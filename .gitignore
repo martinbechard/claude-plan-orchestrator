@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Auto-generated (user-specific)
+.claude/plans/task-status.json
+.claude/plans/current-plan.yaml
