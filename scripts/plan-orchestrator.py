@@ -67,6 +67,19 @@ VERBOSE = False
 # Resolved claude command (set at startup)
 CLAUDE_CMD: list[str] = ["claude"]
 
+# Environment variables to strip from child Claude processes
+# CLAUDECODE is set by Claude Code to detect nested sessions; we must remove it
+# so the orchestrator can spawn Claude from within a Claude Code session.
+STRIPPED_ENV_VARS = ["CLAUDECODE"]
+
+
+def build_child_env() -> dict[str, str]:
+    """Build a clean environment for spawning Claude child processes."""
+    env = os.environ.copy()
+    for var in STRIPPED_ENV_VARS:
+        env.pop(var, None)
+    return env
+
 
 def verbose_log(message: str, prefix: str = "VERBOSE") -> None:
     """Print a verbose log message if verbose mode is enabled."""
@@ -954,7 +967,8 @@ def run_parallel_task(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            cwd=str(worktree_path)
+            cwd=str(worktree_path),
+            env=build_child_env()
         )
 
         stdout, stderr = process.communicate(timeout=CLAUDE_TIMEOUT_SECONDS)
@@ -1337,7 +1351,8 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            cwd=os.getcwd()
+            cwd=os.getcwd(),
+            env=build_child_env()
         )
 
         # Start threads to stream/collect stdout and stderr

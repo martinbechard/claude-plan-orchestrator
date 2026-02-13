@@ -385,6 +385,7 @@ def run_child_process(
         # so their output streams in real-time instead of in chunks
         child_env = os.environ.copy()
         child_env["PYTHONUNBUFFERED"] = "1"
+        child_env.pop("CLAUDECODE", None)  # Allow spawning Claude from within Claude Code
 
         process = subprocess.Popen(
             cmd,
