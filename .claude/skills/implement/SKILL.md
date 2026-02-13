@@ -289,6 +289,17 @@ ls -la .claude/plans/*.yaml
 
 Read the plan and find the first task with `status: pending` or `status: in_progress`.
 
+### Step 2b: Check Backlog Dependencies
+
+Before executing, verify the backlog item's dependencies are satisfied:
+1. Identify the plan's backlog slug from the YAML filename (e.g. `02-blog-publishing-system.yaml` -> `02-blog-publishing-system`)
+2. Find the matching `.md` file in `docs/feature-backlog/` or `docs/defect-backlog/`
+3. Parse the `## Dependencies` section for lines matching `NN-slug-name.md`
+4. Check if each dependency slug exists in `docs/feature-backlog/completed/` or `docs/defect-backlog/completed/`
+5. If any are missing, log a visible warning:
+   `WARNING: This plan has unsatisfied backlog dependencies: [list of missing slugs]`
+6. Continue execution (the human/orchestrator decided to run it), but ensure the warning is visible
+
 ### Step 3: Read Context
 
 Before implementing, ALWAYS read:

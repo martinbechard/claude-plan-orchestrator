@@ -52,6 +52,9 @@ RATE_LIMIT_BUFFER_SECONDS = 30
 RATE_LIMIT_DEFAULT_WAIT_SECONDS = 3600
 DEV_SERVER_PORT = 3000  # Only manage dev server, never touch QA (3002)
 
+# Pattern matching backlog item slugs (NN-slug-name format)
+BACKLOG_SLUG_PATTERN = re.compile(r"^\d{2,}-[\w-]+$")
+
 # Status patterns in backlog files that indicate already-processed items
 COMPLETED_STATUS_PATTERN = re.compile(
     r"^##\s*Status:\s*(Fixed|Completed)", re.IGNORECASE | re.MULTILINE
@@ -317,11 +320,103 @@ def scan_directory(directory: str, item_type: str) -> list[BacklogItem]:
     return items
 
 
+def parse_dependencies(filepath: str) -> list[str]:
+    """Parse the ## Dependencies section from a backlog .md file.
+
+    Extracts dependency slugs from lines like '- 03-karma-trust-system.md' or
+    '- 03-karma-trust-system'. Non-backlog dependencies (e.g. 'Base application
+    scaffold') that don't match the NN-slug pattern are silently skipped.
+
+    Returns list of dependency slugs (e.g. ['03-karma-trust-system']).
+    """
+    try:
+        with open(filepath, "r") as f:
+            content = f.read()
+    except (IOError, OSError):
+        return []
+
+    deps: list[str] = []
+    in_deps_section = False
+
+    for line in content.splitlines():
+        stripped = line.strip()
+
+        # Detect the Dependencies heading
+        if re.match(r"^##\s+Dependencies", stripped, re.IGNORECASE):
+            in_deps_section = True
+            continue
+
+        # Stop at the next heading
+        if in_deps_section and stripped.startswith("##"):
+            break
+
+        if not in_deps_section:
+            continue
+
+        # Parse list items: '- 03-karma-trust-system.md' or '- 03-karma-trust-system'
+        list_match = re.match(r"^-\s+(.+)", stripped)
+        if not list_match:
+            continue
+
+        raw = list_match.group(1).strip()
+        # Extract the filename portion (before any parenthetical comment or space)
+        # e.g. '03-karma-trust-system.md (determines who can post)' -> '03-karma-trust-system.md'
+        filename_part = re.split(r"\s+\(|$", raw)[0].strip()
+        # Strip .md extension if present
+        slug = filename_part.removesuffix(".md").strip()
+
+        # Only include items matching the NN-slug backlog pattern
+        if BACKLOG_SLUG_PATTERN.match(slug):
+            deps.append(slug)
+        else:
+            verbose_log(f"Ignoring non-backlog dependency: '{raw}' in {filepath}")
+
+    return deps
+
+
+def completed_slugs() -> set[str]:
+    """Build a set of completed backlog item slugs from completed/ directories."""
+    slugs: set[str] = set()
+
+    for base_dir in [DEFECT_DIR, FEATURE_DIR]:
+        completed_dir = Path(base_dir) / COMPLETED_SUBDIR
+        if not completed_dir.exists():
+            continue
+        for md_file in completed_dir.glob("*.md"):
+            slugs.add(md_file.stem)
+
+    return slugs
+
+
 def scan_all_backlogs() -> list[BacklogItem]:
-    """Scan both backlog directories. Returns defects first, then features."""
+    """Scan both backlog directories with dependency filtering.
+
+    Returns defects first, then features. Items whose dependencies are not
+    all present in the completed/ directories are filtered out.
+    """
     defects = scan_directory(DEFECT_DIR, "defect")
     features = scan_directory(FEATURE_DIR, "feature")
-    return defects + features
+    all_items = defects + features
+
+    # Build the set of completed slugs for dependency resolution
+    done = completed_slugs()
+    verbose_log(f"Completed slugs: {done}")
+
+    # Filter items with unsatisfied dependencies
+    ready: list[BacklogItem] = []
+    for item in all_items:
+        deps = parse_dependencies(item.path)
+        if not deps:
+            ready.append(item)
+            continue
+
+        unsatisfied = [d for d in deps if d not in done]
+        if unsatisfied:
+            log(f"Skipped: {item.slug} (waiting on: {', '.join(unsatisfied)})")
+        else:
+            ready.append(item)
+
+    return ready
 
 
 # ─── Filesystem Watcher ──────────────────────────────────────────────
@@ -566,6 +661,9 @@ def reset_interrupted_tasks(plan_path: str) -> int:
         log(f"WARNING: Could not read plan for reset: {e}")
         return 0
 
+    if not plan or "sections" not in plan:
+        return 0
+
     reset_count = 0
     for section in plan.get("sections", []):
         for task in section.get("tasks", []):
@@ -612,6 +710,9 @@ def check_existing_plan(item: BacklogItem) -> Optional[str]:
     try:
         with open(plan_path, "r") as f:
             plan = yaml.safe_load(f)
+        if not plan or "sections" not in plan:
+            log(f"WARNING: Plan file is empty or invalid: {plan_path}")
+            return None
         done = 0
         pending = 0
         for section in plan.get("sections", []):
@@ -622,8 +723,8 @@ def check_existing_plan(item: BacklogItem) -> Optional[str]:
                 elif status == "pending":
                     pending += 1
     except (IOError, yaml.YAMLError):
-        done = 0
-        pending = 0
+        log(f"WARNING: Could not parse plan file: {plan_path}")
+        return None
 
     if pending == 0 and done > 0:
         log(f"Found existing plan: {plan_path} (all {done} tasks completed)")
@@ -849,6 +950,51 @@ def execute_plan(plan_path: str, dry_run: bool = False) -> bool:
 # ─── Archive ──────────────────────────────────────────────────────────
 
 
+def find_in_progress_plans() -> list[str]:
+    """Find YAML plans that have pending tasks (started but not finished).
+
+    When the pipeline restarts, any plan with remaining pending tasks must
+    be completed before new backlog items are processed. This prevents the
+    pipeline from starting new work while previous plans are incomplete.
+    Excludes the sample-plan.yaml template.
+    """
+    in_progress: list[str] = []
+    plans_dir = Path(PLANS_DIR)
+
+    if not plans_dir.exists():
+        return in_progress
+
+    for yaml_file in sorted(plans_dir.glob("*.yaml")):
+        if yaml_file.name == "sample-plan.yaml":
+            continue
+
+        try:
+            with open(yaml_file, "r") as f:
+                plan = yaml.safe_load(f)
+        except (IOError, yaml.YAMLError):
+            continue
+
+        if not plan or "sections" not in plan:
+            continue
+
+        has_completed = False
+        has_pending = False
+        for section in plan.get("sections", []):
+            for task in section.get("tasks", []):
+                status = task.get("status", "pending")
+                if status == "completed":
+                    has_completed = True
+                elif status in ("pending", "in_progress"):
+                    has_pending = True
+
+        # A plan is "in progress" if it has both completed and pending tasks
+        # (i.e. it was started but not finished)
+        if has_completed and has_pending:
+            in_progress.append(str(yaml_file))
+
+    return in_progress
+
+
 def archive_item(item: BacklogItem, dry_run: bool = False) -> bool:
     """Move a completed backlog item to the completed/ subfolder."""
     source = item.path
@@ -958,7 +1104,24 @@ def main_loop(dry_run: bool = False, once: bool = False) -> None:
                 log("Stop requested via semaphore. Exiting.")
                 break
 
-            # Scan for items
+            # Resume in-progress plans before scanning for new work.
+            # This ensures partially-completed plans finish before new items start.
+            if not dry_run:
+                in_progress_plans = find_in_progress_plans()
+                if in_progress_plans:
+                    log(f"Found {len(in_progress_plans)} in-progress plan(s) to resume")
+                    for plan_path in in_progress_plans:
+                        if check_stop_requested():
+                            break
+                        log(f"  Resuming: {os.path.basename(plan_path)}")
+                        success = execute_plan(plan_path, dry_run)
+                        if not success:
+                            failed_items.add(plan_path)
+                            log(f"In-progress plan failed: {plan_path}")
+                    # After resuming, re-scan (completed plans may unblock new items)
+                    continue
+
+            # Scan for items (with dependency filtering)
             items = scan_all_backlogs()
 
             # Filter out previously failed items
