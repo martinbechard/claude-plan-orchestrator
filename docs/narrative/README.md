@@ -20,6 +20,7 @@ long-running LLM interactions.
 | [07-auto-pipeline.md](07-auto-pipeline.md) | The meta-layer: auto-pipeline daemon that watches backlogs and drives the orchestrator |
 | [08-lessons-and-questions.md](08-lessons-and-questions.md) | Lessons learned, open questions, and patterns that emerged |
 | [09-fixing-parallel-merge.md](09-fixing-parallel-merge.md) | Fixing the root cause: replacing git merge with file-copy for parallel worktrees |
+| [10-design-competitions.md](10-design-competitions.md) | The evolving implement skill: parallel design generation, AI judge, and self-extending plans |
 
 ## Timeline at a Glance
 
@@ -35,6 +36,7 @@ long-running LLM interactions.
 2026-02-12  Stream-json real-time output
 2026-02-12  Auto-pipeline daemon (separate script, 1073 lines)
 2026-02-12  Fix parallel merge: file-copy replaces git merge
+2026-02-07+ Design competition pattern (Phase 0) across 7 plans
 
 Current: ~2000 lines (orchestrator) + 1073 lines (auto-pipeline)
 Plans executed: 19 YAML plan files, 11+ completed plans

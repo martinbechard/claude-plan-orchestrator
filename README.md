@@ -415,6 +415,7 @@ The orchestrator evolved from a 454-line sequential executor to a ~2000-line par
 - Auto-pipeline daemon
 - Lessons learned and open questions
 - Fixing the parallel merge strategy
+- Design competitions: parallel design generation with AI judge
 
 ## License
 
