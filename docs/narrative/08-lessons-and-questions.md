@@ -58,9 +58,15 @@ graceful stops, binary resolution, stale cleanup, verbose logging, smoke tests,
 parallel execution, conflict detection, worktree management, and stream-json output.
 This 18:1 ratio of resilience-to-core is typical of production infrastructure.
 
-### 5. Human Oversight Points Matter
+### 5. Automated Validation with Human Escape Hatches
 
-Every automation level includes escape hatches:
+The design competition pattern (Chapter 10) eliminated routine human review of plans.
+Five competing designs are generated in parallel, an AI judge scores them, and the
+winning design drives the implementation. The human doesn't review every plan --- the
+judge does.
+
+But every automation level still includes escape hatches for when things go wrong:
+- **Circuit breaker:** stops automatically after 3 consecutive failures
 - **Stop semaphore:** `touch .claude/plans/.stop`
 - **Ctrl+C during rate limit waits:** aborts cleanly
 - **--single-task:** run one task then stop
@@ -68,8 +74,9 @@ Every automation level includes escape hatches:
 - **--skip-smoke:** bypass post-plan verification
 - **Verbose mode:** see exactly what Claude is doing
 
-These aren't afterthoughts --- they were added because the human operator needed them
-in real situations.
+The human's role shifted from "review every plan" to "intervene when the circuit
+breaker trips or the smoke tests fail." This is a fundamentally different relationship
+with the automation --- trust by default, investigate on failure.
 
 ### 6. The Self-Extending Plan Pattern
 
@@ -165,6 +172,6 @@ the hard way:
 - Silent failures taught verbose logging
 
 The result is a system that reliably executes multi-task plans with an AI developer,
-handles failures gracefully, and gives the human operator enough visibility and
-control to trust the automation. It's not elegant --- it's practical. And that's
-exactly what infrastructure should be.
+validates its own designs through competition and judging, handles failures gracefully,
+and only escalates to the human when the circuit breaker trips or smoke tests fail.
+It's not elegant --- it's practical. And that's exactly what infrastructure should be.

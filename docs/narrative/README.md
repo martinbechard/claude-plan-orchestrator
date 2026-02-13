@@ -3,9 +3,10 @@
 This folder documents the evolution of the Plan Orchestrator --- the automated task execution
 engine built during the development of CheapoVille, a full-featured open-source online community
 platform --- a social hub with blogs, instant messaging, help-wanted boards, and more.
-The orchestrator allows a human-AI team to break down large features into YAML plans and have
-Claude execute each task in a fresh session, avoiding the context degradation that plagues
-long-running LLM interactions.
+The orchestrator breaks down large features into YAML plans and has Claude execute each task
+in a fresh session, avoiding the context degradation that plagues long-running LLM interactions.
+Design competitions with an AI judge validate plans automatically; the human only intervenes
+when the circuit breaker trips or smoke tests fail.
 
 ## Document Index
 

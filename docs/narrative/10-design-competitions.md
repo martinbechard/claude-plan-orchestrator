@@ -5,16 +5,16 @@
 
 ## The Problem with Single-Design Planning
 
-Early orchestrator plans followed a straightforward pattern: one human writes a design
-document, the orchestrator executes the implementation. This worked for backend features
+Early orchestrator plans followed a straightforward pattern: write a design document,
+then the orchestrator executes the implementation. This worked for backend features
 (database schemas, API routes, data pipelines) where the "right" approach is often obvious
 from the constraints.
 
 But UI features were different. When building the Conversation Viewer, there were at least
 five legitimate approaches: chat bubbles, notebook cells, accordion panels, split columns,
 timeline cards. Each had different strengths depending on what you optimized for. Picking
-one upfront meant the human had to make a high-stakes design decision with limited
-information, and the AI couldn't contribute its breadth of pattern knowledge.
+one upfront was a high-stakes design decision with limited information, and a single
+Claude session couldn't explore its full breadth of pattern knowledge.
 
 The insight: **an LLM can generate multiple competing designs faster than a human can
 evaluate one.** Five parallel Claude sessions each producing a complete design document
@@ -203,9 +203,16 @@ Phases 1-7: Implementation (written by task 0.7)
   ...tasks appended by the plan-extension task...
 ```
 
-The human writes Phase 0 (7 tasks). Claude writes Phases 1-7 (typically 15-40 tasks).
-The orchestrator executes all of them seamlessly, reloading the plan when it detects
-the `plan_modified` flag.
+Phase 0 (7 tasks) is a template that can be reused across features --- it follows the
+same structure every time. Claude writes Phases 1-7 (typically 15-40 tasks) based on
+the winning design. The orchestrator executes all of them seamlessly, reloading the plan
+when it detects the `plan_modified` flag.
+
+This means no human reviews the detailed implementation plan. The design competition
+itself is the validation: five approaches are explored, the best is selected by an AI
+judge with explicit criteria, and the implementation plan flows from the winning design.
+The human only intervenes if the circuit breaker trips or smoke tests fail after
+completion.
 
 This is a form of meta-programming: the AI is programming its own future execution plan
 based on a design it selected from options it generated.
@@ -234,8 +241,8 @@ design would have been.
 The competition pattern evolved through use:
 
 **v1 (Friendly File References):** First use. Five designs, explicit evaluation criteria in
-the design overview, separate judge task. The human wrote detailed DESIGN CONCEPT paragraphs
-for each design agent.
+the design overview, separate judge task. Detailed DESIGN CONCEPT paragraphs were written
+for each design agent to ensure diversity.
 
 **v2 (Conversation Viewer onward):** Standardized the structure. The design overview document
 always includes an "Evaluation Criteria" section with exactly 5 criteria scored out of 10.
@@ -303,12 +310,14 @@ In theory, you could implement all 5 designs and pick the best rendered version.
 practice, 5 parallel implementations would be extremely expensive and most of the work
 would be thrown away. The document-level competition is a much better cost/quality tradeoff.
 
-**Q: What if the human disagrees with the judge?**
-The human can override. The judge writes its evaluation to the design overview document,
-and the plan-extension task (0.7) reads from that document. If the human edits the
-document to declare a different winner before 0.7 runs, the implementation follows the
-human's choice. The orchestrator's `--single-task` mode makes this workflow easy: run
-through 0.6, review the judge's decision, optionally override, then continue.
+**Q: What if the judge picks a poor design?**
+In practice, the explicit scoring criteria keep the judge honest --- it has to justify each
+score against the criteria defined in the design overview. The cross-pollination step also
+compensates: even if the top-ranked design isn't perfect, improvements from runner-ups are
+incorporated. If the system does go off-track, the circuit breaker will trip during
+implementation (build failures, test failures) and the human can investigate. The
+orchestrator's `--single-task` mode makes it easy to run through 0.6, inspect the judge's
+decision, and optionally edit the design doc before continuing.
 
 **Q: Could this pattern apply to non-UI features?**
 Yes. Any feature with multiple valid approaches benefits from design competition: database

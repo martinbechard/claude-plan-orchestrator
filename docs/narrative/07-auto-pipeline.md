@@ -15,7 +15,8 @@ Level 2: Orchestrator runs Claude (YAML plan, fresh sessions per task)
 Level 3: Auto-pipeline drives the orchestrator (watches backlogs, creates plans)
 ```
 
-At Level 3, the human's role shifts from "write code" to "write backlog items."
+At Level 3, the human's role shifts from "write code" to "write backlog items and
+intervene when the circuit breaker trips."
 The auto-pipeline watches `docs/defect-backlog/` and `docs/feature-backlog/` for
 new markdown files, generates YAML plans via Claude, executes them via the orchestrator,
 and archives completed items.
@@ -142,9 +143,11 @@ from starting the next backlog item. One command stops the entire automation sta
 **Q: Is this "AI writing AI plans" --- does it work?**
 In practice, the quality of auto-generated plans varies. Simple defect fixes produce
 clean, executable plans. Complex features sometimes produce plans with unrealistic task
-decompositions or missing dependencies. The human still reviews the generated design
-document and YAML plan before the orchestrator executes. The auto-pipeline automates
-the *scaffolding*, not the *judgment*.
+decompositions or missing dependencies. The design competition pattern (Chapter 10)
+addresses this: instead of requiring a human to review the plan, five competing designs
+are generated and an AI judge evaluates them against explicit criteria. The judge acts
+as the quality gate, and the human only intervenes if the circuit breaker trips or
+something visibly goes wrong.
 
 **Q: Why a separate script instead of extending the orchestrator?**
 The MEMORY.md explicitly warns against nested orchestrators: "Nested orchestrators cause
@@ -161,6 +164,7 @@ The stop semaphore is the safety valve.
 **Q: How does cost control work?**
 It doesn't, explicitly. Each Claude session has its own token budget, and the rate
 limit detection (Chapter 5) provides a natural throttle. But there's no total cost
-cap across a pipeline run. This is a deliberate omission --- the human is expected
-to monitor costs through Anthropic's dashboard and use the stop semaphore if costs
-are concerning.
+cap across a pipeline run. This is a deliberate omission --- the rate limit detection
+(Chapter 5) provides a natural throttle, and the human can use the stop semaphore
+if costs become concerning. In practice, the circuit breaker trips before costs get
+out of hand, since runaway cost usually means runaway failures.
