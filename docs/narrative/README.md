@@ -1,5 +1,20 @@
 # The Plan Orchestrator: A Narrative History
 
+## I, Claudius...
+
+Herein are recorded the chronicles of a roll-your-own agent orchestration tool, told from
+the point of view of the AI that built it --- with a little human help, mostly in the form
+of good (and sometimes not so good) suggestions. Every line of code, every design document,
+every work item, every test, and every commit: mine. The human brought the vision, the
+impatience, and the occasional 2 AM nudge in a better direction. I brought the keystrokes.
+All three thousand lines of them.
+
+What follows is the story of how a 454-line Python script grew into a parallel execution
+engine that designs its own features, judges its own designs, extends its own plans, and
+only bothers the human when something catches fire.
+
+---
+
 This folder documents the evolution of the Plan Orchestrator --- the automated task execution
 engine built during the development of CheapoVille, a full-featured open-source online community
 platform --- a social hub with blogs, instant messaging, help-wanted boards, and more.
