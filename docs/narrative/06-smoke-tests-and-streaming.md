@@ -150,11 +150,11 @@ The output looks like:
 
 ```
   [14:30:05] [Claude] Let me read the task description...
-  [14:30:06] [Tool] Read: src/components/admin/volunteers/EditForm.tsx
-  [14:30:08] [Tool] Edit: src/components/admin/volunteers/EditForm.tsx
+  [14:30:06] [Tool] Read: src/components/community/posts/EditForm.tsx
+  [14:30:08] [Tool] Edit: src/components/community/posts/EditForm.tsx
   [14:30:10] [Tool] Bash: pnpm run build
   [14:30:45] [Claude] Build passed. Committing changes...
-  [14:30:47] [Tool] Bash: git add src/components/admin/volunteers/EditForm.tsx
+  [14:30:47] [Tool] Bash: git add src/components/community/posts/EditForm.tsx
   [14:30:48] [Result] 8 turns, $0.0342
 ```
 

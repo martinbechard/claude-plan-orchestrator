@@ -57,12 +57,12 @@ The file-level mutex system uses a shared JSON file:
   "claims": [
     {
       "agent": "subagent-8-1",
-      "file": "src/components/admin/volunteers/EditForm.tsx",
+      "file": "src/components/community/posts/EditForm.tsx",
       "claimed_at": "2026-02-05T14:30:00Z"
     },
     {
       "agent": "subagent-8-2",
-      "file": "src/components/admin/donations/EmbedCodeModal.tsx",
+      "file": "src/components/community/messages/ShareLinkModal.tsx",
       "claimed_at": "2026-02-05T14:30:05Z"
     }
   ]
@@ -118,7 +118,7 @@ Each subagent is instructed to update its status file periodically:
   "status": "working",
   "task_id": "8.2",
   "heartbeat": "2026-02-05T14:35:00Z",
-  "current_file": "src/components/admin/donations/EmbedCodeModal.tsx"
+  "current_file": "src/components/community/messages/ShareLinkModal.tsx"
 }
 ```
 

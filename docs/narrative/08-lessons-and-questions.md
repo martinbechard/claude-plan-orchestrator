@@ -106,7 +106,7 @@ historical duration) would be more sophisticated but harder to tune.
 ### Scaling Questions
 
 **Q: What happens with 50+ task plans?**
-The largest completed plan had 59 tasks (donation widget). The orchestrator handled
+The largest completed plan had 59 tasks (activity feed widget). The orchestrator handled
 it but encountered status synchronization issues in parallel mode. Larger plans might
 benefit from being split into sub-plans with explicit handoff points.
 

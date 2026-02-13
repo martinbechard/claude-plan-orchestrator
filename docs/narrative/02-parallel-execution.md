@@ -7,7 +7,7 @@
 ## The Motivation
 
 By early February, the orchestrator had successfully executed several plans sequentially.
-But plans were getting larger --- the Volunteer Dashboard Enhancement plan had dozens of tasks ---
+But plans were getting larger --- the Community Messaging Feature plan had dozens of tasks ---
 and many of them were independent. Running them one at a time was leaving performance on
 the table.
 
@@ -48,15 +48,15 @@ Tasks declare their parallel eligibility:
 ```yaml
 tasks:
 - id: '8.1'
-  name: Add donation settings to organization edit form
+  name: Add notification settings to community profile form
   parallel_group: phase-8-admin
   exclusive_resources: []
 - id: '8.2'
-  name: Build embed code generation modal
+  name: Build share-link generation modal
   parallel_group: phase-8-admin
   exclusive_resources: []
 - id: '8.3'
-  name: Create preview pane for donation widget
+  name: Create preview pane for activity feed widget
   parallel_group: phase-8-admin
   exclusive_resources: []
 ```

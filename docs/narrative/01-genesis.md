@@ -7,8 +7,8 @@
 ## The Problem
 
 By mid-January 2026, the CheapoVille project had accumulated significant
-complexity: a program evaluation system with database schema changes, API layers, reporting
-frameworks, and UI components. Implementing this as one continuous Claude session was failing.
+complexity: a community hub system with database schema changes, API layers, real-time messaging,
+and UI components. Implementing this as one continuous Claude session was failing.
 The LLM would lose track of earlier decisions, contradict its own code, and the quality would
 drop noticeably after 3-4 tasks.
 
@@ -29,13 +29,13 @@ The orchestrator introduced a clean separation of concerns:
 
 ## The Initial YAML Schema
 
-The first plan (`program-evaluation.yaml`, 239 lines) established the template:
+The first plan (`community-hub.yaml`, 239 lines) established the template:
 
 ```yaml
 meta:
-  name: Program Evaluation System
-  description: Build systematic program evaluation with AI-assisted reporting
-  plan_doc: docs/plans/2025-01-18-program-evaluation-implementation.md
+  name: Community Hub
+  description: Build community social hub with posts, messaging, and help boards
+  plan_doc: docs/plans/2025-01-18-community-hub-implementation.md
   created: '2025-01-19'
   max_attempts_default: 3
   notification_email: martin.bechard@DevConsult.ca
@@ -45,10 +45,10 @@ sections:
   status: completed
   tasks:
   - id: '1.1'
-    name: Database Schema - Programs
+    name: Database Schema - Posts and Users
     status: completed
     attempts: 1
-    description: Add program tracking tables to schema
+    description: Add community post and user profile tables to schema
 ```
 
 Key decisions:

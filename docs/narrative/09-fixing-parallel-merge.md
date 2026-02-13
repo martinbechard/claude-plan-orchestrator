@@ -6,7 +6,7 @@
 ## The Misdiagnosis
 
 While writing the orchestrator narrative (Chapters 1-8), we examined the parallel merge
-failures from the donation widget plan. The MEMORY.md rule said:
+failures from the activity feed widget plan. The MEMORY.md rule said:
 
 > "Parallel merge drops new files -- only copies YAML status, NOT new files from worktrees.
 >  Avoid --parallel for phases creating new files."

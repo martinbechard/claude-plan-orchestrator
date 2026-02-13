@@ -92,7 +92,7 @@ The startup banner now advertises this:
 
 ```
 === Plan Orchestrator ===
-Plan: Volunteer Dashboard Enhancement
+Plan: Community Messaging Feature
 Claude binary: /opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js
 Graceful stop: touch .claude/plans/.stop
 ```
