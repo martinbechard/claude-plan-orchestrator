@@ -32,11 +32,17 @@ YAML plans live in `.claude/plans/` and are executed by `scripts/plan-orchestrat
 # Run all pending tasks
 python scripts/plan-orchestrator.py --plan .claude/plans/<plan-name>.yaml
 
+# Run with parallel execution (independent tasks run concurrently)
+python scripts/plan-orchestrator.py --plan .claude/plans/<plan-name>.yaml --parallel
+
 # Run single task then stop
 python scripts/plan-orchestrator.py --plan .claude/plans/<plan-name>.yaml --single-task
 
 # Resume from specific task
 python scripts/plan-orchestrator.py --plan .claude/plans/<plan-name>.yaml --resume-from 4.7
+
+# Verbose with real-time streaming
+python scripts/plan-orchestrator.py --plan .claude/plans/<plan-name>.yaml --verbose
 ```
 
 **YAML Plan Structure:**
@@ -57,7 +63,11 @@ sections:
     name: Task Name
     status: pending
     description: What this task does
-    max_attempts: 3  # optional, overrides default
+    max_attempts: 3          # optional, overrides default
+    depends_on: ['1.0']      # optional, wait for these tasks
+    parallel_group: group-1  # optional, same group = run in parallel
+    exclusive_resources:      # optional, prevents parallel with same resource
+    - database
 ```
 
 ### TODO.md (Legacy)

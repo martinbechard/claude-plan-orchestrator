@@ -14,3 +14,10 @@ venv/
 # Auto-generated (user-specific)
 .claude/plans/task-status.json
 .claude/plans/current-plan.yaml
+.claude/plans/.stop
+.claude/subagent-status/
+.claude/agent-claims.json
+
+# OS
+.DS_Store
+Thumbs.db

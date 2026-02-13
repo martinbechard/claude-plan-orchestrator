@@ -22,16 +22,39 @@ sections:
     name: Second task name
     status: pending
     description: Another task description
+    depends_on:
+    - '1.1'
 
 - id: phase-2
-  name: Phase 2 - Implementation
+  name: Phase 2 - Implementation (Parallel)
   status: pending
   tasks:
   - id: '2.1'
-    name: Implementation task
+    name: Build component A
     status: pending
-    description: What needs to be implemented
-    max_attempts: 5  # Override default for complex tasks
+    description: |
+      Implement component A.
+      Files: src/components/ComponentA.tsx
+    parallel_group: phase-2-impl
+    depends_on:
+    - '1.2'
+  - id: '2.2'
+    name: Build component B
+    status: pending
+    description: |
+      Implement component B.
+      Files: src/components/ComponentB.tsx
+    parallel_group: phase-2-impl
+    depends_on:
+    - '1.2'
+  - id: '2.3'
+    name: Database migration
+    status: pending
+    description: Run database migration
+    exclusive_resources:
+    - database
+    depends_on:
+    - '1.2'
 
 - id: phase-3
   name: Phase 3 - Testing
@@ -41,3 +64,8 @@ sections:
     name: Run tests and verify
     status: pending
     description: Run full test suite and fix any failures
+    max_attempts: 5
+    depends_on:
+    - '2.1'
+    - '2.2'
+    - '2.3'
