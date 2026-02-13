@@ -81,9 +81,12 @@ Or copy individual files:
 # Required
 cp scripts/plan-orchestrator.py /your/project/scripts/
 
+# Recommended
+cp CODING-RULES.md /your/project/                  # Coding standards template
+cp .claude/skills/implement/SKILL.md /your/project/.claude/skills/implement/
+
 # Optional
 cp scripts/auto-pipeline.py /your/project/scripts/
-cp .claude/skills/implement/SKILL.md /your/project/.claude/skills/implement/
 cp .claude/commands/implement.md /your/project/.claude/commands/
 cp .claude/plans/sample-plan.yaml /your/project/.claude/plans/
 ```
@@ -341,6 +344,7 @@ See `.claude/skills/implement/SKILL.md` for the full protocol details.
 
 ```
 your-project/
+├── CODING-RULES.md                   # Coding standards (adapt for your project)
 ├── .claude/
 │   ├── plans/
 │   │   ├── sample-plan.yaml        # Template plan

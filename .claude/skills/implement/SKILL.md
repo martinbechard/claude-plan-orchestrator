@@ -292,7 +292,7 @@ Read the plan and find the first task with `status: pending` or `status: in_prog
 ### Step 3: Read Context
 
 Before implementing, ALWAYS read:
-1. The project's coding rules/standards document
+1. The project's coding rules: `CODING-RULES.md` (in the project root)
 2. The `plan_doc` referenced in meta - detailed design
 3. Relevant architecture and design documents
 
@@ -370,7 +370,7 @@ If you modify the plan, set `plan_modified: true` in the status file.
 
 ## Important Rules
 
-1. ALWAYS read the project's coding rules before generating code
+1. ALWAYS read `CODING-RULES.md` before generating code
 2. Fix ALL test failures before marking complete
 3. If build fails, fix the errors before proceeding
 4. Keep changes minimal and focused on the task
