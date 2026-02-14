@@ -32,7 +32,7 @@ sections:
       following the existing DEV_SERVER_PORT pattern.
   - id: '1.2'
     name: Replace hardcoded pnpm in VERIFICATION_PROMPT_TEMPLATE
-    status: pending
+    status: completed
     description: 'In scripts/auto-pipeline.py, update the VERIFICATION_PROMPT_TEMPLATE
       string
 
@@ -55,6 +55,11 @@ sections:
       '
     depends_on:
     - '1.1'
+    attempts: 1
+    last_attempt: '2026-02-13T21:54:54.029381'
+    completed_at: '2026-02-13T21:55:59.125085'
+    result_message: 'Replaced three hardcoded pnpm references in VERIFICATION_PROMPT_TEMPLATE
+      with .format() placeholders: {build_command}, {test_command}, {dev_server_command}'
   - id: '1.3'
     name: Update verify_item() to pass command values to format()
     status: pending
