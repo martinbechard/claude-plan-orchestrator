@@ -1,122 +1,91 @@
 meta:
   name: Move Completed Items Outside Backlog Directories
-  description: >
-    Move completed backlog items from docs/defect-backlog/completed/ and
-    docs/feature-backlog/completed/ to a separate top-level archive at
-    docs/completed-backlog/defects/ and docs/completed-backlog/features/.
-    This keeps backlog folders clean and avoids scanning completed items
-    on every cycle. Single file change in scripts/auto-pipeline.py plus
-    a data migration of existing completed files.
+  description: 'Move completed backlog items from docs/defect-backlog/completed/ and
+    docs/feature-backlog/completed/ to a separate top-level archive at docs/completed-backlog/defects/
+    and docs/completed-backlog/features/. This keeps backlog folders clean and avoids
+    scanning completed items on every cycle. Single file change in scripts/auto-pipeline.py
+    plus a data migration of existing completed files.
+
+    '
   plan_doc: docs/plans/2026-02-14-09-move-completed-outside-backlog-design.md
   created: '2026-02-14'
   max_attempts_default: 3
   validation:
     enabled: true
     run_after:
-      - coder
+    - coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 1
 sections:
 - id: phase-1
   name: Phase 1 - Implementation
-  status: pending
+  status: in_progress
   tasks:
   - id: '1.1'
     name: Update constants and path helpers in auto-pipeline.py
     agent: coder
-    status: pending
-    description: |
-      Update scripts/auto-pipeline.py to replace the single COMPLETED_SUBDIR constant
-      with new top-level archive paths.
-
-      Reference: docs/plans/2026-02-14-09-move-completed-outside-backlog-design.md
-
-      Steps:
-      1. Remove the COMPLETED_SUBDIR = "completed" constant (line 52).
-
-      2. Add three new constants immediately after the existing path constants
-         (after FEATURE_DIR, around line 51):
-
-             COMPLETED_DEFECTS_DIR = "docs/completed-backlog/defects"
-             COMPLETED_FEATURES_DIR = "docs/completed-backlog/features"
-             COMPLETED_DIRS = {
-                 "defect": COMPLETED_DEFECTS_DIR,
-                 "feature": COMPLETED_FEATURES_DIR,
-             }
-
-      3. Update the completed_slugs() function (around line 411) to iterate
-         over the new paths instead of DEFECT_DIR/FEATURE_DIR + COMPLETED_SUBDIR:
-
-             def completed_slugs() -> set[str]:
-                 slugs: set[str] = set()
-                 for completed_dir_path in [COMPLETED_DEFECTS_DIR, COMPLETED_FEATURES_DIR]:
-                     completed_dir = Path(completed_dir_path)
-                     if not completed_dir.exists():
-                         continue
-                     for md_file in completed_dir.glob("*.md"):
-                         slugs.add(md_file.stem)
-                 return slugs
-
-      4. Update the archive_item() function (around line 1217) to use COMPLETED_DIRS
-         instead of building path from os.path.dirname + COMPLETED_SUBDIR:
-
-             def archive_item(item: BacklogItem, dry_run: bool = False) -> bool:
-                 source = item.path
-                 dest_dir = COMPLETED_DIRS[item.item_type]
-                 dest = os.path.join(dest_dir, os.path.basename(item.path))
-                 ...rest stays the same...
-
-      5. In the BacklogWatcher class (around line 459), remove the completed/
-         subdirectory filter from on_created and on_modified methods. Delete the
-         lines that check:
-             if f"/{COMPLETED_SUBDIR}/" not in event.src_path:
-         Since completed items are no longer inside the watched directories, this
-         filter is unnecessary. The methods should just check .endswith(".md") and
-         not start with ".".
-
-      6. Verify there are no remaining references to COMPLETED_SUBDIR in the file.
-         Search for "COMPLETED_SUBDIR" - there should be zero hits after this change.
-
-      Files: scripts/auto-pipeline.py
+    status: completed
+    description: "Update scripts/auto-pipeline.py to replace the single COMPLETED_SUBDIR\
+      \ constant\nwith new top-level archive paths.\n\nReference: docs/plans/2026-02-14-09-move-completed-outside-backlog-design.md\n\
+      \nSteps:\n1. Remove the COMPLETED_SUBDIR = \"completed\" constant (line 52).\n\
+      \n2. Add three new constants immediately after the existing path constants\n\
+      \   (after FEATURE_DIR, around line 51):\n\n       COMPLETED_DEFECTS_DIR = \"\
+      docs/completed-backlog/defects\"\n       COMPLETED_FEATURES_DIR = \"docs/completed-backlog/features\"\
+      \n       COMPLETED_DIRS = {\n           \"defect\": COMPLETED_DEFECTS_DIR,\n\
+      \           \"feature\": COMPLETED_FEATURES_DIR,\n       }\n\n3. Update the\
+      \ completed_slugs() function (around line 411) to iterate\n   over the new paths\
+      \ instead of DEFECT_DIR/FEATURE_DIR + COMPLETED_SUBDIR:\n\n       def completed_slugs()\
+      \ -> set[str]:\n           slugs: set[str] = set()\n           for completed_dir_path\
+      \ in [COMPLETED_DEFECTS_DIR, COMPLETED_FEATURES_DIR]:\n               completed_dir\
+      \ = Path(completed_dir_path)\n               if not completed_dir.exists():\n\
+      \                   continue\n               for md_file in completed_dir.glob(\"\
+      *.md\"):\n                   slugs.add(md_file.stem)\n           return slugs\n\
+      \n4. Update the archive_item() function (around line 1217) to use COMPLETED_DIRS\n\
+      \   instead of building path from os.path.dirname + COMPLETED_SUBDIR:\n\n  \
+      \     def archive_item(item: BacklogItem, dry_run: bool = False) -> bool:\n\
+      \           source = item.path\n           dest_dir = COMPLETED_DIRS[item.item_type]\n\
+      \           dest = os.path.join(dest_dir, os.path.basename(item.path))\n   \
+      \        ...rest stays the same...\n\n5. In the BacklogWatcher class (around\
+      \ line 459), remove the completed/\n   subdirectory filter from on_created and\
+      \ on_modified methods. Delete the\n   lines that check:\n       if f\"/{COMPLETED_SUBDIR}/\"\
+      \ not in event.src_path:\n   Since completed items are no longer inside the\
+      \ watched directories, this\n   filter is unnecessary. The methods should just\
+      \ check .endswith(\".md\") and\n   not start with \".\".\n\n6. Verify there\
+      \ are no remaining references to COMPLETED_SUBDIR in the file.\n   Search for\
+      \ \"COMPLETED_SUBDIR\" - there should be zero hits after this change.\n\nFiles:\
+      \ scripts/auto-pipeline.py\n"
+    attempts: 1
+    last_attempt: '2026-02-14T10:24:38.267517'
+    completed_at: '2026-02-14T10:27:36.327032'
+    result_message: Replaced COMPLETED_SUBDIR constant with COMPLETED_DEFECTS_DIR,
+      COMPLETED_FEATURES_DIR, and COMPLETED_DIRS mapping. Updated completed_slugs()
+      to iterate over new archive paths, archive_item() to use COMPLETED_DIRS lookup,
+      and removed COMPLETED_SUBDIR filter from BacklogWatcher. Zero references to
+      COMPLETED_SUBDIR remain.
   - id: '1.2'
     name: Move existing completed files to new archive structure
     agent: coder
     status: pending
     depends_on:
     - '1.1'
-    description: |
-      Move the existing completed backlog items from the old locations to the new
-      top-level archive directories.
-
-      Steps:
-      1. Create the new archive directories:
-         mkdir -p docs/completed-backlog/defects
-         mkdir -p docs/completed-backlog/features
-
-      2. Move defect completed files (if any exist):
-         If docs/defect-backlog/completed/ exists and has .md files:
-           git mv docs/defect-backlog/completed/*.md docs/completed-backlog/defects/
-
-      3. Move feature completed files (if any exist):
-         If docs/feature-backlog/completed/ exists and has .md files:
-           git mv docs/feature-backlog/completed/*.md docs/completed-backlog/features/
-
-      4. Remove the now-empty completed/ subdirectories:
-         rmdir docs/defect-backlog/completed (if empty)
-         rmdir docs/feature-backlog/completed (if empty)
-         Note: git does not track empty directories, so just rmdir them.
-
-      5. Git commit the moves with message:
-         "chore: move completed backlog items to docs/completed-backlog/"
-
-      6. Verify the old completed/ directories no longer exist or are empty.
-         Verify the new directories contain the moved files:
-         ls docs/completed-backlog/defects/
-         ls docs/completed-backlog/features/
-
-      Files: docs/defect-backlog/completed/*, docs/feature-backlog/completed/*,
-             docs/completed-backlog/defects/, docs/completed-backlog/features/
+    description: "Move the existing completed backlog items from the old locations\
+      \ to the new\ntop-level archive directories.\n\nSteps:\n1. Create the new archive\
+      \ directories:\n   mkdir -p docs/completed-backlog/defects\n   mkdir -p docs/completed-backlog/features\n\
+      \n2. Move defect completed files (if any exist):\n   If docs/defect-backlog/completed/\
+      \ exists and has .md files:\n     git mv docs/defect-backlog/completed/*.md\
+      \ docs/completed-backlog/defects/\n\n3. Move feature completed files (if any\
+      \ exist):\n   If docs/feature-backlog/completed/ exists and has .md files:\n\
+      \     git mv docs/feature-backlog/completed/*.md docs/completed-backlog/features/\n\
+      \n4. Remove the now-empty completed/ subdirectories:\n   rmdir docs/defect-backlog/completed\
+      \ (if empty)\n   rmdir docs/feature-backlog/completed (if empty)\n   Note: git\
+      \ does not track empty directories, so just rmdir them.\n\n5. Git commit the\
+      \ moves with message:\n   \"chore: move completed backlog items to docs/completed-backlog/\"\
+      \n\n6. Verify the old completed/ directories no longer exist or are empty.\n\
+      \   Verify the new directories contain the moved files:\n   ls docs/completed-backlog/defects/\n\
+      \   ls docs/completed-backlog/features/\n\nFiles: docs/defect-backlog/completed/*,\
+      \ docs/feature-backlog/completed/*,\n       docs/completed-backlog/defects/,\
+      \ docs/completed-backlog/features/\n"
 - id: phase-2
   name: Phase 2 - Unit Tests
   status: pending
@@ -127,46 +96,25 @@ sections:
     status: pending
     depends_on:
     - '1.2'
-    description: |
-      Create tests/test_completed_archive.py with unit tests for the updated
-      completed_slugs() and archive_item() functions.
-
-      Reference: docs/plans/2026-02-14-09-move-completed-outside-backlog-design.md
-
-      Steps:
-      1. Create tests/test_completed_archive.py with the following tests:
-
-      test_completed_slugs_reads_from_new_locations:
-        - Use tmp_path to create a temporary directory structure mimicking
-          docs/completed-backlog/defects/ and docs/completed-backlog/features/
-        - Create sample .md files in each directory
-        - Monkeypatch the COMPLETED_DEFECTS_DIR and COMPLETED_FEATURES_DIR
-          constants in the auto_pipeline module to point to the temp dirs
-        - Import and call completed_slugs()
-        - Assert the returned set contains all expected slugs
-
-      test_completed_slugs_empty_when_dirs_missing:
-        - Monkeypatch to nonexistent directories
-        - Assert completed_slugs() returns an empty set
-
-      test_archive_item_defect_goes_to_defects_dir:
-        - Create a temporary source file and a temporary dest directory
-        - Monkeypatch COMPLETED_DIRS to use temp paths
-        - Mock subprocess.run to avoid actual git calls
-        - Create a BacklogItem with item_type="defect"
-        - Call archive_item(item)
-        - Assert the file was moved to the defects directory
-
-      test_archive_item_feature_goes_to_features_dir:
-        - Same as above but with item_type="feature"
-        - Assert the file was moved to the features directory
-
-      2. Run the tests:
-         python3 -m pytest tests/test_completed_archive.py -v
-
-      3. Fix any test failures until all pass.
-
-      Files: tests/test_completed_archive.py
+    description: "Create tests/test_completed_archive.py with unit tests for the updated\n\
+      completed_slugs() and archive_item() functions.\n\nReference: docs/plans/2026-02-14-09-move-completed-outside-backlog-design.md\n\
+      \nSteps:\n1. Create tests/test_completed_archive.py with the following tests:\n\
+      \ntest_completed_slugs_reads_from_new_locations:\n  - Use tmp_path to create\
+      \ a temporary directory structure mimicking\n    docs/completed-backlog/defects/\
+      \ and docs/completed-backlog/features/\n  - Create sample .md files in each\
+      \ directory\n  - Monkeypatch the COMPLETED_DEFECTS_DIR and COMPLETED_FEATURES_DIR\n\
+      \    constants in the auto_pipeline module to point to the temp dirs\n  - Import\
+      \ and call completed_slugs()\n  - Assert the returned set contains all expected\
+      \ slugs\n\ntest_completed_slugs_empty_when_dirs_missing:\n  - Monkeypatch to\
+      \ nonexistent directories\n  - Assert completed_slugs() returns an empty set\n\
+      \ntest_archive_item_defect_goes_to_defects_dir:\n  - Create a temporary source\
+      \ file and a temporary dest directory\n  - Monkeypatch COMPLETED_DIRS to use\
+      \ temp paths\n  - Mock subprocess.run to avoid actual git calls\n  - Create\
+      \ a BacklogItem with item_type=\"defect\"\n  - Call archive_item(item)\n  -\
+      \ Assert the file was moved to the defects directory\n\ntest_archive_item_feature_goes_to_features_dir:\n\
+      \  - Same as above but with item_type=\"feature\"\n  - Assert the file was moved\
+      \ to the features directory\n\n2. Run the tests:\n   python3 -m pytest tests/test_completed_archive.py\
+      \ -v\n\n3. Fix any test failures until all pass.\n\nFiles: tests/test_completed_archive.py\n"
 - id: phase-3
   name: Phase 3 - Verification
   status: pending
@@ -177,39 +125,21 @@ sections:
     status: pending
     depends_on:
     - '2.1'
-    description: |
-      Verify the changes compile correctly and the system still functions.
-
-      Steps:
-      1. Check Python syntax:
-         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
-
-      2. Run orchestrator dry-run:
-         python scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
-
-      3. Run all unit tests:
-         python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
-
-      4. Verify COMPLETED_SUBDIR is completely removed:
-         grep -c "COMPLETED_SUBDIR" scripts/auto-pipeline.py
-         (should return 0 or exit with code 1)
-
-      5. Verify new constants exist:
-         grep -c "COMPLETED_DEFECTS_DIR" scripts/auto-pipeline.py
-         (should return 2 or more: definition + usage)
-         grep -c "COMPLETED_FEATURES_DIR" scripts/auto-pipeline.py
-         (should return 2 or more: definition + usage)
-         grep -c "COMPLETED_DIRS" scripts/auto-pipeline.py
-         (should return 2 or more: definition + usage)
-
-      6. Verify the old completed/ directories are gone:
-         test ! -d docs/defect-backlog/completed && echo "OK: defect completed dir removed"
-         test ! -d docs/feature-backlog/completed && echo "OK: feature completed dir removed"
-
-      7. Verify the new archive directories exist and contain files:
-         ls docs/completed-backlog/defects/
-         ls docs/completed-backlog/features/
-
-      If any check fails, report the failure. Do NOT modify any files.
-
-      Files: scripts/auto-pipeline.py, scripts/plan-orchestrator.py
+    description: "Verify the changes compile correctly and the system still functions.\n\
+      \nSteps:\n1. Check Python syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\
+      \n\n2. Run orchestrator dry-run:\n   python scripts/plan-orchestrator.py --plan\
+      \ .claude/plans/sample-plan.yaml --dry-run\n\n3. Run all unit tests:\n   python3\
+      \ -m pytest tests/ 2>/dev/null || echo 'No test suite configured'\n\n4. Verify\
+      \ COMPLETED_SUBDIR is completely removed:\n   grep -c \"COMPLETED_SUBDIR\" scripts/auto-pipeline.py\n\
+      \   (should return 0 or exit with code 1)\n\n5. Verify new constants exist:\n\
+      \   grep -c \"COMPLETED_DEFECTS_DIR\" scripts/auto-pipeline.py\n   (should return\
+      \ 2 or more: definition + usage)\n   grep -c \"COMPLETED_FEATURES_DIR\" scripts/auto-pipeline.py\n\
+      \   (should return 2 or more: definition + usage)\n   grep -c \"COMPLETED_DIRS\"\
+      \ scripts/auto-pipeline.py\n   (should return 2 or more: definition + usage)\n\
+      \n6. Verify the old completed/ directories are gone:\n   test ! -d docs/defect-backlog/completed\
+      \ && echo \"OK: defect completed dir removed\"\n   test ! -d docs/feature-backlog/completed\
+      \ && echo \"OK: feature completed dir removed\"\n\n7. Verify the new archive\
+      \ directories exist and contain files:\n   ls docs/completed-backlog/defects/\n\
+      \   ls docs/completed-backlog/features/\n\nIf any check fails, report the failure.\
+      \ Do NOT modify any files.\n\nFiles: scripts/auto-pipeline.py, scripts/plan-orchestrator.py\n"
