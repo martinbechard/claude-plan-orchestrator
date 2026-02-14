@@ -1,0 +1,421 @@
+meta:
+  name: Quota-Aware Execution with Weekly Budget Limits
+  description: 'Add budget awareness to the orchestrator and auto-pipeline so they
+    stop gracefully before exhausting the user''s weekly Claude quota. Users configure
+    a ceiling and max percentage; the system checks cumulative cost before each task
+    and pauses when the limit is reached.
+
+    '
+  plan_doc: docs/plans/2026-02-13-07-quota-aware-execution-design.md
+  created: '2026-02-13'
+  max_attempts_default: 3
+sections:
+- id: phase-1
+  name: Phase 1 - BudgetConfig and BudgetGuard
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add BudgetConfig dataclass
+    agent: coder
+    status: pending
+    description: "In scripts/plan-orchestrator.py, add a BudgetConfig dataclass after\
+      \ the CircuitBreaker class (around line 353).\n\nPREREQUISITE: Feature 06 (token\
+      \ usage tracking) must be implemented first. Verify that\nclass TaskUsage and\
+      \ class PlanUsageTracker exist in plan-orchestrator.py before\nproceeding. If\
+      \ they do not exist, STOP and report the dependency is missing.\n\nAdd the following\
+      \ dataclass:\n\n    @dataclass\n    class BudgetConfig:\n        \"\"\"Budget\
+      \ limits for plan execution.\"\"\"\n        max_quota_percent: float = 100.0\n\
+      \        quota_ceiling_usd: float = 0.0\n        reserved_budget_usd: float\
+      \ = 0.0\n\n        @property\n        def effective_limit_usd(self) -> float:\n\
+      \            \"\"\"Calculate effective spending limit in USD.\"\"\"\n        \
+      \    if self.quota_ceiling_usd <= 0:\n                return float('inf')\n \
+      \           percent_limit = self.quota_ceiling_usd * (self.max_quota_percent\
+      \ / 100.0)\n            if self.reserved_budget_usd > 0:\n                reserve_limit\
+      \ = self.quota_ceiling_usd - self.reserved_budget_usd\n                return\
+      \ min(percent_limit, reserve_limit)\n            return percent_limit\n\n   \
+      \     @property\n        def is_enabled(self) -> bool:\n            \"\"\"Whether\
+      \ budget enforcement is active.\"\"\"\n            return self.quota_ceiling_usd\
+      \ > 0\n\nVerify: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('OK')\"\n\nReference: docs/plans/2026-02-13-07-quota-aware-execution-design.md\n"
+  - id: '1.2'
+    name: Add parse_budget_config helper function
+    agent: coder
+    status: pending
+    description: "In scripts/plan-orchestrator.py, add a helper function after the\
+      \ BudgetConfig dataclass.\n\nFunction: parse_budget_config(plan: dict, cli_args:\
+      \ argparse.Namespace) -> BudgetConfig\n\n1. Extract budget settings from plan\
+      \ YAML meta.budget block:\n    budget_meta = plan.get(\"meta\", {}).get(\"budget\"\
+      , {})\n    config = BudgetConfig(\n        max_quota_percent=budget_meta.get(\"\
+      max_quota_percent\", 100.0),\n        quota_ceiling_usd=budget_meta.get(\"quota_ceiling_usd\"\
+      , 0.0),\n        reserved_budget_usd=budget_meta.get(\"reserved_budget_usd\"\
+      , 0.0),\n    )\n\n2. CLI flags override plan YAML values (only when explicitly\
+      \ set):\n    if hasattr(cli_args, 'max_budget_pct') and cli_args.max_budget_pct\
+      \ is not None:\n        config.max_quota_percent = cli_args.max_budget_pct\n\
+      \    if hasattr(cli_args, 'quota_ceiling') and cli_args.quota_ceiling is not\
+      \ None:\n        config.quota_ceiling_usd = cli_args.quota_ceiling\n\n3. Return\
+      \ the config\n\n4. Add a docstring explaining the priority order: CLI > plan\
+      \ YAML > defaults\n\nVerify: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('OK')\"\n\nReference: docs/plans/2026-02-13-07-quota-aware-execution-design.md\n"
+    depends_on:
+    - '1.1'
+  - id: '1.3'
+    name: Add BudgetGuard class
+    agent: coder
+    status: pending
+    description: "In scripts/plan-orchestrator.py, add a BudgetGuard class after the\
+      \ parse_budget_config function.\n\n    class BudgetGuard:\n        \"\"\"Checks\
+      \ cumulative cost against budget limits before each task.\"\"\"\n\n        def\
+      \ __init__(self, config: BudgetConfig):\n            self.config = config\n \
+      \           self.session_cost_usd: float = 0.0\n\n        def record_cost(self,\
+      \ cost_usd: float) -> None:\n            \"\"\"Add cost from a completed task.\"\
+      \"\"\n            self.session_cost_usd += cost_usd\n\n        def can_proceed(self)\
+      \ -> tuple[bool, str]:\n            \"\"\"Check if budget allows another task.\n\
+      \            Returns (can_proceed, reason_if_not).\"\"\"\n            if not\
+      \ self.config.is_enabled:\n                return (True, \"\")\n            limit\
+      \ = self.config.effective_limit_usd\n            if self.session_cost_usd >=\
+      \ limit:\n                pct = self.get_usage_percent()\n                return\
+      \ (False,\n                    f\"Budget exhausted: ${self.session_cost_usd:.4f}\
+      \ spent \"\n                    f\"of ${limit:.2f} limit ({pct:.1f}% of ${self.config.quota_ceiling_usd:.2f}\
+      \ ceiling)\")\n            return (True, \"\")\n\n        def get_usage_percent(self)\
+      \ -> float:\n            \"\"\"Current spending as percentage of ceiling.\"\"\
+      \"\n            if self.config.quota_ceiling_usd <= 0:\n                return\
+      \ 0.0\n            return (self.session_cost_usd / self.config.quota_ceiling_usd)\
+      \ * 100.0\n\n        def format_status(self) -> str:\n            \"\"\"Format\
+      \ current budget status for display.\"\"\"\n            if not self.config.is_enabled:\n\
+      \                return \"[Budget: unlimited]\"\n            limit = self.config.effective_limit_usd\n\
+      \            remaining = max(0, limit - self.session_cost_usd)\n            pct\
+      \ = self.get_usage_percent()\n            return (f\"[Budget: ${self.session_cost_usd:.4f}\
+      \ / ${limit:.2f} \"\n                    f\"({pct:.1f}% of ceiling), ${remaining:.2f}\
+      \ remaining]\")\n\nVerify: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('OK')\"\n\nReference: docs/plans/2026-02-13-07-quota-aware-execution-design.md\n"
+    depends_on:
+    - '1.2'
+
+- id: phase-2
+  name: Phase 2 - Orchestrator Integration
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add CLI flags for budget configuration
+    agent: coder
+    status: pending
+    description: "In scripts/plan-orchestrator.py, add two new CLI arguments to the\
+      \ argument parser\nin main() (around line 2182, after --skip-smoke).\n\n   \
+      \ parser.add_argument(\n        \"--max-budget-pct\",\n        type=float,\n\
+      \        default=None,\n        metavar=\"PCT\",\n        help=\"Maximum percentage\
+      \ of quota ceiling to use (e.g., 90). Overrides plan YAML.\"\n    )\n    parser.add_argument(\n\
+      \        \"--quota-ceiling\",\n        type=float,\n        default=None,\n \
+      \       metavar=\"USD\",\n        help=\"Weekly quota ceiling in USD (e.g., 100.00).\
+      \ 0 = unlimited. Overrides plan YAML.\"\n    )\n\nAlso pass the args namespace\
+      \ to run_orchestrator(). Modify the run_orchestrator()\ncall in main() to pass\
+      \ cli_args=args:\n\n    run_orchestrator(\n        plan_path=args.plan,\n   \
+      \     dry_run=args.dry_run,\n        resume_from=args.resume_from,\n        single_task=args.single_task,\n\
+      \        verbose=args.verbose,\n        parallel=args.parallel,\n        skip_smoke=args.skip_smoke,\n\
+      \        cli_args=args\n    )\n\nModify run_orchestrator() signature to accept\
+      \ cli_args:\n\n    def run_orchestrator(\n        plan_path: str,\n        dry_run:\
+      \ bool = False,\n        resume_from: Optional[str] = None,\n        single_task:\
+      \ bool = False,\n        verbose: bool = False,\n        parallel: bool = False,\n\
+      \        skip_smoke: bool = False,\n        cli_args: Optional[argparse.Namespace]\
+      \ = None\n    ) -> None:\n\nVerify: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('OK')\"\n\nReference: scripts/plan-orchestrator.py lines\
+      \ 1699-1707, 2149-2202\n"
+    depends_on:
+    - '1.3'
+  - id: '2.2'
+    name: Initialize BudgetGuard in run_orchestrator
+    agent: coder
+    status: pending
+    description: "In scripts/plan-orchestrator.py, initialize BudgetGuard in run_orchestrator().\n\
+      \nAfter the plan is loaded and PlanUsageTracker is created (should be near\n\
+      the circuit_breaker initialization), add:\n\n    # Initialize budget guard\n\
+      \    budget_args = cli_args if cli_args else argparse.Namespace()\n    budget_config\
+      \ = parse_budget_config(plan, budget_args)\n    budget_guard = BudgetGuard(budget_config)\n\
+      \    if budget_config.is_enabled:\n        print(f\"\\n{budget_guard.format_status()}\"\
+      )\n\nThis creates the budget guard early so it is available for the task loop.\n\
+      \nVerify: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('OK')\"\n\nReference: scripts/plan-orchestrator.py run_orchestrator()\
+      \ function\n"
+    depends_on:
+    - '2.1'
+  - id: '2.3'
+    name: Add pre-task budget check in sequential execution
+    agent: coder
+    status: pending
+    description: "In scripts/plan-orchestrator.py, add a budget check before each\
+      \ task in the\nSEQUENTIAL EXECUTION block (around line 1952).\n\nFind the sequential\
+      \ task loop. Before the run_claude_task() call, add:\n\n    # Pre-task budget\
+      \ check\n    can_proceed, budget_reason = budget_guard.can_proceed()\n    if\
+      \ not can_proceed:\n        print(f\"\\n[BUDGET] {budget_reason}\")\n       \
+      \ print(f\"Pausing plan due to budget limit.\")\n        # Update plan status\
+      \ to paused_quota\n        plan.setdefault(\"meta\", {})[\"status\"] = \"paused_quota\"\
+      \n        plan[\"meta\"][\"pause_reason\"] = budget_reason\n        save_plan(plan,\
+      \ plan_path)\n        # Print usage summary if tracker exists\n        if usage_tracker\
+      \ and usage_tracker.task_usages:\n            print(usage_tracker.format_final_summary(plan))\n\
+      \            usage_tracker.write_usage_report(plan, plan_path)\n        print(\"\
+      \\nPlan paused. Resume later with: python scripts/plan-orchestrator.py --plan\"\
+      \n              f\" {plan_path}\")\n        return\n\nAfter each task completes\
+      \ (after usage_tracker.record is called), add:\n\n    # Record cost in budget\
+      \ guard\n    if task_result.usage and task_result.usage.total_cost_usd > 0:\n\
+      \        budget_guard.record_cost(task_result.usage.total_cost_usd)\n       \
+      \ if budget_config.is_enabled:\n            print(f\"  {budget_guard.format_status()}\"\
+      )\n\nVerify: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('OK')\"\n\nReference: docs/plans/2026-02-13-07-quota-aware-execution-design.md\n\
+      Reference: scripts/plan-orchestrator.py sequential execution block\n"
+    depends_on:
+    - '2.2'
+  - id: '2.4'
+    name: Add pre-task budget check in parallel execution
+    agent: coder
+    status: pending
+    description: "In scripts/plan-orchestrator.py, add a budget check in the PARALLEL\
+      \ EXECUTION\nblock (around line 1800).\n\nBefore the parallel tasks are submitted\
+      \ to the executor, add a budget check:\n\n    # Pre-group budget check\n   \
+      \ can_proceed, budget_reason = budget_guard.can_proceed()\n    if not can_proceed:\n\
+      \        print(f\"\\n[BUDGET] {budget_reason}\")\n        print(f\"Pausing plan\
+      \ due to budget limit.\")\n        plan.setdefault(\"meta\", {})[\"status\"\
+      ] = \"paused_quota\"\n        plan[\"meta\"][\"pause_reason\"] = budget_reason\n\
+      \        save_plan(plan, plan_path)\n        if usage_tracker and usage_tracker.task_usages:\n\
+      \            print(usage_tracker.format_final_summary(plan))\n            usage_tracker.write_usage_report(plan,\
+      \ plan_path)\n        print(\"\\nPlan paused. Resume later with: python scripts/plan-orchestrator.py\
+      \ --plan\"\n              f\" {plan_path}\")\n        return\n\nAfter the parallel\
+      \ results are collected and usage is recorded, add:\n\n    # Record costs from\
+      \ parallel tasks in budget guard\n    for tid, tres in results.items():\n   \
+      \     if tres and tres.usage and tres.usage.total_cost_usd > 0:\n          \
+      \  budget_guard.record_cost(tres.usage.total_cost_usd)\n    if budget_config.is_enabled:\n\
+      \        print(f\"  {budget_guard.format_status()}\")\n\nVerify: python3 -c \"\
+      import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True);\
+      \ print('OK')\"\n\nReference: scripts/plan-orchestrator.py parallel execution\
+      \ block\n"
+    depends_on:
+    - '2.3'
+
+- id: phase-3
+  name: Phase 3 - Plan Pause and Resume
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Add save_plan helper function
+    agent: coder
+    status: pending
+    description: "In scripts/plan-orchestrator.py, check if a save_plan() function\
+      \ already exists.\nSearch for 'def save_plan' in the file.\n\nIf it does NOT\
+      \ exist, add a helper function near the load_plan() function:\n\n    def save_plan(plan:\
+      \ dict, plan_path: str) -> None:\n        \"\"\"Write plan dict back to YAML\
+      \ file.\"\"\"\n        with open(plan_path, \"w\") as f:\n            yaml.dump(plan,\
+      \ f, default_flow_style=False, sort_keys=False)\n\nIf save_plan() already exists\
+      \ (the orchestrator already writes plan YAML\nfor task status updates), verify\
+      \ it can handle the meta.status field.\nThe existing function that updates task\
+      \ statuses in the YAML file is\nlikely sufficient.\n\nAlso verify that the paused_quota\
+      \ status is handled correctly at plan\nload time. In run_orchestrator(), after\
+      \ loading the plan, check for\npaused status and log a message:\n\n    # Check\
+      \ for paused plan\n    meta_status = plan.get(\"meta\", {}).get(\"status\", \"\
+      \")\n    if meta_status == \"paused_quota\":\n        print(f\"\\n[INFO] Plan\
+      \ was previously paused due to budget.\")\n        print(f\"  Reason: {plan.get('meta',\
+      \ {}).get('pause_reason', 'unknown')}\")\n        print(f\"  Clearing pause status\
+      \ and resuming...\")\n        plan[\"meta\"].pop(\"status\", None)\n        plan[\"\
+      meta\"].pop(\"pause_reason\", None)\n        # Save the cleared status\n    \
+      \    save_plan(plan, plan_path)\n\nVerify: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('OK')\"\n\nReference: scripts/plan-orchestrator.py load_plan()\
+      \ function area\n"
+    depends_on:
+    - '2.4'
+  - id: '3.2'
+    name: Handle paused_quota in auto-pipeline
+    agent: coder
+    status: pending
+    description: "In scripts/auto-pipeline.py, modify execute_plan() to detect and\
+      \ handle\nthe paused_quota status.\n\nAfter the orchestrator subprocess completes\
+      \ in execute_plan() (around\nline 998), add a check for paused_quota:\n\n   \
+      \ # Check if plan was paused due to budget\n    try:\n        with open(plan_path,\
+      \ \"r\") as f:\n            plan_data = yaml.safe_load(f)\n        if plan_data.get(\"\
+      meta\", {}).get(\"status\") == \"paused_quota\":\n            pause_reason =\
+      \ plan_data.get(\"meta\", {}).get(\"pause_reason\", \"budget limit\")\n     \
+      \       log(f\"Plan paused due to budget: {pause_reason}\")\n            return\
+      \ \"paused_quota\"  # Special return value\n    except (IOError, yaml.YAMLError):\n\
+      \        pass  # If we can't read the plan, treat as normal result\n\nIMPORTANT:\
+      \ Change the return type of execute_plan() from bool to\nUnion[bool, str]. The\
+      \ function currently returns True/False. Add the\nnew \"paused_quota\" string\
+      \ return value. Update the type hint:\n\n    def execute_plan(plan_path: str,\
+      \ dry_run: bool = False) -> Union[bool, str]:\n\nIn process_item() where execute_plan()\
+      \ is called (around line 1270),\nhandle the new return value:\n\n    plan_result\
+      \ = execute_plan(plan_path, dry_run)\n    if plan_result == \"paused_quota\"\
+      :\n        log(f\"Work item paused due to budget. Stopping pipeline.\")\n   \
+      \     return False  # Signal pipeline to stop\n    if not plan_result:\n    \
+      \    # existing failure handling...\n\nVerify: python3 -c \"import py_compile;\
+      \ py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('OK')\"\
+      \n\nReference: scripts/auto-pipeline.py lines 965-1013, 1233+\n"
+    depends_on:
+    - '3.1'
+
+- id: phase-4
+  name: Phase 4 - Auto-Pipeline Budget Tracking
+  status: pending
+  tasks:
+  - id: '4.1'
+    name: Add pipeline-level budget tracking
+    agent: coder
+    status: pending
+    description: "In scripts/auto-pipeline.py, add session-level budget tracking.\n\
+      \n1. Add new CLI arguments to the argument parser in main() (after --verbose):\n\
+      \n    parser.add_argument(\n        \"--max-budget-pct\",\n        type=float,\n\
+      \        default=None,\n        metavar=\"PCT\",\n        help=\"Maximum percentage\
+      \ of quota ceiling to use for this session\"\n    )\n    parser.add_argument(\n\
+      \        \"--quota-ceiling\",\n        type=float,\n        default=None,\n \
+      \       metavar=\"USD\",\n        help=\"Weekly quota ceiling in USD (0 = unlimited)\"\
+      \n    )\n\n2. Add module-level tracking variables near the other globals (around\
+      \ line 85):\n\n    PIPELINE_SESSION_COST_USD: float = 0.0\n    PIPELINE_BUDGET_CEILING_USD:\
+      \ float = 0.0\n    PIPELINE_BUDGET_MAX_PCT: float = 100.0\n\n3. In main(),\
+      \ after parsing args, set the globals:\n\n    global PIPELINE_SESSION_COST_USD,\
+      \ PIPELINE_BUDGET_CEILING_USD, PIPELINE_BUDGET_MAX_PCT\n    if args.quota_ceiling\
+      \ is not None:\n        PIPELINE_BUDGET_CEILING_USD = args.quota_ceiling\n \
+      \   if args.max_budget_pct is not None:\n        PIPELINE_BUDGET_MAX_PCT = args.max_budget_pct\n\
+      \n4. Add a function to check pipeline budget:\n\n    def check_pipeline_budget()\
+      \ -> tuple[bool, str]:\n        \"\"\"Check if pipeline budget allows another\
+      \ work item.\"\"\"\n        if PIPELINE_BUDGET_CEILING_USD <= 0:\n          \
+      \  return (True, \"\")\n        limit = PIPELINE_BUDGET_CEILING_USD * (PIPELINE_BUDGET_MAX_PCT\
+      \ / 100.0)\n        if PIPELINE_SESSION_COST_USD >= limit:\n            return\
+      \ (False,\n                f\"Pipeline budget exhausted: ${PIPELINE_SESSION_COST_USD:.4f}\
+      \ spent \"\n                f\"of ${limit:.2f} limit\")\n        return (True,\
+      \ \"\")\n\n5. After execute_plan() returns in process_item(), read the usage\
+      \ report\n   (from Feature 06) and accumulate cost:\n\n    # Accumulate plan\
+      \ cost into pipeline session total\n    global PIPELINE_SESSION_COST_USD\n  \
+      \  usage_report = read_usage_report(plan_path)  # From feature 06\n    if usage_report:\n\
+      \        plan_cost = usage_report.get(\"total\", {}).get(\"cost_usd\", 0.0)\n\
+      \        PIPELINE_SESSION_COST_USD += plan_cost\n        log(f\"  Session cost\
+      \ so far: ${PIPELINE_SESSION_COST_USD:.4f}\")\n\n6. In main_loop(), before processing\
+      \ each item, add a budget check:\n\n    # Check pipeline budget before next\
+      \ item\n    can_proceed, budget_reason = check_pipeline_budget()\n    if not\
+      \ can_proceed:\n        log(f\"[BUDGET] {budget_reason}\")\n        log(\"Stopping\
+      \ pipeline due to budget limit.\")\n        break\n\n   Add this check inside\
+      \ the 'for item in items:' loop (around line 1403),\n   right before the process_item()\
+      \ call.\n\nVerify: python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); print('OK')\"\n\nReference: scripts/auto-pipeline.py lines\
+      \ 1310-1424, 1457-1488\nReference: docs/plans/2026-02-13-07-quota-aware-execution-design.md\n"
+    depends_on:
+    - '3.2'
+
+- id: phase-5
+  name: Phase 5 - Unit Tests
+  status: pending
+  tasks:
+  - id: '5.1'
+    name: Create unit tests for BudgetConfig
+    agent: coder
+    status: pending
+    description: "Create tests/test_budget_guard.py with unit tests for BudgetConfig.\n\
+      \nSince plan-orchestrator.py is a script with top-level code that may be\ndifficult\
+      \ to import, replicate the BudgetConfig and BudgetGuard classes\nin the test\
+      \ file for testing purposes (copy the class definitions from\nthe script). Add\
+      \ a comment noting they are copied for test isolation.\n\nTest cases for BudgetConfig:\n\
+      \n1. test_default_values:\n   - BudgetConfig() should have max_quota_percent=100.0,\
+      \ quota_ceiling_usd=0.0,\n     reserved_budget_usd=0.0\n   - is_enabled should\
+      \ be False\n   - effective_limit_usd should be float('inf')\n\n2. test_effective_limit_with_ceiling:\n\
+      \   - BudgetConfig(max_quota_percent=90, quota_ceiling_usd=100.0)\n   - effective_limit_usd\
+      \ should be 90.0\n\n3. test_effective_limit_with_reserve:\n   - BudgetConfig(quota_ceiling_usd=100.0,\
+      \ reserved_budget_usd=20.0)\n   - effective_limit_usd should be 80.0 (100 -\
+      \ 20)\n\n4. test_effective_limit_uses_minimum:\n   - BudgetConfig(max_quota_percent=90,\
+      \ quota_ceiling_usd=100.0, reserved_budget_usd=15.0)\n   - percent_limit =\
+      \ 90.0, reserve_limit = 85.0\n   - effective_limit_usd should be 85.0 (the\
+      \ minimum)\n\n5. test_is_enabled:\n   - BudgetConfig(quota_ceiling_usd=0.0)\
+      \ -> is_enabled = False\n   - BudgetConfig(quota_ceiling_usd=50.0) -> is_enabled\
+      \ = True\n\n6. test_zero_ceiling_is_unlimited:\n   - BudgetConfig(max_quota_percent=50,\
+      \ quota_ceiling_usd=0.0)\n   - effective_limit_usd should be float('inf') (ceiling\
+      \ of 0 means unlimited)\n\nRun: python -m pytest tests/test_budget_guard.py\
+      \ -v -k \"BudgetConfig\"\nFix any failures before marking complete.\n\nReference:\
+      \ docs/plans/2026-02-13-07-quota-aware-execution-design.md\n"
+    depends_on:
+    - '1.3'
+  - id: '5.2'
+    name: Create unit tests for BudgetGuard
+    agent: coder
+    status: pending
+    description: "Add test cases for BudgetGuard to tests/test_budget_guard.py.\n\n\
+      Test cases for BudgetGuard:\n\n1. test_unlimited_budget_always_proceeds:\n  \
+      \ - BudgetGuard with BudgetConfig() (no ceiling)\n   - can_proceed() should\
+      \ return (True, \"\")\n   - Record arbitrary costs, can_proceed() still returns\
+      \ True\n\n2. test_budget_allows_when_under_limit:\n   - BudgetConfig(max_quota_percent=90,\
+      \ quota_ceiling_usd=100.0)\n   - Record $50 cost\n   - can_proceed() should\
+      \ return (True, \"\")\n\n3. test_budget_blocks_when_at_limit:\n   - BudgetConfig(max_quota_percent=90,\
+      \ quota_ceiling_usd=100.0)\n   - effective_limit = $90\n   - Record $90 cost\n\
+      \   - can_proceed() should return (False, <reason string>)\n   - Verify reason\
+      \ string contains \"Budget exhausted\"\n\n4. test_budget_blocks_when_over_limit:\n\
+      \   - BudgetConfig(max_quota_percent=90, quota_ceiling_usd=100.0)\n   - Record\
+      \ $95 cost (over the $90 limit)\n   - can_proceed() should return (False, <reason>)\n\
+      \n5. test_record_cost_accumulates:\n   - Record $10, $20, $30\n   - session_cost_usd\
+      \ should be 60.0\n\n6. test_get_usage_percent:\n   - BudgetConfig(quota_ceiling_usd=200.0)\n\
+      \   - Record $50\n   - get_usage_percent() should return 25.0\n\n7. test_get_usage_percent_unlimited:\n\
+      \   - BudgetConfig() (no ceiling)\n   - get_usage_percent() should return 0.0\n\
+      \n8. test_format_status_unlimited:\n   - BudgetGuard with no ceiling\n   - format_status()\
+      \ should contain \"unlimited\"\n\n9. test_format_status_with_budget:\n   - BudgetConfig(max_quota_percent=90,\
+      \ quota_ceiling_usd=100.0)\n   - Record $45\n   - format_status() should contain\
+      \ \"$45\" and \"remaining\"\n\nRun: python -m pytest tests/test_budget_guard.py\
+      \ -v -k \"BudgetGuard\"\nFix any failures before marking complete.\n\nReference:\
+      \ docs/plans/2026-02-13-07-quota-aware-execution-design.md\n"
+    depends_on:
+    - '5.1'
+  - id: '5.3'
+    name: Create unit tests for parse_budget_config
+    agent: coder
+    status: pending
+    description: "Add test cases for parse_budget_config to tests/test_budget_guard.py.\n\
+      \nSince parse_budget_config uses argparse.Namespace, import argparse in the\n\
+      test file.\n\nReplicate the parse_budget_config function in the test file for\n\
+      isolation (same approach as BudgetConfig/BudgetGuard).\n\nTest cases:\n\n1. test_parse_empty_plan_defaults:\n\
+      \   - plan = {\"meta\": {}}\n   - cli_args = argparse.Namespace()\n   - Result\
+      \ should have all defaults (100.0 / 0.0 / 0.0)\n\n2. test_parse_plan_yaml_budget:\n\
+      \   - plan = {\"meta\": {\"budget\": {\"max_quota_percent\": 80, \"quota_ceiling_usd\"\
+      : 50.0}}}\n   - cli_args = argparse.Namespace()\n   - Result: max_quota_percent=80,\
+      \ quota_ceiling_usd=50.0\n\n3. test_cli_overrides_yaml:\n   - plan = {\"meta\"\
+      : {\"budget\": {\"max_quota_percent\": 80, \"quota_ceiling_usd\": 50.0}}}\n\
+      \   - cli_args = argparse.Namespace(max_budget_pct=95, quota_ceiling=200.0)\n\
+      \   - Result: max_quota_percent=95, quota_ceiling_usd=200.0\n\n4. test_cli_partial_override:\n\
+      \   - plan = {\"meta\": {\"budget\": {\"max_quota_percent\": 80, \"quota_ceiling_usd\"\
+      : 50.0}}}\n   - cli_args = argparse.Namespace(max_budget_pct=None, quota_ceiling=75.0)\n\
+      \   - Result: max_quota_percent=80 (from YAML), quota_ceiling_usd=75.0 (from\
+      \ CLI)\n\n5. test_parse_no_budget_section:\n   - plan = {\"meta\": {\"name\"\
+      : \"test\"}}\n   - Result should have all defaults\n\nRun: python -m pytest tests/test_budget_guard.py\
+      \ -v\nFix any failures before marking complete.\n\nReference: docs/plans/2026-02-13-07-quota-aware-execution-design.md\n"
+    depends_on:
+    - '5.2'
+
+- id: phase-6
+  name: Phase 6 - Verification
+  status: pending
+  tasks:
+  - id: '6.1'
+    name: Run full verification suite
+    agent: code-reviewer
+    status: pending
+    description: "Run all verification checks to confirm the quota-aware execution\n\
+      feature works correctly.\n\n1. Syntax check both scripts:\n   python3 -c \"\
+      import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True);\
+      \ print('plan-orchestrator.py: OK')\"\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); print('auto-pipeline.py: OK')\"\n\n2. Run unit tests:\n  \
+      \ python -m pytest tests/test_budget_guard.py -v\n\n3. Run orchestrator dry-run\
+      \ to verify no regressions:\n   python scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml\
+      \ --dry-run\n\n4. Verify structural checks:\n   python3 -c \"\n   with open('scripts/plan-orchestrator.py')\
+      \ as f:\n       source = f.read()\n   assert 'class BudgetConfig' in source,\
+      \ 'BudgetConfig class not found'\n   assert 'class BudgetGuard' in source, 'BudgetGuard\
+      \ class not found'\n   assert 'parse_budget_config' in source, 'parse_budget_config\
+      \ not found'\n   assert 'effective_limit_usd' in source, 'effective_limit_usd\
+      \ not found'\n   assert 'can_proceed' in source, 'can_proceed method not found'\n\
+      \   assert 'paused_quota' in source, 'paused_quota status not found'\n   assert\
+      \ '--max-budget-pct' in source, 'CLI flag --max-budget-pct not found'\n   assert\
+      \ '--quota-ceiling' in source, 'CLI flag --quota-ceiling not found'\n   print('All\
+      \ orchestrator structural checks passed')\n   \"\n\n5. Verify auto-pipeline\
+      \ integration:\n   python3 -c \"\n   with open('scripts/auto-pipeline.py') as\
+      \ f:\n       source = f.read()\n   assert 'paused_quota' in source, 'paused_quota\
+      \ handling not found'\n   assert 'check_pipeline_budget' in source, 'Pipeline\
+      \ budget check not found'\n   assert '--max-budget-pct' in source, 'CLI flag\
+      \ --max-budget-pct not found'\n   assert '--quota-ceiling' in source, 'CLI flag\
+      \ --quota-ceiling not found'\n   print('All auto-pipeline structural checks\
+      \ passed')\n   \"\n\n6. Test budget config with a YAML plan that has budget\
+      \ settings:\n   Create a temporary test: verify that the orchestrator dry-run\
+      \ accepts\n   the new flags without error:\n   python scripts/plan-orchestrator.py\
+      \ --plan .claude/plans/sample-plan.yaml --dry-run --max-budget-pct 90 --quota-ceiling\
+      \ 100.0\n\nIf any check fails, report which check failed and what the error\
+      \ was.\nDo not attempt to fix - just report findings.\n\nReference: docs/plans/2026-02-13-07-quota-aware-execution-design.md\n"
+    depends_on:
+    - '5.3'
+    - '4.1'
+    max_attempts: 5
