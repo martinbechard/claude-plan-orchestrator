@@ -127,6 +127,36 @@ def load_agent_definition(agent_name: str) -> Optional[dict]:
         return None
 
 
+# Keywords in task descriptions that indicate a review/verification task.
+# When infer_agent_for_task() matches any of these in the description,
+# it selects the "code-reviewer" agent instead of the default "coder".
+REVIEWER_KEYWORDS = [
+    "verify", "review", "check", "validate", "regression", "compliance"
+]
+
+
+def infer_agent_for_task(task: dict) -> Optional[str]:
+    """Infer which agent should execute a task based on its description keywords.
+
+    Scans the task description for keywords associated with review/verification
+    work. If any REVIEWER_KEYWORDS are found, returns "code-reviewer". Otherwise
+    returns the default "coder" agent.
+
+    Returns None if the agents directory (AGENTS_DIR) does not exist, which
+    preserves backward compatibility for projects that have not adopted agents.
+    """
+    if not os.path.isdir(AGENTS_DIR):
+        return None
+
+    description = task.get("description", "").lower()
+
+    for keyword in REVIEWER_KEYWORDS:
+        if keyword in description:
+            return "code-reviewer"
+
+    return "coder"
+
+
 # Known locations for the claude binary
 CLAUDE_BINARY_SEARCH_PATHS = [
     "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js",
