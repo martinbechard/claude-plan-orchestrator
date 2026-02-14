@@ -674,6 +674,32 @@ PLAN_CREATION_PROMPT_TEMPLATE = """You are creating an implementation plan for a
 
 ## Backlog item type: {item_type}
 
+## Agent Selection
+
+Tasks can specify which agent should execute them via the optional "agent" field.
+Available agents are in {agents_dir}:
+
+- **coder**: Implementation specialist. Use for coding, implementation, and
+  modification tasks. This is the default if no agent is specified.
+- **code-reviewer**: Read-only reviewer. Use for verification, review, and
+  compliance-checking tasks.
+
+Example:
+  - id: '2.1'
+    name: Implement the feature
+    agent: coder
+    status: pending
+    description: ...
+
+  - id: '3.1'
+    name: Review code quality
+    agent: code-reviewer
+    status: pending
+    description: ...
+
+If you do not set the agent field, the orchestrator will infer it from the
+task description (verification tasks get code-reviewer, everything else gets coder).
+
 ## Important
 - Follow the CLAUDE.md change workflow order: docs -> code -> tests -> verification
 - For defects: include a task to verify the fix with a regression test
@@ -801,6 +827,7 @@ def create_plan(item: BacklogItem, dry_run: bool = False) -> Optional[str]:
         date=date_str,
         slug=item.slug,
         item_type=item.item_type,
+        agents_dir=AGENTS_DIR,
     )
 
     cmd = [*CLAUDE_CMD, "--dangerously-skip-permissions", "--print", prompt]

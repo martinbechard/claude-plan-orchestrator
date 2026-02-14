@@ -203,7 +203,7 @@ sections:
       loading (line 80) to auto-pipeline.py, mirroring the same pattern in plan-orchestrator.py.
   - id: '3.2'
     name: Update PLAN_CREATION_PROMPT_TEMPLATE with agent guidance
-    status: pending
+    status: completed
     description: "In scripts/auto-pipeline.py, update the PLAN_CREATION_PROMPT_TEMPLATE\n\
       (starts at line 641) to inform the plan creator about agents.\n\nAdd a new section\
       \ before the \"## Important\" section (line ~675). Insert\nthis text block:\n\
@@ -224,6 +224,8 @@ sections:
       \ the keyword arguments.\n\nReference: scripts/auto-pipeline.py lines 641-683\n"
     depends_on:
     - '3.1'
+    attempts: 1
+    last_attempt: '2026-02-13T22:27:39.300788'
   - id: '3.3'
     name: Update orchestrator-config.yaml with agents_dir field
     status: pending
