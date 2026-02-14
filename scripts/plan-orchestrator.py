@@ -1206,7 +1206,7 @@ def build_claude_prompt(
     if agent_name:
         agent_def = load_agent_definition(agent_name)
         if agent_def:
-            agent_content = agent_def["content"] + "\n\n---\n\n"
+            agent_content = agent_def["body"] + "\n\n---\n\n"
             verbose_log(f"Using agent '{agent_name}' for task {task['id']}", "AGENT")
 
     # Add subagent header if running as parallel worker
