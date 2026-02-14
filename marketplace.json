@@ -1,0 +1,9 @@
+{
+  "name": "plan-orchestrator",
+  "displayName": "Claude Plan Orchestrator",
+  "description": "Automate multi-step implementation plans with Claude Code. Break complex projects into discrete tasks executed in isolated sessions, avoiding context degradation. Supports parallel execution via git worktrees, per-task validation, and automated backlog processing.",
+  "repository": "https://github.com/martinbechard/claude-plan-orchestrator",
+  "installCommand": "claude plugin install martinbechard/claude-plan-orchestrator",
+  "categories": ["automation", "development-tools"],
+  "minClaudeCodeVersion": "1.0.0"
+}
