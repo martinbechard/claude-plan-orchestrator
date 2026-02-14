@@ -665,7 +665,7 @@ PLAN_CREATION_PROMPT_TEMPLATE = """You are creating an implementation plan for a
    - Each task has: id, name, description, status: pending
    - Task descriptions should be detailed enough for a fresh Claude session to execute
    - Include: documentation tasks, implementation tasks, unit tests, verification
-   - The verification task should run pnpm run build and pnpm test
+   - The verification task should run {build_command} and {test_command}
 
 3. Validate the plan: python scripts/plan-orchestrator.py --plan .claude/plans/{slug}.yaml --dry-run
    - If validation fails, fix the YAML format and retry
@@ -828,6 +828,8 @@ def create_plan(item: BacklogItem, dry_run: bool = False) -> Optional[str]:
         slug=item.slug,
         item_type=item.item_type,
         agents_dir=AGENTS_DIR,
+        build_command=BUILD_COMMAND,
+        test_command=TEST_COMMAND,
     )
 
     cmd = [*CLAUDE_CMD, "--dangerously-skip-permissions", "--print", prompt]
@@ -941,7 +943,7 @@ def start_dev_server() -> None:
     log(f"Restarting dev server on port {DEV_SERVER_PORT}...")
     try:
         subprocess.Popen(
-            ["pnpm", "dev"],
+            DEV_SERVER_COMMAND.split(),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             cwd=os.getcwd(),
