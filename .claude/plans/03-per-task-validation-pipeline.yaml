@@ -423,7 +423,7 @@ sections:
   - id: '5.2'
     name: Update sample-plan.yaml with validation example
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '5.1'
     description: "Update .claude/plans/sample-plan.yaml to include an example of the\
@@ -432,6 +432,12 @@ sections:
       \ (optional, disabled by default)\n\n  # validation:\n\n  #   enabled: true\n\
       \n  #   run_after:\n\n  #     - coder\n\n  #   validators:\n\n  #     - validator\n\
       \n  #   max_validation_attempts: 1\n\n\nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
+    attempts: 1
+    last_attempt: '2026-02-13T23:40:50.172550'
+    completed_at: '2026-02-13T23:41:37.646190'
+    result_message: Added commented-out validation configuration example to sample-plan.yaml
+      after notification_email field. Shows enabled, run_after, validators, and max_validation_attempts
+      fields as a discoverable template for users.
   - id: '5.3'
     name: Update PLAN_CREATION_PROMPT_TEMPLATE with validation guidance
     agent: coder
