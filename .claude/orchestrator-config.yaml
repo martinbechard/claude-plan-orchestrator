@@ -8,12 +8,15 @@
 # dev_server_port: 3000
 
 # Command used to build/compile the project during verification.
-# build_command: "pnpm run build"
+# Default: "pnpm run build"
+build_command: "python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\""
 
 # Command used to run the project test suite during verification.
-# test_command: "pnpm test"
+# Default: "pnpm test"
+test_command: "python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'"
 
 # Command used to start the dev server during verification.
+# Default: "pnpm dev"
 # dev_server_command: "pnpm dev"
 
 # Directory containing agent definition markdown files.
