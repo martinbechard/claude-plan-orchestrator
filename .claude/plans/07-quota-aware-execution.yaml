@@ -217,12 +217,12 @@ sections:
       verified, runtime assertions pass.'
 - id: phase-3
   name: Phase 3 - Auto-Pipeline Integration
-  status: pending
+  status: completed
   tasks:
   - id: '3.1'
     name: Add PipelineBudgetGuard and CLI flags to auto-pipeline
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.1'
     description: "In scripts/auto-pipeline.py, add budget awareness to the pipeline.\n\
@@ -280,6 +280,14 @@ sections:
       \ and budget_guard.is_enabled:\n       log(f\"  Budget: ${budget_guard.effective_limit_usd:.2f}\
       \ limit\")\n\n8. Verify with: python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py\n"
+    attempts: 1
+    last_attempt: '2026-02-14T10:01:46.802005'
+    completed_at: '2026-02-14T10:05:27.108251'
+    result_message: Added PipelineBudgetGuard class, budget constants (DEFAULT_MAX_QUOTA_PERCENT,
+      DEFAULT_QUOTA_CEILING_USD, DEFAULT_RESERVED_BUDGET_USD), CLI flags (--max-budget-pct,
+      --quota-ceiling, --reserved-budget), budget checks in both --once and continuous
+      loop paths, and budget info in startup log to scripts/auto-pipeline.py. Syntax
+      verified, all assertions pass.
 - id: phase-4
   name: Phase 4 - Unit Tests
   status: pending
