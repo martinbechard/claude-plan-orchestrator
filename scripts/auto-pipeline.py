@@ -700,6 +700,28 @@ Example:
 If you do not set the agent field, the orchestrator will infer it from the
 task description (verification tasks get code-reviewer, everything else gets coder).
 
+## Validation (Optional)
+
+Plans can enable per-task validation by adding a validation block to the meta section. When enabled, a validator agent runs after each coder task to independently verify the result.
+
+Example meta configuration:
+
+  meta:
+    validation:
+      enabled: true
+      run_after:
+        - coder
+      validators:
+        - validator
+      max_validation_attempts: 1
+
+The validator produces PASS/WARN/FAIL verdicts:
+- PASS: task proceeds normally
+- WARN: task completes but warnings are logged
+- FAIL: task is retried with validation findings prepended to the prompt
+
+For defect fixes, use the issue-verifier validator instead of or in addition to the default validator. This validator reads the original defect file and checks whether reported symptoms are resolved.
+
 ## Important
 - Follow the CLAUDE.md change workflow order: docs -> code -> tests -> verification
 - For defects: include a task to verify the fix with a regression test
