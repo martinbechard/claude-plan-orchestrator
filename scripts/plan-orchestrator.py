@@ -2160,6 +2160,11 @@ def run_orchestrator(
     print(f"Tasks completed: {tasks_completed}")
     print(f"Tasks failed: {tasks_failed}")
 
+    # Return non-zero exit code when tasks failed so callers (e.g. auto-pipeline)
+    # know the orchestrator did not fully succeed.
+    if tasks_failed > 0:
+        sys.exit(1)
+
 
 def main():
     parser = argparse.ArgumentParser(

@@ -86,7 +86,7 @@ sections:
       frontmatter with name/description).
 - id: phase-3
   name: Phase 3 - Documentation
-  status: in_progress
+  status: completed
   tasks:
   - id: '3.1'
     name: Create CHANGELOG.md
@@ -163,7 +163,7 @@ sections:
       via plugin path, and rollback procedure. Committed as 4176d63.'
   - id: '3.3'
     name: Update README with plugin installation instructions
-    status: pending
+    status: completed
     description: "Update README.md to add plugin installation as the primary installation\n\
       method, keeping manual-copy as a fallback.\n\nReference: docs/plans/2026-02-13-05-plugin-packaging-design.md\n\
       \nChanges to make:\n\n1. In the Installation section (currently line ~68), restructure\
@@ -181,6 +181,13 @@ sections:
       \ add the migration guide link. Do not rewrite\nother sections.\n\nFiles: README.md\n"
     depends_on:
     - '3.2'
+    attempts: 1
+    last_attempt: '2026-02-13T23:14:44.441388'
+    completed_at: '2026-02-13T23:15:37.699625'
+    result_message: 'Updated README.md Installation section: added Plugin Install
+      (Recommended) as primary method with install command, local dev flag, and script
+      access example via plugin path. Kept manual-copy instructions under Manual Install
+      (Alternative) sub-heading. Added migration guide link. Committed as 828d2f4.'
 - id: phase-4
   name: Phase 4 - Verification
   status: pending
