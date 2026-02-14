@@ -1528,6 +1528,21 @@ def build_claude_prompt(
             agent_content = agent_def["body"] + "\n\n---\n\n"
             verbose_log(f"Using agent '{agent_name}' for task {task['id']}", "AGENT")
 
+    # Prepend validation findings from previous failed validation
+    validation_findings = task.get("validation_findings", "")
+    validation_header = ""
+    if validation_findings:
+        validation_header = f"""## PREVIOUS VALIDATION FAILED
+
+The previous attempt at this task was completed but failed validation.
+You must address these findings:
+
+{validation_findings}
+
+---
+
+"""
+
     # Add subagent header if running as parallel worker
     subagent_header = ""
     if subagent_context:
@@ -1583,7 +1598,7 @@ Read `.claude/skills/agent-sync.md` for the full protocol.
             "the orchestrator assigned it to you. Start working immediately on the task."
         )
 
-    return f"""{agent_content}{subagent_header}Run task {task['id']} from the implementation plan.
+    return f"""{agent_content}{validation_header}{subagent_header}Run task {task['id']} from the implementation plan.
 
 ## Task Details
 - **Section:** {section['name']} ({section['id']})
