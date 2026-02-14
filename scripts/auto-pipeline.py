@@ -39,6 +39,9 @@ except ImportError:
 
 # ─── Configuration ────────────────────────────────────────────────────
 
+ORCHESTRATOR_CONFIG_PATH = ".claude/orchestrator-config.yaml"
+DEFAULT_DEV_SERVER_PORT = 3000
+
 DEFECT_DIR = "docs/defect-backlog"
 FEATURE_DIR = "docs/feature-backlog"
 COMPLETED_SUBDIR = "completed"
@@ -50,7 +53,23 @@ PLAN_CREATION_TIMEOUT_SECONDS = 600
 CHILD_SHUTDOWN_TIMEOUT_SECONDS = 10
 RATE_LIMIT_BUFFER_SECONDS = 30
 RATE_LIMIT_DEFAULT_WAIT_SECONDS = 3600
-DEV_SERVER_PORT = 3000  # Only manage dev server, never touch QA (3002)
+
+
+def load_orchestrator_config() -> dict:
+    """Load project-level orchestrator config from .claude/orchestrator-config.yaml.
+
+    Returns the parsed dict, or an empty dict if the file doesn't exist.
+    """
+    try:
+        with open(ORCHESTRATOR_CONFIG_PATH, "r") as f:
+            config = yaml.safe_load(f)
+        return config if isinstance(config, dict) else {}
+    except (IOError, yaml.YAMLError):
+        return {}
+
+
+_config = load_orchestrator_config()
+DEV_SERVER_PORT = int(_config.get("dev_server_port", DEFAULT_DEV_SERVER_PORT))
 
 # Pattern matching backlog item slugs (NN-slug-name format)
 BACKLOG_SLUG_PATTERN = re.compile(r"^\d{2,}-[\w-]+$")

@@ -30,12 +30,33 @@ import yaml
 # Worktree configuration
 WORKTREE_BASE_DIR = ".worktrees"
 
+# Orchestrator project config
+ORCHESTRATOR_CONFIG_PATH = ".claude/orchestrator-config.yaml"
+DEFAULT_DEV_SERVER_PORT = 3000
+
 # Configuration
 DEFAULT_PLAN_PATH = ".claude/plans/pipeline-optimization.yaml"
 STATUS_FILE_PATH = ".claude/plans/task-status.json"
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
 DEFAULT_MAX_ATTEMPTS = 3
 CLAUDE_TIMEOUT_SECONDS = 600  # 10 minutes per task
+
+
+def load_orchestrator_config() -> dict:
+    """Load project-level orchestrator config from .claude/orchestrator-config.yaml.
+
+    Returns the parsed dict, or an empty dict if the file doesn't exist.
+    """
+    try:
+        with open(ORCHESTRATOR_CONFIG_PATH, "r") as f:
+            config = yaml.safe_load(f)
+        return config if isinstance(config, dict) else {}
+    except (IOError, yaml.YAMLError):
+        return {}
+
+
+_config = load_orchestrator_config()
+DEV_SERVER_PORT = int(_config.get("dev_server_port", DEFAULT_DEV_SERVER_PORT))
 
 # Known locations for the claude binary
 CLAUDE_BINARY_SEARCH_PATHS = [
@@ -1173,20 +1194,18 @@ def run_smoke_tests() -> bool:
 
     # Detect which port has a running server
     smoke_port = None
-    for port in [3000, 3001, 3002]:
-        try:
-            check = subprocess.run(
-                ["lsof", "-ti", f":{port}"],
-                capture_output=True, text=True, timeout=5
-            )
-            if check.stdout.strip():
-                smoke_port = port
-                break
-        except Exception:
-            continue
+    try:
+        check = subprocess.run(
+            ["lsof", "-ti", f":{DEV_SERVER_PORT}"],
+            capture_output=True, text=True, timeout=5
+        )
+        if check.stdout.strip():
+            smoke_port = DEV_SERVER_PORT
+    except Exception:
+        pass
 
     if not smoke_port:
-        print("[SMOKE] No dev/QA server detected on ports 3000-3002 - skipping smoke tests")
+        print(f"[SMOKE] No dev server detected on port {DEV_SERVER_PORT} - skipping smoke tests")
         print("[SMOKE] Start a server with 'pnpm dev' before running smoke tests")
         return True  # Don't fail the plan if no server is running
 

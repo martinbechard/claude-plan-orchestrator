@@ -1,0 +1,8 @@
+# Orchestrator configuration for this project.
+# Both auto-pipeline.py and plan-orchestrator.py read this file.
+# All fields are optional -- defaults are used when omitted.
+
+# Port the dev server runs on. The auto-pipeline stops/restarts it during
+# orchestrator runs to avoid build cache conflicts, and the plan-orchestrator
+# uses it for post-plan smoke tests.
+# dev_server_port: 3000
