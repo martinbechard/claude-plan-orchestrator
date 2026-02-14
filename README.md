@@ -65,6 +65,28 @@ See [docs/narrative/](docs/narrative/) for the full development history and desi
 
 ## Installation
 
+### Plugin Install (Recommended)
+
+```bash
+claude plugin install martinbechard/claude-plan-orchestrator
+```
+
+Or for local development:
+
+```bash
+claude --plugin-dir /path/to/claude-plan-orchestrator
+```
+
+After plugin install, the orchestrator scripts are available in the plugin directory:
+
+```bash
+python "$(claude plugin path plan-orchestrator)/scripts/plan-orchestrator.py" --plan .claude/plans/my-feature.yaml
+```
+
+See [Migration Guide](docs/migration-from-manual-copy.md) for migrating from manual-copy to plugin installation.
+
+### Manual Install (Alternative)
+
 Copy the orchestrator components to your project:
 
 ```bash
