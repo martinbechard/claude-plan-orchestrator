@@ -1,68 +1,51 @@
 meta:
   name: Plugin Packaging and Distribution
-  description: >
-    Package the plan orchestrator as a Claude Code plugin for one-command
-    installation. Create plugin.json manifest, package CODING-RULES.md as a
-    preloadable skill, add marketplace.json, update README with plugin install
-    instructions, create migration guide, and add CHANGELOG.md. Preserves
-    the manual-copy workflow as a fallback.
+  description: 'Package the plan orchestrator as a Claude Code plugin for one-command
+    installation. Create plugin.json manifest, package CODING-RULES.md as a preloadable
+    skill, add marketplace.json, update README with plugin install instructions, create
+    migration guide, and add CHANGELOG.md. Preserves the manual-copy workflow as a
+    fallback.
+
+    '
   plan_doc: docs/plans/2026-02-13-05-plugin-packaging-design.md
   created: '2026-02-13'
   max_attempts_default: 3
-
 sections:
 - id: phase-1
   name: Phase 1 - Plugin Manifest and Marketplace
-  status: pending
+  status: in_progress
   tasks:
   - id: '1.1'
     name: Create plugin.json manifest
-    status: pending
-    description: |
-      Create plugin.json at the project root with proper Claude Code plugin metadata.
-
-      Reference: docs/plans/2026-02-13-05-plugin-packaging-design.md
-
-      The manifest must include:
-      - name: "plan-orchestrator"
-      - version: "1.0.0"
-      - description: Summary from README (automate multi-step implementation plans
-        with Claude Code)
-      - author: "martinbechard"
-      - repository: "https://github.com/martinbechard/claude-plan-orchestrator"
-      - license: "MIT"
-      - keywords: ["orchestrator", "plan", "automation", "parallel", "yaml"]
-      - Map the .claude/ subdirectories as plugin component entry points:
-        agents, skills, commands
-
-      Verify the JSON is valid:
-        python3 -c "import json; json.load(open('plugin.json')); print('plugin.json valid')"
-
-      Files: plugin.json
-
+    status: completed
+    description: "Create plugin.json at the project root with proper Claude Code plugin\
+      \ metadata.\n\nReference: docs/plans/2026-02-13-05-plugin-packaging-design.md\n\
+      \nThe manifest must include:\n- name: \"plan-orchestrator\"\n- version: \"1.0.0\"\
+      \n- description: Summary from README (automate multi-step implementation plans\n\
+      \  with Claude Code)\n- author: \"martinbechard\"\n- repository: \"https://github.com/martinbechard/claude-plan-orchestrator\"\
+      \n- license: \"MIT\"\n- keywords: [\"orchestrator\", \"plan\", \"automation\"\
+      , \"parallel\", \"yaml\"]\n- Map the .claude/ subdirectories as plugin component\
+      \ entry points:\n  agents, skills, commands\n\nVerify the JSON is valid:\n \
+      \ python3 -c \"import json; json.load(open('plugin.json')); print('plugin.json\
+      \ valid')\"\n\nFiles: plugin.json\n"
+    attempts: 1
+    last_attempt: '2026-02-13T23:08:52.911127'
+    completed_at: '2026-02-13T23:09:53.683476'
+    result_message: Created plugin.json manifest with name, version, description,
+      author, repository, license, keywords, and .claude/ entry points (agents, skills,
+      commands). JSON validated successfully.
   - id: '1.2'
     name: Create marketplace.json for team distribution
     status: pending
-    description: |
-      Create marketplace.json at the project root for Claude Code team marketplace
-      discovery.
-
-      Reference: docs/plans/2026-02-13-05-plugin-packaging-design.md
-
-      The marketplace.json should include:
-      - name: "plan-orchestrator"
-      - displayName: "Claude Plan Orchestrator"
-      - description: Brief description for marketplace listing
-      - repository: GitHub URL
-      - installCommand: "claude plugin install martinbechard/claude-plan-orchestrator"
-      - categories: ["automation", "development-tools"]
-      - minClaudeCodeVersion: "1.0.0" (or appropriate minimum)
-
-      Verify the JSON is valid:
-        python3 -c "import json; json.load(open('marketplace.json')); print('marketplace.json valid')"
-
-      Files: marketplace.json
-
+    description: "Create marketplace.json at the project root for Claude Code team\
+      \ marketplace\ndiscovery.\n\nReference: docs/plans/2026-02-13-05-plugin-packaging-design.md\n\
+      \nThe marketplace.json should include:\n- name: \"plan-orchestrator\"\n- displayName:\
+      \ \"Claude Plan Orchestrator\"\n- description: Brief description for marketplace\
+      \ listing\n- repository: GitHub URL\n- installCommand: \"claude plugin install\
+      \ martinbechard/claude-plan-orchestrator\"\n- categories: [\"automation\", \"\
+      development-tools\"]\n- minClaudeCodeVersion: \"1.0.0\" (or appropriate minimum)\n\
+      \nVerify the JSON is valid:\n  python3 -c \"import json; json.load(open('marketplace.json'));\
+      \ print('marketplace.json valid')\"\n\nFiles: marketplace.json\n"
 - id: phase-2
   name: Phase 2 - Skills Packaging
   status: pending
@@ -70,40 +53,23 @@ sections:
   - id: '2.1'
     name: Package CODING-RULES.md as a preloadable skill
     status: pending
-    description: |
-      Create a skill entry point for CODING-RULES.md with progressive disclosure.
-
-      Reference: docs/plans/2026-02-13-05-plugin-packaging-design.md
-
-      Create .claude/skills/coding-rules/SKILL.md with:
-
-      1. A concise summary of the key coding rules (one paragraph per rule category)
-      2. Clear statement that this is a condensed version
-      3. Instruction to read the full CODING-RULES.md at the project root for
-         complete details and rationale
-      4. The summary should cover:
-         - File headers and design traceability (Rule 0)
-         - Naming conventions (Rule 1)
-         - File organization (Rule 2)
-         - Code structure and readability (Rule 3)
-         - Type safety (Rule 4)
-         - Coupling and cohesion (Rule 5)
-         - Error handling (Rule 6)
-         - Comments and documentation (Rule 7)
-         - Test discipline (Rule 11)
-         - AI-specific discipline (Rule 12)
-
-      Reference the existing .claude/skills/implement/SKILL.md for skill formatting
-      conventions.
-
-      The full CODING-RULES.md stays at the project root unchanged. The skill
-      is a progressive-disclosure entry point, not a replacement.
-
-      Files: .claude/skills/coding-rules/SKILL.md
-
+    description: "Create a skill entry point for CODING-RULES.md with progressive\
+      \ disclosure.\n\nReference: docs/plans/2026-02-13-05-plugin-packaging-design.md\n\
+      \nCreate .claude/skills/coding-rules/SKILL.md with:\n\n1. A concise summary\
+      \ of the key coding rules (one paragraph per rule category)\n2. Clear statement\
+      \ that this is a condensed version\n3. Instruction to read the full CODING-RULES.md\
+      \ at the project root for\n   complete details and rationale\n4. The summary\
+      \ should cover:\n   - File headers and design traceability (Rule 0)\n   - Naming\
+      \ conventions (Rule 1)\n   - File organization (Rule 2)\n   - Code structure\
+      \ and readability (Rule 3)\n   - Type safety (Rule 4)\n   - Coupling and cohesion\
+      \ (Rule 5)\n   - Error handling (Rule 6)\n   - Comments and documentation (Rule\
+      \ 7)\n   - Test discipline (Rule 11)\n   - AI-specific discipline (Rule 12)\n\
+      \nReference the existing .claude/skills/implement/SKILL.md for skill formatting\n\
+      conventions.\n\nThe full CODING-RULES.md stays at the project root unchanged.\
+      \ The skill\nis a progressive-disclosure entry point, not a replacement.\n\n\
+      Files: .claude/skills/coding-rules/SKILL.md\n"
     depends_on:
     - '1.1'
-
 - id: phase-3
   name: Phase 3 - Documentation
   status: pending
@@ -111,112 +77,83 @@ sections:
   - id: '3.1'
     name: Create CHANGELOG.md
     status: pending
-    description: |
-      Create CHANGELOG.md at the project root to track version history.
+    description: 'Create CHANGELOG.md at the project root to track version history.
+
 
       Reference: docs/plans/2026-02-13-05-plugin-packaging-design.md
+
 
       Use the Keep a Changelog format (https://keepachangelog.com/):
 
+
       Start with version 1.0.0 dated 2026-02-13 (today).
 
+
       Under 1.0.0, list the initial release features:
+
       - Plan orchestrator with parallel execution via git worktrees
+
       - Auto-pipeline daemon for automated backlog processing
+
       - Defect verification loop with independent symptom verification
+
       - Agent definition framework with coder, code-reviewer agents
+
       - Design competition agents (systems-designer, ux-designer, planner)
+
       - Per-task validation pipeline
+
       - Configurable build/test commands via orchestrator-config.yaml
+
       - Implement skill and /implement command
+
       - CODING-RULES.md template for project coding standards
+
       - Sample plan template
+
 
       Files: CHANGELOG.md
 
+      '
   - id: '3.2'
     name: Create migration guide for manual-copy users
     status: pending
-    description: |
-      Create docs/migration-from-manual-copy.md documenting how to migrate
-      from the manual file-copy installation to the plugin-based installation.
-
-      Reference: docs/plans/2026-02-13-05-plugin-packaging-design.md
-
-      Include sections for:
-
-      1. Overview - why migrate (automatic updates, cleaner installation)
-      2. Prerequisites - Claude Code CLI with plugin support
-      3. Migration Steps:
-         a. Back up your current .claude/ directory
-         b. Remove copied orchestrator files (list which ones)
-         c. Install the plugin: claude plugin install martinbechard/claude-plan-orchestrator
-         d. Copy your project-specific files back (orchestrator-config.yaml, plans/)
-         e. Verify the plugin is active
-      4. What stays the same:
-         - YAML plan format unchanged
-         - Design document structure unchanged
-         - /implement command unchanged
-         - scripts/ accessible via plugin directory
-      5. Accessing scripts after plugin install:
-         - How to find the plugin directory path
-         - Running plan-orchestrator.py from the plugin location
-      6. Rollback - how to go back to manual-copy if needed
-
-      Files: docs/migration-from-manual-copy.md
-
+    description: "Create docs/migration-from-manual-copy.md documenting how to migrate\n\
+      from the manual file-copy installation to the plugin-based installation.\n\n\
+      Reference: docs/plans/2026-02-13-05-plugin-packaging-design.md\n\nInclude sections\
+      \ for:\n\n1. Overview - why migrate (automatic updates, cleaner installation)\n\
+      2. Prerequisites - Claude Code CLI with plugin support\n3. Migration Steps:\n\
+      \   a. Back up your current .claude/ directory\n   b. Remove copied orchestrator\
+      \ files (list which ones)\n   c. Install the plugin: claude plugin install martinbechard/claude-plan-orchestrator\n\
+      \   d. Copy your project-specific files back (orchestrator-config.yaml, plans/)\n\
+      \   e. Verify the plugin is active\n4. What stays the same:\n   - YAML plan\
+      \ format unchanged\n   - Design document structure unchanged\n   - /implement\
+      \ command unchanged\n   - scripts/ accessible via plugin directory\n5. Accessing\
+      \ scripts after plugin install:\n   - How to find the plugin directory path\n\
+      \   - Running plan-orchestrator.py from the plugin location\n6. Rollback - how\
+      \ to go back to manual-copy if needed\n\nFiles: docs/migration-from-manual-copy.md\n"
     depends_on:
     - '1.1'
-
   - id: '3.3'
     name: Update README with plugin installation instructions
     status: pending
-    description: |
-      Update README.md to add plugin installation as the primary installation
-      method, keeping manual-copy as a fallback.
-
-      Reference: docs/plans/2026-02-13-05-plugin-packaging-design.md
-
-      Changes to make:
-
-      1. In the Installation section (currently line ~68), restructure as:
-
-         ## Installation
-
-         ### Plugin Install (Recommended)
-
-         ```bash
-         claude plugin install martinbechard/claude-plan-orchestrator
-         ```
-
-         Or for local development:
-
-         ```bash
-         claude --plugin-dir /path/to/claude-plan-orchestrator
-         ```
-
-         ### Manual Install (Alternative)
-
-         [Keep the existing manual-copy instructions as-is, just move them
-          under this sub-heading]
-
-      2. Add a brief note about accessing scripts/ after plugin install:
-         - The orchestrator scripts are in the plugin directory
-         - Example: python $(claude plugin path plan-orchestrator)/scripts/plan-orchestrator.py
-
-      3. Add a link to the migration guide:
-         See [Migration Guide](docs/migration-from-manual-copy.md) for
-         migrating from manual-copy to plugin installation.
-
-      IMPORTANT: Preserve all existing README content. Only restructure the
-      Installation section and add the migration guide link. Do not rewrite
-      other sections.
-
-      Files: README.md
-
+    description: "Update README.md to add plugin installation as the primary installation\n\
+      method, keeping manual-copy as a fallback.\n\nReference: docs/plans/2026-02-13-05-plugin-packaging-design.md\n\
+      \nChanges to make:\n\n1. In the Installation section (currently line ~68), restructure\
+      \ as:\n\n   ## Installation\n\n   ### Plugin Install (Recommended)\n\n   ```bash\n\
+      \   claude plugin install martinbechard/claude-plan-orchestrator\n   ```\n\n\
+      \   Or for local development:\n\n   ```bash\n   claude --plugin-dir /path/to/claude-plan-orchestrator\n\
+      \   ```\n\n   ### Manual Install (Alternative)\n\n   [Keep the existing manual-copy\
+      \ instructions as-is, just move them\n    under this sub-heading]\n\n2. Add\
+      \ a brief note about accessing scripts/ after plugin install:\n   - The orchestrator\
+      \ scripts are in the plugin directory\n   - Example: python $(claude plugin\
+      \ path plan-orchestrator)/scripts/plan-orchestrator.py\n\n3. Add a link to the\
+      \ migration guide:\n   See [Migration Guide](docs/migration-from-manual-copy.md)\
+      \ for\n   migrating from manual-copy to plugin installation.\n\nIMPORTANT: Preserve\
+      \ all existing README content. Only restructure the\nInstallation section and\
+      \ add the migration guide link. Do not rewrite\nother sections.\n\nFiles: README.md\n"
     depends_on:
     - '3.2'
-
 - id: phase-4
   name: Phase 4 - Verification
   status: pending
@@ -224,74 +161,38 @@ sections:
   - id: '4.1'
     name: Verify plugin packaging
     status: pending
-    description: |
-      Run verification checks to confirm the plugin packaging is correct.
-
-      1. Validate plugin.json:
-         python3 -c "
-         import json
-         data = json.load(open('plugin.json'))
-         assert 'name' in data, 'Missing name'
-         assert 'version' in data, 'Missing version'
-         assert 'description' in data, 'Missing description'
-         assert data['version'] == '1.0.0', f'Expected 1.0.0, got {data[\"version\"]}'
-         print(f'plugin.json valid: {data[\"name\"]} v{data[\"version\"]}')
-         "
-
-      2. Validate marketplace.json:
-         python3 -c "
-         import json
-         data = json.load(open('marketplace.json'))
-         assert 'name' in data, 'Missing name'
-         assert 'repository' in data, 'Missing repository'
-         print(f'marketplace.json valid: {data[\"name\"]}')
-         "
-
-      3. Verify coding-rules skill exists:
-         python3 -c "
-         import os
-         path = '.claude/skills/coding-rules/SKILL.md'
-         assert os.path.exists(path), f'Missing {path}'
-         content = open(path).read()
-         assert 'CODING-RULES' in content, 'Missing reference to CODING-RULES.md'
-         print(f'Coding rules skill OK ({len(content)} chars)')
-         "
-
-      4. Verify CHANGELOG.md exists and has 1.0.0:
-         python3 -c "
-         content = open('CHANGELOG.md').read()
-         assert '1.0.0' in content, 'Missing version 1.0.0'
-         assert '2026-02-13' in content, 'Missing date'
-         print('CHANGELOG.md valid')
-         "
-
-      5. Verify migration guide exists:
-         python3 -c "
-         import os
-         path = 'docs/migration-from-manual-copy.md'
-         assert os.path.exists(path), f'Missing {path}'
-         content = open(path).read()
-         assert 'plugin' in content.lower(), 'Missing plugin references'
-         print(f'Migration guide OK ({len(content)} chars)')
-         "
-
-      6. Verify README has plugin installation section:
-         python3 -c "
-         content = open('README.md').read()
-         assert 'plugin install' in content.lower() or 'plugin-dir' in content.lower(), 'Missing plugin install instructions'
-         assert 'Manual' in content, 'Missing manual install fallback'
-         print('README plugin section OK')
-         "
-
-      7. Run orchestrator dry-run to confirm no regressions:
-         python scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
-
-      8. Check Python syntax of both scripts:
-         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('plan-orchestrator.py: syntax OK')"
-         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('auto-pipeline.py: syntax OK')"
-
-      If any check fails, fix the issue and re-run all checks.
-
+    description: "Run verification checks to confirm the plugin packaging is correct.\n\
+      \n1. Validate plugin.json:\n   python3 -c \"\n   import json\n   data = json.load(open('plugin.json'))\n\
+      \   assert 'name' in data, 'Missing name'\n   assert 'version' in data, 'Missing\
+      \ version'\n   assert 'description' in data, 'Missing description'\n   assert\
+      \ data['version'] == '1.0.0', f'Expected 1.0.0, got {data[\\\"version\\\"]}'\n\
+      \   print(f'plugin.json valid: {data[\\\"name\\\"]} v{data[\\\"version\\\"]}')\n\
+      \   \"\n\n2. Validate marketplace.json:\n   python3 -c \"\n   import json\n\
+      \   data = json.load(open('marketplace.json'))\n   assert 'name' in data, 'Missing\
+      \ name'\n   assert 'repository' in data, 'Missing repository'\n   print(f'marketplace.json\
+      \ valid: {data[\\\"name\\\"]}')\n   \"\n\n3. Verify coding-rules skill exists:\n\
+      \   python3 -c \"\n   import os\n   path = '.claude/skills/coding-rules/SKILL.md'\n\
+      \   assert os.path.exists(path), f'Missing {path}'\n   content = open(path).read()\n\
+      \   assert 'CODING-RULES' in content, 'Missing reference to CODING-RULES.md'\n\
+      \   print(f'Coding rules skill OK ({len(content)} chars)')\n   \"\n\n4. Verify\
+      \ CHANGELOG.md exists and has 1.0.0:\n   python3 -c \"\n   content = open('CHANGELOG.md').read()\n\
+      \   assert '1.0.0' in content, 'Missing version 1.0.0'\n   assert '2026-02-13'\
+      \ in content, 'Missing date'\n   print('CHANGELOG.md valid')\n   \"\n\n5. Verify\
+      \ migration guide exists:\n   python3 -c \"\n   import os\n   path = 'docs/migration-from-manual-copy.md'\n\
+      \   assert os.path.exists(path), f'Missing {path}'\n   content = open(path).read()\n\
+      \   assert 'plugin' in content.lower(), 'Missing plugin references'\n   print(f'Migration\
+      \ guide OK ({len(content)} chars)')\n   \"\n\n6. Verify README has plugin installation\
+      \ section:\n   python3 -c \"\n   content = open('README.md').read()\n   assert\
+      \ 'plugin install' in content.lower() or 'plugin-dir' in content.lower(), 'Missing\
+      \ plugin install instructions'\n   assert 'Manual' in content, 'Missing manual\
+      \ install fallback'\n   print('README plugin section OK')\n   \"\n\n7. Run orchestrator\
+      \ dry-run to confirm no regressions:\n   python scripts/plan-orchestrator.py\
+      \ --plan .claude/plans/sample-plan.yaml --dry-run\n\n8. Check Python syntax\
+      \ of both scripts:\n   python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('plan-orchestrator.py: syntax OK')\"\n   python3 -c \"\
+      import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
+      \ print('auto-pipeline.py: syntax OK')\"\n\nIf any check fails, fix the issue\
+      \ and re-run all checks.\n"
     depends_on:
     - '3.3'
     max_attempts: 5
