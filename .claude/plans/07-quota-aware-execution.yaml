@@ -359,10 +359,11 @@ sections:
       \ -m pytest tests/test_budget_guard.py -v\n   Fix any failures.\n \nFiles: tests/test_budget_guard.py\n"
     attempts: 1
     last_attempt: '2026-02-14T10:07:32.889328'
-    completed_at: '2026-02-14T10:09:45.000000'
-    result_message: Added 7 BudgetGuard unit tests covering unlimited, under-budget,
-      at-limit, over-limit, usage percent, and format_status variants. All 13 tests
-      pass.
+    completed_at: '2026-02-14T10:10:03.632360'
+    result_message: 'Added 7 BudgetGuard unit tests: unlimited always proceeds, under
+      budget proceeds, at limit stops, over limit stops, usage percent, format status
+      unlimited, format status with ceiling. All 13 tests pass (6 BudgetConfig + 7
+      BudgetGuard).'
   - id: '4.3'
     name: Write unit tests for parse_budget_config
     agent: coder
