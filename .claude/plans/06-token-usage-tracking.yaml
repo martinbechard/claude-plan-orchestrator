@@ -396,12 +396,12 @@ sections:
       Added _read_plan_name() and _try_record_usage() helpers for report file discovery.
 - id: phase-5
   name: Phase 5 - Unit Tests
-  status: pending
+  status: in_progress
   tasks:
   - id: '5.1'
     name: Write unit tests for TaskUsage and parse_task_usage
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.3'
     description: "Create tests/test_token_usage.py with unit tests for the TaskUsage\
@@ -426,6 +426,12 @@ sections:
       \   spec.loader.exec_module(mod)\n   TaskUsage = mod.TaskUsage\n   parse_task_usage\
       \ = mod.parse_task_usage\n\n3. Run: python3 -m pytest tests/test_token_usage.py\
       \ -v\n   Fix any failures.\n\nFiles: tests/test_token_usage.py\n"
+    attempts: 1
+    last_attempt: '2026-02-14T09:34:13.530226'
+    completed_at: '2026-02-14T09:36:29.072063'
+    result_message: 'Created tests/test_token_usage.py with 5 unit tests: test_task_usage_defaults,
+      test_parse_task_usage_full, test_parse_task_usage_empty, test_parse_task_usage_partial,
+      test_parse_task_usage_missing_usage_key. All tests pass.'
   - id: '5.2'
     name: Write unit tests for PlanUsageTracker
     agent: coder
