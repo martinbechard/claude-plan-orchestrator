@@ -1197,6 +1197,18 @@ def build_claude_prompt(
     """
     plan_doc = plan.get("meta", {}).get("plan_doc", "")
 
+    # Resolve agent for this task (explicit or inferred)
+    agent_name = task.get("agent")
+    if agent_name is None:
+        agent_name = infer_agent_for_task(task)
+
+    agent_content = ""
+    if agent_name:
+        agent_def = load_agent_definition(agent_name)
+        if agent_def:
+            agent_content = agent_def["content"] + "\n\n---\n\n"
+            verbose_log(f"Using agent '{agent_name}' for task {task['id']}", "AGENT")
+
     # Add subagent header if running as parallel worker
     subagent_header = ""
     if subagent_context:
@@ -1240,7 +1252,7 @@ Read `.claude/skills/agent-sync.md` for the full protocol.
 
 """
 
-    return f"""{subagent_header}Run task {task['id']} from the implementation plan.
+    return f"""{agent_content}{subagent_header}Run task {task['id']} from the implementation plan.
 
 ## Task Details
 - **Section:** {section['name']} ({section['id']})
