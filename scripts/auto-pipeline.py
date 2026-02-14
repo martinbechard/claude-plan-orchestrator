@@ -790,6 +790,14 @@ Available agents are in {agents_dir}:
   modification tasks. This is the default if no agent is specified.
 - **code-reviewer**: Read-only reviewer. Use for verification, review, and
   compliance-checking tasks.
+- **systems-designer**: Architecture and data model designer. Use for Phase 0
+  design competition tasks that focus on system architecture, data models,
+  and API boundaries. Read-only.
+- **ux-designer**: Visual and interaction designer. Use for Phase 0
+  design competition tasks that focus on wireframes, user workflows,
+  and UI component specs. Read-only.
+- **planner**: Design-to-implementation bridge. Use for tasks that read a
+  winning design and create YAML implementation phases. Sets plan_modified: true.
 
 Example:
   - id: '2.1'
@@ -804,8 +812,23 @@ Example:
     status: pending
     description: ...
 
+Phase 0 Competition Example:
+  - id: '0.1'
+    name: Generate Design 1
+    agent: systems-designer
+    parallel_group: phase-0-designs
+    status: pending
+    description: ...
+
+  - id: '0.7'
+    name: Extend plan with implementation tasks
+    agent: planner
+    status: pending
+    description: ...
+
 If you do not set the agent field, the orchestrator will infer it from the
-task description (verification tasks get code-reviewer, everything else gets coder).
+task name and description (review/verification -> code-reviewer, design/architecture
+-> systems-designer, plan extension -> planner, everything else -> coder).
 
 ## Validation (Optional)
 
