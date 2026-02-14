@@ -135,6 +135,19 @@ REVIEWER_KEYWORDS = [
     "verify", "review", "check", "validate", "regression", "compliance"
 ]
 
+# Keywords indicating a design/architecture task.
+# When infer_agent_for_task() matches any of these, it selects "systems-designer".
+DESIGNER_KEYWORDS = [
+    "design", "wireframe", "layout", "architecture", "mockup"
+]
+
+# Keywords indicating a plan-generation task.
+# When infer_agent_for_task() matches any of these, it selects "planner".
+PLANNER_KEYWORDS = [
+    "extend plan", "create tasks", "create phases", "plan sections",
+    "append implementation"
+]
+
 # Regex patterns for parsing validation verdicts from validator agent output.
 # Matches structured output like: **Verdict: PASS**
 VERDICT_PATTERN = re.compile(
