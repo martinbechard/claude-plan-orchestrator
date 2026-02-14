@@ -586,6 +586,27 @@ class BudgetGuard:
         return f"[Budget: ${spent:.4f} / ${limit:.4f} ({pct:.1f}% of ceiling)]"
 
 
+def parse_budget_config(plan: dict, args: argparse.Namespace) -> BudgetConfig:
+    """Parse budget configuration from plan YAML and CLI overrides.
+
+    Priority: CLI flags > plan YAML meta.budget > defaults.
+    A ceiling of 0.0 means no budget enforcement.
+    """
+    budget_meta = plan.get("meta", {}).get("budget", {})
+    config = BudgetConfig(
+        max_quota_percent=budget_meta.get("max_quota_percent", DEFAULT_MAX_QUOTA_PERCENT),
+        quota_ceiling_usd=budget_meta.get("quota_ceiling_usd", DEFAULT_QUOTA_CEILING_USD),
+        reserved_budget_usd=budget_meta.get("reserved_budget_usd", DEFAULT_RESERVED_BUDGET_USD),
+    )
+    if hasattr(args, 'max_budget_pct') and args.max_budget_pct is not None:
+        config.max_quota_percent = args.max_budget_pct
+    if hasattr(args, 'quota_ceiling') and args.quota_ceiling is not None:
+        config.quota_ceiling_usd = args.quota_ceiling
+    if hasattr(args, 'reserved_budget') and args.reserved_budget is not None:
+        config.reserved_budget_usd = args.reserved_budget
+    return config
+
+
 @dataclass
 class ValidationConfig:
     """Configuration for per-task validation parsed from plan meta.
