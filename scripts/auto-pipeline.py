@@ -1078,8 +1078,8 @@ For each item in "Fix Required" or "Verification" that describes a testable cond
 - Record the actual output or observation
 
 Also check:
-- Does `pnpm run build` pass? (code correctness)
-- Do unit tests pass? (`pnpm test`)
+- Does `{build_command}` pass? (code correctness)
+- Do unit tests pass? (`{test_command}`)
 - Is the reported symptom actually gone? (the MOST IMPORTANT check)
 
 ## What to produce
@@ -1109,7 +1109,7 @@ Use this exact format (the count MUST increment from the last entry, or start at
 - Do NOT fix anything
 - Do NOT change the defect's ## Status line
 - ONLY read, run verification commands, and append findings to the defect file
-- If you need the dev server running for a check, start it with `pnpm dev`, wait for it,
+- If you need the dev server running for a check, start it with `{dev_server_command}`, wait for it,
   run your check, then stop it
 - Git commit the updated defect file with message: "verify: {slug} verification #{count}"
 """
