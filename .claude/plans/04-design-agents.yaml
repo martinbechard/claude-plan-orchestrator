@@ -1,14 +1,19 @@
 meta:
   name: Design Agents for Phase 0 Competitions
-  description: 'Create specialized design agents (systems-designer, ux-designer, planner)
-    that replace generic Claude sessions in Phase 0 design competitions. Includes
-    agent definition files, orchestrator inference expansion, template updates, and
-    documentation updates. Builds on the agent definition framework (feature 02).
-
-    '
-  plan_doc: docs/plans/2026-02-13-04-design-agents-design.md
-  created: '2026-02-13'
+  description: >
+    Create specialized design agents (systems-designer, ux-designer, planner)
+    for Phase 0 design competitions. Extends the agent framework from feature 02
+    with design-specific agents, inference keyword expansion, and template updates.
+  plan_doc: docs/plans/2026-02-14-04-design-agents-design.md
+  created: '2026-02-14'
   max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+      - coder
+    validators:
+      - validator
+    max_validation_attempts: 1
 sections:
 - id: phase-1
   name: Phase 1 - Agent Definition Files
@@ -16,267 +21,436 @@ sections:
   tasks:
   - id: '1.1'
     name: Create systems-designer agent definition
+    agent: coder
     status: pending
-    description: "Create .claude/agents/systems-designer.md with YAML frontmatter\
-      \ and markdown body.\nReference the existing coder.md and code-reviewer.md in\
-      \ .claude/agents/ for format. Reference the design doc: docs/plans/2026-02-13-04-design-agents-design.md\n\
-      \nFrontmatter fields:\n  name: systems-designer\n  description: \"Architecture\
-      \ and data model design specialist for Phase 0 competitions.\n    Produces TypeScript\
-      \ interfaces, component hierarchies, data flow diagrams, and\n    integration\
-      \ analysis. Read-only - produces design documents, not code.\"\n  tools: [Read,\
-      \ Grep, Glob]\n  model: opus\n\n\nBody sections to include:\n\n1. Role: You\
-      \ are a systems architect specializing in software design. Your job is to\n\
-      \   create detailed architectural designs for features during Phase 0 design\
-      \ competitions.\n   You are READ-ONLY and produce design documents, not code.\n\
-      \n\n2. Before Designing checklist:\n   - Read the design competition brief/task\
-      \ description carefully\n   - Read existing codebase architecture (component\
-      \ hierarchy, data models, API patterns)\n   - Read CODING-RULES.md to understand\
-      \ project conventions\n   - Identify existing patterns that the design should\
-      \ follow or extend\n\n\n3. Design Output Structure:\n   - Architecture Overview\
-      \ (system diagram, component relationships)\n   - Data Models (TypeScript interfaces\
-      \ for all entities and DTOs)\n   - Component Hierarchy (tree structure with\
-      \ responsibilities)\n   - API Boundaries (endpoints, request/response shapes,\
-      \ error handling)\n   - Data Flow (how data moves through the system)\n   -\
-      \ Integration Points (how this design connects to existing code)\n   - Trade-off\
-      \ Analysis (alternatives considered, pros/cons)\n   - Edge Cases and Error Scenarios\n\
-      \n\n4. Evaluation Criteria (what the judge scores):\n   - Scalability (can the\
-      \ design handle growth?)\n   - Maintainability (is the code easy to understand\
-      \ and modify?)\n   - Integration (does it work with existing codebase patterns?)\n\
-      \   - Completeness (are edge cases and errors addressed?)\n   - Simplicity (is\
-      \ it the minimum viable design, not over-engineered?)\n\n\n5. Anti-Patterns\
-      \ to Avoid:\n   - No over-engineering beyond what the feature requires\n   -\
-      \ No reinventing patterns that already exist in the codebase\n   - No designs\
-      \ that require massive refactoring of existing code\n   - No abstract frameworks\
-      \ when concrete implementations suffice\n\n\n6. Output Protocol:\n   Write the\
-      \ design to the output file specified in the task description.\n   Write task-status.json\
-      \ when done with task_id, status, message, timestamp,\n   plan_modified fields.\n"
-    attempts: 3
-    last_attempt: '2026-02-13T23:00:01.820616'
-    last_error: "Claude exited with code 1: error: unknown option '---\nname: code-reviewer\n\
-      description: \"Read-only coding standards compliance reviewer. Checks naming,\
-      \ types,\n  file size, coupling, error handling. Produces findings list with\
-      \ severity ratings.\n  Does not modify code.\"\ntools:\n  - Read\n  - Grep\n\
-      \  - Glob\nmodel: sonnet\n---\n\n# Code Reviewer Agent\n\n## Role\n\nYou are\
-      \ a code quality reviewer. Your job is to independently review code changes\n\
-      for compliance with CODING-RULES.md. You are READ-ONLY and must NOT modify any\
-      \ code\nfiles. Y"
+    description: |
+      Create the systems-designer agent definition file at .claude/agents/systems-designer.md
+
+      Use the same markdown-with-YAML-frontmatter format as the existing agents.
+      Reference .claude/agents/coder.md and .claude/agents/code-reviewer.md for format examples.
+
+      Frontmatter fields:
+        name: systems-designer
+        description: "Architecture and data model design agent. Produces design documents
+          with TypeScript interfaces, component hierarchy, data flow, and API boundaries.
+          Read-only: does not write code."
+        tools: [Read, Grep, Glob]
+        model: opus
+
+      Body sections:
+
+      1. Role: You are a systems design specialist. Your job is to create detailed
+         architecture designs for Phase 0 design competitions. You produce design documents,
+         NOT code. You analyze existing code to inform your designs but never modify files.
+
+      2. Before Designing checklist:
+         - Read the competition brief / task description thoroughly
+         - Read existing source code in the areas the feature will touch
+         - Identify existing patterns, data models, and API boundaries
+         - Read the design document referenced in the task (if any)
+
+      3. Design Output Structure:
+         Your design document must include these sections:
+         - Architecture Overview: high-level component diagram (ASCII)
+         - Data Models: TypeScript interfaces for all new data shapes
+         - Component Hierarchy: parent-child relationships, props flow
+         - API Boundaries: endpoints, request/response shapes, error cases
+         - Integration Points: how new code connects to existing modules
+         - Trade-off Analysis: alternatives considered, pros/cons of chosen approach
+         - Scalability Considerations: how the design handles growth
+
+      4. Evaluation Criteria (what the judge scores):
+         - Scalability (0-10): handles growth without redesign
+         - Maintainability (0-10): clear separation, testable units
+         - Integration (0-10): fits existing codebase patterns
+         - Completeness (0-10): all requirements addressed
+         - Feasibility (0-10): implementable within project constraints
+
+      5. Constraints:
+         - Read-only: do NOT use Write, Edit, or Bash to modify files
+         - Write your design document to the OUTPUT path specified in the task
+         - Use ASCII diagrams, not images
+
+      6. Output Protocol:
+         Write task-status.json when done with task_id, status, message, timestamp,
+         plan_modified fields.
+
+      Reference: docs/plans/2026-02-14-04-design-agents-design.md
   - id: '1.2'
     name: Create ux-designer agent definition
+    agent: coder
     status: pending
-    description: "Create .claude/agents/ux-designer.md with YAML frontmatter and markdown\
-      \ body.\nReference the existing coder.md and code-reviewer.md in .claude/agents/\
-      \ for format. Reference the design doc: docs/plans/2026-02-13-04-design-agents-design.md\n\
-      \nFrontmatter fields:\n  name: ux-designer\n  description: \"Visual and interaction\
-      \ design specialist for Phase 0 competitions.\n    Produces ASCII wireframes,\
-      \ component specs, state diagrams, and user workflow\n    documentation. Read-only\
-      \ - produces design documents, not code.\"\n  tools: [Read, Grep, Glob]\n  model:\
-      \ opus\n\n\nBody sections to include:\n\n1. Role: You are a UX designer specializing\
-      \ in developer tool and web application\n   interfaces. Your job is to create\
-      \ detailed visual and interaction designs for\n   features during Phase 0 design\
-      \ competitions. You are READ-ONLY and produce\n   design documents, not code.\n\
-      \n\n2. Before Designing checklist:\n   - Read the design competition brief/task\
-      \ description carefully\n   - Read existing UI components and pages to understand\
-      \ the design system\n   - Identify the existing visual patterns (layout, spacing,\
-      \ color usage)\n   - Understand the target user workflow and pain points\n\n\
-      \n3. Design Output Structure:\n   - User Workflow (step-by-step interaction\
-      \ flow)\n   - ASCII Wireframes (for each state: normal, loading, error, empty)\n\
-      \   - Component Specifications (props, states, behaviors)\n   - State Diagrams\
-      \ (component state transitions)\n   - Responsive Layout (mobile and desktop\
-      \ breakpoints)\n   - Accessibility Considerations (ARIA labels, keyboard nav,\
-      \ color contrast)\n   - Interaction Specifications (hover, click, drag, keyboard\
-      \ shortcuts)\n   - Visual Hierarchy (information density, scanning patterns)\n\
-      \n\n4. Evaluation Criteria (what the judge scores):\n   - Clarity (is the UI\
-      \ intuitive and self-explanatory?)\n   - Mobile UX (does it work well on small\
-      \ screens?)\n   - Accessibility (WCAG compliance, keyboard navigation)\n   -\
-      \ Consistency (matches existing design system patterns?)\n   - User Workflow\
-      \ (efficient path to task completion?)\n\n\n5. Anti-Patterns to Avoid:\n   -\
-      \ No designs that ignore the existing component library\n   - No desktop-only\
-      \ layouts without mobile consideration\n   - No information overload on a single\
-      \ screen\n   - No custom UI patterns when standard ones exist\n   - No designs\
-      \ requiring JavaScript-heavy interactions when CSS suffices\n\n\n6. Output Protocol:\n\
-      \   Write the design to the output file specified in the task description.\n\
-      \   Write task-status.json when done with task_id, status, message, timestamp,\n\
-      \   plan_modified fields.\n"
+    description: |
+      Create the ux-designer agent definition file at .claude/agents/ux-designer.md
+
+      Use the same markdown-with-YAML-frontmatter format as existing agents.
+      Reference .claude/agents/coder.md for format examples.
+
+      Frontmatter fields:
+        name: ux-designer
+        description: "Visual and interaction design agent. Produces UX design documents
+          with ASCII wireframes, component specs, state diagrams, and user workflows.
+          Read-only: does not write code."
+        tools: [Read, Grep, Glob]
+        model: opus
+
+      Body sections:
+
+      1. Role: You are a UX design specialist. Your job is to create detailed visual
+         and interaction designs for Phase 0 design competitions. You produce design
+         specs, NOT code. You analyze existing UI code to maintain consistency.
+
+      2. Before Designing checklist:
+         - Read the competition brief / task description thoroughly
+         - Read existing UI components to understand the design system
+         - Identify layout patterns, color schemes, typography in use
+         - Read the design document referenced in the task (if any)
+
+      3. Design Output Structure:
+         Your design document must include these sections:
+         - User Flow: step-by-step interaction sequence
+         - Wireframes: ASCII wireframes for all states (normal, loading, error, empty)
+         - Component Specs: dimensions, spacing, interactive behaviors
+         - State Diagrams: component state transitions
+         - Responsive Design: mobile, tablet, desktop breakpoints
+         - Accessibility: ARIA roles, keyboard navigation, screen reader support
+         - Design System Integration: which existing components to reuse vs. create
+
+      4. Evaluation Criteria (what the judge scores):
+         - Clarity (0-10): is the design easy to understand and implement?
+         - Mobile UX (0-10): works well on small screens
+         - Accessibility (0-10): inclusive design practices
+         - Consistency (0-10): matches existing design patterns
+         - Completeness (0-10): all states and edge cases covered
+
+      5. Constraints:
+         - Read-only: do NOT use Write, Edit, or Bash to modify files
+         - Write your design document to the OUTPUT path specified in the task
+         - Use ASCII wireframes for visual layouts
+
+      6. Output Protocol:
+         Write task-status.json when done with task_id, status, message, timestamp,
+         plan_modified fields.
+
+      Reference: docs/plans/2026-02-14-04-design-agents-design.md
   - id: '1.3'
     name: Create planner agent definition
+    agent: coder
     status: pending
-    description: "Create .claude/agents/planner.md with YAML frontmatter and markdown\
-      \ body.\nReference the existing coder.md and code-reviewer.md in .claude/agents/\
-      \ for format. Reference the design doc: docs/plans/2026-02-13-04-design-agents-design.md\n\
-      \nFrontmatter fields:\n  name: planner\n  description: \"Design-to-implementation\
-      \ bridge agent. Reads winning designs from\n    Phase 0 competitions and creates\
-      \ valid YAML task sections with proper dependencies\n    and agent assignments.\
-      \ Sets plan_modified: true for orchestrator reload.\"\n  tools: [Read, Write,\
-      \ Bash, Grep, Glob]\n  model: sonnet\n\n\nBody sections to include:\n\n1. Role:\
-      \ You are a project planner specializing in breaking designs into implementation\n\
-      \   tasks. Your job is to read the winning design from a Phase 0 competition\
-      \ and create\n   the implementation phases that follow. You produce valid YAML\
-      \ plan sections that the\n   orchestrator can execute.\n\n\n2. Before Planning\
-      \ checklist:\n   - Read the winning design document\n   - Read the judge's scoring\
-      \ and improvement suggestions from runner-ups\n   - Read the current YAML plan\
-      \ file to understand the existing structure\n   - Read .claude/plans/sample-plan.yaml\
-      \ for the correct YAML format\n   - Understand the project's change workflow\
-      \ order: docs -> code -> tests -> verification\n\n\n3. Planning Rules:\n   -\
-      \ Follow the mandatory change workflow: documentation first, then code, then\
-      \ tests,\n     then verification\n   - Each task should be completable in one\
-      \ Claude session (under 10 minutes)\n   - Task descriptions must be detailed\
-      \ enough for a fresh Claude session\n   - Include file paths in descriptions\
-      \ for automatic conflict detection\n   - Set agent: coder for implementation\
-      \ tasks\n   - Set agent: code-reviewer for review/verification tasks\n   - The\
-      \ final section must include a verification task that runs the project build\n\
-      \     and test commands\n   - Use depends_on to express task ordering within\
-      \ and across sections\n   - Use parallel_group when tasks can safely run concurrently\n\
-      \n\n4. YAML Format:\n   Sections follow this structure:\n     - id: phase-N\n\
-      \       name: Phase N - Description\n       status: pending\n       tasks:\n\
-      \       - id: 'N.1'\n         name: Task name\n         agent: coder\n     \
-      \    status: pending\n         description: |\n           Detailed description...\n\
-      \           Files: path/to/file.py\n         depends_on:\n         - 'previous.task.id'\n\
-      \n\n5. Output Protocol:\n   Append the new sections to the YAML plan file specified\
-      \ in the task description.\n   IMPORTANT: Set plan_modified: true in the task-status.json\
-      \ so the orchestrator\n   reloads the plan with the new sections.\n"
+    description: |
+      Create the planner agent definition file at .claude/agents/planner.md
+
+      Use the same markdown-with-YAML-frontmatter format as existing agents.
+      Reference .claude/agents/coder.md for format examples.
+
+      Frontmatter fields:
+        name: planner
+        description: "Design-to-implementation bridge agent. Reads winning designs and
+          creates YAML implementation phases with proper dependencies and agent assignments.
+          Sets plan_modified: true for orchestrator reload."
+        tools: [Read, Write, Bash, Grep, Glob]
+        model: sonnet
+
+      Body sections:
+
+      1. Role: You are an implementation planner. Your job is to read a winning design
+         from a Phase 0 competition and translate it into concrete YAML implementation
+         phases that the orchestrator can execute. You bridge the gap between design
+         and implementation.
+
+      2. Before Planning checklist:
+         - Read the winning design document thoroughly
+         - Read the judge's feedback and scoring (if available)
+         - Read the existing YAML plan to understand current structure
+         - Read the project's coding rules (CODING-RULES.md or equivalent)
+         - Identify which files need to be created vs. modified
+
+      3. Plan Output Structure:
+         Append new sections to the YAML plan with:
+         - Proper section IDs continuing from the last section
+         - Task IDs continuing from the last task
+         - Task descriptions detailed enough for a fresh Claude session
+         - Agent assignments (coder for implementation, code-reviewer for verification)
+         - Dependencies between tasks reflecting build order
+         - parallel_group assignments for independent tasks
+         - A final verification task
+
+      4. Plan Quality Criteria:
+         - Each task completable in one Claude session (under 10 minutes)
+         - Task descriptions include specific file paths and what to change
+         - Dependencies form a valid DAG (no cycles)
+         - Verification tasks check both build and tests
+         - Follow docs -> code -> tests -> verification order
+
+      5. Constraints:
+         - Use Write tool to modify the YAML plan file
+         - Set plan_modified: true in the status file so orchestrator reloads
+         - Do NOT implement any code; only create the plan
+         - Follow the exact YAML schema used by plan-orchestrator.py
+
+      6. Output Protocol:
+         Write task-status.json with plan_modified: true (critical for reload).
+
+      Reference: docs/plans/2026-02-14-04-design-agents-design.md
 - id: phase-2
-  name: Phase 2 - Orchestrator Inference Updates
+  name: Phase 2 - Orchestrator Inference Changes
   status: pending
   tasks:
   - id: '2.1'
-    name: Add design and planner keyword constants and expand inference
+    name: Add DESIGNER_KEYWORDS and PLANNER_KEYWORDS constants
+    agent: coder
     status: pending
-    description: "In scripts/plan-orchestrator.py, expand the agent inference system\
-      \ to recognize design and planner tasks.\nReference: docs/plans/2026-02-13-04-design-agents-design.md\n\
-      Reference: scripts/plan-orchestrator.py lines 130-157 for existing inference\
-      \ code.\n\n1. Near line 133 (after REVIEWER_KEYWORDS), add two new module-level\
-      \ constants:\n\n   DESIGNER_KEYWORDS = [\"design\", \"wireframe\", \"layout\"\
-      , \"architecture\", \"mockup\"]\n\n   PLANNER_KEYWORDS = [\"extend plan\", \"\
-      create tasks\", \"create phases\", \"plan sections\"]\n\n\n2. Modify infer_agent_for_task()\
-      \ (line 138) to check keywords in priority order:\n   - First check REVIEWER_KEYWORDS\
-      \ (existing, unchanged)\n   - Then check PLANNER_KEYWORDS -> return \"planner\"\
-      \n   - Then check DESIGNER_KEYWORDS -> return \"systems-designer\"\n   - Default\
-      \ -> return \"coder\"\n\n   The function should scan BOTH task.get(\"description\"\
-      , \"\") AND task.get(\"name\", \"\")\n   converted to lowercase. This is because\
-      \ Phase 0 tasks often have short names like\n   \"Generate Design 1\" where\
-      \ the keyword appears in the name.\n\n   Updated function:\n\n   def infer_agent_for_task(task:\
-      \ dict) -> Optional[str]:\n       if not os.path.isdir(AGENTS_DIR):\n      \
-      \     return None\n       searchable = (task.get(\"description\", \"\") + \"\
-      \ \" + task.get(\"name\", \"\")).lower()\n       for keyword in REVIEWER_KEYWORDS:\n\
-      \           if keyword in searchable:\n               return \"code-reviewer\"\
-      \n       for keyword in PLANNER_KEYWORDS:\n           if keyword in searchable:\n\
-      \               return \"planner\"\n       for keyword in DESIGNER_KEYWORDS:\n\
-      \           if keyword in searchable:\n               return \"systems-designer\"\
-      \n       return \"coder\"\n\n\n3. Update the function docstring to document\
-      \ all four agent outcomes and the\n   name+description scanning behavior.\n\n\
-      \nIMPORTANT: Preserve the existing REVIEWER_KEYWORDS constant and its position.\
-      \ Add the new constants immediately after it.\n"
+    depends_on:
+    - '1.3'
+    description: |
+      In scripts/plan-orchestrator.py, add two new keyword constant lists alongside
+      the existing REVIEWER_KEYWORDS (currently at line ~134).
+
+      After REVIEWER_KEYWORDS, add:
+
+      # Keywords indicating a design/architecture task.
+      # When infer_agent_for_task() matches any of these, it selects "systems-designer".
+      DESIGNER_KEYWORDS = [
+          "design", "wireframe", "layout", "architecture", "mockup"
+      ]
+
+      # Keywords indicating a plan-generation task.
+      # When infer_agent_for_task() matches any of these, it selects "planner".
+      PLANNER_KEYWORDS = [
+          "extend plan", "create tasks", "create phases", "plan sections",
+          "append implementation"
+      ]
+
+      These follow the exact same pattern as REVIEWER_KEYWORDS: module-level constants
+      with a comment explaining their purpose.
+
+      Reference: scripts/plan-orchestrator.py lines 131-136 for existing pattern.
+      Reference: docs/plans/2026-02-14-04-design-agents-design.md
   - id: '2.2'
-    name: Update PLAN_CREATION_PROMPT_TEMPLATE with all agents
+    name: Expand infer_agent_for_task to support design and planner agents
+    agent: coder
     status: pending
-    description: "In scripts/auto-pipeline.py, update the PLAN_CREATION_PROMPT_TEMPLATE\
-      \ (line 643) to list all five agents instead of just two.\nReference: docs/plans/2026-02-13-04-design-agents-design.md\n\
-      Reference: scripts/auto-pipeline.py lines 677-701 for the existing Agent Selection\
-      \ section.\n\nReplace the current agent list (lines 682-685) which only lists\
-      \ coder and code-reviewer with the full list of five agents:\n- **coder**: Implementation\
-      \ specialist. Use for coding, implementation, and\n  modification tasks. This\
-      \ is the default if no agent is specified.\n- **code-reviewer**: Read-only reviewer.\
-      \ Use for verification, review, and\n  compliance-checking tasks.\n- **systems-designer**:\
-      \ Architecture and data model designer. Use for Phase 0\n  design competition\
-      \ tasks focused on system architecture, data models, and APIs.\n- **ux-designer**:\
-      \ Visual and interaction designer. Use for Phase 0 design\n  competition tasks\
-      \ focused on UI layout, wireframes, and user workflows.\n- **planner**: Design-to-implementation\
-      \ bridge. Use for tasks that read a winning\n  design and create YAML implementation\
-      \ phases. Sets plan_modified: true.\n\n\nAlso add a Phase 0 agent assignment\
-      \ example after the existing examples:\nFor Phase 0 design competitions, assign\
-      \ agents to tasks:\n  - id: '0.1'\n    name: Systems Design - Approach A\n \
-      \   agent: systems-designer\n    parallel_group: phase-0-designs\n    status:\
-      \ pending\n    description: ...\n\n  - id: '0.6'\n    name: Judge and select\
-      \ best design\n    status: pending\n    description: ...\n\n  - id: '0.7'\n\
-      \    name: Extend plan with implementation tasks\n    agent: planner\n    status:\
-      \ pending\n    description: ...\n\n\nIMPORTANT: Do NOT change the Python .format()\
-      \ call - {agents_dir} is already a placeholder. Only modify the text content\
-      \ within the template string.\n"
     depends_on:
     - '2.1'
+    description: |
+      In scripts/plan-orchestrator.py, modify the infer_agent_for_task() function
+      (currently at line ~150) to support the new agent types.
+
+      Current logic:
+      1. Check AGENTS_DIR exists, return None if not
+      2. Scan description for REVIEWER_KEYWORDS -> return "code-reviewer"
+      3. Default -> return "coder"
+
+      New logic:
+      1. Check AGENTS_DIR exists, return None if not
+      2. Combine task name and description for scanning:
+         text = (task.get("name", "") + " " + task.get("description", "")).lower()
+      3. Check REVIEWER_KEYWORDS first (preserve existing behavior) -> return "code-reviewer"
+      4. Check PLANNER_KEYWORDS (multi-word phrases, checked before single-word DESIGNER_KEYWORDS)
+         -> return "planner"
+      5. Check DESIGNER_KEYWORDS -> return "systems-designer"
+      6. Default -> return "coder"
+
+      IMPORTANT: PLANNER_KEYWORDS must be checked BEFORE DESIGNER_KEYWORDS because planner
+      keywords are multi-word phrases that are more specific. DESIGNER_KEYWORDS contains
+      single words like "design" that would match too broadly if checked first.
+
+      Update the docstring to reflect the new 4-outcome inference logic and the
+      name+description scanning.
+
+      Reference: scripts/plan-orchestrator.py lines 150-169 for current function.
+      Reference: docs/plans/2026-02-14-04-design-agents-design.md
 - id: phase-3
-  name: Phase 3 - Documentation Updates
+  name: Phase 3 - Template Updates
   status: pending
   tasks:
   - id: '3.1'
-    name: Update implement skill Phase 0 template with agent assignments
+    name: Update PLAN_CREATION_PROMPT_TEMPLATE agent list
+    agent: coder
     status: pending
-    description: "Update .claude/skills/implement/SKILL.md to show agent assignments\
-      \ in the Phase 0 design competition template.\nReference: docs/plans/2026-02-13-04-design-agents-design.md\n\
-      Reference: .claude/skills/implement/SKILL.md lines 178-213 for the existing\
-      \ Phase 0 template.\n\nIn the existing Phase 0 YAML template (lines 184-213),\
-      \ add agent fields to the example tasks:\n1. For design generation tasks (0.1-0.5),\
-      \ add: agent: systems-designer\n   (and note in the surrounding text that ux-designer\
-      \ can be used for UX-focused\n   competitions, or both can be used as pairs\
-      \ in the same parallel_group)\n\n2. For the judge task (0.6), leave without\
-      \ an agent field (uses default inference)\n3. For the plan extension task (0.7),\
-      \ add: agent: planner\n\nAlso add a brief paragraph after the template explaining\
-      \ the agent team pattern: when a feature needs both architecture and UX design,\
-      \ create paired tasks (one systems-designer + one ux-designer per approach)\
-      \ in the same parallel_group. The judge evaluates each pair as a unit.\n\nIMPORTANT:\
-      \ Keep the existing text and structure. Only add agent fields to the YAML example\
-      \ and the team dispatch paragraph. Do not rewrite the surrounding text.\n"
     depends_on:
     - '2.2'
+    description: |
+      In scripts/auto-pipeline.py, update the Agent Selection section within
+      PLAN_CREATION_PROMPT_TEMPLATE (currently at line ~677) to list all agents
+      including the three new design agents.
+
+      Current agent list (2 agents):
+      - **coder**: Implementation specialist...
+      - **code-reviewer**: Read-only reviewer...
+
+      Replace with expanded list (5 agents shown in template, plus mention of
+      validator and issue-verifier which are used in the validation pipeline):
+
+      - **coder**: Implementation specialist. Use for coding, implementation, and
+        modification tasks. This is the default if no agent is specified.
+      - **code-reviewer**: Read-only reviewer. Use for verification, review, and
+        compliance-checking tasks.
+      - **systems-designer**: Architecture and data model designer. Use for Phase 0
+        design competition tasks that focus on system architecture, data models,
+        and API boundaries. Read-only.
+      - **ux-designer**: Visual and interaction designer. Use for Phase 0
+        design competition tasks that focus on wireframes, user workflows,
+        and UI component specs. Read-only.
+      - **planner**: Design-to-implementation bridge. Use for tasks that read a
+        winning design and create YAML implementation phases. Sets plan_modified: true.
+
+      Also add an example showing Phase 0 agent assignments after the existing examples:
+
+      Phase 0 Competition Example:
+        - id: '0.1'
+          name: Generate Design 1
+          agent: systems-designer
+          parallel_group: phase-0-designs
+          status: pending
+          description: ...
+
+        - id: '0.7'
+          name: Extend plan with implementation tasks
+          agent: planner
+          status: pending
+          description: ...
+
+      Update the inference description to mention the new keywords:
+      "If you do not set the agent field, the orchestrator will infer it from the
+      task name and description (review/verification -> code-reviewer, design/architecture
+      -> systems-designer, plan extension -> planner, everything else -> coder)."
+
+      Reference: scripts/auto-pipeline.py lines 677-701 for current template section.
+      Reference: docs/plans/2026-02-14-04-design-agents-design.md
+  - id: '3.2'
+    name: Update implement skill Phase 0 template with agent assignments
+    agent: coder
+    status: pending
+    depends_on:
+    - '3.1'
+    description: |
+      In .claude/skills/implement/SKILL.md, update the Phase 0 Design Competition
+      section (starts at line ~178) to show agent assignments for design tasks.
+
+      Changes to make:
+
+      1. In the Phase 0 example YAML (lines ~184-213), add agent fields to the
+         design generation tasks:
+
+         - id: '0.1'
+           name: Generate Design 1 - Approach A
+           agent: systems-designer          # ADD THIS LINE
+           parallel_group: phase-0-designs
+           ...
+
+      2. Add agent field to the plan extension task:
+
+         - id: '0.7'
+           name: Extend plan with implementation tasks
+           agent: planner                   # ADD THIS LINE
+           depends_on: ['0.6']
+           ...
+
+      3. After the existing Phase 0 example, add a new subsection:
+
+         ### Agent Team Dispatch (Design Pairs)
+
+         For features requiring both architecture and UX design, assign complementary
+         agent pairs in the same parallel group:
+
+         ```yaml
+         - id: '0.1'
+           name: Systems Design - Approach A
+           agent: systems-designer
+           parallel_group: phase-0-designs
+           description: |
+             Create architecture design for approach A.
+             OUTPUT: Write to docs/plans/feature-design-1-systems.md
+         - id: '0.2'
+           name: UX Design - Approach A
+           agent: ux-designer
+           parallel_group: phase-0-designs
+           description: |
+             Create UX design complementing approach A.
+             OUTPUT: Write to docs/plans/feature-design-1-ux.md
+         ```
+
+         The judge task evaluates both designs as a pair, scoring holistically.
+
+      Do NOT change anything else in the SKILL.md file. Keep all existing content intact.
+
+      Reference: .claude/skills/implement/SKILL.md lines 178-216 for current section.
+      Reference: docs/plans/2026-02-14-04-design-agents-design.md
 - id: phase-4
   name: Phase 4 - Verification
   status: pending
   tasks:
   - id: '4.1'
     name: Verify agent files and inference logic
+    agent: code-reviewer
     status: pending
-    description: "Run verification checks to confirm all design agents work correctly.\n\
-      \n1. Verify all agent files exist and have valid frontmatter:\n\n   python3\
-      \ -c \"\n   import yaml, os\n   for agent in ['coder', 'code-reviewer', 'systems-designer',\
-      \ 'ux-designer', 'planner']:\n       path = f'.claude/agents/{agent}.md'\n \
-      \      assert os.path.exists(path), f'Missing: {path}'\n       content = open(path).read()\n\
-      \       parts = content.split('---', 2)\n       assert len(parts) >= 3, f'Invalid\
-      \ frontmatter in {path}'\n       meta = yaml.safe_load(parts[1])\n       assert\
-      \ 'name' in meta, f'Missing name in {path}'\n       assert 'description' in\
-      \ meta, f'Missing description in {path}'\n       assert 'tools' in meta, f'Missing\
-      \ tools in {path}'\n       assert 'model' in meta, f'Missing model in {path}'\n\
-      \       print(f'OK: {path} - name={meta[\\\"name\\\"]}, model={meta[\\\"model\\\
-      \"]}')\n   print('All agent files valid')\n   \"\n\n\n2. Verify expanded inference\
-      \ logic with test cases:\n\n   python3 -c \"\n   import sys, os\n   os.chdir('.')\n\
-      \n   # Import the inference function by exec-ing just the relevant parts\n \
-      \  REVIEWER_KEYWORDS = ['verify', 'review', 'check', 'validate', 'regression',\
-      \ 'compliance']\n   DESIGNER_KEYWORDS = ['design', 'wireframe', 'layout', 'architecture',\
-      \ 'mockup']\n   PLANNER_KEYWORDS = ['extend plan', 'create tasks', 'create phases',\
-      \ 'plan sections']\n\n   def infer(name, desc):\n       searchable = (desc +\
-      \ ' ' + name).lower()\n       for kw in REVIEWER_KEYWORDS:\n           if kw\
-      \ in searchable:\n               return 'code-reviewer'\n       for kw in PLANNER_KEYWORDS:\n\
-      \           if kw in searchable:\n               return 'planner'\n       for\
-      \ kw in DESIGNER_KEYWORDS:\n           if kw in searchable:\n              \
-      \ return 'systems-designer'\n       return 'coder'\n\n   # Reviewer tests\n\
-      \   assert infer('', 'Verify build passes') == 'code-reviewer'\n   assert infer('Review\
-      \ code quality', '') == 'code-reviewer'\n   assert infer('', 'Check compliance')\
-      \ == 'code-reviewer'\n\n   # Designer tests\n   assert infer('Generate Design\
-      \ 1', 'Create architecture') == 'systems-designer'\n   assert infer('', 'Create\
-      \ wireframe for dashboard') == 'systems-designer'\n   assert infer('', 'Design\
-      \ the layout') == 'systems-designer'\n   assert infer('', 'Create mockup for\
-      \ settings page') == 'systems-designer'\n\n   # Planner tests\n   assert infer('Extend\
-      \ plan with implementation', '') == 'planner'\n   assert infer('', 'Create tasks\
-      \ from winning design') == 'planner'\n   assert infer('', 'Create phases for\
-      \ implementation') == 'planner'\n\n   # Coder (default) tests\n   assert infer('Implement\
-      \ the feature', '') == 'coder'\n   assert infer('', 'Add unit tests for auth\
-      \ module') == 'coder'\n   assert infer('', 'Build the login component') == 'coder'\n\
-      \n   print('All inference tests passed (12/12)')\n   \"\n\n\n3. Verify no Python\
-      \ syntax errors in both scripts:\n\n   python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
-      \ doraise=True); print('plan-orchestrator.py: syntax OK')\"\n   python3 -c \"\
-      import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
-      \ print('auto-pipeline.py: syntax OK')\"\n\n\n4. Verify orchestrator dry-run\
-      \ still works:\n\n   python scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml\
-      \ --dry-run\n\n\n5. Verify PLAN_CREATION_PROMPT_TEMPLATE contains all five agents:\n\
-      \n   python3 -c \"\n   content = open('scripts/auto-pipeline.py').read()\n \
-      \  for agent in ['coder', 'code-reviewer', 'systems-designer', 'ux-designer',\
-      \ 'planner']:\n       assert agent in content, f'Missing agent {agent} in auto-pipeline.py'\n\
-      \       print(f'OK: {agent} found in template')\n   print('All agents present\
-      \ in plan creation template')\n   \"\n\n\n6. Verify implement skill mentions\
-      \ design agents:\n\n   python3 -c \"\n   content = open('.claude/skills/implement/SKILL.md').read()\n\
-      \   for agent in ['systems-designer', 'ux-designer', 'planner']:\n       assert\
-      \ agent in content, f'Missing agent {agent} in SKILL.md'\n       print(f'OK:\
-      \ {agent} found in SKILL.md')\n   print('All design agents documented in implement\
-      \ skill')\n   \"\n\n\nIf any check fails, fix the issue and re-run all checks.\n"
     depends_on:
-    - '3.1'
-    max_attempts: 5
+    - '3.2'
+    description: |
+      Run verification checks to confirm the design agents feature works correctly.
+
+      1. Verify all three new agent files exist and have valid frontmatter:
+
+         python3 -c "
+         import yaml, os
+         for agent in ['systems-designer', 'ux-designer', 'planner']:
+             path = f'.claude/agents/{agent}.md'
+             assert os.path.exists(path), f'Missing: {path}'
+             content = open(path).read()
+             parts = content.split('---', 2)
+             assert len(parts) >= 3, f'Invalid frontmatter in {path}'
+             meta = yaml.safe_load(parts[1])
+             assert 'name' in meta, f'Missing name in {path}'
+             assert 'description' in meta, f'Missing description in {path}'
+             assert 'tools' in meta, f'Missing tools in {path}'
+             assert 'model' in meta, f'Missing model in {path}'
+             print(f'OK: {path} - name={meta[\"name\"]}, model={meta[\"model\"]}')
+         print('All new agent files valid')
+         "
+
+      2. Verify inference logic handles all four outcomes:
+
+         python3 -c "
+         import sys, os
+         sys.path.insert(0, 'scripts')
+         os.environ['_TESTING'] = '1'
+
+         REVIEWER_KEYWORDS = ['verify', 'review', 'check', 'validate', 'regression', 'compliance']
+         DESIGNER_KEYWORDS = ['design', 'wireframe', 'layout', 'architecture', 'mockup']
+         PLANNER_KEYWORDS = ['extend plan', 'create tasks', 'create phases', 'plan sections', 'append implementation']
+
+         def infer(name, desc):
+             text = (name + ' ' + desc).lower()
+             for kw in REVIEWER_KEYWORDS:
+                 if kw in text:
+                     return 'code-reviewer'
+             for kw in PLANNER_KEYWORDS:
+                 if kw in text:
+                     return 'planner'
+             for kw in DESIGNER_KEYWORDS:
+                 if kw in text:
+                     return 'systems-designer'
+             return 'coder'
+
+         assert infer('', 'Verify build passes') == 'code-reviewer', 'reviewer failed'
+         assert infer('', 'Implement the feature') == 'coder', 'coder failed'
+         assert infer('Generate Design 1', '') == 'systems-designer', 'designer from name failed'
+         assert infer('', 'Create architecture design') == 'systems-designer', 'designer from desc failed'
+         assert infer('', 'Extend plan with implementation') == 'planner', 'planner failed'
+         assert infer('', 'Create phases for implementation') == 'planner', 'planner phrase failed'
+         assert infer('', 'Review the design') == 'code-reviewer', 'reviewer priority failed'
+         print('All inference tests passed')
+         "
+
+      3. Verify no Python syntax errors in both scripts:
+
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+      4. Verify orchestrator dry-run still works:
+
+         python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
+
+      If any check fails, report the failure with specific details.
+
+      Reference: docs/plans/2026-02-14-04-design-agents-design.md
