@@ -339,6 +339,78 @@ def parse_validation_config(plan: dict) -> ValidationConfig:
     )
 
 
+def build_validation_prompt(
+    task: dict,
+    section: dict,
+    task_result: "TaskResult",
+    validator_name: str,
+) -> str:
+    """Build the prompt for a validation agent to verify a completed task.
+
+    Loads the validator agent definition and constructs a prompt that includes
+    the agent body, original task context, task result details, and validation
+    instructions with structured output format.
+
+    Args:
+        task: The task dict from the plan YAML.
+        section: The section dict containing this task.
+        task_result: The TaskResult from the completed task execution.
+        validator_name: Name of the validator agent to load (e.g. 'validator').
+
+    Returns:
+        The fully assembled validation prompt string.
+    """
+    agent_def = load_agent_definition(validator_name)
+    agent_body = agent_def["body"] if agent_def else ""
+
+    task_id = task.get("id", "unknown")
+    task_name = task.get("name", "Unnamed task")
+    task_description = task.get("description", "No description")
+    result_message = task_result.message
+    duration = task_result.duration_seconds
+
+    return f"""{agent_body}
+
+---
+
+You are validating the results of task {task_id}: {task_name}
+
+## Original Task Description
+
+{task_description}
+
+## Task Result
+
+Status: completed
+
+Message: {result_message}
+
+Duration: {duration:.1f}s
+
+## Validation Checks
+
+1. Run: {BUILD_COMMAND}
+
+2. Run: {TEST_COMMAND}
+
+3. Verify the task description requirements are met
+
+4. Check for regressions in related code
+
+## Output Format
+
+Produce your verdict in this exact format:
+
+**Verdict: PASS** or **Verdict: WARN** or **Verdict: FAIL**
+
+**Findings:**
+
+- [PASS|WARN|FAIL] Description with file:line references
+
+IMPORTANT: You MUST write .claude/plans/task-status.json when done.
+"""
+
+
 class CircuitBreaker:
     """Circuit breaker to prevent runaway failures when LLM is unavailable."""
 
