@@ -94,12 +94,12 @@ sections:
       from both backlog folders. All tracked files preserved as git renames.'
 - id: phase-2
   name: Phase 2 - Unit Tests
-  status: pending
+  status: completed
   tasks:
   - id: '2.1'
     name: Add unit tests for completed archive functions
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.2'
     description: "Create tests/test_completed_archive.py with unit tests for the updated\n\
@@ -121,6 +121,12 @@ sections:
       \  - Same as above but with item_type=\"feature\"\n  - Assert the file was moved\
       \ to the features directory\n\n2. Run the tests:\n   python3 -m pytest tests/test_completed_archive.py\
       \ -v\n\n3. Fix any test failures until all pass.\n\nFiles: tests/test_completed_archive.py\n"
+    attempts: 1
+    last_attempt: '2026-02-14T10:30:30.794429'
+    completed_at: '2026-02-14T10:32:47.422410'
+    result_message: 'Created tests/test_completed_archive.py with 4 unit tests: test_completed_slugs_reads_from_new_locations,
+      test_completed_slugs_empty_when_dirs_missing, test_archive_item_defect_goes_to_defects_dir,
+      test_archive_item_feature_goes_to_features_dir. All tests pass.'
 - id: phase-3
   name: Phase 3 - Verification
   status: pending
