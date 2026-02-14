@@ -133,12 +133,12 @@ sections:
       (priority: CLI > YAML > defaults). Syntax verified, all assertions pass.'
 - id: phase-2
   name: Phase 2 - Orchestrator Integration
-  status: pending
+  status: in_progress
   tasks:
   - id: '2.1'
     name: Add budget CLI flags to argparse
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.3'
     description: "In scripts/plan-orchestrator.py, add three new CLI flags to the\
@@ -163,6 +163,13 @@ sections:
       \   Add cli_args: Optional[argparse.Namespace] = None as the last parameter.\n\
       \n4. Verify with: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py\n"
+    attempts: 1
+    last_attempt: '2026-02-14T09:55:01.809556'
+    completed_at: '2026-02-14T09:57:17.932707'
+    result_message: 'Added --max-budget-pct, --quota-ceiling, --reserved-budget CLI
+      flags to argparse in main(). Updated run_orchestrator() call to pass cli_args=args
+      and updated its signature with cli_args: Optional[argparse.Namespace] = None
+      parameter. Syntax verified, all 3 flags visible in --help output.'
   - id: '2.2'
     name: Integrate BudgetGuard into run_orchestrator
     agent: coder
