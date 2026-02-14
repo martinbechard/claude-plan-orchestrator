@@ -133,7 +133,7 @@ sections:
       (priority: CLI > YAML > defaults). Syntax verified, all assertions pass.'
 - id: phase-2
   name: Phase 2 - Orchestrator Integration
-  status: in_progress
+  status: completed
   tasks:
   - id: '2.1'
     name: Add budget CLI flags to argparse
@@ -173,7 +173,7 @@ sections:
   - id: '2.2'
     name: Integrate BudgetGuard into run_orchestrator
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.1'
     description: "In scripts/plan-orchestrator.py, wire BudgetGuard into the main\
@@ -206,6 +206,15 @@ sections:
       \   if budget_config.is_enabled:\n       print(budget_guard.format_status())\n\
       \ \n5. Verify with: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py\n"
+    attempts: 1
+    last_attempt: '2026-02-14T09:57:19.997572'
+    completed_at: '2026-02-14T10:01:44.737519'
+    result_message: 'Integrated BudgetGuard into run_orchestrator: moved usage_tracker
+      init earlier, created budget_config and budget_guard from plan YAML + CLI overrides,
+      added budget info to header print block, added pre-task budget check in main
+      loop (pauses plan with paused_quota status on limit), and added budget status
+      prints after task usage summaries in both sequential and parallel paths. Syntax
+      verified, runtime assertions pass.'
 - id: phase-3
   name: Phase 3 - Auto-Pipeline Integration
   status: pending
