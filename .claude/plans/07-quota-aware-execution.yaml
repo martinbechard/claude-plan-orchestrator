@@ -330,7 +330,7 @@ sections:
   - id: '4.2'
     name: Write unit tests for BudgetGuard
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.2'
     - '4.1'
@@ -357,6 +357,12 @@ sections:
       \   BudgetConfig(quota_ceiling_usd=100.0). Record a task costing $30.\n    \
       \  Verify format_status() contains \"$30\" and \"$100\".\n \n3. Run: python3\
       \ -m pytest tests/test_budget_guard.py -v\n   Fix any failures.\n \nFiles: tests/test_budget_guard.py\n"
+    attempts: 1
+    last_attempt: '2026-02-14T10:07:32.889328'
+    completed_at: '2026-02-14T10:09:45.000000'
+    result_message: Added 7 BudgetGuard unit tests covering unlimited, under-budget,
+      at-limit, over-limit, usage percent, and format_status variants. All 13 tests
+      pass.
   - id: '4.3'
     name: Write unit tests for parse_budget_config
     agent: coder
