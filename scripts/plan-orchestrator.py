@@ -45,6 +45,7 @@ TASK_LOG_DIR = Path(".claude/plans/logs")
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
 DEFAULT_MAX_ATTEMPTS = 3
 CLAUDE_TIMEOUT_SECONDS = 600  # 10 minutes per task
+MAX_PLAN_NAME_LENGTH = 50  # Max chars from plan name used in report filenames
 
 
 def load_orchestrator_config() -> dict:
@@ -436,6 +437,73 @@ class PlanUsageTracker:
             if task_count > 0:
                 lines.append(f"  {sname}: ${su.total_cost_usd:.4f} ({task_count} tasks)")
         return "\n".join(lines)
+
+    def write_report(self, plan: dict, plan_path: str) -> Optional[Path]:
+        """Write a usage report JSON file alongside the plan logs.
+
+        Produces a structured JSON report with per-task and per-section usage
+        breakdowns. The report file is written to TASK_LOG_DIR with a filename
+        derived from the plan name.
+
+        Args:
+            plan: The parsed plan dict containing meta, sections, and tasks.
+            plan_path: The filesystem path to the plan YAML file.
+
+        Returns:
+            The report file path, or None if no usage data was recorded.
+        """
+        if not self.task_usages:
+            return None
+        total = self.get_total_usage()
+        plan_name = plan.get("meta", {}).get("name", "unknown")
+        safe_name = plan_name.lower().replace(" ", "-")[:MAX_PLAN_NAME_LENGTH]
+        report_path = TASK_LOG_DIR / f"{safe_name}-usage-report.json"
+        report = {
+            "plan_name": plan_name,
+            "plan_path": plan_path,
+            "completed_at": datetime.now().isoformat(),
+            "total": {
+                "cost_usd": total.total_cost_usd,
+                "input_tokens": total.input_tokens,
+                "output_tokens": total.output_tokens,
+                "cache_read_tokens": total.cache_read_tokens,
+                "cache_creation_tokens": total.cache_creation_tokens,
+                "cache_hit_rate": self.get_cache_hit_rate(),
+                "num_turns": total.num_turns,
+                "duration_api_ms": total.duration_api_ms,
+            },
+            "sections": [],
+            "tasks": [],
+        }
+        for section in plan.get("sections", []):
+            sid = section.get("id", "")
+            su = self.get_section_usage(plan, sid)
+            task_count = sum(
+                1 for t in section.get("tasks", [])
+                if t.get("id") in self.task_usages
+            )
+            if task_count > 0:
+                report["sections"].append({
+                    "id": sid,
+                    "name": section.get("name", sid),
+                    "cost_usd": su.total_cost_usd,
+                    "task_count": task_count,
+                })
+        for tid, u in self.task_usages.items():
+            report["tasks"].append({
+                "id": tid,
+                "cost_usd": u.total_cost_usd,
+                "input_tokens": u.input_tokens,
+                "output_tokens": u.output_tokens,
+                "cache_read_tokens": u.cache_read_tokens,
+                "cache_creation_tokens": u.cache_creation_tokens,
+                "num_turns": u.num_turns,
+                "duration_api_ms": u.duration_api_ms,
+            })
+        TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        with open(report_path, "w") as f:
+            json.dump(report, f, indent=2)
+        return report_path
 
 
 @dataclass
@@ -2742,6 +2810,10 @@ def run_orchestrator(
     print(f"\n=== Summary ===")
     print(f"Tasks completed: {tasks_completed}")
     print(f"Tasks failed: {tasks_failed}")
+
+    report_path = usage_tracker.write_report(plan, plan_path)
+    if report_path:
+        print(f"[Usage report written to: {report_path}]")
 
     # Return non-zero exit code when tasks failed so callers (e.g. auto-pipeline)
     # know the orchestrator did not fully succeed.
