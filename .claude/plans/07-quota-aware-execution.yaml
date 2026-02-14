@@ -367,7 +367,7 @@ sections:
   - id: '4.3'
     name: Write unit tests for parse_budget_config
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.3'
     - '4.2'
@@ -389,6 +389,12 @@ sections:
       \ directly:\n   mock_args = argparse.Namespace(max_budget_pct=None, quota_ceiling=None,\n\
       \                                  reserved_budget=None)\n \n3. Run: python3\
       \ -m pytest tests/test_budget_guard.py -v\n   Fix any failures.\n \nFiles: tests/test_budget_guard.py\n"
+    attempts: 1
+    last_attempt: '2026-02-14T10:10:05.704365'
+    completed_at: '2026-02-14T10:12:30.476441'
+    result_message: 'Added 4 parse_budget_config unit tests: defaults, YAML parsing,
+      CLI overrides YAML, and partial CLI override. All 17 tests pass (6 BudgetConfig
+      + 7 BudgetGuard + 4 parse_budget_config).'
   - id: '4.4'
     name: Write unit tests for PipelineBudgetGuard
     agent: coder
