@@ -19,7 +19,7 @@ import sys
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -133,6 +133,17 @@ def load_agent_definition(agent_name: str) -> Optional[dict]:
 REVIEWER_KEYWORDS = [
     "verify", "review", "check", "validate", "regression", "compliance"
 ]
+
+# Regex patterns for parsing validation verdicts from validator agent output.
+# Matches structured output like: **Verdict: PASS**
+VERDICT_PATTERN = re.compile(
+    r"\*\*Verdict:\s*(PASS|WARN|FAIL)\*\*", re.IGNORECASE
+)
+
+# Matches individual finding lines like: - [FAIL] Build failed at line 42
+FINDING_PATTERN = re.compile(
+    r"- \[(PASS|WARN|FAIL)\]\s+(.+)", re.IGNORECASE
+)
 
 
 def infer_agent_for_task(task: dict) -> Optional[str]:
@@ -275,6 +286,32 @@ class TaskResult:
     plan_modified: bool = False
     rate_limited: bool = False
     rate_limit_reset_time: Optional[datetime] = None
+
+
+@dataclass
+class ValidationConfig:
+    """Configuration for per-task validation parsed from plan meta.
+
+    Parsed from the optional meta.validation block in the plan YAML.
+    When enabled, the orchestrator spawns a validator agent after each
+    implementation task to independently verify the result.
+    """
+    enabled: bool = False
+    run_after: list[str] = field(default_factory=lambda: ["coder"])
+    validators: list[str] = field(default_factory=lambda: ["validator"])
+    max_validation_attempts: int = 1
+
+
+@dataclass
+class ValidationVerdict:
+    """Result of a validation pass on a completed task.
+
+    The verdict is extracted from the validator's output using VERDICT_PATTERN.
+    Individual findings are parsed using FINDING_PATTERN.
+    """
+    verdict: str       # "PASS", "WARN", or "FAIL"
+    findings: list[str] = field(default_factory=list)
+    raw_output: str = ""
 
 
 class CircuitBreaker:
