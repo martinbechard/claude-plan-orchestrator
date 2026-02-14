@@ -15,3 +15,7 @@
 
 # Command used to start the dev server during verification.
 # dev_server_command: "pnpm dev"
+
+# Directory containing agent definition markdown files.
+# Each agent is a .md file with YAML frontmatter (name, description, tools, model).
+# agents_dir: ".claude/agents/"
