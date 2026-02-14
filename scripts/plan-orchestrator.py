@@ -1070,7 +1070,8 @@ def run_parallel_task(
 
     try:
         # Build prompt with subagent context
-        prompt = build_claude_prompt(plan, section, task, plan_path, subagent_context)
+        prompt = build_claude_prompt(plan, section, task, plan_path, subagent_context,
+                                     attempt_number=task.get("attempts", 1))
 
         # Run Claude in the worktree directory
         cmd = [
@@ -1180,7 +1181,8 @@ def build_claude_prompt(
     section: dict,
     task: dict,
     plan_path: str,
-    subagent_context: Optional[dict] = None
+    subagent_context: Optional[dict] = None,
+    attempt_number: int = 1
 ) -> str:
     """Build the prompt for Claude to execute a task.
 
@@ -1194,6 +1196,7 @@ def build_claude_prompt(
             - worktree_path: Path to this agent's worktree
             - parallel_group: Name of the parallel group
             - sibling_tasks: List of other task IDs running in parallel
+        attempt_number: Which attempt this is (1 = fresh start, 2+ = retry after failure)
     """
     plan_doc = plan.get("meta", {}).get("plan_doc", "")
 
@@ -1252,6 +1255,18 @@ Read `.claude/skills/agent-sync.md` for the full protocol.
 
 """
 
+    # Build attempt-aware instruction for step 1
+    if attempt_number >= 2:
+        state_verification_instruction = (
+            f"1. This is attempt {attempt_number}. A previous attempt failed. "
+            "Check the current state before proceeding - some work may already be done."
+        )
+    else:
+        state_verification_instruction = (
+            "1. This is a fresh start (attempt 1). The task shows as in_progress because "
+            "the orchestrator assigned it to you. Start working immediately on the task."
+        )
+
     return f"""{agent_content}{subagent_header}Run task {task['id']} from the implementation plan.
 
 ## Task Details
@@ -1262,7 +1277,7 @@ Read `.claude/skills/agent-sync.md` for the full protocol.
 - **YAML Plan File:** {plan_path}
 
 ## Instructions
-1. First, verify the current state - a previous attempt may have failed
+{state_verification_instruction}
 2. Read the relevant section from the plan document for detailed implementation steps
 3. Implement the task following the plan's specifications
 4. Run `{BUILD_COMMAND}` to verify no build errors
@@ -2037,7 +2052,8 @@ def run_orchestrator(
 
         # Build and execute prompt
         verbose_log("Building Claude prompt...", "TASK")
-        prompt = build_claude_prompt(plan, section, task, plan_path)
+        prompt = build_claude_prompt(plan, section, task, plan_path,
+                                     attempt_number=task.get("attempts", 1))
         verbose_log(f"Prompt built, length: {len(prompt)} chars", "TASK")
         if VERBOSE:
             print("-" * 40)
