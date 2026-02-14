@@ -2266,6 +2266,32 @@ def run_orchestrator(
                         break
                     continue  # Retry the parallel group
 
+                # Validate successful parallel tasks sequentially
+                if validation_config.enabled:
+                    for section, task, _ in parallel_tasks:
+                        task_id = task.get("id")
+                        task_result = results.get(task_id)
+                        if task_result and task_result.success:
+                            validation_attempts = task.get("validation_attempts", 0)
+                            if validation_attempts < validation_config.max_validation_attempts:
+                                verdict = run_validation(
+                                    task, section, task_result, validation_config, dry_run
+                                )
+                                if verdict.verdict == "FAIL":
+                                    print(f"  [{task_id}] VALIDATION FAIL")
+                                    task_result = TaskResult(
+                                        success=False,
+                                        message=f"Validation failed: {', '.join(verdict.findings[:3])}",
+                                        duration_seconds=task_result.duration_seconds
+                                    )
+                                    results[task_id] = task_result
+                                    task["validation_findings"] = "\n".join(verdict.findings)
+                                    task["validation_attempts"] = validation_attempts + 1
+                                elif verdict.verdict == "WARN":
+                                    print(f"  [{task_id}] VALIDATION WARN")
+                                else:
+                                    print(f"  [{task_id}] VALIDATION PASS")
+
                 # Update task statuses in plan
                 for section, task, _ in parallel_tasks:
                     task_id = task.get("id")
