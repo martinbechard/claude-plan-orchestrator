@@ -539,6 +539,53 @@ class BudgetConfig:
         return self.quota_ceiling_usd > 0
 
 
+class BudgetGuard:
+    """Checks cumulative cost against budget limits before each task.
+
+    Wraps a PlanUsageTracker to read current spending. Does not maintain
+    its own cost counter; queries the tracker directly to avoid duplicate state.
+    """
+
+    def __init__(self, config: BudgetConfig, usage_tracker: PlanUsageTracker) -> None:
+        self.config = config
+        self.usage_tracker = usage_tracker
+
+    def can_proceed(self) -> tuple[bool, str]:
+        """Check if budget allows another task.
+        Returns (can_proceed, reason_if_not).
+        """
+        if not self.config.is_enabled:
+            return (True, "")
+        total = self.usage_tracker.get_total_usage()
+        spent = total.total_cost_usd
+        limit = self.config.effective_limit_usd
+        if spent >= limit:
+            pct = (spent / self.config.quota_ceiling_usd * 100) if self.config.quota_ceiling_usd > 0 else 0
+            reason = (
+                f"Budget limit reached: ${spent:.4f} / ${limit:.4f} "
+                f"({pct:.1f}% of ${self.config.quota_ceiling_usd:.2f} ceiling)"
+            )
+            return (False, reason)
+        return (True, "")
+
+    def get_usage_percent(self) -> float:
+        """Current spending as percentage of ceiling."""
+        if not self.config.is_enabled:
+            return 0.0
+        total = self.usage_tracker.get_total_usage()
+        return (total.total_cost_usd / self.config.quota_ceiling_usd * 100)
+
+    def format_status(self) -> str:
+        """Format current budget status for display."""
+        if not self.config.is_enabled:
+            return "[Budget: unlimited]"
+        total = self.usage_tracker.get_total_usage()
+        spent = total.total_cost_usd
+        limit = self.config.effective_limit_usd
+        pct = self.get_usage_percent()
+        return f"[Budget: ${spent:.4f} / ${limit:.4f} ({pct:.1f}% of ceiling)]"
+
+
 @dataclass
 class ValidationConfig:
     """Configuration for per-task validation parsed from plan meta.
