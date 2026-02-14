@@ -303,6 +303,18 @@ DEFAULT_BACKOFF_MAX = 120  # max backoff seconds
 
 
 @dataclass
+class TaskUsage:
+    """Token usage and cost data from a single Claude CLI invocation."""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_creation_tokens: int = 0
+    total_cost_usd: float = 0.0
+    num_turns: int = 0
+    duration_api_ms: int = 0
+
+
+@dataclass
 class TaskResult:
     """Result of a task execution."""
     success: bool
@@ -311,6 +323,29 @@ class TaskResult:
     plan_modified: bool = False
     rate_limited: bool = False
     rate_limit_reset_time: Optional[datetime] = None
+    usage: Optional[TaskUsage] = None
+
+
+def parse_task_usage(result_data: dict) -> TaskUsage:
+    """Extract token usage from a Claude CLI result JSON object.
+
+    Args:
+        result_data: The parsed JSON result from Claude CLI, containing
+             usage, total_cost_usd, num_turns, and duration_api_ms fields.
+
+    Returns:
+        A TaskUsage populated from the result data, with zeros for missing fields.
+    """
+    usage = result_data.get("usage", {})
+    return TaskUsage(
+        input_tokens=usage.get("input_tokens", 0),
+        output_tokens=usage.get("output_tokens", 0),
+        cache_read_tokens=usage.get("cache_read_input_tokens", 0),
+        cache_creation_tokens=usage.get("cache_creation_input_tokens", 0),
+        total_cost_usd=result_data.get("total_cost_usd", 0.0),
+        num_turns=result_data.get("num_turns", 0),
+        duration_api_ms=result_data.get("duration_api_ms", 0),
+    )
 
 
 @dataclass
