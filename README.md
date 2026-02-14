@@ -14,6 +14,8 @@ The Plan Orchestrator executes structured YAML plans through Claude Code, provid
 - **Graceful Stop**: Touch a semaphore file to stop between tasks
 - **Post-Plan Smoke Tests**: Optionally run Playwright tests after plan completion
 - **Auto-Pipeline**: Daemon that watches backlog folders and drives the orchestrator automatically
+- **Defect Verification Loop**: Independent symptom verification with verify-then-fix retry cycles
+- **Configurable Commands**: Build, test, and dev-server commands configurable per project
 
 ```
                      ┌──────────────────────────┐
@@ -281,12 +283,82 @@ python scripts/auto-pipeline.py --verbose
 
 The auto-pipeline:
 1. Monitors `docs/defect-backlog/` and `docs/feature-backlog/` for new `.md` files
-2. Prioritizes defects over features
+2. Prioritizes defects over features; respects `## Dependencies` between items
 3. For each item: Claude creates a design + YAML plan, then the orchestrator executes it
-4. Archives completed items to `completed/` subdirectories
-5. Shares the `.stop` semaphore with the orchestrator for coordinated shutdown
+4. For defects: runs an independent verification step to confirm symptoms are resolved
+5. If verification fails: deletes stale plan, retries with findings (up to 3 cycles)
+6. Archives completed items to `completed/` subdirectories
+7. Shares the `.stop` semaphore with the orchestrator for coordinated shutdown
 
 Requires: `pip install watchdog pyyaml`
+
+### Defect Verification Loop
+
+For defects, the auto-pipeline runs a verify-then-fix cycle after the orchestrator completes:
+
+```
+Phase 1: Create plan      --> Phase 2: Execute plan
+                                        |
+                              Phase 3: Verify symptoms
+                                    |           |
+                                  PASS        FAIL
+                                    |           |
+                              Phase 4:    Delete stale plan,
+                              Archive     loop to Phase 1
+                                          (findings in defect file
+                                           inform the next plan)
+```
+
+The verifier is a read-only Claude session that checks whether the reported symptoms are actually resolved. It appends structured findings to the defect file, which the next plan-creation step reads to produce a targeted fix.
+
+### Project Configuration
+
+Customize build and test commands in `.claude/orchestrator-config.yaml`:
+
+```yaml
+# Build/test commands used during verification (defaults shown)
+# build_command: "pnpm run build"
+# test_command: "pnpm test"
+# dev_server_command: "pnpm dev"
+# dev_server_port: 3000
+```
+
+### Backlog Item Format
+
+Write backlog items as markdown files in `docs/defect-backlog/` or `docs/feature-backlog/`:
+
+```markdown
+# Brief Title
+
+## Status: Open
+
+## Priority: High
+
+## Summary
+What this defect/feature is about.
+
+## Expected Behavior
+What should happen.
+
+## Actual Behavior
+What actually happens (for defects).
+
+## Fix Required
+Specific steps or criteria for the fix.
+
+## Verification
+How to verify the fix is correct.
+
+## Dependencies
+- 02-other-feature.md
+```
+
+Key conventions:
+- Filenames use `NN-slug-name.md` format (e.g., `01-fix-login-bug.md`)
+- `## Status: Fixed` or `## Status: Completed` marks items as done (auto-pipeline skips them)
+- `## Dependencies` lists other backlog slugs that must be completed first
+- Items in `completed/` subdirectories are ignored
+- Items in `on-hold/` subdirectories are ignored
 
 ## Manual Execution
 
@@ -359,8 +431,8 @@ your-project/
 │   ├── subagent-status/            # Parallel task heartbeats
 │   └── agent-claims.json           # File claim coordination
 ├── scripts/
-│   ├── plan-orchestrator.py        # Main orchestrator (~2000 lines)
-│   └── auto-pipeline.py            # Auto-pipeline daemon (~1000 lines)
+│   ├── plan-orchestrator.py        # Main orchestrator (~2095 lines)
+│   └── auto-pipeline.py            # Auto-pipeline daemon (~1450 lines)
 └── docs/
     ├── plans/
     │   └── YYYY-MM-DD-*.md         # Design documents
@@ -408,7 +480,7 @@ your-project/
 
 ## Development History
 
-The orchestrator evolved from a 454-line sequential executor to a ~2000-line parallel execution engine over the course of building a production application. See [docs/narrative/](docs/narrative/) for the complete development history, including:
+The orchestrator evolved from a 454-line sequential executor to a ~3500-line parallel execution engine (across two scripts) over the course of building a production application. See [docs/narrative/](docs/narrative/) for the complete development history, including:
 
 - Genesis and initial design decisions
 - Parallel execution via git worktrees
@@ -420,6 +492,7 @@ The orchestrator evolved from a 454-line sequential executor to a ~2000-line par
 - Lessons learned and open questions
 - Fixing the parallel merge strategy
 - Design competitions: parallel design generation with AI judge
+- Verification loop: independent symptom verification for defects
 
 ## License
 
