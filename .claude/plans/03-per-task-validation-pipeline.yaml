@@ -163,7 +163,7 @@ sections:
       Includes docstring. Syntax verified clean.
 - id: phase-3
   name: Phase 3 - Validation Execution Logic
-  status: in_progress
+  status: completed
   tasks:
   - id: '3.1'
     name: Add build_validation_prompt function
@@ -225,7 +225,7 @@ sections:
   - id: '3.3'
     name: Add run_validation function
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '3.2'
     description: "In scripts/plan-orchestrator.py, add the main validation execution\
@@ -256,6 +256,20 @@ sections:
       \ run_claude_task completes, read the most recent log file from .claude/plans/logs/\
       \ and parse its STDOUT section for the verdict and findings using parse_validation_verdict().\n\
       \nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
+    attempts: 1
+    last_attempt: '2026-02-13T23:30:11.841774'
+    completed_at: '2026-02-13T23:33:38.672651'
+    result_message: Added run_validation() function after parse_validation_verdict()
+      in plan-orchestrator.py. The function determines the executing agent, checks
+      if validation applies for that agent type, and iterates over configured validators.
+      For each validator it builds a prompt via build_validation_prompt(), executes
+      via run_claude_task(), reads the log output via get_most_recent_log_file()/read_log_stdout(),
+      and parses the verdict with parse_validation_verdict(). Short-circuits on FAIL.
+      Also added helper functions get_most_recent_log_file() and read_log_stdout(),
+      plus manifest constants (TASK_LOG_DIR, LOG_STDOUT_SECTION, LOG_STDERR_SECTION,
+      FALLBACK_AGENT_NAME, VALIDATION_LOG_PREFIX, DRY_RUN_PROMPT_PREVIEW_LENGTH).
+      Refactored run_claude_task() to use shared TASK_LOG_DIR constant. Syntax verified
+      clean.
 - id: phase-4
   name: Phase 4 - Orchestrator Integration
   status: pending
