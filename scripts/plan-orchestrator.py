@@ -161,11 +161,14 @@ FINDING_PATTERN = re.compile(
 
 
 def infer_agent_for_task(task: dict) -> Optional[str]:
-    """Infer which agent should execute a task based on its description keywords.
+    """Infer which agent should execute a task based on name and description keywords.
 
-    Scans the task description for keywords associated with review/verification
-    work. If any REVIEWER_KEYWORDS are found, returns "code-reviewer". Otherwise
-    returns the default "coder" agent.
+    Combines the task name and description, then scans for keywords in priority order:
+    1. REVIEWER_KEYWORDS -> "code-reviewer"
+    2. PLANNER_KEYWORDS (multi-word phrases, checked before single-word designer
+       keywords to avoid false matches on words like "design") -> "planner"
+    3. DESIGNER_KEYWORDS -> "systems-designer"
+    4. Default -> "coder"
 
     Returns None if the agents directory (AGENTS_DIR) does not exist, which
     preserves backward compatibility for projects that have not adopted agents.
@@ -173,11 +176,19 @@ def infer_agent_for_task(task: dict) -> Optional[str]:
     if not os.path.isdir(AGENTS_DIR):
         return None
 
-    description = task.get("description", "").lower()
+    text = (task.get("name", "") + " " + task.get("description", "")).lower()
 
     for keyword in REVIEWER_KEYWORDS:
-        if keyword in description:
+        if keyword in text:
             return "code-reviewer"
+
+    for keyword in PLANNER_KEYWORDS:
+        if keyword in text:
+            return "planner"
+
+    for keyword in DESIGNER_KEYWORDS:
+        if keyword in text:
+            return "systems-designer"
 
     return "coder"
 
