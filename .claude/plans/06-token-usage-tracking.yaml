@@ -1,0 +1,427 @@
+meta:
+  name: Token Usage Tracking and Cost Reporting
+  description: 'Track token consumption across orchestrator tasks and auto-pipeline work
+    items, producing per-task and aggregate usage reports. Adds TaskUsage dataclass,
+    always captures structured CLI output, aggregates with PlanUsageTracker, writes
+    usage-report.json, and enhances log files with cost/token data.
+
+    '
+  plan_doc: docs/plans/2026-02-14-06-token-usage-tracking-design.md
+  created: '2026-02-14'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - validator
+    max_validation_attempts: 1
+sections:
+- id: phase-1
+  name: Phase 1 - TaskUsage Dataclass and Parsing
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add TaskUsage dataclass and parse_task_usage helper
+    agent: coder
+    status: pending
+    description: "In scripts/plan-orchestrator.py, add the TaskUsage dataclass and a\
+      \ parse_task_usage() helper function.\n\nReference: docs/plans/2026-02-14-06-token-usage-tracking-design.md\n\
+      \nSteps:\n1. Add the TaskUsage dataclass immediately before the TaskResult dataclass\
+      \ (currently at line 305):\n\n   @dataclass\n   class TaskUsage:\n       \"\"\"Token\
+      \ usage and cost data from a single Claude CLI invocation.\"\"\"\n       input_tokens:\
+      \ int = 0\n       output_tokens: int = 0\n       cache_read_tokens: int = 0\n\
+      \       cache_creation_tokens: int = 0\n       total_cost_usd: float = 0.0\n\
+      \       num_turns: int = 0\n       duration_api_ms: int = 0\n\n2. Add an optional\
+      \ usage field to the existing TaskResult dataclass:\n\n   usage: Optional[TaskUsage]\
+      \ = None\n\n3. Add the parse_task_usage() helper function after the TaskResult\
+      \ dataclass:\n\n   def parse_task_usage(result_data: dict) -> TaskUsage:\n   \
+      \    \"\"\"Extract token usage from a Claude CLI result JSON object.\n\n       Args:\n\
+      \           result_data: The parsed JSON result from Claude CLI, containing\n \
+      \               usage, total_cost_usd, num_turns, and duration_api_ms fields.\n\
+      \n       Returns:\n           A TaskUsage populated from the result data, with\
+      \ zeros for missing fields.\n       \"\"\"\n       usage = result_data.get(\"usage\"\
+      , {})\n       return TaskUsage(\n           input_tokens=usage.get(\"input_tokens\"\
+      , 0),\n           output_tokens=usage.get(\"output_tokens\", 0),\n           cache_read_tokens=usage.get(\"\
+      cache_read_input_tokens\", 0),\n           cache_creation_tokens=usage.get(\"\
+      cache_creation_input_tokens\", 0),\n           total_cost_usd=result_data.get(\"\
+      total_cost_usd\", 0.0),\n           num_turns=result_data.get(\"num_turns\", 0),\n\
+      \           duration_api_ms=result_data.get(\"duration_api_ms\", 0),\n       )\n\
+      \n4. Verify with: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py\n"
+  - id: '1.2'
+    name: Modify stream_json_output to capture result event data
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.1'
+    description: "In scripts/plan-orchestrator.py, modify the stream_json_output()\
+      \ function to capture the result event in a shared dict so run_claude_task() can\
+      \ extract usage data.\n\nReference: docs/plans/2026-02-14-06-token-usage-tracking-design.md\n\
+      \nSteps:\n1. Change the function signature from:\n   def stream_json_output(pipe,\
+      \ collector: OutputCollector) -> None:\n   To:\n   def stream_json_output(pipe,\
+      \ collector: OutputCollector, result_capture: dict) -> None:\n\n   Update the\
+      \ docstring to document the new parameter:\n   result_capture: A mutable dict that\
+      \ will be populated with the full result event data\n   when the 'result' event\
+      \ is received. The caller reads this after thread join.\n\n2. In the result event\
+      \ handler (currently line 1803), after the existing print statement,\n   add:\n\
+      \   result_capture.update(event)\n\n   This stores the entire result event dict\
+      \ so parse_task_usage() can extract all fields.\n\n3. Verify with: python3 -c \"\
+      import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True);\
+      \ print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py\n"
+  - id: '1.3'
+    name: Always use --output-format json in non-verbose mode
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.2'
+    description: "In scripts/plan-orchestrator.py, modify run_claude_task() to always\
+      \ use structured JSON output so usage data is available in all modes.\n\nReference:\
+      \ docs/plans/2026-02-14-06-token-usage-tracking-design.md\n\nSteps:\n1. In the\
+      \ command construction block (currently around line 1822-1831), change from:\n\
+      \   cmd = [\n       *CLAUDE_CMD,\n       \"--dangerously-skip-permissions\",\n\
+      \       \"--print\",\n       prompt\n   ]\n   if VERBOSE:\n       cmd.extend([\"\
+      --output-format\", \"stream-json\", \"--verbose\"])\n\n   To:\n   cmd = [\n  \
+      \     *CLAUDE_CMD,\n       \"--dangerously-skip-permissions\",\n       \"--print\"\
+      ,\n       prompt\n   ]\n   if VERBOSE:\n       cmd.extend([\"--output-format\"\
+      , \"stream-json\", \"--verbose\"])\n   else:\n       cmd.extend([\"--output-format\"\
+      , \"json\"])\n\n   This ensures non-verbose mode produces parseable JSON output.\n\
+      \n2. Create a result_capture dict before the subprocess launch:\n   result_capture:\
+      \ dict = {}\n\n3. Update the verbose-mode stdout_thread creation to pass result_capture:\n\
+      \   stdout_thread = threading.Thread(\n       target=stream_json_output,\n    \
+      \   args=(process.stdout, stdout_collector, result_capture)\n   )\n\n4. After thread\
+      \ join and log file writing, extract usage data for BOTH modes:\n\n   For verbose\
+      \ mode: result_capture is already populated by stream_json_output.\n   For non-verbose\
+      \ mode: parse the entire stdout as JSON:\n     if not VERBOSE:\n         try:\n\
+      \             result_json = json.loads(stdout_collector.get_output())\n         \
+      \    result_capture.update(result_json)\n         except (json.JSONDecodeError,\
+      \ ValueError):\n             pass  # Non-JSON output, no usage data available\n\
+      \n5. Create a TaskUsage from result_capture and attach to every TaskResult:\n  \
+      \ task_usage = parse_task_usage(result_capture) if result_capture else None\n\n\
+      \   Then in every place TaskResult is returned within run_claude_task(), add:\n\
+      \   usage=task_usage\n\n   There are multiple return statements in run_claude_task()\
+      \ for different outcomes\n   (success, rate limit, error). Add usage=task_usage\
+      \ to all of them. For the error/rate-limit\n   paths where task_usage may not yet\
+      \ be populated, pass None.\n\n6. Verify with: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py\n"
+- id: phase-2
+  name: Phase 2 - PlanUsageTracker and Summary Output
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Implement PlanUsageTracker class
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.3'
+    description: "In scripts/plan-orchestrator.py, add the PlanUsageTracker class that\
+      \ accumulates usage across all tasks in a plan run.\n\nReference: docs/plans/2026-02-14-06-token-usage-tracking-design.md\n\
+      \nSteps:\n1. Add the PlanUsageTracker class after the parse_task_usage() function.\n\
+      \   The class needs these methods:\n\n   class PlanUsageTracker:\n       \"\"\"Accumulates\
+      \ token usage across all tasks in a plan run.\"\"\"\n\n       def __init__(self):\n\
+      \           self.task_usages: dict[str, TaskUsage] = {}\n\n       def record(self,\
+      \ task_id: str, usage: TaskUsage) -> None:\n           \"\"\"Record usage for\
+      \ a completed task.\"\"\"\n           self.task_usages[task_id] = usage\n\n   \
+      \    def get_section_usage(self, plan: dict, section_id: str) -> TaskUsage:\n \
+      \          \"\"\"Aggregate usage for all tasks in a given section.\"\"\"\n     \
+      \      # Find the section, iterate its tasks, sum up usage for matching task_ids\n\
+      \           total = TaskUsage()\n           for section in plan.get(\"sections\"\
+      , []):\n               if section.get(\"id\") == section_id:\n               \
+      \    for task in section.get(\"tasks\", []):\n                       tid = task.get(\"\
+      id\", \"\")\n                       if tid in self.task_usages:\n             \
+      \              u = self.task_usages[tid]\n                           total.input_tokens\
+      \ += u.input_tokens\n                           total.output_tokens += u.output_tokens\n\
+      \                           total.cache_read_tokens += u.cache_read_tokens\n  \
+      \                         total.cache_creation_tokens += u.cache_creation_tokens\n\
+      \                           total.total_cost_usd += u.total_cost_usd\n        \
+      \                   total.num_turns += u.num_turns\n                          \
+      \ total.duration_api_ms += u.duration_api_ms\n           return total\n\n     \
+      \  def get_total_usage(self) -> TaskUsage:\n           \"\"\"Aggregate usage across\
+      \ all recorded tasks.\"\"\"\n           total = TaskUsage()\n           for u in\
+      \ self.task_usages.values():\n               total.input_tokens += u.input_tokens\n\
+      \               total.output_tokens += u.output_tokens\n               total.cache_read_tokens\
+      \ += u.cache_read_tokens\n               total.cache_creation_tokens += u.cache_creation_tokens\n\
+      \               total.total_cost_usd += u.total_cost_usd\n               total.num_turns\
+      \ += u.num_turns\n               total.duration_api_ms += u.duration_api_ms\n\
+      \           return total\n\n       def get_cache_hit_rate(self) -> float:\n   \
+      \        \"\"\"Calculate overall cache hit rate.\"\"\"\n           total = self.get_total_usage()\n\
+      \           denom = total.cache_read_tokens + total.input_tokens\n           return\
+      \ total.cache_read_tokens / denom if denom > 0 else 0.0\n\n       def format_summary_line(self,\
+      \ task_id: str) -> str:\n           \"\"\"Format a one-line usage summary for a\
+      \ task.\"\"\"\n           u = self.task_usages.get(task_id)\n           if not\
+      \ u:\n               return \"\"\n           total = self.get_total_usage()\n \
+      \          cache_denom = u.cache_read_tokens + u.input_tokens\n           cache_pct\
+      \ = (u.cache_read_tokens / cache_denom * 100) if cache_denom > 0 else 0\n    \
+      \       return (\n               f\"[Usage] Task {task_id}: ${u.total_cost_usd:.4f}\
+      \ | \"\n               f\"{u.input_tokens:,} in / {u.output_tokens:,} out / \"\
+      \n               f\"{u.cache_read_tokens:,} cached ({cache_pct:.0f}% cache hit)\
+      \ | \"\n               f\"Running: ${total.total_cost_usd:.4f}\"\n           )\n\
+      \n       def format_final_summary(self, plan: dict) -> str:\n           \"\"\"Format\
+      \ the final usage summary printed after all tasks complete.\"\"\"\n           total\
+      \ = self.get_total_usage()\n           cache_rate = self.get_cache_hit_rate()\n\
+      \           lines = [\n               \"\\n=== Usage Summary ===\",\n          \
+      \     f\"Total cost: ${total.total_cost_usd:.4f}\",\n               f\"Total tokens:\
+      \ {total.input_tokens:,} input / {total.output_tokens:,} output\",\n          \
+      \     f\"Cache: {total.cache_read_tokens:,} read / {total.cache_creation_tokens:,}\
+      \ created ({cache_rate:.0%} hit rate)\",\n               f\"API time: {total.duration_api_ms\
+      \ / 1000:.1f}s across {total.num_turns} turns\",\n               \"Per-section\
+      \ breakdown:\",\n           ]\n           for section in plan.get(\"sections\",\
+      \ []):\n               sid = section.get(\"id\", \"\")\n               sname =\
+      \ section.get(\"name\", sid)\n               su = self.get_section_usage(plan,\
+      \ sid)\n               task_count = sum(\n                   1 for t in section.get(\"\
+      tasks\", []) if t.get(\"id\") in self.task_usages\n               )\n         \
+      \      if task_count > 0:\n                   lines.append(f\"  {sname}: ${su.total_cost_usd:.4f}\
+      \ ({task_count} tasks)\")\n           return \"\\n\".join(lines)\n\n2. Verify with:\
+      \ python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py\n"
+  - id: '2.2'
+    name: Integrate PlanUsageTracker into run_orchestrator loop
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.1'
+    description: "In scripts/plan-orchestrator.py, wire PlanUsageTracker into the main\
+      \ orchestration loop so that usage is recorded after each task and printed as summaries.\n\
+      \nReference: docs/plans/2026-02-14-06-token-usage-tracking-design.md\n\nSteps:\n\
+      1. In run_orchestrator() (currently around line 2068), create a PlanUsageTracker\
+      \ instance\n   near the top of the function, alongside the existing tasks_completed/tasks_failed\
+      \ counters:\n   usage_tracker = PlanUsageTracker()\n\n2. After each task completes\
+      \ (after run_claude_task returns and task_result is available),\n   record the\
+      \ usage if present:\n   if task_result.usage:\n       usage_tracker.record(task.get(\"\
+      id\", \"\"), task_result.usage)\n       print(usage_tracker.format_summary_line(task.get(\"\
+      id\", \"\")))\n\n   This should go right after the existing task result handling\
+      \ (around the area where\n   task_result.success is checked and tasks_completed/tasks_failed\
+      \ are incremented).\n\n3. Before the existing summary block (around line 2574:\
+      \ print(\"=== Summary ===\")),\n   add the usage final summary:\n   print(usage_tracker.format_final_summary(plan))\n\
+      \n4. Verify with: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py\n"
+- id: phase-3
+  name: Phase 3 - Usage Report and Log Enhancement
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Write usage-report.json after plan completion
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.2'
+    description: "In scripts/plan-orchestrator.py, add a method to PlanUsageTracker\
+      \ that writes a usage report JSON file, and call it at plan completion.\n\nReference:\
+      \ docs/plans/2026-02-14-06-token-usage-tracking-design.md\n\nSteps:\n1. Add a\
+      \ write_report() method to PlanUsageTracker:\n\n   def write_report(self, plan:\
+      \ dict, plan_path: str) -> Optional[Path]:\n       \"\"\"Write a usage report\
+      \ JSON file alongside the plan logs.\n       Returns the report file path, or\
+      \ None if no usage data was recorded.\"\"\"\n       if not self.task_usages:\n\
+      \           return None\n       total = self.get_total_usage()\n       plan_name\
+      \ = plan.get(\"meta\", {}).get(\"name\", \"unknown\")\n       # Sanitize plan\
+      \ name for filename\n       safe_name = plan_name.lower().replace(\" \", \"-\"\
+      )[:50]\n       report_path = TASK_LOG_DIR / f\"{safe_name}-usage-report.json\"\
+      \n       report = {\n           \"plan_name\": plan_name,\n           \"plan_path\"\
+      : plan_path,\n           \"completed_at\": datetime.now().isoformat(),\n      \
+      \     \"total\": {\n               \"cost_usd\": total.total_cost_usd,\n      \
+      \         \"input_tokens\": total.input_tokens,\n               \"output_tokens\"\
+      : total.output_tokens,\n               \"cache_read_tokens\": total.cache_read_tokens,\n\
+      \               \"cache_creation_tokens\": total.cache_creation_tokens,\n     \
+      \          \"cache_hit_rate\": self.get_cache_hit_rate(),\n               \"num_turns\"\
+      : total.num_turns,\n               \"duration_api_ms\": total.duration_api_ms,\n\
+      \           },\n           \"sections\": [],\n           \"tasks\": [],\n      \
+      \ }\n       for section in plan.get(\"sections\", []):\n           sid = section.get(\"\
+      id\", \"\")\n           su = self.get_section_usage(plan, sid)\n           task_count\
+      \ = sum(1 for t in section.get(\"tasks\", []) if t.get(\"id\") in self.task_usages)\n\
+      \           if task_count > 0:\n               report[\"sections\"].append({\n\
+      \                   \"id\": sid,\n                   \"name\": section.get(\"name\"\
+      , sid),\n                   \"cost_usd\": su.total_cost_usd,\n               \
+      \    \"task_count\": task_count,\n               })\n       for tid, u in self.task_usages.items():\n\
+      \           report[\"tasks\"].append({\n               \"id\": tid,\n          \
+      \     \"cost_usd\": u.total_cost_usd,\n               \"input_tokens\": u.input_tokens,\n\
+      \               \"output_tokens\": u.output_tokens,\n               \"cache_read_tokens\"\
+      : u.cache_read_tokens,\n               \"cache_creation_tokens\": u.cache_creation_tokens,\n\
+      \               \"num_turns\": u.num_turns,\n               \"duration_api_ms\"\
+      : u.duration_api_ms,\n           })\n       TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)\n\
+      \       with open(report_path, \"w\") as f:\n           json.dump(report, f, indent=2)\n\
+      \       return report_path\n\n2. In run_orchestrator(), after the final summary\
+      \ print and before the sys.exit(1)\n   check, call the report writer:\n   report_path\
+      \ = usage_tracker.write_report(plan, plan_path)\n   if report_path:\n       print(f\"\
+      [Usage report written to: {report_path}]\")\n\n3. Verify with: python3 -c \"import\
+      \ py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True);\
+      \ print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py\n"
+  - id: '3.2'
+    name: Enhance log file headers with usage data
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.3'
+    description: "In scripts/plan-orchestrator.py, enhance the per-task log file header\
+      \ to include usage data when available.\n\nReference: docs/plans/2026-02-14-06-token-usage-tracking-design.md\n\
+      \nSteps:\n1. In run_claude_task(), find the log file writing block (currently around\
+      \ line 1929-1943).\n   After the existing header lines (Duration, Return code,\
+      \ Stdout lines, Stderr lines),\n   add usage data if result_capture has content:\n\
+      \n   Current header writes:\n     f.write(f\"Duration: {duration:.1f}s\\n\")\n\
+      \     f.write(f\"Return code: {returncode}\\n\")\n     f.write(f\"Stdout lines:\
+      \ {stdout_collector.line_count}\\n\")\n     f.write(f\"Stderr lines: {stderr_collector.line_count}\\\
+      n\")\n\n   Add after these lines:\n     if result_capture:\n         cost = result_capture.get(\"\
+      total_cost_usd\", 0)\n         usage_data = result_capture.get(\"usage\", {})\n\
+      \         f.write(f\"Cost: ${cost:.4f}\\n\")\n         f.write(f\"Tokens: {usage_data.get('input_tokens',\
+      \ 0)} input / \"\n                 f\"{usage_data.get('output_tokens', 0)} output\
+      \ / \"\n                 f\"{usage_data.get('cache_read_input_tokens', 0)} cache_read\
+      \ / \"\n                 f\"{usage_data.get('cache_creation_input_tokens', 0)}\
+      \ cache_create\\n\")\n         f.write(f\"Turns: {result_capture.get('num_turns',\
+      \ 0)}\\n\")\n         f.write(f\"API time: {result_capture.get('duration_api_ms',\
+      \ 0)}ms\\n\")\n\n2. Verify with: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py\n"
+- id: phase-4
+  name: Phase 4 - Auto-Pipeline Integration
+  status: pending
+  tasks:
+  - id: '4.1'
+    name: Add usage report reading to auto-pipeline
+    agent: coder
+    status: pending
+    depends_on:
+    - '3.1'
+    description: "In scripts/auto-pipeline.py, add the ability to read usage reports\
+      \ after orchestrator execution and accumulate session-level totals.\n\nReference:\
+      \ docs/plans/2026-02-14-06-token-usage-tracking-design.md\n\nSteps:\n1. Add a\
+      \ SessionUsageTracker class near the top of the file (after the ProcessResult\
+      \ dataclass):\n\n   class SessionUsageTracker:\n       \"\"\"Accumulates usage\
+      \ reports across all work items in a pipeline session.\"\"\"\n\n       def __init__(self):\n\
+      \           self.work_item_costs: list[dict] = []\n           self.total_cost_usd:\
+      \ float = 0.0\n           self.total_input_tokens: int = 0\n           self.total_output_tokens:\
+      \ int = 0\n\n       def record_from_report(self, report_path: str, work_item_name:\
+      \ str) -> None:\n           \"\"\"Read a usage report JSON and accumulate totals.\"\
+      \"\"\n           try:\n               with open(report_path) as f:\n          \
+      \         report = json.load(f)\n               total = report.get(\"total\",\
+      \ {})\n               cost = total.get(\"cost_usd\", 0.0)\n               self.total_cost_usd\
+      \ += cost\n               self.total_input_tokens += total.get(\"input_tokens\"\
+      , 0)\n               self.total_output_tokens += total.get(\"output_tokens\",\
+      \ 0)\n               self.work_item_costs.append({\n                   \"name\"\
+      : work_item_name,\n                   \"cost_usd\": cost,\n               })\n\
+      \               log(f\"[Usage] {work_item_name}: ${cost:.4f}\")\n           except\
+      \ (FileNotFoundError, json.JSONDecodeError, ValueError):\n               pass\
+      \  # Report not available, skip silently\n\n       def format_session_summary(self)\
+      \ -> str:\n           \"\"\"Format session-level usage summary.\"\"\"\n       \
+      \    lines = [\"\\n=== Pipeline Session Usage ===\"]\n           lines.append(f\"\
+      Total cost: ${self.total_cost_usd:.4f}\")\n           lines.append(f\"Total tokens:\
+      \ {self.total_input_tokens:,} input / {self.total_output_tokens:,} output\")\n\
+      \           if self.work_item_costs:\n               lines.append(\"Per work item:\"\
+      )\n               for item in self.work_item_costs:\n                   lines.append(f\"\
+      \  {item['name']}: ${item['cost_usd']:.4f}\")\n           return \"\\n\".join(lines)\n\
+      \n       def write_session_report(self) -> Optional[str]:\n           \"\"\"Write\
+      \ a session summary JSON file.\"\"\"\n           if not self.work_item_costs:\n\
+      \               return None\n           log_dir = Path(\".claude/plans/logs\")\n\
+      \           log_dir.mkdir(parents=True, exist_ok=True)\n           report_path\
+      \ = log_dir / f\"pipeline-session-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json\"\
+      \n           report = {\n               \"session_timestamp\": datetime.now().isoformat(),\n\
+      \               \"total_cost_usd\": self.total_cost_usd,\n               \"total_input_tokens\"\
+      : self.total_input_tokens,\n               \"total_output_tokens\": self.total_output_tokens,\n\
+      \               \"work_items\": self.work_item_costs,\n           }\n          \
+      \ with open(report_path, \"w\") as f:\n               json.dump(report, f, indent=2)\n\
+      \           return str(report_path)\n\n2. In the main pipeline loop (the function\
+      \ that processes work items and calls\n   execute_plan()), create a SessionUsageTracker\
+      \ instance and after each\n   execute_plan() call, try to find and read the usage\
+      \ report:\n\n   After execute_plan(plan_path, ...) returns:\n   # Look for the\
+      \ usage report written by the orchestrator\n   plan_name = <extract from plan YAML\
+      \ meta.name>\n   safe_name = plan_name.lower().replace(\" \", \"-\")[:50]\n  \
+      \ report_path = Path(\".claude/plans/logs\") / f\"{safe_name}-usage-report.json\"\
+      \n   if report_path.exists():\n       session_tracker.record_from_report(str(report_path),\
+      \ work_item_name)\n\n3. At pipeline shutdown (the graceful stop handler or end\
+      \ of main loop),\n   print and write the session summary:\n   print(session_tracker.format_session_summary())\n\
+      \   session_report = session_tracker.write_session_report()\n   if session_report:\n\
+      \       log(f\"[Session usage report: {session_report}]\")\n\n4. Verify with: python3\
+      \ -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
+      \ print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py\n"
+- id: phase-5
+  name: Phase 5 - Unit Tests
+  status: pending
+  tasks:
+  - id: '5.1'
+    name: Write unit tests for TaskUsage and parse_task_usage
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.3'
+    description: "Create tests/test_token_usage.py with unit tests for the TaskUsage\
+      \ dataclass and parse_task_usage() helper function.\n\nReference: docs/plans/2026-02-14-06-token-usage-tracking-design.md\n\
+      \nSteps:\n1. Create tests/test_token_usage.py with the following test cases:\n\n\
+      \   a. test_task_usage_defaults: Create TaskUsage() with no args, verify all fields\
+      \ are 0.\n\n   b. test_parse_task_usage_full: Call parse_task_usage() with a realistic\
+      \ result dict\n      (modeled on actual Claude CLI output) containing:\n      -\
+      \ total_cost_usd: 0.49\n      - usage: {input_tokens: 10, output_tokens: 2782,\
+      \ cache_read_input_tokens: 417890, cache_creation_input_tokens: 34206}\n      -\
+      \ num_turns: 5\n      - duration_api_ms: 45000\n      Verify all fields in the\
+      \ returned TaskUsage match.\n\n   c. test_parse_task_usage_empty: Call parse_task_usage({})\
+      \ and verify all fields are 0.\n\n   d. test_parse_task_usage_partial: Call parse_task_usage\
+      \ with only total_cost_usd,\n      verify cost is set and all token fields are\
+      \ 0.\n\n   e. test_parse_task_usage_missing_usage_key: Call parse_task_usage with\
+      \ a dict that\n      has total_cost_usd but no \"usage\" key. Verify cost is set,\
+      \ tokens are 0.\n\n2. Import the functions:\n   import sys\n   sys.path.insert(0,\
+      \ \"scripts\")\n   # We need to import carefully since plan-orchestrator.py uses\
+      \ a hyphen in filename.\n   # Use importlib or extract the functions we need.\n\
+      \   import importlib.util\n   spec = importlib.util.spec_from_file_location(\"plan_orchestrator\"\
+      , \"scripts/plan-orchestrator.py\")\n   mod = importlib.util.module_from_spec(spec)\n\
+      \   spec.loader.exec_module(mod)\n   TaskUsage = mod.TaskUsage\n   parse_task_usage\
+      \ = mod.parse_task_usage\n\n3. Run: python3 -m pytest tests/test_token_usage.py\
+      \ -v\n   Fix any failures.\n\nFiles: tests/test_token_usage.py\n"
+  - id: '5.2'
+    name: Write unit tests for PlanUsageTracker
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.1'
+    - '5.1'
+    description: "Add PlanUsageTracker tests to tests/test_token_usage.py.\n\nReference:\
+      \ docs/plans/2026-02-14-06-token-usage-tracking-design.md\n\nSteps:\n1. Add the\
+      \ following test cases to tests/test_token_usage.py:\n\n   a. test_tracker_record_and_total:\
+      \ Create a tracker, record two tasks with known\n      usage values, call get_total_usage()\
+      \ and verify the sums are correct.\n\n   b. test_tracker_cache_hit_rate: Create\
+      \ a tracker, record a task with\n      input_tokens=100, cache_read_tokens=300.\
+      \ Verify get_cache_hit_rate() returns 0.75.\n\n   c. test_tracker_cache_hit_rate_zero:\
+      \ Empty tracker should return 0.0.\n\n   d. test_tracker_section_usage: Create\
+      \ a tracker with tasks from two sections.\n      Build a minimal plan dict with\
+      \ two sections containing the task ids.\n      Verify get_section_usage() returns\
+      \ correct per-section totals.\n\n   e. test_tracker_format_summary_line: Record\
+      \ a task, verify format_summary_line()\n      returns a string containing \"[Usage]\
+      \ Task\", the cost, and token counts.\n\n   f. test_tracker_format_final_summary:\
+      \ Record tasks across sections, verify\n      format_final_summary() contains \"\
+      === Usage Summary ===\", total cost, and\n      per-section breakdown.\n\n   g.\
+      \ test_tracker_write_report: Record tasks, call write_report() with a minimal\n\
+      \      plan dict and a temp plan path. Verify the JSON file is created and contains\n\
+      \      the expected keys (plan_name, total, sections, tasks). Use tmp_path fixture.\n\
+      \n2. Import PlanUsageTracker from the module (same importlib pattern as 5.1).\n\
+      \n3. Run: python3 -m pytest tests/test_token_usage.py -v\n   Fix any failures.\n\
+      \nFiles: tests/test_token_usage.py\n"
+- id: phase-6
+  name: Phase 6 - Verification
+  status: pending
+  tasks:
+  - id: '6.1'
+    name: Verify syntax, tests, and dry-run
+    agent: code-reviewer
+    status: pending
+    depends_on:
+    - '3.1'
+    - '3.2'
+    - '4.1'
+    - '5.2'
+    description: "Run verification checks to confirm the token usage tracking feature\
+      \ works correctly.\n\nSteps:\n1. Check Python syntax for both scripts:\n   python3\
+      \ -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
+      \ py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\n\n2. Run\
+      \ unit tests:\n   python3 -m pytest tests/ 2>/dev/null || echo 'No test suite\
+      \ configured'\n\n3. Verify the TaskUsage dataclass exists:\n   python3 -c \"\n\
+      \   import importlib.util\n   spec = importlib.util.spec_from_file_location('po',\
+      \ 'scripts/plan-orchestrator.py')\n   mod = importlib.util.module_from_spec(spec)\n\
+      \   spec.loader.exec_module(mod)\n   assert hasattr(mod, 'TaskUsage'), 'TaskUsage\
+      \ not found'\n   assert hasattr(mod, 'parse_task_usage'), 'parse_task_usage not\
+      \ found'\n   assert hasattr(mod, 'PlanUsageTracker'), 'PlanUsageTracker not found'\n\
+      \   # Verify TaskResult has usage field\n   import dataclasses\n   fields = {f.name\
+      \ for f in dataclasses.fields(mod.TaskResult)}\n   assert 'usage' in fields, 'TaskResult\
+      \ missing usage field'\n   print('All classes and functions verified')\n   \"\n\n\
+      4. Verify --output-format json is used in non-verbose mode:\n   grep -c 'output-format.*json'\
+      \ scripts/plan-orchestrator.py\n   (should return 2 or more - one for stream-json\
+      \ verbose, one for json non-verbose)\n\n5. Verify usage data is written to log\
+      \ files:\n   grep -c 'Cost:' scripts/plan-orchestrator.py\n   (should return at\
+      \ least 1 for the log header enhancement)\n\n6. Run orchestrator dry-run to verify\
+      \ it still starts correctly:\n   python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml\
+      \ --dry-run\n\nIf any check fails, report the failure with specific details.\n\n\
+      Files: scripts/plan-orchestrator.py, scripts/auto-pipeline.py, tests/test_token_usage.py\n"
