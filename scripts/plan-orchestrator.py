@@ -33,6 +33,9 @@ WORKTREE_BASE_DIR = ".worktrees"
 # Orchestrator project config
 ORCHESTRATOR_CONFIG_PATH = ".claude/orchestrator-config.yaml"
 DEFAULT_DEV_SERVER_PORT = 3000
+DEFAULT_BUILD_COMMAND = "pnpm run build"
+DEFAULT_TEST_COMMAND = "pnpm test"
+DEFAULT_DEV_SERVER_COMMAND = "pnpm dev"
 
 # Configuration
 DEFAULT_PLAN_PATH = ".claude/plans/pipeline-optimization.yaml"
@@ -57,6 +60,9 @@ def load_orchestrator_config() -> dict:
 
 _config = load_orchestrator_config()
 DEV_SERVER_PORT = int(_config.get("dev_server_port", DEFAULT_DEV_SERVER_PORT))
+BUILD_COMMAND = _config.get("build_command", DEFAULT_BUILD_COMMAND)
+TEST_COMMAND = _config.get("test_command", DEFAULT_TEST_COMMAND)
+DEV_SERVER_COMMAND = _config.get("dev_server_command", DEFAULT_DEV_SERVER_COMMAND)
 
 # Known locations for the claude binary
 CLAUDE_BINARY_SEARCH_PATHS = [
@@ -1623,7 +1629,7 @@ def run_orchestrator(
     # Clear any stale stop semaphore from a previous run
     clear_stop_semaphore()
 
-    print(f"=== Plan Orchestrator ===")
+    print(f"=== Plan Orchestrator (PID {os.getpid()}) ===")
     print(f"Plan: {meta.get('name', 'Unknown')}")
     print(f"Claude binary: {' '.join(CLAUDE_CMD)}")
     print(f"Max attempts per task: {default_max_attempts}")
