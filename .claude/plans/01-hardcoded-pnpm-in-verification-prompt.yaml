@@ -1,13 +1,13 @@
 meta:
   name: 'Defect Fix: Hardcoded pnpm Commands in Verification Prompt'
-  description: >
-    Replace hardcoded pnpm commands in both auto-pipeline.py and plan-orchestrator.py
+  description: 'Replace hardcoded pnpm commands in both auto-pipeline.py and plan-orchestrator.py
     with configurable values read from orchestrator-config.yaml. Extends the existing
     config loading pattern already used for dev_server_port.
+
+    '
   plan_doc: docs/plans/2026-02-13-01-hardcoded-pnpm-in-verification-prompt-design.md
   created: '2026-02-13'
   max_attempts_default: 3
-
 sections:
 - id: phase-1
   name: Phase 1 - Auto-Pipeline Config and Template Fix
@@ -15,58 +15,53 @@ sections:
   tasks:
   - id: '1.1'
     name: Add command config constants and loading to auto-pipeline.py
-    status: pending
-    description: |
-      In scripts/auto-pipeline.py, add three new default constants near line 43
-      (alongside DEFAULT_DEV_SERVER_PORT):
-
-          DEFAULT_BUILD_COMMAND = "pnpm run build"
-          DEFAULT_TEST_COMMAND = "pnpm test"
-          DEFAULT_DEV_SERVER_COMMAND = "pnpm dev"
-
-      Then near line 72, after the DEV_SERVER_PORT line, add:
-
-          BUILD_COMMAND = _config.get("build_command", DEFAULT_BUILD_COMMAND)
-          TEST_COMMAND = _config.get("test_command", DEFAULT_TEST_COMMAND)
-          DEV_SERVER_COMMAND = _config.get("dev_server_command", DEFAULT_DEV_SERVER_COMMAND)
-
-      This follows the exact same pattern already used for DEV_SERVER_PORT.
-
+    status: completed
+    description: "In scripts/auto-pipeline.py, add three new default constants near\
+      \ line 43\n(alongside DEFAULT_DEV_SERVER_PORT):\n\n    DEFAULT_BUILD_COMMAND\
+      \ = \"pnpm run build\"\n    DEFAULT_TEST_COMMAND = \"pnpm test\"\n    DEFAULT_DEV_SERVER_COMMAND\
+      \ = \"pnpm dev\"\n\nThen near line 72, after the DEV_SERVER_PORT line, add:\n\
+      \n    BUILD_COMMAND = _config.get(\"build_command\", DEFAULT_BUILD_COMMAND)\n\
+      \    TEST_COMMAND = _config.get(\"test_command\", DEFAULT_TEST_COMMAND)\n  \
+      \  DEV_SERVER_COMMAND = _config.get(\"dev_server_command\", DEFAULT_DEV_SERVER_COMMAND)\n\
+      \nThis follows the exact same pattern already used for DEV_SERVER_PORT.\n"
+    attempts: 2
+    last_attempt: '2026-02-13T22:10:00.000000'
   - id: '1.2'
     name: Replace hardcoded pnpm in VERIFICATION_PROMPT_TEMPLATE
     status: pending
-    description: |
-      In scripts/auto-pipeline.py, update the VERIFICATION_PROMPT_TEMPLATE string
+    description: 'In scripts/auto-pipeline.py, update the VERIFICATION_PROMPT_TEMPLATE
+      string
+
       (starts at line ~1057) to replace three hardcoded pnpm references with
+
       format placeholders:
 
-      1. Line ~1075: Change "Does `pnpm run build` pass?" to "Does `{build_command}` pass?"
-      2. Line ~1076: Change "Do unit tests pass? (`pnpm test`)" to "Do unit tests pass? (`{test_command}`)"
+
+      1. Line ~1075: Change "Does `pnpm run build` pass?" to "Does `{build_command}`
+      pass?"
+
+      2. Line ~1076: Change "Do unit tests pass? (`pnpm test`)" to "Do unit tests
+      pass? (`{test_command}`)"
+
       3. Line ~1107: Change "start it with `pnpm dev`" to "start it with `{dev_server_command}`"
 
+
       These are Python .format() placeholders, not f-string expressions.
+
+      '
     depends_on:
     - '1.1'
-
   - id: '1.3'
     name: Update verify_item() to pass command values to format()
     status: pending
-    description: |
-      In scripts/auto-pipeline.py, update the verify_item() function (line ~1159).
-      The VERIFICATION_PROMPT_TEMPLATE.format() call currently passes item_path,
-      slug, and count. Add the three new command values:
-
-          prompt = VERIFICATION_PROMPT_TEMPLATE.format(
-              item_path=item.path,
-              slug=item.slug,
-              count=attempt_count,
-              build_command=BUILD_COMMAND,
-              test_command=TEST_COMMAND,
-              dev_server_command=DEV_SERVER_COMMAND,
-          )
+    description: "In scripts/auto-pipeline.py, update the verify_item() function (line\
+      \ ~1159).\nThe VERIFICATION_PROMPT_TEMPLATE.format() call currently passes item_path,\n\
+      slug, and count. Add the three new command values:\n\n    prompt = VERIFICATION_PROMPT_TEMPLATE.format(\n\
+      \        item_path=item.path,\n        slug=item.slug,\n        count=attempt_count,\n\
+      \        build_command=BUILD_COMMAND,\n        test_command=TEST_COMMAND,\n\
+      \        dev_server_command=DEV_SERVER_COMMAND,\n    )\n"
     depends_on:
     - '1.2'
-
 - id: phase-2
   name: Phase 2 - Plan Orchestrator Config and Prompt Fix
   status: pending
@@ -74,42 +69,29 @@ sections:
   - id: '2.1'
     name: Add command config constants and loading to plan-orchestrator.py
     status: pending
-    description: |
-      In scripts/plan-orchestrator.py, add three new default constants near line 42
-      (alongside DEFAULT_DEV_SERVER_PORT):
-
-          DEFAULT_BUILD_COMMAND = "pnpm run build"
-          DEFAULT_TEST_COMMAND = "pnpm test"
-          DEFAULT_DEV_SERVER_COMMAND = "pnpm dev"
-
-      Then near line 59, after the DEV_SERVER_PORT line, add:
-
-          BUILD_COMMAND = _config.get("build_command", DEFAULT_BUILD_COMMAND)
-          TEST_COMMAND = _config.get("test_command", DEFAULT_TEST_COMMAND)
-          DEV_SERVER_COMMAND = _config.get("dev_server_command", DEFAULT_DEV_SERVER_COMMAND)
-
-      This mirrors the same pattern used in auto-pipeline.py.
+    description: "In scripts/plan-orchestrator.py, add three new default constants\
+      \ near line 42\n(alongside DEFAULT_DEV_SERVER_PORT):\n\n    DEFAULT_BUILD_COMMAND\
+      \ = \"pnpm run build\"\n    DEFAULT_TEST_COMMAND = \"pnpm test\"\n    DEFAULT_DEV_SERVER_COMMAND\
+      \ = \"pnpm dev\"\n\nThen near line 59, after the DEV_SERVER_PORT line, add:\n\
+      \n    BUILD_COMMAND = _config.get(\"build_command\", DEFAULT_BUILD_COMMAND)\n\
+      \    TEST_COMMAND = _config.get(\"test_command\", DEFAULT_TEST_COMMAND)\n  \
+      \  DEV_SERVER_COMMAND = _config.get(\"dev_server_command\", DEFAULT_DEV_SERVER_COMMAND)\n\
+      \nThis mirrors the same pattern used in auto-pipeline.py.\n"
     depends_on:
     - '1.3'
-
   - id: '2.2'
     name: Replace hardcoded pnpm in plan-orchestrator.py prompts
     status: pending
-    description: |
-      In scripts/plan-orchestrator.py, fix two hardcoded pnpm references:
-
-      1. Line ~1157 (task prompt, inside an f-string):
-         Change: "Run `pnpm run build` to verify no TypeScript errors"
-         To: "Run `{BUILD_COMMAND}` to verify no build errors"
-         (Since this is an f-string, use the module-level variable directly)
-
-      2. Line ~1209 (smoke test message):
-         Change: "Start a server with 'pnpm dev' before running smoke tests"
-         To use an f-string with DEV_SERVER_COMMAND:
-         f"[SMOKE] Start a server with '{DEV_SERVER_COMMAND}' before running smoke tests"
+    description: "In scripts/plan-orchestrator.py, fix two hardcoded pnpm references:\n\
+      \n1. Line ~1157 (task prompt, inside an f-string):\n   Change: \"Run `pnpm run\
+      \ build` to verify no TypeScript errors\"\n   To: \"Run `{BUILD_COMMAND}` to\
+      \ verify no build errors\"\n   (Since this is an f-string, use the module-level\
+      \ variable directly)\n\n2. Line ~1209 (smoke test message):\n   Change: \"Start\
+      \ a server with 'pnpm dev' before running smoke tests\"\n   To use an f-string\
+      \ with DEV_SERVER_COMMAND:\n   f\"[SMOKE] Start a server with '{DEV_SERVER_COMMAND}'\
+      \ before running smoke tests\"\n"
     depends_on:
     - '2.1'
-
 - id: phase-3
   name: Phase 3 - Configuration Documentation
   status: pending
@@ -117,23 +99,16 @@ sections:
   - id: '3.1'
     name: Update orchestrator-config.yaml with new documented fields
     status: pending
-    description: |
-      Update .claude/orchestrator-config.yaml to document the three new fields.
-      Add commented-out entries after the existing dev_server_port entry:
-
-          # Command used to build/compile the project during verification.
-          # build_command: "pnpm run build"
-
-          # Command used to run the project test suite during verification.
-          # test_command: "pnpm test"
-
-          # Command used to start the dev server during verification.
-          # dev_server_command: "pnpm dev"
-
-      These are commented out because the defaults match current behavior.
+    description: "Update .claude/orchestrator-config.yaml to document the three new\
+      \ fields.\nAdd commented-out entries after the existing dev_server_port entry:\n\
+      \n    # Command used to build/compile the project during verification.\n   \
+      \ # build_command: \"pnpm run build\"\n\n    # Command used to run the project\
+      \ test suite during verification.\n    # test_command: \"pnpm test\"\n\n   \
+      \ # Command used to start the dev server during verification.\n    # dev_server_command:\
+      \ \"pnpm dev\"\n\nThese are commented out because the defaults match current\
+      \ behavior.\n"
     depends_on:
     - '2.2'
-
 - id: phase-4
   name: Phase 4 - Verification
   status: pending
@@ -141,32 +116,21 @@ sections:
   - id: '4.1'
     name: Regression test - verify no hardcoded pnpm in templates
     status: pending
-    description: |
-      Verify the fix is complete by running these checks:
-
-      1. grep for "pnpm" in the VERIFICATION_PROMPT_TEMPLATE in auto-pipeline.py:
-         grep -n "pnpm" scripts/auto-pipeline.py | grep -i "verification_prompt\|template"
-         Expected: zero matches inside the template string (only in DEFAULT_ constants)
-
-      2. grep for hardcoded "pnpm" in the plan-orchestrator task prompt area (lines 1140-1220):
-         sed -n '1140,1220p' scripts/plan-orchestrator.py | grep "pnpm"
-         Expected: zero matches (only DEFAULT_ constants should reference pnpm)
-
-      3. Verify config loading works:
-         python -c "
-         import sys; sys.path.insert(0, 'scripts')
-         exec(open('scripts/auto-pipeline.py').read().split('# ─── Symptom')[0])
-         assert BUILD_COMMAND == 'pnpm run build'
-         assert TEST_COMMAND == 'pnpm test'
-         assert DEV_SERVER_COMMAND == 'pnpm dev'
-         print('Config defaults OK')
-         "
-
-      4. Run the plan orchestrator dry-run to verify no syntax errors:
-         python scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
-
-      5. Run build and tests:
-         pnpm run build && pnpm test
+    description: "Verify the fix is complete by running these checks:\n\n1. grep for\
+      \ \"pnpm\" in the VERIFICATION_PROMPT_TEMPLATE in auto-pipeline.py:\n   grep\
+      \ -n \"pnpm\" scripts/auto-pipeline.py | grep -i \"verification_prompt\\|template\"\
+      \n   Expected: zero matches inside the template string (only in DEFAULT_ constants)\n\
+      \n2. grep for hardcoded \"pnpm\" in the plan-orchestrator task prompt area (lines\
+      \ 1140-1220):\n   sed -n '1140,1220p' scripts/plan-orchestrator.py | grep \"\
+      pnpm\"\n   Expected: zero matches (only DEFAULT_ constants should reference\
+      \ pnpm)\n\n3. Verify config loading works:\n   python -c \"\n   import sys;\
+      \ sys.path.insert(0, 'scripts')\n   exec(open('scripts/auto-pipeline.py').read().split('#\
+      \ ─── Symptom')[0])\n   assert BUILD_COMMAND == 'pnpm run build'\n   assert\
+      \ TEST_COMMAND == 'pnpm test'\n   assert DEV_SERVER_COMMAND == 'pnpm dev'\n\
+      \   print('Config defaults OK')\n   \"\n\n4. Run the plan orchestrator dry-run\
+      \ to verify no syntax errors:\n   python scripts/plan-orchestrator.py --plan\
+      \ .claude/plans/sample-plan.yaml --dry-run\n\n5. Run build and tests:\n   pnpm\
+      \ run build && pnpm test\n"
     depends_on:
     - '3.1'
     max_attempts: 5

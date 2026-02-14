@@ -41,6 +41,9 @@ except ImportError:
 
 ORCHESTRATOR_CONFIG_PATH = ".claude/orchestrator-config.yaml"
 DEFAULT_DEV_SERVER_PORT = 3000
+DEFAULT_BUILD_COMMAND = "pnpm run build"
+DEFAULT_TEST_COMMAND = "pnpm test"
+DEFAULT_DEV_SERVER_COMMAND = "pnpm dev"
 
 DEFECT_DIR = "docs/defect-backlog"
 FEATURE_DIR = "docs/feature-backlog"
@@ -70,6 +73,9 @@ def load_orchestrator_config() -> dict:
 
 _config = load_orchestrator_config()
 DEV_SERVER_PORT = int(_config.get("dev_server_port", DEFAULT_DEV_SERVER_PORT))
+BUILD_COMMAND = _config.get("build_command", DEFAULT_BUILD_COMMAND)
+TEST_COMMAND = _config.get("test_command", DEFAULT_TEST_COMMAND)
+DEV_SERVER_COMMAND = _config.get("dev_server_command", DEFAULT_DEV_SERVER_COMMAND)
 
 # Pattern matching backlog item slugs (NN-slug-name format)
 BACKLOG_SLUG_PATTERN = re.compile(r"^\d{2,}-[\w-]+$")
@@ -139,17 +145,20 @@ def restore_terminal_settings() -> None:
 # ─── Logging ──────────────────────────────────────────────────────────
 
 
+_PIPELINE_PID = os.getpid()
+
+
 def log(message: str) -> None:
-    """Print a timestamped log message."""
+    """Print a timestamped log message with PID for process tracking."""
     timestamp = datetime.now().strftime("%H:%M:%S")
-    print(f"[{timestamp}] [AUTO-PIPELINE] {message}", flush=True)
+    print(f"[{timestamp}] [AUTO-PIPELINE:{_PIPELINE_PID}] {message}", flush=True)
 
 
 def verbose_log(message: str) -> None:
     """Print a verbose log message if verbose mode is enabled."""
     if VERBOSE:
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        print(f"[{timestamp}] [VERBOSE] {message}", flush=True)
+        print(f"[{timestamp}] [VERBOSE:{_PIPELINE_PID}] {message}", flush=True)
 
 
 # ─── Claude Binary Resolution ────────────────────────────────────────
@@ -514,6 +523,7 @@ def run_child_process(
         # Track active child for signal handling
         global _active_child_process
         _active_child_process = process
+        log(f"Spawned child process PID {process.pid}: {description}")
 
         # Start output streaming threads
         stdout_thread = threading.Thread(
@@ -570,6 +580,7 @@ def run_child_process(
 
         duration = time.time() - start_time
         exit_code = process.returncode
+        log(f"Child PID {process.pid} exited with code {exit_code} after {duration:.0f}s: {description}")
 
         if not (show_output or VERBOSE):
             status = "done" if exit_code == 0 else f"FAILED (exit {exit_code})"
@@ -635,6 +646,9 @@ PLAN_CREATION_PROMPT_TEMPLATE = """You are creating an implementation plan for a
 2. Read procedure-coding-rules.md for coding standards
 3. Read an existing YAML plan for format reference: look at .claude/plans/*.yaml files
 4. Read the CLAUDE.md file for project conventions
+5. If the backlog item has a ## Verification Log section, READ IT CAREFULLY.
+   Previous fix attempts and their verification results are recorded there.
+   Your plan MUST address any unresolved findings from prior verifications.
 
 ## What to produce
 
@@ -663,6 +677,9 @@ PLAN_CREATION_PROMPT_TEMPLATE = """You are creating an implementation plan for a
 - For defects: include a task to verify the fix with a regression test
 - For features: include documentation, implementation, unit tests, and E2E tests as appropriate
 - Keep tasks focused - each task should be completable in one Claude session (under 10 minutes)
+- If the backlog item has a ## Verification Log with unresolved findings, your plan
+  must specifically address those findings. The previous code fix may be correct but
+  incomplete (e.g., operational steps not executed, data not deployed).
 """
 
 
@@ -1041,43 +1058,221 @@ def archive_item(item: BacklogItem, dry_run: bool = False) -> bool:
         return False
 
 
+# ─── Symptom Verification ─────────────────────────────────────────────
+
+VERIFICATION_PROMPT_TEMPLATE = """You are a VERIFIER. Your job is to check whether a defect's
+reported symptoms have been fully resolved. You must NOT fix anything. You only observe and report.
+
+## Instructions
+
+1. Read the defect file: {item_path}
+2. Read the "Expected Behavior" and "Actual Behavior" sections carefully
+3. Read the "Fix Required" section for any commands or checks that should be performed
+4. If there is a "## Verification Log" section, read previous verification attempts
+
+## What to check
+
+For each item in "Fix Required" or "Verification" that describes a testable condition:
+- Run the command or check the condition
+- Record whether it passed or failed
+- Record the actual output or observation
+
+Also check:
+- Does `pnpm run build` pass? (code correctness)
+- Do unit tests pass? (`pnpm test`)
+- Is the reported symptom actually gone? (the MOST IMPORTANT check)
+
+## What to produce
+
+Append your findings to the defect file at {item_path}.
+If no "## Verification Log" section exists, create one at the end of the file.
+
+Use this exact format (the count MUST increment from the last entry, or start at 1):
+
+```
+### Verification #{count} - YYYY-MM-DD HH:MM
+
+**Verdict: PASS** or **Verdict: FAIL**
+
+**Checks performed:**
+- [ ] or [x] Build passes
+- [ ] or [x] Unit tests pass
+- [ ] or [x] (each specific symptom check from the defect)
+
+**Findings:**
+(describe what you observed for each check - be specific about command outputs)
+```
+
+## CRITICAL RULES
+
+- Do NOT modify any code files
+- Do NOT fix anything
+- Do NOT change the defect's ## Status line
+- ONLY read, run verification commands, and append findings to the defect file
+- If you need the dev server running for a check, start it with `pnpm dev`, wait for it,
+  run your check, then stop it
+- Git commit the updated defect file with message: "verify: {slug} verification #{count}"
+"""
+
+# Maximum number of verify-then-fix cycles before giving up
+MAX_VERIFICATION_CYCLES = 3
+
+
+def count_verification_attempts(item_path: str) -> int:
+    """Count how many verification entries exist in the defect file."""
+    try:
+        with open(item_path, "r") as f:
+            content = f.read()
+    except IOError:
+        return 0
+
+    return len(re.findall(r"### Verification #\d+", content))
+
+
+def last_verification_passed(item_path: str) -> bool:
+    """Check if the most recent verification entry has Verdict: PASS."""
+    try:
+        with open(item_path, "r") as f:
+            content = f.read()
+    except IOError:
+        return False
+
+    # Find all verdict lines and check the last one
+    verdicts = re.findall(r"\*\*Verdict:\s*(PASS|FAIL)\*\*", content, re.IGNORECASE)
+    if not verdicts:
+        return False
+    return verdicts[-1].upper() == "PASS"
+
+
+def verify_item(item: BacklogItem, dry_run: bool = False) -> bool:
+    """Run symptom verification on a completed defect fix.
+
+    Returns True if verification passed, False if it failed.
+    The verifier appends findings to the defect file regardless of outcome.
+    """
+    if item.item_type != "defect":
+        # Features don't have symptom verification (yet)
+        return True
+
+    attempt_count = count_verification_attempts(item.path) + 1
+
+    if dry_run:
+        log(f"[DRY RUN] Would verify symptoms for: {item.display_name} (attempt #{attempt_count})")
+        return True
+
+    log(f"Running symptom verification #{attempt_count}...")
+
+    prompt = VERIFICATION_PROMPT_TEMPLATE.format(
+        item_path=item.path,
+        slug=item.slug,
+        count=attempt_count,
+    )
+
+    cmd = [*CLAUDE_CMD, "--dangerously-skip-permissions", "--print", prompt]
+
+    result = run_child_process(
+        cmd,
+        description=f"Verify {item.slug} #{attempt_count}",
+        timeout=PLAN_CREATION_TIMEOUT_SECONDS,
+        show_output=VERBOSE,
+    )
+
+    if result.rate_limited:
+        log("Rate limited during verification")
+        return False
+
+    if not result.success:
+        log(f"Verification process failed (exit {result.exit_code})")
+        return False
+
+    # Check if the verifier recorded a PASS
+    passed = last_verification_passed(item.path)
+    if passed:
+        log(f"Verification #{attempt_count}: PASSED")
+    else:
+        log(f"Verification #{attempt_count}: FAILED - defect stays in queue for next cycle")
+
+    return passed
+
+
 # ─── Main Pipeline ────────────────────────────────────────────────────
 
 
 def process_item(item: BacklogItem, dry_run: bool = False) -> bool:
     """Process a single backlog item through the full pipeline.
 
-    Returns True on success, False on failure.
+    For defects, runs a verify-then-fix cycle:
+      Phase 1: Create plan
+      Phase 2: Execute plan (orchestrator)
+      Phase 3: Verify symptoms resolved (verifier agent, append-only)
+        - If PASS: Phase 4 (archive)
+        - If FAIL: Delete stale plan, loop back to Phase 1
+          (next plan creation sees verification findings in the defect file)
+      Phase 4: Archive
+
+    Returns True on success, False on failure or max cycles exceeded.
     """
     item_start = time.time()
     log(f"{'=' * 60}")
     log(f"Processing {item.display_name}")
+    log(f"  Type: {item.item_type}")
     log(f"  File: {item.path}")
+    log(f"  Pipeline PID: {_PIPELINE_PID}")
     log(f"{'=' * 60}")
 
-    # Phase 1: Create plan
-    log("Phase 1: Creating plan...")
-    plan_path = create_plan(item, dry_run)
-    if not plan_path:
-        log(f"FAILED: Could not create plan for {item.display_name}")
-        return False
+    prior_verifications = count_verification_attempts(item.path)
 
-    # Phase 2: Execute plan
-    log("Phase 2: Running orchestrator...")
-    success = execute_plan(plan_path, dry_run)
-    if not success:
-        log(f"FAILED: Orchestrator failed for {item.display_name}")
-        return False
+    for cycle in range(MAX_VERIFICATION_CYCLES):
+        cycle_num = prior_verifications + cycle + 1
 
-    # Phase 3: Archive
-    log("Phase 3: Archiving...")
-    archive_item(item, dry_run)
+        if check_stop_requested():
+            log("Stop requested during processing.")
+            return False
 
-    elapsed = time.time() - item_start
-    minutes = int(elapsed // 60)
-    seconds = int(elapsed % 60)
-    log(f"Item complete: {item.display_name} ({minutes}m {seconds}s)")
-    return True
+        # Phase 1: Create plan
+        log(f"Phase 1: Creating plan (cycle {cycle + 1}/{MAX_VERIFICATION_CYCLES})...")
+        plan_path = create_plan(item, dry_run)
+        if not plan_path:
+            log(f"FAILED: Could not create plan for {item.display_name}")
+            return False
+
+        # Phase 2: Execute plan
+        log("Phase 2: Running orchestrator...")
+        success = execute_plan(plan_path, dry_run)
+        if not success:
+            log(f"FAILED: Orchestrator failed for {item.display_name}")
+            return False
+
+        # Phase 3: Verify symptoms
+        log("Phase 3: Verifying symptoms...")
+        verified = verify_item(item, dry_run)
+
+        if verified:
+            # Phase 4: Archive
+            log("Phase 4: Archiving...")
+            archive_item(item, dry_run)
+
+            elapsed = time.time() - item_start
+            minutes = int(elapsed // 60)
+            seconds = int(elapsed % 60)
+            log(f"Item complete: {item.display_name} ({minutes}m {seconds}s)")
+            return True
+
+        # Verification failed - prepare for next cycle
+        log(f"Verification failed (cycle {cycle + 1}/{MAX_VERIFICATION_CYCLES})")
+
+        if cycle + 1 < MAX_VERIFICATION_CYCLES:
+            # Delete the stale plan so next cycle creates a fresh one
+            # that incorporates the verification findings
+            if plan_path and os.path.exists(plan_path):
+                os.remove(plan_path)
+                log(f"Removed stale plan: {plan_path}")
+            log("Cycling back to Phase 1 with verification findings...")
+        else:
+            log(f"Max verification cycles ({MAX_VERIFICATION_CYCLES}) reached for {item.slug}")
+            log("Defect stays in queue with accumulated verification findings.")
+
+    return False
 
 
 def main_loop(dry_run: bool = False, once: bool = False) -> None:
@@ -1162,6 +1357,16 @@ def main_loop(dry_run: bool = False, once: bool = False) -> None:
                 new_item_event.wait(timeout=SAFETY_SCAN_INTERVAL_SECONDS)
                 continue
 
+            # In --once mode, process only the first item then exit
+            if once:
+                item = items[0]
+                log(f"Processing single item (--once mode): [{item.item_type}] {item.slug}")
+                success = process_item(item, dry_run)
+                if not success:
+                    log(f"Item failed: {item.slug}")
+                log("Exiting (--once mode).")
+                break
+
             # Process items one at a time
             for item in items:
                 if check_stop_requested():
@@ -1172,16 +1377,6 @@ def main_loop(dry_run: bool = False, once: bool = False) -> None:
                 if not success:
                     failed_items.add(item.path)
                     log(f"Item failed - will not retry in this session: {item.slug}")
-
-                # Re-check after each item (orchestrator may have seen the semaphore)
-                if check_stop_requested():
-                    log("Stop requested. No more items will be processed.")
-                    break
-
-            # In --once mode, process all items then exit
-            if once:
-                log("All items processed. Exiting (--once mode).")
-                break
 
             # Brief pause before next scan
             time.sleep(2)
@@ -1236,7 +1431,7 @@ def main():
     )
     parser.add_argument(
         "--once", action="store_true",
-        help="Process all current items then exit (don't watch for new ones)",
+        help="Process the first item found then exit (single-item mode)",
     )
     parser.add_argument(
         "--verbose", action="store_true",
