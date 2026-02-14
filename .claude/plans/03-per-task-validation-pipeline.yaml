@@ -163,12 +163,12 @@ sections:
       Includes docstring. Syntax verified clean.
 - id: phase-3
   name: Phase 3 - Validation Execution Logic
-  status: pending
+  status: in_progress
   tasks:
   - id: '3.1'
     name: Add build_validation_prompt function
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.2'
     description: "In scripts/plan-orchestrator.py, add a function to build the validation\
@@ -188,6 +188,14 @@ sections:
       \ FAIL**\n\n\n   **Findings:**\n\n   - [PASS|WARN|FAIL] Description with file:line\
       \ references\n\n\n   IMPORTANT: You MUST write .claude/plans/task-status.json\
       \ when done.\n\n\n4. Return the prompt string\n\nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
+    attempts: 1
+    last_attempt: '2026-02-13T23:27:31.034003'
+    completed_at: '2026-02-13T23:28:56.005288'
+    result_message: Added build_validation_prompt() function after parse_validation_config()
+      in plan-orchestrator.py. The function loads a validator agent definition via
+      load_agent_definition(), extracts the body content, and constructs a structured
+      validation prompt with task context, result details, build/test commands, and
+      PASS/WARN/FAIL output format instructions. Syntax verified clean.
   - id: '3.2'
     name: Add parse_validation_verdict function
     agent: coder
