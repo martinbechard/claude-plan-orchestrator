@@ -1173,6 +1173,11 @@ def main_loop(dry_run: bool = False, once: bool = False) -> None:
                     failed_items.add(item.path)
                     log(f"Item failed - will not retry in this session: {item.slug}")
 
+                # Re-check after each item (orchestrator may have seen the semaphore)
+                if check_stop_requested():
+                    log("Stop requested. No more items will be processed.")
+                    break
+
             # In --once mode, process all items then exit
             if once:
                 log("All items processed. Exiting (--once mode).")
