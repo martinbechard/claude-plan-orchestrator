@@ -186,6 +186,7 @@ pattern. Five parallel agents each explore a different approach, then a judge pi
   tasks:
   - id: '0.1'
     name: Generate Design 1 - Approach A
+    agent: systems-designer
     parallel_group: phase-0-designs
     description: |
       Create a detailed design using approach A.
@@ -206,6 +207,7 @@ pattern. Five parallel agents each explore a different approach, then a judge pi
       Update the design overview doc with scoring table and final design.
   - id: '0.7'
     name: Extend plan with implementation tasks
+    agent: planner
     depends_on: ['0.6']
     description: |
       Read winning design. Append implementation phases to THIS YAML.
@@ -214,6 +216,30 @@ pattern. Five parallel agents each explore a different approach, then a judge pi
 
 The AI judge validates the design; no human review is needed. The human only intervenes
 if the circuit breaker trips or smoke tests fail during implementation.
+
+### Agent Team Dispatch (Design Pairs)
+
+For features requiring both architecture and UX design, assign complementary
+agent pairs in the same parallel group:
+
+```yaml
+- id: '0.1'
+  name: Systems Design - Approach A
+  agent: systems-designer
+  parallel_group: phase-0-designs
+  description: |
+    Create architecture design for approach A.
+    OUTPUT: Write to docs/plans/feature-design-1-systems.md
+- id: '0.2'
+  name: UX Design - Approach A
+  agent: ux-designer
+  parallel_group: phase-0-designs
+  description: |
+    Create UX design complementing approach A.
+    OUTPUT: Write to docs/plans/feature-design-1-ux.md
+```
+
+The judge task evaluates both designs as a pair, scoring holistically.
 
 ## Agent Teams (Collaborative Tasks)
 
