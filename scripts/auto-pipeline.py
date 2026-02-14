@@ -58,6 +58,9 @@ PLAN_CREATION_TIMEOUT_SECONDS = 600
 CHILD_SHUTDOWN_TIMEOUT_SECONDS = 10
 RATE_LIMIT_BUFFER_SECONDS = 30
 RATE_LIMIT_DEFAULT_WAIT_SECONDS = 3600
+DEFAULT_MAX_QUOTA_PERCENT = 100.0
+DEFAULT_QUOTA_CEILING_USD = 0.0
+DEFAULT_RESERVED_BUDGET_USD = 0.0
 
 
 def load_orchestrator_config() -> dict:
@@ -552,6 +555,44 @@ class SessionUsageTracker:
         with open(report_path, "w") as f:
             json.dump(report, f, indent=2)
         return str(report_path)
+
+
+class PipelineBudgetGuard:
+    """Checks session-level cost against budget limits before each work item."""
+
+    def __init__(self, max_quota_percent: float, quota_ceiling_usd: float,
+                 reserved_budget_usd: float = 0.0) -> None:
+        self.max_quota_percent = max_quota_percent
+        self.quota_ceiling_usd = quota_ceiling_usd
+        self.reserved_budget_usd = reserved_budget_usd
+
+    @property
+    def is_enabled(self) -> bool:
+        return self.quota_ceiling_usd > 0
+
+    @property
+    def effective_limit_usd(self) -> float:
+        if self.quota_ceiling_usd <= 0:
+            return float('inf')
+        percent_limit = self.quota_ceiling_usd * (self.max_quota_percent / 100.0)
+        if self.reserved_budget_usd > 0:
+            reserve_limit = self.quota_ceiling_usd - self.reserved_budget_usd
+            return min(percent_limit, reserve_limit)
+        return percent_limit
+
+    def can_proceed(self, session_cost_usd: float) -> tuple[bool, str]:
+        """Check if session budget allows another work item."""
+        if not self.is_enabled:
+            return (True, "")
+        limit = self.effective_limit_usd
+        if session_cost_usd >= limit:
+            pct = (session_cost_usd / self.quota_ceiling_usd * 100)
+            reason = (
+                f"Session budget limit reached: ${session_cost_usd:.4f} / ${limit:.4f} "
+                f"({pct:.1f}% of ${self.quota_ceiling_usd:.2f} ceiling)"
+            )
+            return (False, reason)
+        return (True, "")
 
 
 def run_child_process(
@@ -1427,7 +1468,8 @@ def process_item(
     return False
 
 
-def main_loop(dry_run: bool = False, once: bool = False) -> None:
+def main_loop(dry_run: bool = False, once: bool = False,
+              budget_guard: Optional[PipelineBudgetGuard] = None) -> None:
     """Main processing loop with filesystem watching."""
     global VERBOSE, CLAUDE_CMD
 
@@ -1520,6 +1562,12 @@ def main_loop(dry_run: bool = False, once: bool = False) -> None:
             # In --once mode, process only the first item then exit
             if once:
                 item = items[0]
+                if budget_guard and budget_guard.is_enabled:
+                    can_go, reason = budget_guard.can_proceed(session_tracker.total_cost_usd)
+                    if not can_go:
+                        log(f"Budget limit reached: {reason}")
+                        log("Stopping pipeline due to budget constraint.")
+                        break
                 log(f"Processing single item (--once mode): [{item.item_type}] {item.slug}")
                 success = process_item(item, dry_run, session_tracker)
                 if not success:
@@ -1532,6 +1580,13 @@ def main_loop(dry_run: bool = False, once: bool = False) -> None:
                 if check_stop_requested():
                     log("Stop requested. Finishing current session.")
                     break
+
+                if budget_guard and budget_guard.is_enabled:
+                    can_go, reason = budget_guard.can_proceed(session_tracker.total_cost_usd)
+                    if not can_go:
+                        log(f"Budget limit reached: {reason}")
+                        log("Stopping pipeline due to budget constraint.")
+                        break
 
                 success = process_item(item, dry_run, session_tracker)
                 if not success:
@@ -1603,6 +1658,21 @@ def main():
         "--verbose", action="store_true",
         help="Stream all child output in detail",
     )
+    parser.add_argument(
+        "--max-budget-pct", type=float, default=None,
+        metavar="N",
+        help="Maximum percentage of quota ceiling to use (default: 100)",
+    )
+    parser.add_argument(
+        "--quota-ceiling", type=float, default=None,
+        metavar="N.NN",
+        help="Weekly quota ceiling in USD (default: 0 = no limit)",
+    )
+    parser.add_argument(
+        "--reserved-budget", type=float, default=None,
+        metavar="N.NN",
+        help="USD to reserve for interactive use (default: 0)",
+    )
     args = parser.parse_args()
     VERBOSE = args.verbose
 
@@ -1615,7 +1685,15 @@ def main():
     log(f"  Feature backlog: {FEATURE_DIR}/")
     log(f"  Mode: {'dry-run' if args.dry_run else 'once' if args.once else 'continuous watch'}")
 
-    main_loop(dry_run=args.dry_run, once=args.once)
+    budget_guard = PipelineBudgetGuard(
+        max_quota_percent=args.max_budget_pct or DEFAULT_MAX_QUOTA_PERCENT,
+        quota_ceiling_usd=args.quota_ceiling or DEFAULT_QUOTA_CEILING_USD,
+        reserved_budget_usd=args.reserved_budget or DEFAULT_RESERVED_BUDGET_USD,
+    )
+    if budget_guard.is_enabled:
+        log(f"  Budget: ${budget_guard.effective_limit_usd:.2f} limit")
+
+    main_loop(dry_run=args.dry_run, once=args.once, budget_guard=budget_guard)
 
 
 if __name__ == "__main__":
