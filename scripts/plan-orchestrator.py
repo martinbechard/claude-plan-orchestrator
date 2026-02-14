@@ -1794,8 +1794,15 @@ def stream_output(pipe, prefix: str, collector: OutputCollector, show_full: bool
             verbose_log(f"Error streaming {prefix}: {e}", "ERROR")
 
 
-def stream_json_output(pipe, collector: OutputCollector) -> None:
-    """Stream output from Claude CLI in stream-json format, showing tool use and text in real-time."""
+def stream_json_output(pipe, collector: OutputCollector, result_capture: dict) -> None:
+    """Stream output from Claude CLI in stream-json format, showing tool use and text in real-time.
+
+    Args:
+        pipe: The stdout pipe from the Claude CLI subprocess.
+        collector: OutputCollector that accumulates raw output lines.
+        result_capture: A mutable dict that will be populated with the full result event data
+            when the 'result' event is received. The caller reads this after thread join.
+    """
     try:
         for line in iter(pipe.readline, ''):
             if not line:
@@ -1840,6 +1847,7 @@ def stream_json_output(pipe, collector: OutputCollector) -> None:
                 duration = event.get("duration_ms", 0) / 1000
                 turns = event.get("num_turns", 0)
                 print(f"  [{ts}] [Result] {turns} turns, {duration:.1f}s, ${cost:.4f}", flush=True)
+                result_capture.update(event)
 
     except Exception as e:
         if VERBOSE:
@@ -1892,9 +1900,10 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
 
         # Start threads to stream/collect stdout and stderr
         if VERBOSE:
+            result_capture: dict = {}
             stdout_thread = threading.Thread(
                 target=stream_json_output,
-                args=(process.stdout, stdout_collector)
+                args=(process.stdout, stdout_collector, result_capture)
             )
         else:
             stdout_thread = threading.Thread(
