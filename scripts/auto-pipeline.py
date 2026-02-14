@@ -13,6 +13,7 @@ Copyright (c) 2025 Martin Bechard [martin.bechard@DevConsult.ca]
 """
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -486,6 +487,71 @@ class ProcessResult:
     duration_seconds: float
     rate_limited: bool = False
     rate_limit_wait: Optional[float] = None
+
+
+# Max chars from plan name used in report filenames (matches plan-orchestrator.py)
+MAX_PLAN_NAME_LENGTH = 50
+
+
+class SessionUsageTracker:
+    """Accumulates usage reports across all work items in a pipeline session."""
+
+    def __init__(self) -> None:
+        self.work_item_costs: list[dict] = []
+        self.total_cost_usd: float = 0.0
+        self.total_input_tokens: int = 0
+        self.total_output_tokens: int = 0
+
+    def record_from_report(self, report_path: str, work_item_name: str) -> None:
+        """Read a usage report JSON and accumulate totals."""
+        try:
+            with open(report_path) as f:
+                report = json.load(f)
+            total = report.get("total", {})
+            cost = total.get("cost_usd", 0.0)
+            self.total_cost_usd += cost
+            self.total_input_tokens += total.get("input_tokens", 0)
+            self.total_output_tokens += total.get("output_tokens", 0)
+            self.work_item_costs.append({
+                "name": work_item_name,
+                "cost_usd": cost,
+            })
+            log(f"[Usage] {work_item_name}: ${cost:.4f}")
+        except (FileNotFoundError, json.JSONDecodeError, ValueError):
+            pass  # Report not available, skip silently
+
+    def format_session_summary(self) -> str:
+        """Format session-level usage summary."""
+        lines = ["\n=== Pipeline Session Usage ==="]
+        lines.append(f"Total cost: ${self.total_cost_usd:.4f}")
+        lines.append(
+            f"Total tokens: {self.total_input_tokens:,} input / "
+            f"{self.total_output_tokens:,} output"
+        )
+        if self.work_item_costs:
+            lines.append("Per work item:")
+            for item in self.work_item_costs:
+                lines.append(f"  {item['name']}: ${item['cost_usd']:.4f}")
+        return "\n".join(lines)
+
+    def write_session_report(self) -> Optional[str]:
+        """Write a session summary JSON file."""
+        if not self.work_item_costs:
+            return None
+        log_dir = Path(".claude/plans/logs")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        report_path = log_dir / f"pipeline-session-{timestamp}.json"
+        report = {
+            "session_timestamp": datetime.now().isoformat(),
+            "total_cost_usd": self.total_cost_usd,
+            "total_input_tokens": self.total_input_tokens,
+            "total_output_tokens": self.total_output_tokens,
+            "work_items": self.work_item_costs,
+        }
+        with open(report_path, "w") as f:
+            json.dump(report, f, indent=2)
+        return str(report_path)
 
 
 def run_child_process(
@@ -1254,7 +1320,32 @@ def verify_item(item: BacklogItem, dry_run: bool = False) -> bool:
 # ─── Main Pipeline ────────────────────────────────────────────────────
 
 
-def process_item(item: BacklogItem, dry_run: bool = False) -> bool:
+def _read_plan_name(plan_path: str) -> str:
+    """Read the plan name from a YAML plan file's meta.name field."""
+    try:
+        with open(plan_path, "r") as f:
+            plan = yaml.safe_load(f)
+        return plan.get("meta", {}).get("name", "unknown") if plan else "unknown"
+    except (IOError, yaml.YAMLError):
+        return "unknown"
+
+
+def _try_record_usage(
+    session_tracker: SessionUsageTracker, plan_path: str, work_item_name: str
+) -> None:
+    """Try to find and record a usage report after orchestrator execution."""
+    plan_name = _read_plan_name(plan_path)
+    safe_name = plan_name.lower().replace(" ", "-")[:MAX_PLAN_NAME_LENGTH]
+    report_path = Path(".claude/plans/logs") / f"{safe_name}-usage-report.json"
+    if report_path.exists():
+        session_tracker.record_from_report(str(report_path), work_item_name)
+
+
+def process_item(
+    item: BacklogItem,
+    dry_run: bool = False,
+    session_tracker: Optional[SessionUsageTracker] = None,
+) -> bool:
     """Process a single backlog item through the full pipeline.
 
     For defects, runs a verify-then-fix cycle:
@@ -1295,6 +1386,11 @@ def process_item(item: BacklogItem, dry_run: bool = False) -> bool:
         # Phase 2: Execute plan
         log("Phase 2: Running orchestrator...")
         success = execute_plan(plan_path, dry_run)
+
+        # Record usage from the orchestrator's report (regardless of success)
+        if session_tracker and plan_path:
+            _try_record_usage(session_tracker, plan_path, item.display_name)
+
         if not success:
             log(f"FAILED: Orchestrator failed for {item.display_name}")
             return False
@@ -1348,6 +1444,9 @@ def main_loop(dry_run: bool = False, once: bool = False) -> None:
     # Track items that failed in this session (don't retry)
     failed_items: set[str] = set()
 
+    # Track usage across all work items in this session
+    session_tracker = SessionUsageTracker()
+
     # Event to signal new items detected
     new_item_event = threading.Event()
 
@@ -1385,6 +1484,11 @@ def main_loop(dry_run: bool = False, once: bool = False) -> None:
                             break
                         log(f"  Resuming: {os.path.basename(plan_path)}")
                         success = execute_plan(plan_path, dry_run)
+                        # Record usage from the orchestrator's report
+                        plan_basename = os.path.basename(plan_path)
+                        _try_record_usage(
+                            session_tracker, plan_path, f"resumed: {plan_basename}"
+                        )
                         if not success:
                             failed_items.add(plan_path)
                             log(f"In-progress plan failed: {plan_path}")
@@ -1417,7 +1521,7 @@ def main_loop(dry_run: bool = False, once: bool = False) -> None:
             if once:
                 item = items[0]
                 log(f"Processing single item (--once mode): [{item.item_type}] {item.slug}")
-                success = process_item(item, dry_run)
+                success = process_item(item, dry_run, session_tracker)
                 if not success:
                     log(f"Item failed: {item.slug}")
                 log("Exiting (--once mode).")
@@ -1429,7 +1533,7 @@ def main_loop(dry_run: bool = False, once: bool = False) -> None:
                     log("Stop requested. Finishing current session.")
                     break
 
-                success = process_item(item, dry_run)
+                success = process_item(item, dry_run, session_tracker)
                 if not success:
                     failed_items.add(item.path)
                     log(f"Item failed - will not retry in this session: {item.slug}")
@@ -1440,6 +1544,12 @@ def main_loop(dry_run: bool = False, once: bool = False) -> None:
     except KeyboardInterrupt:
         log("Interrupted by user. Shutting down...")
     finally:
+        # Print and write session usage summary
+        print(session_tracker.format_session_summary())
+        session_report = session_tracker.write_session_report()
+        if session_report:
+            log(f"[Session usage report: {session_report}]")
+
         if not once:
             observer.stop()
             observer.join(timeout=5)
