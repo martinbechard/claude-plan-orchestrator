@@ -1,179 +1,96 @@
 meta:
   name: Per-Task Validation Pipeline
-  description: >
-    Extend the orchestrator to optionally spawn a validator agent after each
-    implementation task completes. The validator independently verifies the result
-    and produces a PASS/WARN/FAIL verdict. On FAIL, the task is retried with
-    validation findings prepended to the prompt. Validation is opt-in via plan
-    meta.validation configuration.
+  description: 'Extend the orchestrator to optionally spawn a validator agent after
+    each implementation task completes. The validator independently verifies the result
+    and produces a PASS/WARN/FAIL verdict. On FAIL, the task is retried with validation
+    findings prepended to the prompt. Validation is opt-in via plan meta.validation
+    configuration.
+
+    '
   plan_doc: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md
   created: '2026-02-13'
   max_attempts_default: 3
-
 sections:
 - id: phase-1
   name: Phase 1 - Agent Definitions
-  status: pending
+  status: in_progress
   tasks:
   - id: '1.1'
     name: Create validator agent definition
     agent: coder
-    status: pending
-    description: >
-      Create the validator.md agent definition file in .claude/agents/.
-
-
-      File to create: .claude/agents/validator.md
-
-
-      The file uses markdown with YAML frontmatter (--- delimited). Structure:
-
-
-      Frontmatter fields:
-
-        name: validator
-
-        description: "Post-task verification coordinator. Runs build and tests,
-          checks task requirements are met, produces PASS/WARN/FAIL verdict.
-          Does not modify code."
-
-        tools: [Read, Grep, Glob, Bash]
-
-        model: sonnet
-
-
-      Body content should include these sections:
-
-
-      1. Role: You are a post-task validator. Your job is to independently verify
-         that a completed task meets its requirements. You do NOT fix issues - you
-         only observe, test, and report findings.
-
-      2. Before Validating checklist:
-         - Read the original task description provided in the prompt
-         - Read the task result message
-         - Identify files that were expected to be created or modified
-         - Read the design document if one is referenced
-
-      3. Validation Steps:
-         - Run the build command provided in the prompt to check compilation
-         - Run the test command provided in the prompt to check tests pass
-         - Verify each requirement from the task description is satisfied
-         - Check for regressions in related code (imports, exports, integrations)
-
-      4. Output Format (use this exact format):
-
-         **Verdict: PASS** or **Verdict: WARN** or **Verdict: FAIL**
-
-         **Findings:**
-
-         - [PASS] Description with file:line references
-
-         - [WARN] Description with file:line references
-
-         - [FAIL] Description with file:line references
-
-         **Evidence:**
-
-         - Finding N: Command output or code reference supporting each finding
-
-      5. Verdict Rules:
-         - PASS: All requirements met, build and tests pass, no regressions
-         - WARN: Requirements met but minor issues found (style, naming, missing
-           comments). Build and tests pass.
-         - FAIL: Requirements not met, build fails, tests fail, or regressions
-           found. Provide specific evidence for each failure.
-
-      6. Output Protocol:
-         Write task-status.json when done with task_id, status, message, timestamp,
-         plan_modified fields. The message should include the verdict and
-         finding count.
-
-
-      IMPORTANT: The Bash tool is included so the validator can run build and test
-      commands. The validator must NOT use Bash to modify files - only to run
-      verification commands.
-
-
-      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md
-
+    status: completed
+    description: "Create the validator.md agent definition file in .claude/agents/.\n\
+      \nFile to create: .claude/agents/validator.md\n\nThe file uses markdown with\
+      \ YAML frontmatter (--- delimited). Structure:\n\nFrontmatter fields:\n\n  name:\
+      \ validator\n\n  description: \"Post-task verification coordinator. Runs build\
+      \ and tests,\n    checks task requirements are met, produces PASS/WARN/FAIL\
+      \ verdict.\n    Does not modify code.\"\n\n  tools: [Read, Grep, Glob, Bash]\n\
+      \n  model: sonnet\n\n\nBody content should include these sections:\n\n1. Role:\
+      \ You are a post-task validator. Your job is to independently verify\n   that\
+      \ a completed task meets its requirements. You do NOT fix issues - you\n   only\
+      \ observe, test, and report findings.\n\n2. Before Validating checklist:\n \
+      \  - Read the original task description provided in the prompt\n   - Read the\
+      \ task result message\n   - Identify files that were expected to be created\
+      \ or modified\n   - Read the design document if one is referenced\n\n3. Validation\
+      \ Steps:\n   - Run the build command provided in the prompt to check compilation\n\
+      \   - Run the test command provided in the prompt to check tests pass\n   -\
+      \ Verify each requirement from the task description is satisfied\n   - Check\
+      \ for regressions in related code (imports, exports, integrations)\n\n4. Output\
+      \ Format (use this exact format):\n\n   **Verdict: PASS** or **Verdict: WARN**\
+      \ or **Verdict: FAIL**\n\n   **Findings:**\n\n   - [PASS] Description with file:line\
+      \ references\n\n   - [WARN] Description with file:line references\n\n   - [FAIL]\
+      \ Description with file:line references\n\n   **Evidence:**\n\n   - Finding\
+      \ N: Command output or code reference supporting each finding\n\n5. Verdict\
+      \ Rules:\n   - PASS: All requirements met, build and tests pass, no regressions\n\
+      \   - WARN: Requirements met but minor issues found (style, naming, missing\n\
+      \     comments). Build and tests pass.\n   - FAIL: Requirements not met, build\
+      \ fails, tests fail, or regressions\n     found. Provide specific evidence for\
+      \ each failure.\n\n6. Output Protocol:\n   Write task-status.json when done\
+      \ with task_id, status, message, timestamp,\n   plan_modified fields. The message\
+      \ should include the verdict and\n   finding count.\n\n\nIMPORTANT: The Bash\
+      \ tool is included so the validator can run build and test commands. The validator\
+      \ must NOT use Bash to modify files - only to run verification commands.\n\n\
+      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
+    attempts: 1
+    last_attempt: '2026-02-13T23:21:48.542387'
+    completed_at: '2026-02-13T23:22:50.677044'
+    result_message: 'Created .claude/agents/validator.md with YAML frontmatter (name,
+      description, tools, model) and structured body sections: Role, Before Validating
+      checklist, Validation Steps, Output Format, Verdict Rules, Constraints, and
+      Output Protocol. Follows established agent definition pattern from coder.md
+      and code-reviewer.md.'
   - id: '1.2'
     name: Create issue-verifier agent definition
     agent: coder
     status: pending
-    description: >
-      Create the issue-verifier.md agent definition file in .claude/agents/.
-
-
-      File to create: .claude/agents/issue-verifier.md
-
-
-      The file uses markdown with YAML frontmatter (--- delimited). Structure:
-
-
-      Frontmatter fields:
-
-        name: issue-verifier
-
-        description: "Defect fix verification specialist. Reads original defect
-          file, checks reported symptoms are resolved, runs targeted tests.
-          Produces PASS/FAIL with specific evidence."
-
-        tools: [Read, Grep, Glob, Bash]
-
-        model: sonnet
-
-
-      Body content should include these sections:
-
-
-      1. Role: You are a defect fix verifier. Your job is to independently
-         verify that a defect fix has resolved the originally reported symptoms.
-         You do NOT fix issues - you only observe, test, and report.
-
-      2. Before Verifying checklist:
-         - Read the original defect file (path provided in the prompt)
-         - Read the Expected Behavior and Actual Behavior sections
-         - Read the Fix Required section for testable conditions
-         - Check if there is a Verification Log section with prior attempts
-
-      3. Verification Steps:
-         - Run the build command to verify code compiles
-         - Run the test command to verify tests pass
-         - For each item in "Fix Required" that describes a testable condition,
-           run the command or check the condition
-         - Verify the reported symptom is actually gone (the MOST IMPORTANT check)
-         - Check for regressions in related functionality
-
-      4. Output Format (use the same format as validator.md):
-
-         **Verdict: PASS** or **Verdict: FAIL**
-
-         **Checks performed:**
-
-         - [x] or [ ] Build passes
-
-         - [x] or [ ] Unit tests pass
-
-         - [x] or [ ] (each specific symptom check from the defect)
-
-         **Findings:**
-
-         (describe what you observed for each check with specific command outputs)
-
-      5. Constraints:
-         - Do NOT modify any code files
-         - Do NOT fix anything
-         - ONLY read, run verification commands, and report findings
-         - Be specific about command outputs and observations
-
-      6. Output Protocol:
-         Write task-status.json when done with task_id, status, message, timestamp,
-         plan_modified fields.
-
-
-      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md
-
+    description: "Create the issue-verifier.md agent definition file in .claude/agents/.\n\
+      \nFile to create: .claude/agents/issue-verifier.md\n\nThe file uses markdown\
+      \ with YAML frontmatter (--- delimited). Structure:\n\nFrontmatter fields:\n\
+      \n  name: issue-verifier\n\n  description: \"Defect fix verification specialist.\
+      \ Reads original defect\n    file, checks reported symptoms are resolved, runs\
+      \ targeted tests.\n    Produces PASS/FAIL with specific evidence.\"\n\n  tools:\
+      \ [Read, Grep, Glob, Bash]\n\n  model: sonnet\n\n\nBody content should include\
+      \ these sections:\n\n1. Role: You are a defect fix verifier. Your job is to\
+      \ independently\n   verify that a defect fix has resolved the originally reported\
+      \ symptoms.\n   You do NOT fix issues - you only observe, test, and report.\n\
+      \n2. Before Verifying checklist:\n   - Read the original defect file (path provided\
+      \ in the prompt)\n   - Read the Expected Behavior and Actual Behavior sections\n\
+      \   - Read the Fix Required section for testable conditions\n   - Check if there\
+      \ is a Verification Log section with prior attempts\n\n3. Verification Steps:\n\
+      \   - Run the build command to verify code compiles\n   - Run the test command\
+      \ to verify tests pass\n   - For each item in \"Fix Required\" that describes\
+      \ a testable condition,\n     run the command or check the condition\n   - Verify\
+      \ the reported symptom is actually gone (the MOST IMPORTANT check)\n   - Check\
+      \ for regressions in related functionality\n\n4. Output Format (use the same\
+      \ format as validator.md):\n\n   **Verdict: PASS** or **Verdict: FAIL**\n\n\
+      \   **Checks performed:**\n\n   - [x] or [ ] Build passes\n\n   - [x] or [ ]\
+      \ Unit tests pass\n\n   - [x] or [ ] (each specific symptom check from the defect)\n\
+      \n   **Findings:**\n\n   (describe what you observed for each check with specific\
+      \ command outputs)\n\n5. Constraints:\n   - Do NOT modify any code files\n \
+      \  - Do NOT fix anything\n   - ONLY read, run verification commands, and report\
+      \ findings\n   - Be specific about command outputs and observations\n\n6. Output\
+      \ Protocol:\n   Write task-status.json when done with task_id, status, message,\
+      \ timestamp,\n   plan_modified fields.\n\n\nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
 - id: phase-2
   name: Phase 2 - Orchestrator Data Structures
   status: pending
@@ -184,103 +101,43 @@ sections:
     status: pending
     depends_on:
     - '1.2'
-    description: >
-      In scripts/plan-orchestrator.py, add two new dataclasses after the
-      TaskResult dataclass (currently at line 270).
-
-
-      Dataclass 1: ValidationConfig
-
-        @dataclass
-
-        class ValidationConfig:
-
-            """Configuration for per-task validation parsed from plan meta."""
-
-            enabled: bool = False
-
-            run_after: list[str] = field(default_factory=lambda: ["coder"])
-
-            validators: list[str] = field(default_factory=lambda: ["validator"])
-
-            max_validation_attempts: int = 1
-
-
-      Dataclass 2: ValidationVerdict
-
-        @dataclass
-
-        class ValidationVerdict:
-
-            """Result of a validation pass on a completed task."""
-
-            verdict: str       # "PASS", "WARN", or "FAIL"
-
-            findings: list[str] = field(default_factory=list)
-
-            raw_output: str = ""
-
-
-      Also add the required import at the top of the file. The 'field' function
-      from dataclasses is needed (check if it is already imported - the existing
-      TaskResult uses @dataclass so the import may be there, but 'field' may not
-      be imported).
-
-
-      Add a module-level constant for verdict parsing:
-
-        VERDICT_PATTERN = re.compile(
-            r"\*\*Verdict:\s*(PASS|WARN|FAIL)\*\*", re.IGNORECASE
-        )
-
-        FINDING_PATTERN = re.compile(
-            r"- \[(PASS|WARN|FAIL)\]\s+(.+)", re.IGNORECASE
-        )
-
-
-      Place VERDICT_PATTERN and FINDING_PATTERN near the other module-level
-      constants (after REVIEWER_KEYWORDS around line 130).
-
-
-      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md
-
+    description: "In scripts/plan-orchestrator.py, add two new dataclasses after the\
+      \ TaskResult dataclass (currently at line 270).\n\nDataclass 1: ValidationConfig\n\
+      \n  @dataclass\n\n  class ValidationConfig:\n\n      \"\"\"Configuration for\
+      \ per-task validation parsed from plan meta.\"\"\"\n\n      enabled: bool =\
+      \ False\n\n      run_after: list[str] = field(default_factory=lambda: [\"coder\"\
+      ])\n\n      validators: list[str] = field(default_factory=lambda: [\"validator\"\
+      ])\n\n      max_validation_attempts: int = 1\n\n\nDataclass 2: ValidationVerdict\n\
+      \n  @dataclass\n\n  class ValidationVerdict:\n\n      \"\"\"Result of a validation\
+      \ pass on a completed task.\"\"\"\n\n      verdict: str       # \"PASS\", \"\
+      WARN\", or \"FAIL\"\n\n      findings: list[str] = field(default_factory=list)\n\
+      \n      raw_output: str = \"\"\n\n\nAlso add the required import at the top\
+      \ of the file. The 'field' function from dataclasses is needed (check if it\
+      \ is already imported - the existing TaskResult uses @dataclass so the import\
+      \ may be there, but 'field' may not be imported).\n\nAdd a module-level constant\
+      \ for verdict parsing:\n\n  VERDICT_PATTERN = re.compile(\n      r\"\\*\\*Verdict:\\\
+      s*(PASS|WARN|FAIL)\\*\\*\", re.IGNORECASE\n  )\n\n  FINDING_PATTERN = re.compile(\n\
+      \      r\"- \\[(PASS|WARN|FAIL)\\]\\s+(.+)\", re.IGNORECASE\n  )\n\n\nPlace\
+      \ VERDICT_PATTERN and FINDING_PATTERN near the other module-level constants\
+      \ (after REVIEWER_KEYWORDS around line 130).\n\nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
   - id: '2.2'
     name: Add parse_validation_config helper function
     agent: coder
     status: pending
     depends_on:
     - '2.1'
-    description: >
-      In scripts/plan-orchestrator.py, add a function to parse validation
-      config from plan meta. Place it after the ValidationVerdict dataclass.
-
-
-      Function: parse_validation_config(plan: dict) -> ValidationConfig
-
-        - Extracts plan.get("meta", {}).get("validation", {})
-
-        - If the validation dict is empty or not a dict, returns
-          ValidationConfig() (defaults: enabled=False)
-
-        - Otherwise creates ValidationConfig from the dict fields:
-
-          enabled = val_dict.get("enabled", False)
-
-          run_after = val_dict.get("run_after", ["coder"])
-
-          validators = val_dict.get("validators", ["validator"])
-
-          max_validation_attempts = val_dict.get("max_validation_attempts", 1)
-
-        - Returns the populated ValidationConfig
-
-
-      Add a docstring explaining that this parses the optional meta.validation
-      block from the plan YAML.
-
-
-      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md
-
+    description: "In scripts/plan-orchestrator.py, add a function to parse validation\
+      \ config from plan meta. Place it after the ValidationVerdict dataclass.\n\n\
+      Function: parse_validation_config(plan: dict) -> ValidationConfig\n\n  - Extracts\
+      \ plan.get(\"meta\", {}).get(\"validation\", {})\n\n  - If the validation dict\
+      \ is empty or not a dict, returns\n    ValidationConfig() (defaults: enabled=False)\n\
+      \n  - Otherwise creates ValidationConfig from the dict fields:\n\n    enabled\
+      \ = val_dict.get(\"enabled\", False)\n\n    run_after = val_dict.get(\"run_after\"\
+      , [\"coder\"])\n\n    validators = val_dict.get(\"validators\", [\"validator\"\
+      ])\n\n    max_validation_attempts = val_dict.get(\"max_validation_attempts\"\
+      , 1)\n\n  - Returns the populated ValidationConfig\n\n\nAdd a docstring explaining\
+      \ that this parses the optional meta.validation block from the plan YAML.\n\n\
+      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
 - id: phase-3
   name: Phase 3 - Validation Execution Logic
   status: pending
@@ -291,176 +148,73 @@ sections:
     status: pending
     depends_on:
     - '2.2'
-    description: >
-      In scripts/plan-orchestrator.py, add a function to build the validation
-      prompt. Place it after parse_validation_config().
-
-
-      Function: build_validation_prompt(
-          task: dict,
-          section: dict,
-          task_result: TaskResult,
-          validator_name: str
-      ) -> str
-
-
-      Implementation:
-
-      1. Load the validator agent definition using load_agent_definition(validator_name)
-
-      2. Get the agent body content (or empty string if loading fails)
-
-      3. Build the prompt string using an f-string:
-
-
-         {agent_body}
-
-         ---
-
-         You are validating the results of task {task['id']}: {task['name']}
-
-
-         ## Original Task Description
-
-         {task.get('description', 'No description')}
-
-
-         ## Task Result
-
-         Status: completed
-
-         Message: {task_result.message}
-
-         Duration: {task_result.duration_seconds:.1f}s
-
-
-         ## Validation Checks
-
-         1. Run: {BUILD_COMMAND}
-
-         2. Run: {TEST_COMMAND}
-
-         3. Verify the task description requirements are met
-
-         4. Check for regressions in related code
-
-
-         ## Output Format
-
-         Produce your verdict in this exact format:
-
-
-         **Verdict: PASS** or **Verdict: WARN** or **Verdict: FAIL**
-
-
-         **Findings:**
-
-         - [PASS|WARN|FAIL] Description with file:line references
-
-
-         IMPORTANT: You MUST write .claude/plans/task-status.json when done.
-
-
-      4. Return the prompt string
-
-
-      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md
-
+    description: "In scripts/plan-orchestrator.py, add a function to build the validation\
+      \ prompt. Place it after parse_validation_config().\n\nFunction: build_validation_prompt(\n\
+      \    task: dict,\n    section: dict,\n    task_result: TaskResult,\n    validator_name:\
+      \ str\n) -> str\n\nImplementation:\n1. Load the validator agent definition using\
+      \ load_agent_definition(validator_name)\n2. Get the agent body content (or empty\
+      \ string if loading fails)\n3. Build the prompt string using an f-string:\n\n\
+      \n   {agent_body}\n\n   ---\n\n   You are validating the results of task {task['id']}:\
+      \ {task['name']}\n\n\n   ## Original Task Description\n\n   {task.get('description',\
+      \ 'No description')}\n\n\n   ## Task Result\n\n   Status: completed\n\n   Message:\
+      \ {task_result.message}\n\n   Duration: {task_result.duration_seconds:.1f}s\n\
+      \n\n   ## Validation Checks\n\n   1. Run: {BUILD_COMMAND}\n\n   2. Run: {TEST_COMMAND}\n\
+      \n   3. Verify the task description requirements are met\n\n   4. Check for\
+      \ regressions in related code\n\n\n   ## Output Format\n\n   Produce your verdict\
+      \ in this exact format:\n\n\n   **Verdict: PASS** or **Verdict: WARN** or **Verdict:\
+      \ FAIL**\n\n\n   **Findings:**\n\n   - [PASS|WARN|FAIL] Description with file:line\
+      \ references\n\n\n   IMPORTANT: You MUST write .claude/plans/task-status.json\
+      \ when done.\n\n\n4. Return the prompt string\n\nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
   - id: '3.2'
     name: Add parse_validation_verdict function
     agent: coder
     status: pending
     depends_on:
     - '3.1'
-    description: >
-      In scripts/plan-orchestrator.py, add a function to parse the validation
-      verdict from validator output. Place it after build_validation_prompt().
-
-
-      Function: parse_validation_verdict(output: str) -> ValidationVerdict
-
-        - Uses VERDICT_PATTERN to find the verdict string in the output
-
-        - If no verdict found, defaults to "FAIL" (conservative: if the
-          validator could not produce a verdict, treat as failure)
-
-        - Uses FINDING_PATTERN to extract all findings lines
-
-        - Each finding is stored as a string: "[SEVERITY] description"
-
-        - Returns ValidationVerdict(verdict=verdict, findings=findings,
-          raw_output=output)
-
-
-      Add a docstring explaining the parsing logic and that it defaults to
-      FAIL when no verdict is found.
-
-
-      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md
-
+    description: "In scripts/plan-orchestrator.py, add a function to parse the validation\
+      \ verdict from validator output. Place it after build_validation_prompt().\n\
+      \nFunction: parse_validation_verdict(output: str) -> ValidationVerdict\n\n \
+      \ - Uses VERDICT_PATTERN to find the verdict string in the output\n\n  - If\
+      \ no verdict found, defaults to \"FAIL\" (conservative: if the\n    validator\
+      \ could not produce a verdict, treat as failure)\n\n  - Uses FINDING_PATTERN\
+      \ to extract all findings lines\n\n  - Each finding is stored as a string: \"\
+      [SEVERITY] description\"\n\n  - Returns ValidationVerdict(verdict=verdict, findings=findings,\n\
+      \    raw_output=output)\n\n\nAdd a docstring explaining the parsing logic and\
+      \ that it defaults to FAIL when no verdict is found.\n\nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
   - id: '3.3'
     name: Add run_validation function
     agent: coder
     status: pending
     depends_on:
     - '3.2'
-    description: >
-      In scripts/plan-orchestrator.py, add the main validation execution
-      function. Place it after parse_validation_verdict().
-
-
-      Function: run_validation(
-          task: dict,
-          section: dict,
-          task_result: TaskResult,
-          validation_config: ValidationConfig,
-          dry_run: bool = False
-      ) -> ValidationVerdict
-
-
-      Implementation:
-
-      1. Determine the agent that executed the task:
-         agent_name = task.get("agent") or infer_agent_for_task(task) or "coder"
-
-      2. Check if validation should run for this agent type:
-         if agent_name not in validation_config.run_after:
-             return ValidationVerdict(verdict="PASS")  # Skip validation
-
-      3. For each validator in validation_config.validators:
-         a. Print: "[VALIDATION] Running validator '{validator}' on task {task_id}"
-         b. Build the validation prompt using build_validation_prompt()
-         c. If dry_run: print the prompt preview and return ValidationVerdict(verdict="PASS")
-         d. Clear the status file (clear_status_file())
-         e. Call run_claude_task(prompt) to execute the validator
-         f. If the validator task failed (not task_result.success):
-            return ValidationVerdict(verdict="FAIL", findings=["Validator failed to execute"])
-         g. Read the validator output from the task log
-         h. Parse the verdict using parse_validation_verdict()
-         i. If verdict is FAIL, return immediately (short-circuit on first failure)
-
-      4. Return the final ValidationVerdict
-
-
-      Note: For now, use a simple approach - read the status file after
-      validation to get the result message, and parse the log file for the
-      full output. The validator's stdout is captured in the log file at
-      .claude/plans/logs/task-*.log (the most recent one after the call).
-
-
-      Actually, a simpler approach: run_claude_task returns TaskResult with
-      message field. The validator writes its verdict into the status file
-      message. We can parse the message for the verdict, and for full findings,
-      read the most recent log file.
-
-
-      Simplest approach: After run_claude_task completes, read the most recent
-      log file from .claude/plans/logs/ and parse its STDOUT section for the
-      verdict and findings using parse_validation_verdict().
-
-
-      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md
-
+    description: "In scripts/plan-orchestrator.py, add the main validation execution\
+      \ function. Place it after parse_validation_verdict().\n\nFunction: run_validation(\n\
+      \    task: dict,\n    section: dict,\n    task_result: TaskResult,\n    validation_config:\
+      \ ValidationConfig,\n    dry_run: bool = False\n) -> ValidationVerdict\n\nImplementation:\n\
+      1. Determine the agent that executed the task:\n   agent_name = task.get(\"\
+      agent\") or infer_agent_for_task(task) or \"coder\"\n\n2. Check if validation\
+      \ should run for this agent type:\n   if agent_name not in validation_config.run_after:\n\
+      \       return ValidationVerdict(verdict=\"PASS\")  # Skip validation\n\n3.\
+      \ For each validator in validation_config.validators:\n   a. Print: \"[VALIDATION]\
+      \ Running validator '{validator}' on task {task_id}\"\n   b. Build the validation\
+      \ prompt using build_validation_prompt()\n   c. If dry_run: print the prompt\
+      \ preview and return ValidationVerdict(verdict=\"PASS\")\n   d. Clear the status\
+      \ file (clear_status_file())\n   e. Call run_claude_task(prompt) to execute\
+      \ the validator\n   f. If the validator task failed (not task_result.success):\n\
+      \      return ValidationVerdict(verdict=\"FAIL\", findings=[\"Validator failed\
+      \ to execute\"])\n   g. Read the validator output from the task log\n   h. Parse\
+      \ the verdict using parse_validation_verdict()\n   i. If verdict is FAIL, return\
+      \ immediately (short-circuit on first failure)\n\n4. Return the final ValidationVerdict\n\
+      \nNote: For now, use a simple approach - read the status file after validation\
+      \ to get the result message, and parse the log file for the full output. The\
+      \ validator's stdout is captured in the log file at .claude/plans/logs/task-*.log\
+      \ (the most recent one after the call).\n\nActually, a simpler approach: run_claude_task\
+      \ returns TaskResult with message field. The validator writes its verdict into\
+      \ the status file message. We can parse the message for the verdict, and for\
+      \ full findings, read the most recent log file.\n\nSimplest approach: After\
+      \ run_claude_task completes, read the most recent log file from .claude/plans/logs/\
+      \ and parse its STDOUT section for the verdict and findings using parse_validation_verdict().\n\
+      \nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
 - id: phase-4
   name: Phase 4 - Orchestrator Integration
   status: pending
@@ -471,195 +225,96 @@ sections:
     status: pending
     depends_on:
     - '3.3'
-    description: >
-      In scripts/plan-orchestrator.py, modify build_claude_prompt() to
-      prepend validation findings when a task is being retried after validation
-      failure.
-
-
-      In build_claude_prompt() (starts at line 1179), after the agent_content
-      block is built (around line 1213), add:
-
-
-      # Prepend validation findings from previous failed validation
-
-      validation_findings = task.get("validation_findings", "")
-
-      validation_header = ""
-
-      if validation_findings:
-          validation_header = f"""## PREVIOUS VALIDATION FAILED
-
-      The previous attempt at this task was completed but failed validation.
-
-      You must address these findings:
-
-
-      {validation_findings}
-
-
-      ---
-
-
-      """
-
-
-      Then in the return f-string (line 1270), insert validation_header
-      between agent_content and subagent_header:
-
-
-      return f"""{agent_content}{validation_header}{subagent_header}Run task ...
-
-
-      IMPORTANT: Do NOT change any other part of the prompt template. Only add
-      the validation_header injection.
-
-
-      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md
-
+    description: "In scripts/plan-orchestrator.py, modify build_claude_prompt() to\
+      \ prepend validation findings when a task is being retried after validation\
+      \ failure.\n\nIn build_claude_prompt() (starts at line 1179), after the agent_content\
+      \ block is built (around line 1213), add:\n\n# Prepend validation findings from\
+      \ previous failed validation\nvalidation_findings = task.get(\"validation_findings\"\
+      , \"\")\nvalidation_header = \"\"\nif validation_findings:\n    validation_header\
+      \ = f\"\"\"## PREVIOUS VALIDATION FAILED\n\nThe previous attempt at this task\
+      \ was completed but failed validation.\nYou must address these findings:\n\n\
+      {validation_findings}\n\n---\n\n\"\"\"\n\nThen in the return f-string (line\
+      \ 1270), insert validation_header between agent_content and subagent_header:\n\
+      \nreturn f\"\"\"{agent_content}{validation_header}{subagent_header}Run task\
+      \ ...\n\nIMPORTANT: Do NOT change any other part of the prompt template. Only\
+      \ add the validation_header injection.\n\nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
   - id: '4.2'
     name: Integrate validation into sequential task execution
     agent: coder
     status: pending
     depends_on:
     - '4.1'
-    description: >
-      In scripts/plan-orchestrator.py, modify run_orchestrator() to run
-      validation after successful sequential task execution.
-
-
-      In run_orchestrator(), parse the validation config once at startup.
-      After the line that initializes circuit_breaker (around line 1738), add:
-
-
-          validation_config = parse_validation_config(plan)
-
-          if validation_config.enabled:
-              print(f"Validation: enabled (run_after={validation_config.run_after}, "
-                    f"validators={validation_config.validators})")
-
-
-      Then in the sequential execution block, after the task_result.success
-      check (around line 2082), wrap the existing success handling in a
-      validation check:
-
-
-      BEFORE (existing code):
-
-          if task_result.success:
-              task["status"] = "completed"
-              task["completed_at"] = datetime.now().isoformat()
-              task["result_message"] = task_result.message
-              tasks_completed += 1
-              circuit_breaker.record_success()
-              ...
-
-
-      AFTER (with validation):
-
-          if task_result.success:
-              # Run validation if enabled
-              if validation_config.enabled:
-                  validation_attempts = task.get("validation_attempts", 0)
-                  if validation_attempts < validation_config.max_validation_attempts:
-                      verdict = run_validation(
-                          task, section, task_result, validation_config, dry_run
-                      )
-
-                      if verdict.verdict == "FAIL":
-                          print(f"[VALIDATION] FAIL - {len(verdict.findings)} findings")
-                          for finding in verdict.findings:
-                              print(f"  {finding}")
-                          task["status"] = "pending"
-                          task["validation_findings"] = "\n".join(verdict.findings)
-                          task["validation_attempts"] = validation_attempts + 1
-                          if not dry_run:
-                              save_plan(plan_path, plan)
-                          continue  # Retry the task
-
-                      elif verdict.verdict == "WARN":
-                          print(f"[VALIDATION] WARN - {len(verdict.findings)} findings (proceeding)")
-                          for finding in verdict.findings:
-                              print(f"  {finding}")
-                          # Fall through to normal completion
-
-                      else:
-                          print(f"[VALIDATION] PASS")
-
-              # Original completion logic (unchanged)
-              task["status"] = "completed"
-              task["completed_at"] = datetime.now().isoformat()
-              task["result_message"] = task_result.message
-              tasks_completed += 1
-              circuit_breaker.record_success()
-              ...
-
-
-      IMPORTANT: The existing success/failure handling code must remain intact.
-      The validation check wraps around the success path only. The FAIL branch
-      uses 'continue' to skip marking the task as completed and instead retry
-      it on the next loop iteration.
-
-
-      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md
-
+    description: "In scripts/plan-orchestrator.py, modify run_orchestrator() to run\
+      \ validation after successful sequential task execution.\n\nIn run_orchestrator(),\
+      \ parse the validation config once at startup. After the line that initializes\
+      \ circuit_breaker (around line 1738), add:\n\n\n    validation_config = parse_validation_config(plan)\n\
+      \n    if validation_config.enabled:\n        print(f\"Validation: enabled (run_after={validation_config.run_after},\
+      \ \"\n              f\"validators={validation_config.validators})\")\n\n\nThen\
+      \ in the sequential execution block, after the task_result.success check (around\
+      \ line 2082), wrap the existing success handling in a validation check:\n\n\
+      BEFORE (existing code):\n\n    if task_result.success:\n        task[\"status\"\
+      ] = \"completed\"\n        task[\"completed_at\"] = datetime.now().isoformat()\n\
+      \        task[\"result_message\"] = task_result.message\n        tasks_completed\
+      \ += 1\n        circuit_breaker.record_success()\n        ...\n\n\nAFTER (with\
+      \ validation):\n\n    if task_result.success:\n        # Run validation if enabled\n\
+      \        if validation_config.enabled:\n            validation_attempts = task.get(\"\
+      validation_attempts\", 0)\n            if validation_attempts < validation_config.max_validation_attempts:\n\
+      \                verdict = run_validation(\n                    task, section,\
+      \ task_result, validation_config, dry_run\n                )\n\n           \
+      \     if verdict.verdict == \"FAIL\":\n                    print(f\"[VALIDATION]\
+      \ FAIL - {len(verdict.findings)} findings\")\n                    for finding\
+      \ in verdict.findings:\n                        print(f\"  {finding}\")\n  \
+      \                  task[\"status\"] = \"pending\"\n                    task[\"\
+      validation_findings\"] = \"\\n\".join(verdict.findings)\n                  \
+      \  task[\"validation_attempts\"] = validation_attempts + 1\n               \
+      \     if not dry_run:\n                        save_plan(plan_path, plan)\n\
+      \                    continue  # Retry the task\n\n                elif verdict.verdict\
+      \ == \"WARN\":\n                    print(f\"[VALIDATION] WARN - {len(verdict.findings)}\
+      \ findings (proceeding)\")\n                    for finding in verdict.findings:\n\
+      \                        print(f\"  {finding}\")\n                    # Fall\
+      \ through to normal completion\n\n                else:\n                  \
+      \  print(f\"[VALIDATION] PASS\")\n\n        # Original completion logic (unchanged)\n\
+      \        task[\"status\"] = \"completed\"\n        task[\"completed_at\"] =\
+      \ datetime.now().isoformat()\n        task[\"result_message\"] = task_result.message\n\
+      \        tasks_completed += 1\n        circuit_breaker.record_success()\n  \
+      \      ...\n\n\nIMPORTANT: The existing success/failure handling code must remain\
+      \ intact. The validation check wraps around the success path only. The FAIL\
+      \ branch uses 'continue' to skip marking the task as completed and instead retry\
+      \ it on the next loop iteration.\n\nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
   - id: '4.3'
     name: Integrate validation into parallel task execution
     agent: coder
     status: pending
     depends_on:
     - '4.2'
-    description: >
-      In scripts/plan-orchestrator.py, modify the parallel execution block
-      in run_orchestrator() to run validation on successful parallel tasks.
-
-
-      In the parallel execution block, after results are collected and before
-      task statuses are updated (around line 1933), add sequential validation
-      for each successful task:
-
-
-      After the rate limit check block and before the "Update task statuses
-      in plan" comment, add:
-
-
-          # Validate successful parallel tasks sequentially
-          if validation_config.enabled:
-              for section, task, _ in parallel_tasks:
-                  task_id = task.get("id")
-                  task_result = results.get(task_id)
-                  if task_result and task_result.success:
-                      validation_attempts = task.get("validation_attempts", 0)
-                      if validation_attempts < validation_config.max_validation_attempts:
-                          verdict = run_validation(
-                              task, section, task_result, validation_config, dry_run
-                          )
-                          if verdict.verdict == "FAIL":
-                              print(f"  [{task_id}] VALIDATION FAIL")
-                              task_result = TaskResult(
-                                  success=False,
-                                  message=f"Validation failed: {', '.join(verdict.findings[:3])}",
-                                  duration_seconds=task_result.duration_seconds
-                              )
-                              results[task_id] = task_result
-                              task["validation_findings"] = "\n".join(verdict.findings)
-                              task["validation_attempts"] = validation_attempts + 1
-                          elif verdict.verdict == "WARN":
-                              print(f"  [{task_id}] VALIDATION WARN")
-                          else:
-                              print(f"  [{task_id}] VALIDATION PASS")
-
-
-      This replaces successful TaskResults with failed ones when validation
-      fails, which causes the existing retry logic to handle them correctly.
-
-
-      IMPORTANT: Validators run sequentially, not in parallel, to avoid
-      conflicting build/test state.
-
-
-      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md
-
+    description: "In scripts/plan-orchestrator.py, modify the parallel execution block\
+      \ in run_orchestrator() to run validation on successful parallel tasks.\n\n\
+      In the parallel execution block, after results are collected and before task\
+      \ statuses are updated (around line 1933), add sequential validation for each\
+      \ successful task:\n\nAfter the rate limit check block and before the \"Update\
+      \ task statuses in plan\" comment, add:\n\n\n    # Validate successful parallel\
+      \ tasks sequentially\n    if validation_config.enabled:\n        for section,\
+      \ task, _ in parallel_tasks:\n            task_id = task.get(\"id\")\n     \
+      \       task_result = results.get(task_id)\n            if task_result and task_result.success:\n\
+      \                validation_attempts = task.get(\"validation_attempts\", 0)\n\
+      \                if validation_attempts < validation_config.max_validation_attempts:\n\
+      \                    verdict = run_validation(\n                        task,\
+      \ section, task_result, validation_config, dry_run\n                    )\n\
+      \                    if verdict.verdict == \"FAIL\":\n                     \
+      \   print(f\"  [{task_id}] VALIDATION FAIL\")\n                        task_result\
+      \ = TaskResult(\n                            success=False,\n              \
+      \              message=f\"Validation failed: {', '.join(verdict.findings[:3])}\"\
+      ,\n                            duration_seconds=task_result.duration_seconds\n\
+      \                        )\n                        results[task_id] = task_result\n\
+      \                        task[\"validation_findings\"] = \"\\n\".join(verdict.findings)\n\
+      \                        task[\"validation_attempts\"] = validation_attempts\
+      \ + 1\n                    elif verdict.verdict == \"WARN\":\n             \
+      \           print(f\"  [{task_id}] VALIDATION WARN\")\n                    else:\n\
+      \                        print(f\"  [{task_id}] VALIDATION PASS\")\n\n\nThis\
+      \ replaces successful TaskResults with failed ones when validation fails, which\
+      \ causes the existing retry logic to handle them correctly.\n\nIMPORTANT: Validators\
+      \ run sequentially, not in parallel, to avoid conflicting build/test state.\n\
+      \nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
 - id: phase-5
   name: Phase 5 - Configuration and Documentation
   status: pending
@@ -670,128 +325,48 @@ sections:
     status: pending
     depends_on:
     - '4.3'
-    description: >
-      Update .claude/orchestrator-config.yaml to document the new validation
-      configuration fields.
-
-
-      Add a commented-out section after the agents_dir entry:
-
-
-          # Per-task validation configuration.
-
-          # When enabled, the orchestrator spawns a validator agent after each
-
-          # implementation task to independently verify the result.
-
-          # validation:
-
-          #   enabled: false
-
-          #   run_after:
-
-          #     - coder           # Agent types that trigger validation
-
-          #   validators:
-
-          #     - validator       # Validator agent names to run
-
-          #   max_validation_attempts: 1  # Max validation retries per task
-
-
-      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md
-
+    description: "Update .claude/orchestrator-config.yaml to document the new validation\
+      \ configuration fields.\n\nAdd a commented-out section after the agents_dir\
+      \ entry:\n\n\n    # Per-task validation configuration.\n\n    # When enabled,\
+      \ the orchestrator spawns a validator agent after each\n\n    # implementation\
+      \ task to independently verify the result.\n\n    # validation:\n\n    #   enabled:\
+      \ false\n\n    #   run_after:\n\n    #     - coder           # Agent types that\
+      \ trigger validation\n\n    #   validators:\n\n    #     - validator       #\
+      \ Validator agent names to run\n\n    #   max_validation_attempts: 1  # Max\
+      \ validation retries per task\n\n\nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
   - id: '5.2'
     name: Update sample-plan.yaml with validation example
     agent: coder
     status: pending
     depends_on:
     - '5.1'
-    description: >
-      Update .claude/plans/sample-plan.yaml to include an example of the
-      validation configuration in the meta section.
-
-
-      Add these lines after the notification_email field in the meta section:
-
-
-        # Per-task validation (optional, disabled by default)
-
-        # validation:
-
-        #   enabled: true
-
-        #   run_after:
-
-        #     - coder
-
-        #   validators:
-
-        #     - validator
-
-        #   max_validation_attempts: 1
-
-
-      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md
-
+    description: "Update .claude/plans/sample-plan.yaml to include an example of the\
+      \ validation configuration in the meta section.\n\nAdd these lines after the\
+      \ notification_email field in the meta section:\n\n\n  # Per-task validation\
+      \ (optional, disabled by default)\n\n  # validation:\n\n  #   enabled: true\n\
+      \n  #   run_after:\n\n  #     - coder\n\n  #   validators:\n\n  #     - validator\n\
+      \n  #   max_validation_attempts: 1\n\n\nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
   - id: '5.3'
     name: Update PLAN_CREATION_PROMPT_TEMPLATE with validation guidance
     agent: coder
     status: pending
     depends_on:
     - '5.2'
-    description: >
-      In scripts/auto-pipeline.py, update PLAN_CREATION_PROMPT_TEMPLATE to
-      inform the plan creator about validation configuration.
-
-
-      Add a new section after the "## Agent Selection" section (which was added
-      by Feature 02). Insert this text block before the "## Important" section:
-
-
-      ## Validation (Optional)
-
-
-      Plans can enable per-task validation by adding a validation block to the
-      meta section. When enabled, a validator agent runs after each coder task
-      to independently verify the result.
-
-
-      Example meta configuration:
-
-        meta:
-
-          validation:
-
-            enabled: true
-
-            run_after:
-
-              - coder
-
-            validators:
-
-              - validator
-
-            max_validation_attempts: 1
-
-
-      The validator produces PASS/WARN/FAIL verdicts:
-
-      - PASS: task proceeds normally
-
-      - WARN: task completes but warnings are logged
-
-      - FAIL: task is retried with validation findings prepended to the prompt
-
-
-      For defect fixes, use the issue-verifier validator instead of or in
-      addition to the default validator. This validator reads the original
-      defect file and checks whether reported symptoms are resolved.
-
-
-      Reference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md
-
+    description: "In scripts/auto-pipeline.py, update PLAN_CREATION_PROMPT_TEMPLATE\
+      \ to inform the plan creator about validation configuration.\n\nAdd a new section\
+      \ after the \"## Agent Selection\" section (which was added by Feature 02).\
+      \ Insert this text block before the \"## Important\" section:\n\n## Validation\
+      \ (Optional)\n\nPlans can enable per-task validation by adding a validation\
+      \ block to the meta section. When enabled, a validator agent runs after each\
+      \ coder task to independently verify the result.\n\nExample meta configuration:\n\
+      \n  meta:\n\n    validation:\n\n      enabled: true\n\n      run_after:\n\n\
+      \        - coder\n\n      validators:\n\n        - validator\n\n      max_validation_attempts:\
+      \ 1\n\n\nThe validator produces PASS/WARN/FAIL verdicts:\n- PASS: task proceeds\
+      \ normally\n- WARN: task completes but warnings are logged\n- FAIL: task is\
+      \ retried with validation findings prepended to the prompt\n\nFor defect fixes,\
+      \ use the issue-verifier validator instead of or in addition to the default\
+      \ validator. This validator reads the original defect file and checks whether\
+      \ reported symptoms are resolved.\n\nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
 - id: phase-6
   name: Phase 6 - Verification
   status: pending
@@ -803,120 +378,48 @@ sections:
     depends_on:
     - '5.3'
     max_attempts: 5
-    description: >
-      Run verification checks to confirm the per-task validation pipeline
-      works correctly.
-
-
-      1. Verify agent files exist and have valid frontmatter:
-
-         python3 -c "
-         import yaml, os
-         for agent in ['validator', 'issue-verifier']:
-             path = f'.claude/agents/{agent}.md'
-             assert os.path.exists(path), f'Missing: {path}'
-             content = open(path).read()
-             parts = content.split('---', 2)
-             assert len(parts) >= 3, f'Invalid frontmatter in {path}'
-             meta = yaml.safe_load(parts[1])
-             assert 'name' in meta, f'Missing name in {path}'
-             assert 'description' in meta, f'Missing description in {path}'
-             print(f'OK: {path} - name={meta[\"name\"]}')
-         print('All agent files valid')
-         "
-
-
-      2. Verify no Python syntax errors:
-
-         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('plan-orchestrator.py: syntax OK')"
-
-         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('auto-pipeline.py: syntax OK')"
-
-
-      3. Verify orchestrator dry-run still works:
-
-         python scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
-
-
-      4. Verify ValidationConfig parsing:
-
-         python3 -c "
-         import sys, os
-         # Test parsing logic manually
-         plan_with_validation = {
-             'meta': {
-                 'validation': {
-                     'enabled': True,
-                     'run_after': ['coder'],
-                     'validators': ['validator'],
-                     'max_validation_attempts': 2
-                 }
-             }
-         }
-         plan_without_validation = {'meta': {}}
-
-         # Simulate parse_validation_config
-         def parse_vc(plan):
-             val = plan.get('meta', {}).get('validation', {})
-             if not isinstance(val, dict) or not val:
-                 return {'enabled': False}
-             return {
-                 'enabled': val.get('enabled', False),
-                 'run_after': val.get('run_after', ['coder']),
-                 'validators': val.get('validators', ['validator']),
-                 'max_validation_attempts': val.get('max_validation_attempts', 1),
-             }
-
-         c1 = parse_vc(plan_with_validation)
-         assert c1['enabled'] == True
-         assert c1['run_after'] == ['coder']
-         assert c1['max_validation_attempts'] == 2
-
-         c2 = parse_vc(plan_without_validation)
-         assert c2['enabled'] == False
-
-         print('All ValidationConfig parsing tests passed')
-         "
-
-
-      5. Verify verdict parsing regex:
-
-         python3 -c "
-         import re
-         VERDICT_PATTERN = re.compile(r'\*\*Verdict:\s*(PASS|WARN|FAIL)\*\*', re.IGNORECASE)
-         FINDING_PATTERN = re.compile(r'- \[(PASS|WARN|FAIL)\]\s+(.+)', re.IGNORECASE)
-
-         test_output = '''
-         **Verdict: FAIL**
-
-         **Findings:**
-         - [FAIL] Build command failed with exit code 1
-         - [WARN] Missing docstring in new function
-         - [PASS] File headers present
-         '''
-
-         verdict_match = VERDICT_PATTERN.search(test_output)
-         assert verdict_match, 'No verdict found'
-         assert verdict_match.group(1) == 'FAIL'
-
-         findings = FINDING_PATTERN.findall(test_output)
-         assert len(findings) == 3
-         assert findings[0] == ('FAIL', 'Build command failed with exit code 1')
-         assert findings[1] == ('WARN', 'Missing docstring in new function')
-         assert findings[2] == ('PASS', 'File headers present')
-
-         print('All verdict parsing tests passed')
-         "
-
-
-      6. Verify the build passes:
-
-         pnpm run build
-
-
-      7. Verify tests pass:
-
-         pnpm test
-
-
-      If any check fails, report the failure with specific details.
+    description: "Run verification checks to confirm the per-task validation pipeline\
+      \ works correctly.\n\n1. Verify agent files exist and have valid frontmatter:\n\
+      \n   python3 -c \"\n   import yaml, os\n   for agent in ['validator', 'issue-verifier']:\n\
+      \       path = f'.claude/agents/{agent}.md'\n       assert os.path.exists(path),\
+      \ f'Missing: {path}'\n       content = open(path).read()\n       parts = content.split('---',\
+      \ 2)\n       assert len(parts) >= 3, f'Invalid frontmatter in {path}'\n    \
+      \   meta = yaml.safe_load(parts[1])\n       assert 'name' in meta, f'Missing\
+      \ name in {path}'\n       assert 'description' in meta, f'Missing description\
+      \ in {path}'\n       print(f'OK: {path} - name={meta[\\\"name\\\"]}')\n   print('All\
+      \ agent files valid')\n   \"\n\n\n2. Verify no Python syntax errors:\n\n   python3\
+      \ -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('plan-orchestrator.py: syntax OK')\"\n\n   python3 -c\
+      \ \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
+      \ print('auto-pipeline.py: syntax OK')\"\n\n\n3. Verify orchestrator dry-run\
+      \ still works:\n\n   python scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml\
+      \ --dry-run\n\n\n4. Verify ValidationConfig parsing:\n\n   python3 -c \"\n \
+      \  import sys, os\n   # Test parsing logic manually\n   plan_with_validation\
+      \ = {\n       'meta': {\n           'validation': {\n               'enabled':\
+      \ True,\n               'run_after': ['coder'],\n               'validators':\
+      \ ['validator'],\n               'max_validation_attempts': 2\n           }\n\
+      \       }\n   }\n   plan_without_validation = {'meta': {}}\n\n   # Simulate\
+      \ parse_validation_config\n   def parse_vc(plan):\n       val = plan.get('meta',\
+      \ {}).get('validation', {})\n       if not isinstance(val, dict) or not val:\n\
+      \           return {'enabled': False}\n       return {\n           'enabled':\
+      \ val.get('enabled', False),\n           'run_after': val.get('run_after', ['coder']),\n\
+      \           'validators': val.get('validators', ['validator']),\n          \
+      \ 'max_validation_attempts': val.get('max_validation_attempts', 1),\n      \
+      \ }\n\n   c1 = parse_vc(plan_with_validation)\n   assert c1['enabled'] == True\n\
+      \   assert c1['run_after'] == ['coder']\n   assert c1['max_validation_attempts']\
+      \ == 2\n\n   c2 = parse_vc(plan_without_validation)\n   assert c2['enabled']\
+      \ == False\n\n   print('All ValidationConfig parsing tests passed')\n   \"\n\
+      \n\n5. Verify verdict parsing regex:\n\n   python3 -c \"\n   import re\n   VERDICT_PATTERN\
+      \ = re.compile(r'\\*\\*Verdict:\\s*(PASS|WARN|FAIL)\\*\\*', re.IGNORECASE)\n\
+      \   FINDING_PATTERN = re.compile(r'- \\[(PASS|WARN|FAIL)\\]\\s+(.+)', re.IGNORECASE)\n\
+      \n   test_output = '''\n   **Verdict: FAIL**\n\n   **Findings:**\n   - [FAIL]\
+      \ Build command failed with exit code 1\n   - [WARN] Missing docstring in new\
+      \ function\n   - [PASS] File headers present\n   '''\n\n   verdict_match = VERDICT_PATTERN.search(test_output)\n\
+      \   assert verdict_match, 'No verdict found'\n   assert verdict_match.group(1)\
+      \ == 'FAIL'\n\n   findings = FINDING_PATTERN.findall(test_output)\n   assert\
+      \ len(findings) == 3\n   assert findings[0] == ('FAIL', 'Build command failed\
+      \ with exit code 1')\n   assert findings[1] == ('WARN', 'Missing docstring in\
+      \ new function')\n   assert findings[2] == ('PASS', 'File headers present')\n\
+      \n   print('All verdict parsing tests passed')\n   \"\n\n\n6. Verify the build\
+      \ passes:\n\n   pnpm run build\n\n\n7. Verify tests pass:\n\n   pnpm test\n\n\
+      \nIf any check fails, report the failure with specific details.\n"
