@@ -79,7 +79,7 @@ sections:
       up the config-loaded constants to the template placeholders.
 - id: phase-2
   name: Phase 2 - Plan Orchestrator Config and Prompt Fix
-  status: in_progress
+  status: completed
   tasks:
   - id: '2.1'
     name: Add command config constants and loading to plan-orchestrator.py
@@ -102,7 +102,7 @@ sections:
       mirroring the auto-pipeline.py pattern.
   - id: '2.2'
     name: Replace hardcoded pnpm in plan-orchestrator.py prompts
-    status: pending
+    status: completed
     description: "In scripts/plan-orchestrator.py, fix two hardcoded pnpm references:\n\
       \n1. Line ~1157 (task prompt, inside an f-string):\n   Change: \"Run `pnpm run\
       \ build` to verify no TypeScript errors\"\n   To: \"Run `{BUILD_COMMAND}` to\
@@ -113,6 +113,13 @@ sections:
       \ before running smoke tests\"\n"
     depends_on:
     - '2.1'
+    attempts: 1
+    last_attempt: '2026-02-13T21:58:58.203983'
+    completed_at: '2026-02-13T22:00:41.446689'
+    result_message: 'Replaced two hardcoded pnpm references in plan-orchestrator.py:
+      (1) task prompt line 1163 now uses {BUILD_COMMAND} with ''build errors'' instead
+      of ''TypeScript errors'', (2) smoke test message line 1215 now uses f-string
+      with {DEV_SERVER_COMMAND} instead of hardcoded ''pnpm dev''.'
 - id: phase-3
   name: Phase 3 - Configuration Documentation
   status: pending
