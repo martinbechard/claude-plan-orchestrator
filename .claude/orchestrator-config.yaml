@@ -6,3 +6,12 @@
 # orchestrator runs to avoid build cache conflicts, and the plan-orchestrator
 # uses it for post-plan smoke tests.
 # dev_server_port: 3000
+
+# Command used to build/compile the project during verification.
+# build_command: "pnpm run build"
+
+# Command used to run the project test suite during verification.
+# test_command: "pnpm test"
+
+# Command used to start the dev server during verification.
+# dev_server_command: "pnpm dev"
