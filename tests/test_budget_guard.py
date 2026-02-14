@@ -14,6 +14,9 @@ mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
 BudgetConfig = mod.BudgetConfig
+BudgetGuard = mod.BudgetGuard
+PlanUsageTracker = mod.PlanUsageTracker
+TaskUsage = mod.TaskUsage
 
 
 # --- BudgetConfig dataclass tests ---
@@ -72,3 +75,83 @@ def test_budget_config_zero_ceiling_not_enabled():
     """Zero ceiling means budget enforcement is disabled."""
     cfg = BudgetConfig(quota_ceiling_usd=0.0)
     assert cfg.is_enabled is False
+
+
+# --- BudgetGuard tests ---
+
+
+def _make_guard(
+    quota_ceiling_usd: float = 0.0,
+    max_quota_percent: float = 100.0,
+    reserved_budget_usd: float = 0.0,
+    task_costs: list[float] | None = None,
+) -> BudgetGuard:
+    """Helper: build a BudgetGuard with optional pre-recorded task costs."""
+    config = BudgetConfig(
+        quota_ceiling_usd=quota_ceiling_usd,
+        max_quota_percent=max_quota_percent,
+        reserved_budget_usd=reserved_budget_usd,
+    )
+    tracker = PlanUsageTracker()
+    if task_costs:
+        for idx, cost in enumerate(task_costs):
+            tracker.record(str(idx), TaskUsage(total_cost_usd=cost))
+    return BudgetGuard(config, tracker)
+
+
+def test_guard_unlimited_always_proceeds():
+    """Unlimited budget (no ceiling) always allows proceeding."""
+    guard = _make_guard(task_costs=[5.0, 10.0])
+    ok, reason = guard.can_proceed()
+    assert ok is True
+    assert reason == ""
+
+
+def test_guard_under_budget_proceeds():
+    """Spending below the limit allows proceeding."""
+    guard = _make_guard(
+        quota_ceiling_usd=10.0, max_quota_percent=90.0, task_costs=[5.0]
+    )
+    ok, reason = guard.can_proceed()
+    assert ok is True
+    assert reason == ""
+
+
+def test_guard_at_limit_stops():
+    """Spending exactly at the limit triggers a stop."""
+    guard = _make_guard(
+        quota_ceiling_usd=10.0, max_quota_percent=90.0, task_costs=[4.5, 4.5]
+    )
+    ok, reason = guard.can_proceed()
+    assert ok is False
+    assert "Budget limit reached" in reason
+
+
+def test_guard_over_limit_stops():
+    """Spending above the limit triggers a stop."""
+    guard = _make_guard(
+        quota_ceiling_usd=10.0, max_quota_percent=90.0, task_costs=[5.0, 4.5]
+    )
+    ok, reason = guard.can_proceed()
+    assert ok is False
+    assert "Budget limit reached" in reason
+
+
+def test_guard_usage_percent():
+    """Usage percent reflects proportion of total ceiling spent."""
+    guard = _make_guard(quota_ceiling_usd=100.0, task_costs=[25.0])
+    assert guard.get_usage_percent() == 25.0
+
+
+def test_guard_format_status_unlimited():
+    """Unlimited guard displays '[Budget: unlimited]'."""
+    guard = _make_guard()
+    assert guard.format_status() == "[Budget: unlimited]"
+
+
+def test_guard_format_status_with_ceiling():
+    """Status string includes both spent and ceiling amounts."""
+    guard = _make_guard(quota_ceiling_usd=100.0, task_costs=[30.0])
+    status = guard.format_status()
+    assert "$30" in status
+    assert "$100" in status
