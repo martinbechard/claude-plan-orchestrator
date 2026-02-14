@@ -187,7 +187,7 @@ sections:
   tasks:
   - id: '3.1'
     name: Add agents_dir config to auto-pipeline.py
-    status: pending
+    status: completed
     description: "In scripts/auto-pipeline.py, add the agents directory configuration.\n\
       \nNear line 46 (after DEFAULT_DEV_SERVER_COMMAND), add:\n\n    DEFAULT_AGENTS_DIR\
       \ = \".claude/agents/\"\n\nNear line 78 (after DEV_SERVER_COMMAND loading),\
@@ -196,6 +196,11 @@ sections:
       \ lines 40-78\n"
     depends_on:
     - '2.4'
+    attempts: 1
+    last_attempt: '2026-02-13T22:25:48.575660'
+    completed_at: '2026-02-13T22:28:00.000000'
+    result_message: Added DEFAULT_AGENTS_DIR constant (line 47) and AGENTS_DIR config
+      loading (line 80) to auto-pipeline.py, mirroring the same pattern in plan-orchestrator.py.
   - id: '3.2'
     name: Update PLAN_CREATION_PROMPT_TEMPLATE with agent guidance
     status: pending
