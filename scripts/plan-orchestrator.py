@@ -2290,6 +2290,7 @@ def run_orchestrator(
 
     tasks_completed = 0
     tasks_failed = 0
+    usage_tracker = PlanUsageTracker()
 
     iteration = 0
     while True:
@@ -2478,6 +2479,9 @@ def run_orchestrator(
                 for section, task, _ in parallel_tasks:
                     task_id = task.get("id")
                     task_result = results.get(task_id)
+                    if task_result and task_result.usage:
+                        usage_tracker.record(task_id, task_result.usage)
+                        print(usage_tracker.format_summary_line(task_id))
                     if task_result and task_result.success and task_id not in [f[0] for f in merge_failures]:
                         task["status"] = "completed"
                         task["completed_at"] = datetime.now().isoformat()
@@ -2613,6 +2617,10 @@ def run_orchestrator(
         print(f"Duration: {task_result.duration_seconds:.1f}s")
         print(f"Message: {task_result.message}")
 
+        if task_result.usage:
+            usage_tracker.record(task_id, task_result.usage)
+            print(usage_tracker.format_summary_line(task_id))
+
         # Check if Claude modified the plan
         if task_result.plan_modified:
             print("[Plan was modified by Claude - reloading]")
@@ -2728,6 +2736,8 @@ def run_orchestrator(
                 backoff = circuit_breaker.get_backoff_delay(current_attempts + 1)
                 print(f"[Backoff] Waiting {backoff:.0f}s before retry...")
                 time.sleep(backoff)
+
+    print(usage_tracker.format_final_summary(plan))
 
     print(f"\n=== Summary ===")
     print(f"Tasks completed: {tasks_completed}")
