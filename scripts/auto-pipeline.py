@@ -49,7 +49,12 @@ DEFAULT_AGENTS_DIR = ".claude/agents/"
 
 DEFECT_DIR = "docs/defect-backlog"
 FEATURE_DIR = "docs/feature-backlog"
-COMPLETED_SUBDIR = "completed"
+COMPLETED_DEFECTS_DIR = "docs/completed-backlog/defects"
+COMPLETED_FEATURES_DIR = "docs/completed-backlog/features"
+COMPLETED_DIRS = {
+    "defect": COMPLETED_DEFECTS_DIR,
+    "feature": COMPLETED_FEATURES_DIR,
+}
 PLANS_DIR = ".claude/plans"
 DESIGN_DIR = "docs/plans"
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
@@ -409,11 +414,11 @@ def parse_dependencies(filepath: str) -> list[str]:
 
 
 def completed_slugs() -> set[str]:
-    """Build a set of completed backlog item slugs from completed/ directories."""
+    """Build a set of completed backlog item slugs from the archive directories."""
     slugs: set[str] = set()
 
-    for base_dir in [DEFECT_DIR, FEATURE_DIR]:
-        completed_dir = Path(base_dir) / COMPLETED_SUBDIR
+    for completed_dir_path in [COMPLETED_DEFECTS_DIR, COMPLETED_FEATURES_DIR]:
+        completed_dir = Path(completed_dir_path)
         if not completed_dir.exists():
             continue
         for md_file in completed_dir.glob("*.md"):
@@ -465,16 +470,13 @@ class BacklogWatcher(FileSystemEventHandler):
 
     def on_created(self, event):
         if isinstance(event, FileCreatedEvent) and event.src_path.endswith(".md"):
-            # Ignore files in completed/ subdirectory
-            if f"/{COMPLETED_SUBDIR}/" not in event.src_path:
-                verbose_log(f"File created: {event.src_path}")
-                self.event_callback()
+            verbose_log(f"File created: {event.src_path}")
+            self.event_callback()
 
     def on_modified(self, event):
         if isinstance(event, FileModifiedEvent) and event.src_path.endswith(".md"):
-            if f"/{COMPLETED_SUBDIR}/" not in event.src_path:
-                verbose_log(f"File modified: {event.src_path}")
-                self.event_callback()
+            verbose_log(f"File modified: {event.src_path}")
+            self.event_callback()
 
 
 # ─── Child Process Runner ────────────────────────────────────────────
@@ -1215,9 +1217,9 @@ def find_in_progress_plans() -> list[str]:
 
 
 def archive_item(item: BacklogItem, dry_run: bool = False) -> bool:
-    """Move a completed backlog item to the completed/ subfolder."""
+    """Move a completed backlog item to the top-level archive directory."""
     source = item.path
-    dest_dir = os.path.join(os.path.dirname(item.path), COMPLETED_SUBDIR)
+    dest_dir = COMPLETED_DIRS[item.item_type]
     dest = os.path.join(dest_dir, os.path.basename(item.path))
 
     if dry_run:
