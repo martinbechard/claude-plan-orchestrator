@@ -22,3 +22,14 @@ test_command: "python3 -m pytest tests/ 2>/dev/null || echo 'No test suite confi
 # Directory containing agent definition markdown files.
 # Each agent is a .md file with YAML frontmatter (name, description, tools, model).
 # agents_dir: ".claude/agents/"
+
+# Per-task validation configuration.
+# When enabled, the orchestrator spawns a validator agent after each
+# implementation task to independently verify the result.
+# validation:
+#   enabled: false
+#   run_after:
+#     - coder           # Agent types that trigger validation
+#   validators:
+#     - validator       # Validator agent names to run
+#   max_validation_attempts: 1  # Max validation retries per task
