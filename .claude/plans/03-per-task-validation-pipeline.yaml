@@ -272,12 +272,12 @@ sections:
       clean.
 - id: phase-4
   name: Phase 4 - Orchestrator Integration
-  status: pending
+  status: in_progress
   tasks:
   - id: '4.1'
     name: Add validation_findings support to build_claude_prompt
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '3.3'
     description: "In scripts/plan-orchestrator.py, modify build_claude_prompt() to\
@@ -293,6 +293,14 @@ sections:
       \nreturn f\"\"\"{agent_content}{validation_header}{subagent_header}Run task\
       \ ...\n\nIMPORTANT: Do NOT change any other part of the prompt template. Only\
       \ add the validation_header injection.\n\nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
+    attempts: 1
+    last_attempt: '2026-02-13T23:33:40.737512'
+    completed_at: '2026-02-13T23:34:58.826996'
+    result_message: Added validation_findings support to build_claude_prompt(). When
+      task['validation_findings'] is present (set by the orchestrator after a validation
+      FAIL), a header block is prepended between agent_content and subagent_header
+      instructing the coder to address the findings. No other parts of the prompt
+      template were changed.
   - id: '4.2'
     name: Integrate validation into sequential task execution
     agent: coder
