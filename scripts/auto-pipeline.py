@@ -1166,6 +1166,9 @@ def verify_item(item: BacklogItem, dry_run: bool = False) -> bool:
         item_path=item.path,
         slug=item.slug,
         count=attempt_count,
+        build_command=BUILD_COMMAND,
+        test_command=TEST_COMMAND,
+        dev_server_command=DEV_SERVER_COMMAND,
     )
 
     cmd = [*CLAUDE_CMD, "--dangerously-skip-permissions", "--print", prompt]
