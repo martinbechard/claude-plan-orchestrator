@@ -1160,7 +1160,7 @@ Read `.claude/skills/agent-sync.md` for the full protocol.
 1. First, verify the current state - a previous attempt may have failed
 2. Read the relevant section from the plan document for detailed implementation steps
 3. Implement the task following the plan's specifications
-4. Run `pnpm run build` to verify no TypeScript errors
+4. Run `{BUILD_COMMAND}` to verify no build errors
 5. If you changed middleware, layout files, or auth-related code: run `npx playwright test tests/SMOKE01-critical-paths.spec.ts --reporter=list` to verify critical paths
 6. Commit your changes with a descriptive message
 6. Write a status file to `.claude/plans/task-status.json` with this format:
@@ -1212,7 +1212,7 @@ def run_smoke_tests() -> bool:
 
     if not smoke_port:
         print(f"[SMOKE] No dev server detected on port {DEV_SERVER_PORT} - skipping smoke tests")
-        print("[SMOKE] Start a server with 'pnpm dev' before running smoke tests")
+        print(f"[SMOKE] Start a server with '{DEV_SERVER_COMMAND}' before running smoke tests")
         return True  # Don't fail the plan if no server is running
 
     print(f"[SMOKE] Using existing server on port {smoke_port}")
