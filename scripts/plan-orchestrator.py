@@ -2444,6 +2444,13 @@ def run_orchestrator(
     # Clear any stale stop semaphore from a previous run
     clear_stop_semaphore()
 
+    # Initialize usage tracking and budget guard before header prints
+    usage_tracker = PlanUsageTracker()
+
+    # Parse budget configuration from plan YAML + CLI overrides
+    budget_config = parse_budget_config(plan, cli_args) if cli_args else BudgetConfig()
+    budget_guard = BudgetGuard(budget_config, usage_tracker)
+
     print(f"=== Plan Orchestrator (PID {os.getpid()}) ===")
     print(f"Plan: {meta.get('name', 'Unknown')}")
     print(f"Claude binary: {' '.join(CLAUDE_CMD)}")
@@ -2455,6 +2462,11 @@ def run_orchestrator(
     if validation_config.enabled:
         print(f"Validation: enabled (run_after={validation_config.run_after}, "
               f"validators={validation_config.validators})")
+    if budget_config.is_enabled:
+        print(f"Budget: {budget_guard.format_status()}")
+        print(f"  Ceiling: ${budget_config.quota_ceiling_usd:.2f}, Limit: ${budget_config.effective_limit_usd:.2f}")
+    else:
+        print("Budget: unlimited (no --quota-ceiling configured)")
     print()
 
     # Find starting point
@@ -2470,7 +2482,6 @@ def run_orchestrator(
 
     tasks_completed = 0
     tasks_failed = 0
-    usage_tracker = PlanUsageTracker()
 
     iteration = 0
     while True:
@@ -2491,6 +2502,20 @@ def run_orchestrator(
             if not circuit_breaker.wait_for_reset():
                 print("\n=== Orchestrator stopped by circuit breaker ===")
                 break
+
+        # Check budget before starting next task
+        can_proceed, budget_reason = budget_guard.can_proceed()
+        if not can_proceed:
+            print(f"\n=== Budget limit reached ===")
+            print(f"{budget_reason}")
+            print(f"Plan paused. Resume with --resume-from when more budget is available.")
+            # Mark plan as paused
+            plan.setdefault("meta", {})["status"] = "paused_quota"
+            plan["meta"]["pause_reason"] = budget_reason
+            if not dry_run:
+                save_plan(plan_path, plan, commit=True,
+                         commit_message="plan: Paused due to budget limit")
+            break
 
         # =====================================================================
         # PARALLEL EXECUTION MODE
@@ -2675,6 +2700,9 @@ def run_orchestrator(
                             task["last_error"] = task_result.message
                         circuit_breaker.record_failure()
 
+                if budget_config.is_enabled:
+                    print(budget_guard.format_status())
+
                 # Save plan after parallel execution
                 if not dry_run:
                     save_plan(plan_path, plan, commit=True,
@@ -2800,6 +2828,9 @@ def run_orchestrator(
         if task_result.usage:
             usage_tracker.record(task_id, task_result.usage)
             print(usage_tracker.format_summary_line(task_id))
+
+        if budget_config.is_enabled:
+            print(budget_guard.format_status())
 
         # Check if Claude modified the plan
         if task_result.plan_modified:
