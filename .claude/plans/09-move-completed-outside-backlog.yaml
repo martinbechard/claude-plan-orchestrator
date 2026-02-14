@@ -20,7 +20,7 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Implementation
-  status: in_progress
+  status: completed
   tasks:
   - id: '1.1'
     name: Update constants and path helpers in auto-pipeline.py
@@ -66,7 +66,7 @@ sections:
   - id: '1.2'
     name: Move existing completed files to new archive structure
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.1'
     description: "Move the existing completed backlog items from the old locations\
@@ -86,6 +86,12 @@ sections:
       \   ls docs/completed-backlog/features/\n\nFiles: docs/defect-backlog/completed/*,\
       \ docs/feature-backlog/completed/*,\n       docs/completed-backlog/defects/,\
       \ docs/completed-backlog/features/\n"
+    attempts: 1
+    last_attempt: '2026-02-14T10:27:38.390523'
+    completed_at: '2026-02-14T10:30:28.746747'
+    result_message: 'Moved 8 completed backlog items to docs/completed-backlog/: 1
+      defect to defects/, 7 features to features/. Removed empty completed/ subdirectories
+      from both backlog folders. All tracked files preserved as git renames.'
 - id: phase-2
   name: Phase 2 - Unit Tests
   status: pending
