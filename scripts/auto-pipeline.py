@@ -44,6 +44,7 @@ DEFAULT_DEV_SERVER_PORT = 3000
 DEFAULT_BUILD_COMMAND = "pnpm run build"
 DEFAULT_TEST_COMMAND = "pnpm test"
 DEFAULT_DEV_SERVER_COMMAND = "pnpm dev"
+DEFAULT_AGENTS_DIR = ".claude/agents/"
 
 DEFECT_DIR = "docs/defect-backlog"
 FEATURE_DIR = "docs/feature-backlog"
@@ -76,6 +77,7 @@ DEV_SERVER_PORT = int(_config.get("dev_server_port", DEFAULT_DEV_SERVER_PORT))
 BUILD_COMMAND = _config.get("build_command", DEFAULT_BUILD_COMMAND)
 TEST_COMMAND = _config.get("test_command", DEFAULT_TEST_COMMAND)
 DEV_SERVER_COMMAND = _config.get("dev_server_command", DEFAULT_DEV_SERVER_COMMAND)
+AGENTS_DIR = _config.get("agents_dir", DEFAULT_AGENTS_DIR)
 
 # Pattern matching backlog item slugs (NN-slug-name format)
 BACKLOG_SLUG_PATTERN = re.compile(r"^\d{2,}-[\w-]+$")
