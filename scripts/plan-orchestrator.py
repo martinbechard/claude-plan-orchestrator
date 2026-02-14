@@ -348,6 +348,96 @@ def parse_task_usage(result_data: dict) -> TaskUsage:
     )
 
 
+class PlanUsageTracker:
+    """Accumulates token usage across all tasks in a plan run."""
+
+    def __init__(self) -> None:
+        self.task_usages: dict[str, TaskUsage] = {}
+
+    def record(self, task_id: str, usage: TaskUsage) -> None:
+        """Record usage for a completed task."""
+        self.task_usages[task_id] = usage
+
+    def get_section_usage(self, plan: dict, section_id: str) -> TaskUsage:
+        """Aggregate usage for all tasks in a given section."""
+        total = TaskUsage()
+        for section in plan.get("sections", []):
+            if section.get("id") == section_id:
+                for task in section.get("tasks", []):
+                    tid = task.get("id", "")
+                    if tid in self.task_usages:
+                        u = self.task_usages[tid]
+                        total.input_tokens += u.input_tokens
+                        total.output_tokens += u.output_tokens
+                        total.cache_read_tokens += u.cache_read_tokens
+                        total.cache_creation_tokens += u.cache_creation_tokens
+                        total.total_cost_usd += u.total_cost_usd
+                        total.num_turns += u.num_turns
+                        total.duration_api_ms += u.duration_api_ms
+        return total
+
+    def get_total_usage(self) -> TaskUsage:
+        """Aggregate usage across all recorded tasks."""
+        total = TaskUsage()
+        for u in self.task_usages.values():
+            total.input_tokens += u.input_tokens
+            total.output_tokens += u.output_tokens
+            total.cache_read_tokens += u.cache_read_tokens
+            total.cache_creation_tokens += u.cache_creation_tokens
+            total.total_cost_usd += u.total_cost_usd
+            total.num_turns += u.num_turns
+            total.duration_api_ms += u.duration_api_ms
+        return total
+
+    def get_cache_hit_rate(self) -> float:
+        """Calculate overall cache hit rate.
+
+        Cache hit rate measures what fraction of input context was served
+        from cache vs. freshly processed. Higher means lower cost per token.
+        """
+        total = self.get_total_usage()
+        denom = total.cache_read_tokens + total.input_tokens
+        return total.cache_read_tokens / denom if denom > 0 else 0.0
+
+    def format_summary_line(self, task_id: str) -> str:
+        """Format a one-line usage summary for a task."""
+        u = self.task_usages.get(task_id)
+        if not u:
+            return ""
+        total = self.get_total_usage()
+        cache_denom = u.cache_read_tokens + u.input_tokens
+        cache_pct = (u.cache_read_tokens / cache_denom * 100) if cache_denom > 0 else 0
+        return (
+            f"[Usage] Task {task_id}: ${u.total_cost_usd:.4f} | "
+            f"{u.input_tokens:,} in / {u.output_tokens:,} out / "
+            f"{u.cache_read_tokens:,} cached ({cache_pct:.0f}% cache hit) | "
+            f"Running: ${total.total_cost_usd:.4f}"
+        )
+
+    def format_final_summary(self, plan: dict) -> str:
+        """Format the final usage summary printed after all tasks complete."""
+        total = self.get_total_usage()
+        cache_rate = self.get_cache_hit_rate()
+        lines = [
+            "\n=== Usage Summary ===",
+            f"Total cost: ${total.total_cost_usd:.4f}",
+            f"Total tokens: {total.input_tokens:,} input / {total.output_tokens:,} output",
+            f"Cache: {total.cache_read_tokens:,} read / {total.cache_creation_tokens:,} created ({cache_rate:.0%} hit rate)",
+            f"API time: {total.duration_api_ms / 1000:.1f}s across {total.num_turns} turns",
+            "Per-section breakdown:",
+        ]
+        for section in plan.get("sections", []):
+            sid = section.get("id", "")
+            sname = section.get("name", sid)
+            su = self.get_section_usage(plan, sid)
+            task_count = sum(
+                1 for t in section.get("tasks", []) if t.get("id") in self.task_usages
+            )
+            if task_count > 0:
+                lines.append(f"  {sname}: ${su.total_cost_usd:.4f} ({task_count} tasks)")
+        return "\n".join(lines)
+
+
 @dataclass
 class ValidationConfig:
     """Configuration for per-task validation parsed from plan meta.
