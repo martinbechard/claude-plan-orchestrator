@@ -326,12 +326,12 @@ sections:
       in eb03b06.
 - id: phase-4
   name: Phase 4 - Auto-Pipeline Integration
-  status: pending
+  status: completed
   tasks:
   - id: '4.1'
     name: Add usage report reading to auto-pipeline
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '3.1'
     description: "In scripts/auto-pipeline.py, add the ability to read usage reports\
@@ -386,6 +386,14 @@ sections:
       \       log(f\"[Session usage report: {session_report}]\")\n\n4. Verify with:\
       \ python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py\n"
+    attempts: 1
+    last_attempt: '2026-02-14T09:29:53.306212'
+    completed_at: '2026-02-14T09:34:11.459386'
+    result_message: Added SessionUsageTracker class to auto-pipeline.py with record_from_report(),
+      format_session_summary(), and write_session_report() methods. Integrated into
+      main_loop() and process_item() to read orchestrator usage reports after each
+      plan execution. Session summary is printed and written to JSON at pipeline shutdown.
+      Added _read_plan_name() and _try_record_usage() helpers for report file discovery.
 - id: phase-5
   name: Phase 5 - Unit Tests
   status: pending
