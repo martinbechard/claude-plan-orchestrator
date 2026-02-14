@@ -20,6 +20,15 @@ PlanUsageTracker = mod.PlanUsageTracker
 TaskUsage = mod.TaskUsage
 parse_budget_config = mod.parse_budget_config
 
+# auto-pipeline.py also has a hyphen, so use the same importlib pattern.
+spec_ap = importlib.util.spec_from_file_location(
+    "auto_pipeline", "scripts/auto-pipeline.py"
+)
+mod_ap = importlib.util.module_from_spec(spec_ap)
+spec_ap.loader.exec_module(mod_ap)
+
+PipelineBudgetGuard = mod_ap.PipelineBudgetGuard
+
 
 # --- BudgetConfig dataclass tests ---
 
@@ -232,3 +241,50 @@ def test_parse_budget_config_partial_cli_override():
     assert cfg.quota_ceiling_usd == 30.0
     assert cfg.max_quota_percent == 80
     assert cfg.reserved_budget_usd == 5.0
+
+
+# --- PipelineBudgetGuard tests ---
+
+
+def test_pipeline_guard_disabled():
+    """Zero ceiling disables the guard; can_proceed always returns True."""
+    guard = PipelineBudgetGuard(
+        max_quota_percent=100.0, quota_ceiling_usd=0.0
+    )
+    assert guard.is_enabled is False
+    ok, reason = guard.can_proceed(50.0)
+    assert ok is True
+    assert reason == ""
+
+
+def test_pipeline_guard_under_budget():
+    """Spending below the limit allows proceeding."""
+    guard = PipelineBudgetGuard(
+        max_quota_percent=100.0, quota_ceiling_usd=50.0
+    )
+    ok, reason = guard.can_proceed(30.0)
+    assert ok is True
+    assert reason == ""
+
+
+def test_pipeline_guard_over_budget():
+    """Spending at or above the effective limit triggers a stop."""
+    guard = PipelineBudgetGuard(
+        max_quota_percent=90.0, quota_ceiling_usd=50.0
+    )
+    # effective limit = 50 * 90/100 = 45.0
+    ok, reason = guard.can_proceed(45.0)
+    assert ok is False
+    assert "Session budget limit reached" in reason
+
+
+def test_pipeline_guard_effective_limit():
+    """Effective limit is the minimum of percent-based and reserve-based limits."""
+    guard = PipelineBudgetGuard(
+        max_quota_percent=80.0, quota_ceiling_usd=100.0,
+        reserved_budget_usd=10.0
+    )
+    # percent_limit = 100 * 80/100 = 80.0
+    # reserve_limit = 100 - 10 = 90.0
+    # min(80.0, 90.0) = 80.0
+    assert guard.effective_limit_usd == 80.0
