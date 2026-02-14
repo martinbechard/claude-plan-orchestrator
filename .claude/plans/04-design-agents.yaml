@@ -210,12 +210,12 @@ sections:
       and coder (default). Updated docstring to reflect new logic.'
 - id: phase-3
   name: Phase 3 - Template Updates
-  status: pending
+  status: in_progress
   tasks:
   - id: '3.1'
     name: Update PLAN_CREATION_PROMPT_TEMPLATE agent list
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.2'
     description: "In scripts/auto-pipeline.py, update the Agent Selection section\
@@ -245,6 +245,13 @@ sections:
       \ design/architecture\n-> systems-designer, plan extension -> planner, everything\
       \ else -> coder).\"\n\nReference: scripts/auto-pipeline.py lines 677-701 for\
       \ current template section.\nReference: docs/plans/2026-02-14-04-design-agents-design.md\n"
+    attempts: 1
+    last_attempt: '2026-02-14T10:16:30.596306'
+    completed_at: '2026-02-14T10:18:38.731073'
+    result_message: 'Updated PLAN_CREATION_PROMPT_TEMPLATE Agent Selection section:
+      expanded agent list from 2 to 5 agents (added systems-designer, ux-designer,
+      planner), added Phase 0 Competition Example with agent assignments and parallel_group,
+      updated inference description to cover all 4 keyword-to-agent mappings.'
   - id: '3.2'
     name: Update implement skill Phase 0 template with agent assignments
     agent: coder
