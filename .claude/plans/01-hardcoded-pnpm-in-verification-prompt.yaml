@@ -150,10 +150,6 @@ sections:
   - id: '4.1'
     name: Regression test - verify no hardcoded pnpm in templates
     status: completed
-    completed_at: '2026-02-13T22:05:00'
-    result_message: All 5 regression checks passed. No hardcoded pnpm in VERIFICATION_PROMPT_TEMPLATE
-      or plan-orchestrator task prompt area. Config loading returns correct defaults.
-      Dry-run and Python syntax checks pass.
     description: "Verify the fix is complete by running these checks:\n\n1. grep for\
       \ \"pnpm\" in the VERIFICATION_PROMPT_TEMPLATE in auto-pipeline.py:\n   grep\
       \ -n \"pnpm\" scripts/auto-pipeline.py | grep -i \"verification_prompt\\|template\"\
@@ -174,3 +170,13 @@ sections:
     max_attempts: 5
     attempts: 1
     last_attempt: '2026-02-13T22:01:33.643375'
+    completed_at: '2026-02-13T22:04:09.966518'
+    result_message: 'All 5 regression checks passed: (1) VERIFICATION_PROMPT_TEMPLATE
+      has no hardcoded pnpm - only {build_command}, {test_command}, {dev_server_command}
+      placeholders; (2) plan-orchestrator task prompt area (lines 1140-1220) uses
+      {BUILD_COMMAND} and {DEV_SERVER_COMMAND} - no hardcoded pnpm; (3) Config loading
+      returns correct defaults (pnpm run build, pnpm test, pnpm dev) for both scripts;
+      (4) plan-orchestrator --dry-run succeeds with no syntax errors; (5) Python syntax
+      check passes for both scripts (project has no package.json - it IS the orchestrator).
+      Note: auto-pipeline.py lines 666 and 915 still have hardcoded pnpm outside the
+      VERIFICATION_PROMPT_TEMPLATE scope, which could be a follow-up improvement.'
