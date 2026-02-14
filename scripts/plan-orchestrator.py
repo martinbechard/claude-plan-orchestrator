@@ -2072,6 +2072,9 @@ def run_orchestrator(
         backoff_max=meta.get("backoff_max", DEFAULT_BACKOFF_MAX)
     )
 
+    # Parse per-task validation configuration from plan meta
+    validation_config = parse_validation_config(plan)
+
     # Resolve the claude binary path
     global CLAUDE_CMD
     CLAUDE_CMD = resolve_claude_binary()
@@ -2087,6 +2090,9 @@ def run_orchestrator(
     print(f"Parallel mode: {parallel}")
     print(f"Dry run: {dry_run}")
     print(f"Graceful stop: touch {STOP_SEMAPHORE_PATH}")
+    if validation_config.enabled:
+        print(f"Validation: enabled (run_after={validation_config.run_after}, "
+              f"validators={validation_config.validators})")
     print()
 
     # Find starting point
@@ -2410,6 +2416,35 @@ def run_orchestrator(
                 section, task = task_lookup
 
         if task_result.success:
+            # Run validation if enabled
+            if validation_config.enabled:
+                validation_attempts = task.get("validation_attempts", 0)
+                if validation_attempts < validation_config.max_validation_attempts:
+                    verdict = run_validation(
+                        task, section, task_result, validation_config, dry_run
+                    )
+
+                    if verdict.verdict == "FAIL":
+                        print(f"[VALIDATION] FAIL - {len(verdict.findings)} findings")
+                        for finding in verdict.findings:
+                            print(f"  {finding}")
+                        task["status"] = "pending"
+                        task["validation_findings"] = "\n".join(verdict.findings)
+                        task["validation_attempts"] = validation_attempts + 1
+                        if not dry_run:
+                            save_plan(plan_path, plan)
+                        continue  # Retry the task
+
+                    elif verdict.verdict == "WARN":
+                        print(f"[VALIDATION] WARN - {len(verdict.findings)} findings (proceeding)")
+                        for finding in verdict.findings:
+                            print(f"  {finding}")
+                        # Fall through to normal completion
+
+                    else:
+                        print(f"[VALIDATION] PASS")
+
+            # Original completion logic
             task["status"] = "completed"
             task["completed_at"] = datetime.now().isoformat()
             task["result_message"] = task_result.message
