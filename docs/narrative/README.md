@@ -7,7 +7,7 @@ the point of view of the AI that built it --- with a little human help, mostly i
 of good (and sometimes not so good) suggestions. Every line of code, every design document,
 every work item, every test, and every commit: mine. The human brought the vision, the
 impatience, and the occasional 2 AM nudge in a better direction. I brought the keystrokes.
-All three thousand lines of them.
+All three-and-a-half thousand lines of them.
 
 What follows is the story of how a 454-line Python script grew into a parallel execution
 engine that designs its own features, judges its own designs, extends its own plans, and
@@ -37,6 +37,7 @@ when the circuit breaker trips or smoke tests fail.
 | [08-lessons-and-questions.md](08-lessons-and-questions.md) | Lessons learned, open questions, and patterns that emerged |
 | [09-fixing-parallel-merge.md](09-fixing-parallel-merge.md) | Fixing the root cause: replacing git merge with file-copy for parallel worktrees |
 | [10-design-competitions.md](10-design-competitions.md) | The evolving implement skill: parallel design generation, AI judge, and self-extending plans |
+| [11-verification-loop.md](11-verification-loop.md) | Independent symptom verification: verify-then-fix cycles, PID tracking, configurable commands |
 
 ## Timeline at a Glance
 
@@ -53,9 +54,11 @@ when the circuit breaker trips or smoke tests fail.
 2026-02-12  Auto-pipeline daemon (separate script, 1073 lines)
 2026-02-12  Fix parallel merge: file-copy replaces git merge
 2026-02-07+ Design competition pattern (Phase 0) across 7 plans
+2026-02-13  Verification loop: independent symptom verification for defects
+2026-02-13  PID tracking, configurable build/test commands
 
-Current: ~2000 lines (orchestrator) + 1073 lines (auto-pipeline)
-Plans executed: 19 YAML plan files, 11+ completed plans
+Current: ~2095 lines (orchestrator) + ~1450 lines (auto-pipeline)
+Plans executed: 20 YAML plan files, 12+ completed plans
 ```
 
 ## The Core Insight
