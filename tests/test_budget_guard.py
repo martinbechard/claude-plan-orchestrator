@@ -1,7 +1,8 @@
 # tests/test_budget_guard.py
-# Unit tests for BudgetConfig dataclass.
+# Unit tests for BudgetConfig, BudgetGuard, and parse_budget_config.
 # Design ref: docs/plans/2026-02-14-07-quota-aware-execution-design.md
 
+import argparse
 import importlib.util
 import math
 
@@ -17,6 +18,7 @@ BudgetConfig = mod.BudgetConfig
 BudgetGuard = mod.BudgetGuard
 PlanUsageTracker = mod.PlanUsageTracker
 TaskUsage = mod.TaskUsage
+parse_budget_config = mod.parse_budget_config
 
 
 # --- BudgetConfig dataclass tests ---
@@ -155,3 +157,78 @@ def test_guard_format_status_with_ceiling():
     status = guard.format_status()
     assert "$30" in status
     assert "$100" in status
+
+
+# --- parse_budget_config tests ---
+
+
+def _mock_args(
+    max_budget_pct: float | None = None,
+    quota_ceiling: float | None = None,
+    reserved_budget: float | None = None,
+) -> argparse.Namespace:
+    """Helper: build mock CLI args namespace for parse_budget_config."""
+    return argparse.Namespace(
+        max_budget_pct=max_budget_pct,
+        quota_ceiling=quota_ceiling,
+        reserved_budget=reserved_budget,
+    )
+
+
+def test_parse_budget_config_defaults():
+    """Empty plan + all-None args should produce default BudgetConfig."""
+    cfg = parse_budget_config({}, _mock_args())
+    assert cfg.max_quota_percent == 100.0
+    assert cfg.quota_ceiling_usd == 0.0
+    assert cfg.reserved_budget_usd == 0.0
+    assert cfg.is_enabled is False
+
+
+def test_parse_budget_config_from_plan_yaml():
+    """Budget values from plan YAML meta.budget block are applied."""
+    plan = {
+        "meta": {
+            "budget": {
+                "max_quota_percent": 80,
+                "quota_ceiling_usd": 50.0,
+            }
+        }
+    }
+    cfg = parse_budget_config(plan, _mock_args())
+    assert cfg.max_quota_percent == 80
+    assert cfg.quota_ceiling_usd == 50.0
+    assert cfg.reserved_budget_usd == 0.0
+
+
+def test_parse_budget_config_cli_overrides_yaml():
+    """CLI flags take precedence over plan YAML values."""
+    plan = {
+        "meta": {
+            "budget": {
+                "max_quota_percent": 80,
+                "quota_ceiling_usd": 50.0,
+            }
+        }
+    }
+    cfg = parse_budget_config(
+        plan, _mock_args(max_budget_pct=75, quota_ceiling=25.0)
+    )
+    assert cfg.max_quota_percent == 75
+    assert cfg.quota_ceiling_usd == 25.0
+
+
+def test_parse_budget_config_partial_cli_override():
+    """Only non-None CLI args override; others come from YAML."""
+    plan = {
+        "meta": {
+            "budget": {
+                "max_quota_percent": 80,
+                "quota_ceiling_usd": 50.0,
+                "reserved_budget_usd": 5.0,
+            }
+        }
+    }
+    cfg = parse_budget_config(plan, _mock_args(quota_ceiling=30.0))
+    assert cfg.quota_ceiling_usd == 30.0
+    assert cfg.max_quota_percent == 80
+    assert cfg.reserved_budget_usd == 5.0
