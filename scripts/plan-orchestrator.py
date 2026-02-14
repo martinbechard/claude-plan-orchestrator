@@ -314,6 +314,31 @@ class ValidationVerdict:
     raw_output: str = ""
 
 
+def parse_validation_config(plan: dict) -> ValidationConfig:
+    """Parse the optional meta.validation block from the plan YAML.
+
+    Extracts validation configuration from plan['meta']['validation'].
+    If the validation block is missing, empty, or not a dict, returns
+    a ValidationConfig with defaults (enabled=False).
+
+    Args:
+        plan: The parsed plan dictionary containing an optional meta.validation block.
+
+    Returns:
+        A ValidationConfig populated from the plan meta, or defaults if absent.
+    """
+    val_dict = plan.get("meta", {}).get("validation", {})
+    if not isinstance(val_dict, dict) or not val_dict:
+        return ValidationConfig()
+
+    return ValidationConfig(
+        enabled=val_dict.get("enabled", False),
+        run_after=val_dict.get("run_after", ["coder"]),
+        validators=val_dict.get("validators", ["validator"]),
+        max_validation_attempts=val_dict.get("max_validation_attempts", 1),
+    )
+
+
 class CircuitBreaker:
     """Circuit breaker to prevent runaway failures when LLM is unavailable."""
 
