@@ -2409,7 +2409,8 @@ def run_orchestrator(
     single_task: bool = False,
     verbose: bool = False,
     parallel: bool = False,
-    skip_smoke: bool = False
+    skip_smoke: bool = False,
+    cli_args: Optional[argparse.Namespace] = None
 ) -> None:
     """Main orchestrator loop."""
     global VERBOSE
@@ -2971,6 +2972,27 @@ def main():
         action="store_true",
         help="Skip post-plan smoke tests (not recommended)"
     )
+    parser.add_argument(
+        "--max-budget-pct",
+        type=float,
+        default=None,
+        metavar="N",
+        help="Maximum percentage of quota ceiling to use (default: 100, unlimited)"
+    )
+    parser.add_argument(
+        "--quota-ceiling",
+        type=float,
+        default=None,
+        metavar="N.NN",
+        help="Weekly quota ceiling in USD (default: 0 = no budget enforcement)"
+    )
+    parser.add_argument(
+        "--reserved-budget",
+        type=float,
+        default=None,
+        metavar="N.NN",
+        help="USD amount to reserve for interactive use (default: 0)"
+    )
 
     args = parser.parse_args()
 
@@ -2985,7 +3007,8 @@ def main():
         single_task=args.single_task,
         verbose=args.verbose,
         parallel=args.parallel,
-        skip_smoke=args.skip_smoke
+        skip_smoke=args.skip_smoke,
+        cli_args=args
     )
 
 
