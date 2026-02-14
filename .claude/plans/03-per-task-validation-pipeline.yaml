@@ -397,7 +397,7 @@ sections:
       Validators run sequentially to avoid conflicting build/test state.
 - id: phase-5
   name: Phase 5 - Configuration and Documentation
-  status: in_progress
+  status: completed
   tasks:
   - id: '5.1'
     name: Update orchestrator-config.yaml with validation fields
@@ -441,7 +441,7 @@ sections:
   - id: '5.3'
     name: Update PLAN_CREATION_PROMPT_TEMPLATE with validation guidance
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '5.2'
     description: "In scripts/auto-pipeline.py, update PLAN_CREATION_PROMPT_TEMPLATE\
@@ -459,6 +459,13 @@ sections:
       \ use the issue-verifier validator instead of or in addition to the default\
       \ validator. This validator reads the original defect file and checks whether\
       \ reported symptoms are resolved.\n\nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
+    attempts: 1
+    last_attempt: '2026-02-13T23:41:39.722303'
+    completed_at: '2026-02-13T23:42:42.816451'
+    result_message: Added Validation (Optional) section to PLAN_CREATION_PROMPT_TEMPLATE
+      in auto-pipeline.py. Inserted between Agent Selection and Important sections
+      with meta configuration example, PASS/WARN/FAIL verdict descriptions, and issue-verifier
+      guidance for defect fixes.
 - id: phase-6
   name: Phase 6 - Verification
   status: pending
