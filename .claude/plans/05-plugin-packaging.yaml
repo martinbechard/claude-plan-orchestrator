@@ -137,7 +137,7 @@ sections:
       b209dd2.
   - id: '3.2'
     name: Create migration guide for manual-copy users
-    status: pending
+    status: completed
     description: "Create docs/migration-from-manual-copy.md documenting how to migrate\n\
       from the manual file-copy installation to the plugin-based installation.\n\n\
       Reference: docs/plans/2026-02-13-05-plugin-packaging-design.md\n\nInclude sections\
@@ -154,6 +154,13 @@ sections:
       \ to go back to manual-copy if needed\n\nFiles: docs/migration-from-manual-copy.md\n"
     depends_on:
     - '1.1'
+    attempts: 1
+    last_attempt: '2026-02-13T23:13:12.872221'
+    completed_at: '2026-02-13T23:14:42.383946'
+    result_message: 'Created docs/migration-from-manual-copy.md with all 6 required
+      sections: overview, prerequisites, migration steps (backup, remove orchestrator
+      files, install plugin, verify, test), what stays the same, accessing scripts
+      via plugin path, and rollback procedure. Committed as 4176d63.'
   - id: '3.3'
     name: Update README with plugin installation instructions
     status: pending
