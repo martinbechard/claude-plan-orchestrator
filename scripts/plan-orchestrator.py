@@ -1870,8 +1870,11 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
         prompt
     ]
     # In verbose mode, use stream-json for real-time tool/text streaming
+    # In non-verbose mode, use json to capture structured output with usage data
     if VERBOSE:
         cmd.extend(["--output-format", "stream-json", "--verbose"])
+    else:
+        cmd.extend(["--output-format", "json"])
     verbose_log(f"Command: {' '.join(CLAUDE_CMD)} --dangerously-skip-permissions --print <prompt>", "EXEC")
     verbose_log(f"Prompt length: {len(prompt)} chars", "EXEC")
     verbose_log(f"Working directory: {os.getcwd()}", "EXEC")
@@ -1898,9 +1901,11 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
             env=build_child_env()
         )
 
+        # Shared dict to capture result event data from CLI output
+        result_capture: dict = {}
+
         # Start threads to stream/collect stdout and stderr
         if VERBOSE:
-            result_capture: dict = {}
             stdout_thread = threading.Thread(
                 target=stream_json_output,
                 args=(process.stdout, stdout_collector, result_capture)
@@ -1987,6 +1992,18 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
 
         print(f"[Log saved to: {log_file}]")
 
+        # Extract usage data from CLI output
+        # Verbose mode: result_capture already populated by stream_json_output thread
+        # Non-verbose mode: parse entire stdout as JSON
+        if not VERBOSE:
+            try:
+                result_json = json.loads(stdout_collector.get_output())
+                result_capture.update(result_json)
+            except (json.JSONDecodeError, ValueError):
+                pass  # Non-JSON output, no usage data available
+
+        task_usage = parse_task_usage(result_capture) if result_capture else None
+
         if VERBOSE:
             verbose_log(f"Duration: {duration:.1f}s", "EXEC")
 
@@ -2001,14 +2018,16 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
                     message="API rate limit reached",
                     duration_seconds=duration,
                     rate_limited=True,
-                    rate_limit_reset_time=reset_time
+                    rate_limit_reset_time=reset_time,
+                    usage=task_usage
                 )
 
             error_msg = stderr_collector.get_output()[:500] if stderr_collector.bytes_received > 0 else "Unknown error"
             return TaskResult(
                 success=False,
                 message=f"Claude exited with code {returncode}: {error_msg}",
-                duration_seconds=duration
+                duration_seconds=duration,
+                usage=task_usage
             )
 
         # Check the status file for task result
@@ -2028,7 +2047,8 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
                 success=True,
                 message=status.get("message", "Task completed"),
                 duration_seconds=duration,
-                plan_modified=plan_modified
+                plan_modified=plan_modified,
+                usage=task_usage
             )
         elif status and status.get("status") == "failed":
             verbose_log("Task status: FAILED", "STATUS")
@@ -2036,7 +2056,8 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
                 success=False,
                 message=status.get("message", "Task failed"),
                 duration_seconds=duration,
-                plan_modified=plan_modified
+                plan_modified=plan_modified,
+                usage=task_usage
             )
         else:
             verbose_log("Task status: UNKNOWN (no status file)", "STATUS")
@@ -2044,7 +2065,8 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
             return TaskResult(
                 success=False,
                 message="No status file written by Claude",
-                duration_seconds=duration
+                duration_seconds=duration,
+                usage=task_usage
             )
 
     except subprocess.TimeoutExpired:
@@ -2052,14 +2074,16 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
         return TaskResult(
             success=False,
             message=f"Task timed out after {CLAUDE_TIMEOUT_SECONDS} seconds",
-            duration_seconds=CLAUDE_TIMEOUT_SECONDS
+            duration_seconds=CLAUDE_TIMEOUT_SECONDS,
+            usage=None
         )
     except Exception as e:
         verbose_log(f"Exception: {type(e).__name__}: {e}", "ERROR")
         return TaskResult(
             success=False,
             message=f"Error running Claude: {str(e)}",
-            duration_seconds=time.time() - start_time
+            duration_seconds=time.time() - start_time,
+            usage=None
         )
 
 
