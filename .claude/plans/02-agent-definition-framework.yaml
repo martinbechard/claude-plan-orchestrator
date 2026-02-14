@@ -1,114 +1,76 @@
 meta:
   name: Agent Definition Framework
-  description: >
-    Create the foundational infrastructure for specialized agents in the orchestrator.
-    Tasks can specify which agent type should execute them via an optional "agent"
-    field. Each agent is a markdown file with YAML frontmatter containing role-specific
-    instructions, tool restrictions, and checklists. The orchestrator reads the agent
-    file and prepends its content to the task prompt.
+  description: 'Create the foundational infrastructure for specialized agents in the
+    orchestrator. Tasks can specify which agent type should execute them via an optional
+    "agent" field. Each agent is a markdown file with YAML frontmatter containing
+    role-specific instructions, tool restrictions, and checklists. The orchestrator
+    reads the agent file and prepends its content to the task prompt.
+
+    '
   plan_doc: docs/plans/2026-02-13-02-agent-definition-framework-design.md
   created: '2026-02-13'
   max_attempts_default: 3
-
 sections:
 - id: phase-1
   name: Phase 1 - Agent Definition Files
-  status: pending
+  status: in_progress
   tasks:
   - id: '1.1'
     name: Create agents directory and coder agent definition
-    status: pending
-    description: |
-      Create the .claude/agents/ directory and the coder.md agent definition file.
-
-      File to create: .claude/agents/coder.md
-
-      The file uses markdown with YAML frontmatter (--- delimited). Structure:
-
-      Frontmatter fields:
-        name: coder
-        description: "Implementation specialist for coding tasks. Follows CODING-RULES.md,
-          validates against design docs, and commits frequently."
-        tools: [Read, Edit, Write, Bash, Grep, Glob]
-        model: sonnet
-
-      Body content should include these sections:
-
-      1. Role: You are an implementation specialist. Your job is to write high-quality
-         code that follows the project's coding standards and design specifications.
-
-      2. Before Writing Code checklist:
-         - Read CODING-RULES.md
-         - Read the design document referenced in the task
-         - Read existing code in the files you will modify
-
-      3. Coding Standards Summary (key rules from CODING-RULES.md):
-         - Never use any type; create proper typed interfaces
-         - Use manifest constants, not literal values
-         - Files > 200 lines should be split into modules
-         - Follow existing patterns in the codebase
-         - Commit after each meaningful unit of work
-         - File headers must include path, purpose, and design doc reference
-
-      4. Anti-Patterns to Avoid:
-         - No over-engineering beyond what was requested
-         - No fake fallback data when real data is unavailable
-         - No deferred integration; wire components in immediately
-         - No removal of existing functionality without explicit permission
-         - No hardcoded lists that duplicate a registry or source of truth
-         - No TODO/FIXME comments; use the YAML plan to track work
-
-      5. Output Protocol:
-         Write task-status.json when done with task_id, status, message, timestamp,
-         plan_modified fields.
-
-      Reference: docs/plans/2026-02-13-02-agent-definition-framework-design.md
-
+    status: completed
+    description: "Create the .claude/agents/ directory and the coder.md agent definition\
+      \ file.\n\nFile to create: .claude/agents/coder.md\n\nThe file uses markdown\
+      \ with YAML frontmatter (--- delimited). Structure:\n\nFrontmatter fields:\n\
+      \  name: coder\n  description: \"Implementation specialist for coding tasks.\
+      \ Follows CODING-RULES.md,\n    validates against design docs, and commits frequently.\"\
+      \n  tools: [Read, Edit, Write, Bash, Grep, Glob]\n  model: sonnet\n\nBody content\
+      \ should include these sections:\n\n1. Role: You are an implementation specialist.\
+      \ Your job is to write high-quality\n   code that follows the project's coding\
+      \ standards and design specifications.\n\n2. Before Writing Code checklist:\n\
+      \   - Read CODING-RULES.md\n   - Read the design document referenced in the\
+      \ task\n   - Read existing code in the files you will modify\n\n3. Coding Standards\
+      \ Summary (key rules from CODING-RULES.md):\n   - Never use any type; create\
+      \ proper typed interfaces\n   - Use manifest constants, not literal values\n\
+      \   - Files > 200 lines should be split into modules\n   - Follow existing patterns\
+      \ in the codebase\n   - Commit after each meaningful unit of work\n   - File\
+      \ headers must include path, purpose, and design doc reference\n\n4. Anti-Patterns\
+      \ to Avoid:\n   - No over-engineering beyond what was requested\n   - No fake\
+      \ fallback data when real data is unavailable\n   - No deferred integration;\
+      \ wire components in immediately\n   - No removal of existing functionality\
+      \ without explicit permission\n   - No hardcoded lists that duplicate a registry\
+      \ or source of truth\n   - No TODO/FIXME comments; use the YAML plan to track\
+      \ work\n\n5. Output Protocol:\n   Write task-status.json when done with task_id,\
+      \ status, message, timestamp,\n   plan_modified fields.\n\nReference: docs/plans/2026-02-13-02-agent-definition-framework-design.md\n"
+    attempts: 1
+    last_attempt: '2026-02-13T22:15:27.965333'
+    completed_at: '2026-02-13T22:17:40.904791'
+    result_message: Created .claude/agents/ directory and coder.md agent definition
+      with YAML frontmatter (name, description, tools, model) and markdown body containing
+      Role, Before Writing Code, Coding Standards Summary, Anti-Patterns to Avoid,
+      and Output Protocol sections.
   - id: '1.2'
     name: Create code-reviewer agent definition
     status: pending
-    description: |
-      Create the code-reviewer.md agent definition file.
-
-      File to create: .claude/agents/code-reviewer.md
-
-      Frontmatter fields:
-        name: code-reviewer
-        description: "Read-only coding standards compliance reviewer. Checks naming,
-          types, file size, coupling, error handling. Produces findings list with
-          severity ratings. Does not modify code."
-        tools: [Read, Grep, Glob]
-        model: sonnet
-
-      Body content should include these sections:
-
-      1. Role: You are a code quality reviewer. Your job is to independently review
-         code changes for compliance with CODING-RULES.md. You are READ-ONLY and
-         must NOT modify any code files.
-
-      2. Review Checklist:
-         - File headers: path, purpose, design doc reference present
-         - Naming conventions: PascalCase classes, camelCase functions, ALL_CAPS constants
-         - Type safety: no any types, proper interfaces for data shapes
-         - File organization: files under 200 lines, imports organized
-         - Coupling: single responsibility, depend on interfaces not implementations
-         - Error handling: no empty catch blocks, informative error messages
-         - Constants: no literal magic numbers or strings
-         - AI anti-patterns: no over-engineering, no removed functionality, no fake data
-
-      3. Output Format:
-         Produce a structured findings report:
-
-         VERDICT: PASS | WARN | FAIL
-
-         FINDINGS:
-         - [PASS|WARN|FAIL] Description with file:line references
-
-         EVIDENCE:
-         - Specific code references supporting each finding
-
-      Reference: docs/plans/2026-02-13-02-agent-definition-framework-design.md
-
+    description: "Create the code-reviewer.md agent definition file.\n\nFile to create:\
+      \ .claude/agents/code-reviewer.md\n\nFrontmatter fields:\n  name: code-reviewer\n\
+      \  description: \"Read-only coding standards compliance reviewer. Checks naming,\n\
+      \    types, file size, coupling, error handling. Produces findings list with\n\
+      \    severity ratings. Does not modify code.\"\n  tools: [Read, Grep, Glob]\n\
+      \  model: sonnet\n\nBody content should include these sections:\n\n1. Role:\
+      \ You are a code quality reviewer. Your job is to independently review\n   code\
+      \ changes for compliance with CODING-RULES.md. You are READ-ONLY and\n   must\
+      \ NOT modify any code files.\n\n2. Review Checklist:\n   - File headers: path,\
+      \ purpose, design doc reference present\n   - Naming conventions: PascalCase\
+      \ classes, camelCase functions, ALL_CAPS constants\n   - Type safety: no any\
+      \ types, proper interfaces for data shapes\n   - File organization: files under\
+      \ 200 lines, imports organized\n   - Coupling: single responsibility, depend\
+      \ on interfaces not implementations\n   - Error handling: no empty catch blocks,\
+      \ informative error messages\n   - Constants: no literal magic numbers or strings\n\
+      \   - AI anti-patterns: no over-engineering, no removed functionality, no fake\
+      \ data\n\n3. Output Format:\n   Produce a structured findings report:\n\n  \
+      \ VERDICT: PASS | WARN | FAIL\n\n   FINDINGS:\n   - [PASS|WARN|FAIL] Description\
+      \ with file:line references\n\n   EVIDENCE:\n   - Specific code references supporting\
+      \ each finding\n\nReference: docs/plans/2026-02-13-02-agent-definition-framework-design.md\n"
 - id: phase-2
   name: Phase 2 - Orchestrator Core Changes
   status: pending
@@ -116,120 +78,74 @@ sections:
   - id: '2.1'
     name: Add agents_dir config constant and loading
     status: pending
-    description: |
-      In scripts/plan-orchestrator.py, add the agents directory configuration.
-
-      Near line 34 (alongside other DEFAULT_ constants), add:
-
-          DEFAULT_AGENTS_DIR = ".claude/agents/"
-
-      Near line 65 (after DEV_SERVER_COMMAND loading), add:
-
-          AGENTS_DIR = _config.get("agents_dir", DEFAULT_AGENTS_DIR)
-
-      This follows the exact same pattern used for BUILD_COMMAND, TEST_COMMAND, etc.
-
-      Reference: scripts/plan-orchestrator.py lines 30-65 for the existing pattern.
+    description: "In scripts/plan-orchestrator.py, add the agents directory configuration.\n\
+      \nNear line 34 (alongside other DEFAULT_ constants), add:\n\n    DEFAULT_AGENTS_DIR\
+      \ = \".claude/agents/\"\n\nNear line 65 (after DEV_SERVER_COMMAND loading),\
+      \ add:\n\n    AGENTS_DIR = _config.get(\"agents_dir\", DEFAULT_AGENTS_DIR)\n\
+      \nThis follows the exact same pattern used for BUILD_COMMAND, TEST_COMMAND,\
+      \ etc.\n\nReference: scripts/plan-orchestrator.py lines 30-65 for the existing\
+      \ pattern.\n"
     depends_on:
     - '1.2'
-
   - id: '2.2'
     name: Add agent file loading and frontmatter parsing functions
     status: pending
-    description: |
-      In scripts/plan-orchestrator.py, add two new functions after the
-      load_orchestrator_config() function (after line ~58).
-
-      Function 1: parse_agent_frontmatter(content: str) -> tuple[dict, str]
-        - Takes the full file content as a string
-        - Splits on "---" delimiters to extract YAML frontmatter
-        - Returns a tuple of (frontmatter_dict, body_string)
-        - If no valid frontmatter found, returns ({}, content)
-        - Uses yaml.safe_load() for the frontmatter portion
-
-      Function 2: load_agent_definition(agent_name: str) -> Optional[dict]
-        - Takes an agent name (e.g., "coder")
-        - Constructs the path: os.path.join(AGENTS_DIR, f"{agent_name}.md")
-        - If the file does not exist, prints a warning and returns None
-        - Reads the file content
-        - Calls parse_agent_frontmatter() to extract metadata and body
-        - Returns a dict with keys: name, description, tools, model, content (full file),
-          body (markdown body without frontmatter)
-        - On any error, prints a warning and returns None
-
-      Both functions should have docstrings explaining their purpose per CODING-RULES.md
-      rule 7 (Comments and Documentation).
-
-      Reference: scripts/plan-orchestrator.py lines 48-58 for placement context.
+    description: "In scripts/plan-orchestrator.py, add two new functions after the\n\
+      load_orchestrator_config() function (after line ~58).\n\nFunction 1: parse_agent_frontmatter(content:\
+      \ str) -> tuple[dict, str]\n  - Takes the full file content as a string\n  -\
+      \ Splits on \"---\" delimiters to extract YAML frontmatter\n  - Returns a tuple\
+      \ of (frontmatter_dict, body_string)\n  - If no valid frontmatter found, returns\
+      \ ({}, content)\n  - Uses yaml.safe_load() for the frontmatter portion\n\nFunction\
+      \ 2: load_agent_definition(agent_name: str) -> Optional[dict]\n  - Takes an\
+      \ agent name (e.g., \"coder\")\n  - Constructs the path: os.path.join(AGENTS_DIR,\
+      \ f\"{agent_name}.md\")\n  - If the file does not exist, prints a warning and\
+      \ returns None\n  - Reads the file content\n  - Calls parse_agent_frontmatter()\
+      \ to extract metadata and body\n  - Returns a dict with keys: name, description,\
+      \ tools, model, content (full file),\n    body (markdown body without frontmatter)\n\
+      \  - On any error, prints a warning and returns None\n\nBoth functions should\
+      \ have docstrings explaining their purpose per CODING-RULES.md\nrule 7 (Comments\
+      \ and Documentation).\n\nReference: scripts/plan-orchestrator.py lines 48-58\
+      \ for placement context.\n"
     depends_on:
     - '2.1'
-
   - id: '2.3'
     name: Add agent inference function
     status: pending
-    description: |
-      In scripts/plan-orchestrator.py, add a function after load_agent_definition():
-
-      Function: infer_agent_for_task(task: dict) -> Optional[str]
-        - Takes a task dict from the YAML plan
-        - If AGENTS_DIR does not exist as a directory, return None
-        - Reads the task description (task.get("description", ""))
-        - Converts to lowercase for keyword matching
-        - If description contains any of: "verify", "review", "check", "validate",
-          "regression", "compliance" -> return "code-reviewer"
-        - Otherwise -> return "coder"
-
-      Define the keyword lists as module-level constants:
-
-          REVIEWER_KEYWORDS = ["verify", "review", "check", "validate", "regression",
-                               "compliance"]
-
-      Add a docstring explaining the inference rules and that it returns None when
-      no agents directory exists (backward compatible).
-
-      Reference: docs/plans/2026-02-13-02-agent-definition-framework-design.md
+    description: "In scripts/plan-orchestrator.py, add a function after load_agent_definition():\n\
+      \nFunction: infer_agent_for_task(task: dict) -> Optional[str]\n  - Takes a task\
+      \ dict from the YAML plan\n  - If AGENTS_DIR does not exist as a directory,\
+      \ return None\n  - Reads the task description (task.get(\"description\", \"\"\
+      ))\n  - Converts to lowercase for keyword matching\n  - If description contains\
+      \ any of: \"verify\", \"review\", \"check\", \"validate\",\n    \"regression\"\
+      , \"compliance\" -> return \"code-reviewer\"\n  - Otherwise -> return \"coder\"\
+      \n\nDefine the keyword lists as module-level constants:\n\n    REVIEWER_KEYWORDS\
+      \ = [\"verify\", \"review\", \"check\", \"validate\", \"regression\",\n    \
+      \                     \"compliance\"]\n\nAdd a docstring explaining the inference\
+      \ rules and that it returns None when\nno agents directory exists (backward\
+      \ compatible).\n\nReference: docs/plans/2026-02-13-02-agent-definition-framework-design.md\n"
     depends_on:
     - '2.2'
-
   - id: '2.4'
     name: Modify build_claude_prompt to inject agent content
     status: pending
-    description: |
-      In scripts/plan-orchestrator.py, modify the build_claude_prompt() function
-      (starts at line 1085) to inject agent content.
-
-      Changes:
-
-      1. At the start of the function (after plan_doc extraction at line 1105), add
-         agent resolution logic:
-
-         agent_name = task.get("agent")
-         if agent_name is None:
-             agent_name = infer_agent_for_task(task)
-
-         agent_content = ""
-         if agent_name:
-             agent_def = load_agent_definition(agent_name)
-             if agent_def:
-                 agent_content = agent_def["content"] + "\n\n---\n\n"
-                 verbose_log(f"Using agent '{agent_name}' for task {task['id']}", "AGENT")
-
-      2. In the return f-string (line 1150), prepend agent_content before the
-         subagent_header:
-
-         return f"""{agent_content}{subagent_header}Run task {task['id']}...
-
-      This means the agent definition appears first in the prompt, followed by
-      any subagent context, followed by the task details. The agent acts as a
-      "system prompt" that establishes the role before the specific task instructions.
-
-      IMPORTANT: Do NOT change any other part of the prompt template. Only add the
-      agent_content prefix.
-
-      Reference: scripts/plan-orchestrator.py lines 1085-1188
+    description: "In scripts/plan-orchestrator.py, modify the build_claude_prompt()\
+      \ function\n(starts at line 1085) to inject agent content.\n\nChanges:\n\n1.\
+      \ At the start of the function (after plan_doc extraction at line 1105), add\n\
+      \   agent resolution logic:\n\n   agent_name = task.get(\"agent\")\n   if agent_name\
+      \ is None:\n       agent_name = infer_agent_for_task(task)\n\n   agent_content\
+      \ = \"\"\n   if agent_name:\n       agent_def = load_agent_definition(agent_name)\n\
+      \       if agent_def:\n           agent_content = agent_def[\"content\"] + \"\
+      \\n\\n---\\n\\n\"\n           verbose_log(f\"Using agent '{agent_name}' for\
+      \ task {task['id']}\", \"AGENT\")\n\n2. In the return f-string (line 1150),\
+      \ prepend agent_content before the\n   subagent_header:\n\n   return f\"\"\"\
+      {agent_content}{subagent_header}Run task {task['id']}...\n\nThis means the agent\
+      \ definition appears first in the prompt, followed by\nany subagent context,\
+      \ followed by the task details. The agent acts as a\n\"system prompt\" that\
+      \ establishes the role before the specific task instructions.\n\nIMPORTANT:\
+      \ Do NOT change any other part of the prompt template. Only add the\nagent_content\
+      \ prefix.\n\nReference: scripts/plan-orchestrator.py lines 1085-1188\n"
     depends_on:
     - '2.3'
-
 - id: phase-3
   name: Phase 3 - Plan Creation and Config Integration
   status: pending
@@ -237,86 +153,48 @@ sections:
   - id: '3.1'
     name: Add agents_dir config to auto-pipeline.py
     status: pending
-    description: |
-      In scripts/auto-pipeline.py, add the agents directory configuration.
-
-      Near line 46 (after DEFAULT_DEV_SERVER_COMMAND), add:
-
-          DEFAULT_AGENTS_DIR = ".claude/agents/"
-
-      Near line 78 (after DEV_SERVER_COMMAND loading), add:
-
-          AGENTS_DIR = _config.get("agents_dir", DEFAULT_AGENTS_DIR)
-
-      This mirrors the same pattern in plan-orchestrator.py.
-
-      Reference: scripts/auto-pipeline.py lines 40-78
+    description: "In scripts/auto-pipeline.py, add the agents directory configuration.\n\
+      \nNear line 46 (after DEFAULT_DEV_SERVER_COMMAND), add:\n\n    DEFAULT_AGENTS_DIR\
+      \ = \".claude/agents/\"\n\nNear line 78 (after DEV_SERVER_COMMAND loading),\
+      \ add:\n\n    AGENTS_DIR = _config.get(\"agents_dir\", DEFAULT_AGENTS_DIR)\n\
+      \nThis mirrors the same pattern in plan-orchestrator.py.\n\nReference: scripts/auto-pipeline.py\
+      \ lines 40-78\n"
     depends_on:
     - '2.4'
-
   - id: '3.2'
     name: Update PLAN_CREATION_PROMPT_TEMPLATE with agent guidance
     status: pending
-    description: |
-      In scripts/auto-pipeline.py, update the PLAN_CREATION_PROMPT_TEMPLATE
-      (starts at line 641) to inform the plan creator about agents.
-
-      Add a new section before the "## Important" section (line ~675). Insert
-      this text block:
-
-      ## Agent Selection
-
-      Tasks can specify which agent should execute them via the optional "agent" field.
-      Available agents are in {agents_dir}:
-
-      - **coder**: Implementation specialist. Use for coding, implementation, and
-        modification tasks. This is the default if no agent is specified.
-      - **code-reviewer**: Read-only reviewer. Use for verification, review, and
-        compliance-checking tasks.
-
-      Example:
-        - id: '2.1'
-          name: Implement the feature
-          agent: coder
-          status: pending
-          description: ...
-
-        - id: '3.1'
-          name: Review code quality
-          agent: code-reviewer
-          status: pending
-          description: ...
-
-      If you do not set the agent field, the orchestrator will infer it from the
-      task description (verification tasks get code-reviewer, everything else gets coder).
-
-      IMPORTANT: The template uses Python .format() placeholders. The new {agents_dir}
-      placeholder must be added to the .format() call where PLAN_CREATION_PROMPT_TEMPLATE
-      is used. Find the .format() call (search for "PLAN_CREATION_PROMPT_TEMPLATE.format")
-      and add agents_dir=AGENTS_DIR to the keyword arguments.
-
-      Reference: scripts/auto-pipeline.py lines 641-683
+    description: "In scripts/auto-pipeline.py, update the PLAN_CREATION_PROMPT_TEMPLATE\n\
+      (starts at line 641) to inform the plan creator about agents.\n\nAdd a new section\
+      \ before the \"## Important\" section (line ~675). Insert\nthis text block:\n\
+      \n## Agent Selection\n\nTasks can specify which agent should execute them via\
+      \ the optional \"agent\" field.\nAvailable agents are in {agents_dir}:\n\n-\
+      \ **coder**: Implementation specialist. Use for coding, implementation, and\n\
+      \  modification tasks. This is the default if no agent is specified.\n- **code-reviewer**:\
+      \ Read-only reviewer. Use for verification, review, and\n  compliance-checking\
+      \ tasks.\n\nExample:\n  - id: '2.1'\n    name: Implement the feature\n    agent:\
+      \ coder\n    status: pending\n    description: ...\n\n  - id: '3.1'\n    name:\
+      \ Review code quality\n    agent: code-reviewer\n    status: pending\n    description:\
+      \ ...\n\nIf you do not set the agent field, the orchestrator will infer it from\
+      \ the\ntask description (verification tasks get code-reviewer, everything else\
+      \ gets coder).\n\nIMPORTANT: The template uses Python .format() placeholders.\
+      \ The new {agents_dir}\nplaceholder must be added to the .format() call where\
+      \ PLAN_CREATION_PROMPT_TEMPLATE\nis used. Find the .format() call (search for\
+      \ \"PLAN_CREATION_PROMPT_TEMPLATE.format\")\nand add agents_dir=AGENTS_DIR to\
+      \ the keyword arguments.\n\nReference: scripts/auto-pipeline.py lines 641-683\n"
     depends_on:
     - '3.1'
-
   - id: '3.3'
     name: Update orchestrator-config.yaml with agents_dir field
     status: pending
-    description: |
-      Update .claude/orchestrator-config.yaml to document the new agents_dir field.
-
-      Add a commented-out entry after the existing dev_server_command entry:
-
-          # Directory containing agent definition markdown files.
-          # Each agent is a .md file with YAML frontmatter (name, description, tools, model).
-          # agents_dir: ".claude/agents/"
-
-      This is commented out because the default matches the expected location.
-
-      Reference: .claude/orchestrator-config.yaml
+    description: "Update .claude/orchestrator-config.yaml to document the new agents_dir\
+      \ field.\n\nAdd a commented-out entry after the existing dev_server_command\
+      \ entry:\n\n    # Directory containing agent definition markdown files.\n  \
+      \  # Each agent is a .md file with YAML frontmatter (name, description, tools,\
+      \ model).\n    # agents_dir: \".claude/agents/\"\n\nThis is commented out because\
+      \ the default matches the expected location.\n\nReference: .claude/orchestrator-config.yaml\n"
     depends_on:
     - '3.2'
-
 - id: phase-4
   name: Phase 4 - Verification
   status: pending
@@ -324,70 +202,37 @@ sections:
   - id: '4.1'
     name: Verify agent loading and prompt injection
     status: pending
-    description: |
-      Run verification checks to confirm the agent framework works correctly.
-
-      1. Verify agent files exist and have valid frontmatter:
-
-         python3 -c "
-         import sys; sys.path.insert(0, '.')
-         sys.path.insert(0, 'scripts')
-         import yaml, os
-
-         for agent in ['coder', 'code-reviewer']:
-             path = f'.claude/agents/{agent}.md'
-             assert os.path.exists(path), f'Missing: {path}'
-             content = open(path).read()
-             parts = content.split('---', 2)
-             assert len(parts) >= 3, f'Invalid frontmatter in {path}'
-             meta = yaml.safe_load(parts[1])
-             assert 'name' in meta, f'Missing name in {path}'
-             assert 'description' in meta, f'Missing description in {path}'
-             print(f'OK: {path} - name={meta[\"name\"]}')
-         print('All agent files valid')
-         "
-
-      2. Verify plan-orchestrator.py loads agents correctly:
-
-         python3 -c "
-         import sys, os
-         os.chdir('$(pwd)')
-         # Quick syntax check
-         exec(compile(open('scripts/plan-orchestrator.py').read(),
-                       'plan-orchestrator.py', 'exec'))
-         " 2>&1 | head -5
-
-      3. Verify orchestrator dry-run still works:
-
-         python scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
-
-      4. Verify agent inference keywords work:
-
-         python3 -c "
-         import sys; sys.path.insert(0, 'scripts')
-         # Test inference logic manually
-         REVIEWER_KEYWORDS = ['verify', 'review', 'check', 'validate', 'regression', 'compliance']
-         def infer(desc):
-             desc_lower = desc.lower()
-             for kw in REVIEWER_KEYWORDS:
-                 if kw in desc_lower:
-                     return 'code-reviewer'
-             return 'coder'
-         assert infer('Verify build passes') == 'code-reviewer'
-         assert infer('Review code quality') == 'code-reviewer'
-         assert infer('Implement the feature') == 'coder'
-         assert infer('Add unit tests') == 'coder'
-         assert infer('Regression test') == 'code-reviewer'
-         assert infer('Check compliance') == 'code-reviewer'
-         print('All inference tests passed')
-         "
-
-      5. Verify no Python syntax errors in both scripts:
-
-         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('plan-orchestrator.py: syntax OK')"
-         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('auto-pipeline.py: syntax OK')"
-
-      If any check fails, fix the issue and re-run all checks.
+    description: "Run verification checks to confirm the agent framework works correctly.\n\
+      \n1. Verify agent files exist and have valid frontmatter:\n\n   python3 -c \"\
+      \n   import sys; sys.path.insert(0, '.')\n   sys.path.insert(0, 'scripts')\n\
+      \   import yaml, os\n\n   for agent in ['coder', 'code-reviewer']:\n       path\
+      \ = f'.claude/agents/{agent}.md'\n       assert os.path.exists(path), f'Missing:\
+      \ {path}'\n       content = open(path).read()\n       parts = content.split('---',\
+      \ 2)\n       assert len(parts) >= 3, f'Invalid frontmatter in {path}'\n    \
+      \   meta = yaml.safe_load(parts[1])\n       assert 'name' in meta, f'Missing\
+      \ name in {path}'\n       assert 'description' in meta, f'Missing description\
+      \ in {path}'\n       print(f'OK: {path} - name={meta[\\\"name\\\"]}')\n   print('All\
+      \ agent files valid')\n   \"\n\n2. Verify plan-orchestrator.py loads agents\
+      \ correctly:\n\n   python3 -c \"\n   import sys, os\n   os.chdir('$(pwd)')\n\
+      \   # Quick syntax check\n   exec(compile(open('scripts/plan-orchestrator.py').read(),\n\
+      \                 'plan-orchestrator.py', 'exec'))\n   \" 2>&1 | head -5\n\n\
+      3. Verify orchestrator dry-run still works:\n\n   python scripts/plan-orchestrator.py\
+      \ --plan .claude/plans/sample-plan.yaml --dry-run\n\n4. Verify agent inference\
+      \ keywords work:\n\n   python3 -c \"\n   import sys; sys.path.insert(0, 'scripts')\n\
+      \   # Test inference logic manually\n   REVIEWER_KEYWORDS = ['verify', 'review',\
+      \ 'check', 'validate', 'regression', 'compliance']\n   def infer(desc):\n  \
+      \     desc_lower = desc.lower()\n       for kw in REVIEWER_KEYWORDS:\n     \
+      \      if kw in desc_lower:\n               return 'code-reviewer'\n       return\
+      \ 'coder'\n   assert infer('Verify build passes') == 'code-reviewer'\n   assert\
+      \ infer('Review code quality') == 'code-reviewer'\n   assert infer('Implement\
+      \ the feature') == 'coder'\n   assert infer('Add unit tests') == 'coder'\n \
+      \  assert infer('Regression test') == 'code-reviewer'\n   assert infer('Check\
+      \ compliance') == 'code-reviewer'\n   print('All inference tests passed')\n\
+      \   \"\n\n5. Verify no Python syntax errors in both scripts:\n\n   python3 -c\
+      \ \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True);\
+      \ print('plan-orchestrator.py: syntax OK')\"\n   python3 -c \"import py_compile;\
+      \ py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('auto-pipeline.py:\
+      \ syntax OK')\"\n\nIf any check fails, fix the issue and re-run all checks.\n"
     depends_on:
     - '3.3'
     max_attempts: 5
