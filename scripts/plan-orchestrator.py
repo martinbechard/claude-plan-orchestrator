@@ -41,6 +41,7 @@ DEFAULT_AGENTS_DIR = ".claude/agents/"
 # Configuration
 DEFAULT_PLAN_PATH = ".claude/plans/pipeline-optimization.yaml"
 STATUS_FILE_PATH = ".claude/plans/task-status.json"
+TASK_LOG_DIR = Path(".claude/plans/logs")
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
 DEFAULT_MAX_ATTEMPTS = 3
 CLAUDE_TIMEOUT_SECONDS = 600  # 10 minutes per task
@@ -442,6 +443,154 @@ def parse_validation_verdict(output: str) -> ValidationVerdict:
     findings = [f"[{severity.upper()}] {description}" for severity, description in finding_matches]
 
     return ValidationVerdict(verdict=verdict, findings=findings, raw_output=output)
+
+
+# Log file section delimiter used to extract stdout from task logs.
+LOG_STDOUT_SECTION = "=== STDOUT ==="
+LOG_STDERR_SECTION = "=== STDERR ==="
+# Fallback agent name when no agent is specified or inferred for a task.
+FALLBACK_AGENT_NAME = "coder"
+# Prefix for validation log messages printed to the console.
+VALIDATION_LOG_PREFIX = "[VALIDATION]"
+# Maximum characters from the validation prompt to show in dry-run preview.
+DRY_RUN_PROMPT_PREVIEW_LENGTH = 500
+
+
+def get_most_recent_log_file() -> Optional[Path]:
+    """Return the most recently modified log file from the task log directory.
+
+    Scans TASK_LOG_DIR for files matching the task-*.log pattern and returns
+    the one with the latest modification time. Returns None if no log files
+    exist or the directory does not exist.
+    """
+    if not TASK_LOG_DIR.exists():
+        return None
+
+    log_files = sorted(TASK_LOG_DIR.glob("task-*.log"), key=lambda p: p.stat().st_mtime)
+    return log_files[-1] if log_files else None
+
+
+def read_log_stdout(log_path: Path) -> str:
+    """Extract the STDOUT section from a task log file.
+
+    Task log files are written by run_claude_task() with delimited sections
+    (=== STDOUT === and === STDERR ===). This function extracts only the
+    content between the STDOUT and STDERR delimiters.
+
+    Returns the extracted stdout text, or an empty string if the section
+    is not found or the file cannot be read.
+    """
+    try:
+        content = log_path.read_text()
+    except IOError:
+        return ""
+
+    stdout_start = content.find(LOG_STDOUT_SECTION)
+    if stdout_start < 0:
+        return ""
+
+    stdout_start += len(LOG_STDOUT_SECTION)
+    stderr_start = content.find(LOG_STDERR_SECTION, stdout_start)
+
+    if stderr_start < 0:
+        return content[stdout_start:].strip()
+
+    return content[stdout_start:stderr_start].strip()
+
+
+def run_validation(
+    task: dict,
+    section: dict,
+    task_result: "TaskResult",
+    validation_config: ValidationConfig,
+    dry_run: bool = False,
+) -> ValidationVerdict:
+    """Execute validation on a completed task using configured validator agents.
+
+    Spawns each validator agent defined in validation_config.validators to
+    independently verify the task result. Uses build_validation_prompt() to
+    construct the validation prompt and parse_validation_verdict() to interpret
+    the validator's output.
+
+    Short-circuits on the first FAIL verdict — remaining validators are skipped.
+    Returns a PASS verdict immediately (without running validators) when the
+    task's agent type is not in validation_config.run_after.
+
+    Args:
+        task: The task dict from the plan YAML.
+        section: The section dict containing the task.
+        task_result: The TaskResult from the task's execution.
+        validation_config: Validation settings from the plan meta.
+        dry_run: If True, print a prompt preview and return PASS without executing.
+
+    Returns:
+        A ValidationVerdict with the aggregate result of all validators.
+    """
+    task_id = task.get("id", "unknown")
+
+    # 1. Determine the agent that executed the task
+    agent_name = task.get("agent") or infer_agent_for_task(task) or FALLBACK_AGENT_NAME
+
+    # 2. Check if validation should run for this agent type
+    if agent_name not in validation_config.run_after:
+        return ValidationVerdict(verdict="PASS")
+
+    # 3. Run each validator
+    final_verdict = ValidationVerdict(verdict="PASS")
+
+    for validator in validation_config.validators:
+        print(f"{VALIDATION_LOG_PREFIX} Running validator '{validator}' on task {task_id}")
+
+        # 3a. Build the validation prompt
+        prompt = build_validation_prompt(task, section, task_result, validator)
+
+        # 3b. Dry-run: preview and return PASS
+        if dry_run:
+            print(f"{VALIDATION_LOG_PREFIX} [DRY RUN] Prompt preview:")
+            print(prompt[:DRY_RUN_PROMPT_PREVIEW_LENGTH])
+            if len(prompt) > DRY_RUN_PROMPT_PREVIEW_LENGTH:
+                print(f"... ({len(prompt) - DRY_RUN_PROMPT_PREVIEW_LENGTH} more chars)")
+            return ValidationVerdict(verdict="PASS")
+
+        # 3c. Clear the status file so the validator writes a fresh one
+        clear_status_file()
+
+        # 3d. Execute the validator via Claude CLI
+        validator_result = run_claude_task(prompt)
+
+        # 3e. If the validator process itself failed, treat as FAIL
+        if not validator_result.success:
+            print(f"{VALIDATION_LOG_PREFIX} Validator '{validator}' failed to execute: "
+                  f"{validator_result.message}")
+            return ValidationVerdict(
+                verdict="FAIL",
+                findings=[f"Validator '{validator}' failed to execute: {validator_result.message}"],
+            )
+
+        # 3f. Read the most recent log file for the validator's full output
+        log_path = get_most_recent_log_file()
+        if log_path:
+            validator_output = read_log_stdout(log_path)
+        else:
+            # Fallback: use the status file message as output
+            validator_output = validator_result.message
+
+        # 3g. Parse the verdict
+        verdict = parse_validation_verdict(validator_output)
+        print(f"{VALIDATION_LOG_PREFIX} Validator '{validator}' verdict: {verdict.verdict}")
+
+        if verdict.findings:
+            for finding in verdict.findings:
+                print(f"  {finding}")
+
+        # 3h. Short-circuit on FAIL
+        if verdict.verdict == "FAIL":
+            return verdict
+
+        # Keep track of the last non-FAIL verdict (could be WARN)
+        final_verdict = verdict
+
+    return final_verdict
 
 
 class CircuitBreaker:
@@ -1739,9 +1888,8 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
         duration = time.time() - start_time
 
         # Save output to log file for debugging
-        log_dir = Path(".claude/plans/logs")
-        log_dir.mkdir(parents=True, exist_ok=True)
-        log_file = log_dir / f"task-{datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
+        TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        log_file = TASK_LOG_DIR / f"task-{datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
         with open(log_file, "w") as f:
             f.write(f"=== Claude Task Output ===\n")
             f.write(f"Timestamp: {datetime.now().isoformat()}\n")
