@@ -411,6 +411,39 @@ IMPORTANT: You MUST write .claude/plans/task-status.json when done.
 """
 
 
+# Default verdict when parsing fails — conservative approach treats
+# an unparseable validator output as a failure.
+DEFAULT_VERDICT = "FAIL"
+
+
+def parse_validation_verdict(output: str) -> ValidationVerdict:
+    """Parse a validation verdict from validator agent output.
+
+    Scans the output for a structured verdict line matching VERDICT_PATTERN
+    (e.g. '**Verdict: PASS**') and extracts individual findings matching
+    FINDING_PATTERN (e.g. '- [FAIL] Build failed at file:line').
+
+    If no verdict pattern is found in the output, defaults to FAIL. This
+    conservative approach ensures that a validator which crashes, times out,
+    or produces malformed output is treated as a validation failure rather
+    than silently passing.
+
+    Args:
+        output: The raw text output from the validator agent.
+
+    Returns:
+        A ValidationVerdict with the parsed verdict, findings list, and
+        the original raw output preserved for debugging.
+    """
+    verdict_match = VERDICT_PATTERN.search(output)
+    verdict = verdict_match.group(1).upper() if verdict_match else DEFAULT_VERDICT
+
+    finding_matches = FINDING_PATTERN.findall(output)
+    findings = [f"[{severity.upper()}] {description}" for severity, description in finding_matches]
+
+    return ValidationVerdict(verdict=verdict, findings=findings, raw_output=output)
+
+
 class CircuitBreaker:
     """Circuit breaker to prevent runaway failures when LLM is unavailable."""
 
