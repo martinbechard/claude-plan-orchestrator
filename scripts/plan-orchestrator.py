@@ -47,6 +47,11 @@ DEFAULT_MAX_ATTEMPTS = 3
 CLAUDE_TIMEOUT_SECONDS = 600  # 10 minutes per task
 MAX_PLAN_NAME_LENGTH = 50  # Max chars from plan name used in report filenames
 
+# Budget enforcement defaults
+DEFAULT_MAX_QUOTA_PERCENT = 100.0
+DEFAULT_QUOTA_CEILING_USD = 0.0
+DEFAULT_RESERVED_BUDGET_USD = 0.0
+
 
 def load_orchestrator_config() -> dict:
     """Load project-level orchestrator config from .claude/orchestrator-config.yaml.
@@ -504,6 +509,34 @@ class PlanUsageTracker:
         with open(report_path, "w") as f:
             json.dump(report, f, indent=2)
         return report_path
+
+
+@dataclass
+class BudgetConfig:
+    """Budget limits for plan execution.
+
+    Configuration for the budget guard that enforces spending limits.
+    A ceiling of 0.0 (the default) disables budget enforcement entirely.
+    """
+    max_quota_percent: float = DEFAULT_MAX_QUOTA_PERCENT
+    quota_ceiling_usd: float = DEFAULT_QUOTA_CEILING_USD
+    reserved_budget_usd: float = DEFAULT_RESERVED_BUDGET_USD
+
+    @property
+    def effective_limit_usd(self) -> float:
+        """Calculate effective spending limit in USD."""
+        if self.quota_ceiling_usd <= 0:
+            return float('inf')
+        percent_limit = self.quota_ceiling_usd * (self.max_quota_percent / 100.0)
+        if self.reserved_budget_usd > 0:
+            reserve_limit = self.quota_ceiling_usd - self.reserved_budget_usd
+            return min(percent_limit, reserve_limit)
+        return percent_limit
+
+    @property
+    def is_enabled(self) -> bool:
+        """Whether budget enforcement is active."""
+        return self.quota_ceiling_usd > 0
 
 
 @dataclass
