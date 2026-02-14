@@ -2133,24 +2133,7 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
 
         duration = time.time() - start_time
 
-        # Save output to log file for debugging
-        TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)
-        log_file = TASK_LOG_DIR / f"task-{datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
-        with open(log_file, "w") as f:
-            f.write(f"=== Claude Task Output ===\n")
-            f.write(f"Timestamp: {datetime.now().isoformat()}\n")
-            f.write(f"Duration: {duration:.1f}s\n")
-            f.write(f"Return code: {returncode}\n")
-            f.write(f"Stdout lines: {stdout_collector.line_count}\n")
-            f.write(f"Stderr lines: {stderr_collector.line_count}\n")
-            f.write(f"\n=== STDOUT ===\n")
-            f.write(stdout_collector.get_output())
-            f.write(f"\n=== STDERR ===\n")
-            f.write(stderr_collector.get_output())
-
-        print(f"[Log saved to: {log_file}]")
-
-        # Extract usage data from CLI output
+        # Extract usage data from CLI output (before log write so it's available for headers)
         # Verbose mode: result_capture already populated by stream_json_output thread
         # Non-verbose mode: parse entire stdout as JSON
         if not VERBOSE:
@@ -2161,6 +2144,33 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
                 pass  # Non-JSON output, no usage data available
 
         task_usage = parse_task_usage(result_capture) if result_capture else None
+
+        # Save output to log file for debugging
+        TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        log_file = TASK_LOG_DIR / f"task-{datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
+        with open(log_file, "w") as f:
+            f.write(f"=== Claude Task Output ===\n")
+            f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+            f.write(f"Duration: {duration:.1f}s\n")
+            f.write(f"Return code: {returncode}\n")
+            f.write(f"Stdout lines: {stdout_collector.line_count}\n")
+            f.write(f"Stderr lines: {stderr_collector.line_count}\n")
+            if result_capture:
+                cost = result_capture.get("total_cost_usd", 0)
+                usage_data = result_capture.get("usage", {})
+                f.write(f"Cost: ${cost:.4f}\n")
+                f.write(f"Tokens: {usage_data.get('input_tokens', 0)} input / "
+                        f"{usage_data.get('output_tokens', 0)} output / "
+                        f"{usage_data.get('cache_read_input_tokens', 0)} cache_read / "
+                        f"{usage_data.get('cache_creation_input_tokens', 0)} cache_create\n")
+                f.write(f"Turns: {result_capture.get('num_turns', 0)}\n")
+                f.write(f"API time: {result_capture.get('duration_api_ms', 0)}ms\n")
+            f.write(f"\n=== STDOUT ===\n")
+            f.write(stdout_collector.get_output())
+            f.write(f"\n=== STDERR ===\n")
+            f.write(stderr_collector.get_output())
+
+        print(f"[Log saved to: {log_file}]")
 
         if VERBOSE:
             verbose_log(f"Duration: {duration:.1f}s", "EXEC")
