@@ -234,12 +234,12 @@ sections:
       and prints final usage summary before the === Summary === block.'
 - id: phase-3
   name: Phase 3 - Usage Report and Log Enhancement
-  status: pending
+  status: in_progress
   tasks:
   - id: '3.1'
     name: Write usage-report.json after plan completion
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.2'
     description: "In scripts/plan-orchestrator.py, add a method to PlanUsageTracker\
@@ -283,6 +283,14 @@ sections:
       \ print(f\"[Usage report written to: {report_path}]\")\n\n3. Verify with: python3\
       \ -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py\n"
+    attempts: 1
+    last_attempt: '2026-02-14T09:23:16.955004'
+    completed_at: '2026-02-14T09:26:41.583364'
+    result_message: Added write_report() method to PlanUsageTracker that writes a
+      structured usage-report.json file to TASK_LOG_DIR. Called it in run_orchestrator()
+      after the summary block. Report includes plan_name, plan_path, completed_at,
+      total usage, per-section breakdown, and per-task details. Added MAX_PLAN_NAME_LENGTH
+      constant. Syntax verified.
   - id: '3.2'
     name: Enhance log file headers with usage data
     agent: coder
