@@ -66,6 +66,67 @@ TEST_COMMAND = _config.get("test_command", DEFAULT_TEST_COMMAND)
 DEV_SERVER_COMMAND = _config.get("dev_server_command", DEFAULT_DEV_SERVER_COMMAND)
 AGENTS_DIR = _config.get("agents_dir", DEFAULT_AGENTS_DIR)
 
+def parse_agent_frontmatter(content: str) -> tuple[dict, str]:
+    """Parse YAML frontmatter from an agent definition markdown file.
+
+    Splits the content on '---' delimiters to extract the YAML frontmatter
+    block. The frontmatter must appear at the very start of the file,
+    enclosed between two '---' lines.
+
+    Returns a tuple of (frontmatter_dict, body_string). If no valid
+    frontmatter is found, returns ({}, content).
+    """
+    parts = content.split("---", 2)
+    if len(parts) < 3 or parts[0].strip():
+        # No valid frontmatter: either fewer than 3 parts after splitting,
+        # or non-empty content before the first '---'
+        return ({}, content)
+
+    try:
+        frontmatter = yaml.safe_load(parts[1])
+        if not isinstance(frontmatter, dict):
+            return ({}, content)
+        body = parts[2].lstrip("\n")
+        return (frontmatter, body)
+    except yaml.YAMLError:
+        return ({}, content)
+
+
+def load_agent_definition(agent_name: str) -> Optional[dict]:
+    """Load and parse an agent definition file from the agents directory.
+
+    Takes an agent name (e.g. 'coder') and reads the corresponding markdown
+    file from AGENTS_DIR. Parses the YAML frontmatter for metadata (name,
+    description, tools, model) and returns a dict with the full content and
+    parsed fields.
+
+    Returns None if the file does not exist or cannot be parsed.
+    """
+    agent_path = os.path.join(AGENTS_DIR, f"{agent_name}.md")
+
+    if not os.path.isfile(agent_path):
+        print(f"[WARNING] Agent definition not found: {agent_path}")
+        return None
+
+    try:
+        with open(agent_path, "r") as f:
+            content = f.read()
+
+        frontmatter, body = parse_agent_frontmatter(content)
+
+        return {
+            "name": frontmatter.get("name", agent_name),
+            "description": frontmatter.get("description", ""),
+            "tools": frontmatter.get("tools", []),
+            "model": frontmatter.get("model", ""),
+            "content": content,
+            "body": body,
+        }
+    except Exception as e:
+        print(f"[WARNING] Failed to load agent definition '{agent_name}': {e}")
+        return None
+
+
 # Known locations for the claude binary
 CLAUDE_BINARY_SEARCH_PATHS = [
     "/opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js",
