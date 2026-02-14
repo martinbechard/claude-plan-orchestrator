@@ -397,12 +397,12 @@ sections:
       Validators run sequentially to avoid conflicting build/test state.
 - id: phase-5
   name: Phase 5 - Configuration and Documentation
-  status: pending
+  status: in_progress
   tasks:
   - id: '5.1'
     name: Update orchestrator-config.yaml with validation fields
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '4.3'
     description: "Update .claude/orchestrator-config.yaml to document the new validation\
@@ -414,6 +414,12 @@ sections:
       \ trigger validation\n\n    #   validators:\n\n    #     - validator       #\
       \ Validator agent names to run\n\n    #   max_validation_attempts: 1  # Max\
       \ validation retries per task\n\n\nReference: docs/plans/2026-02-13-03-per-task-validation-pipeline-design.md\n"
+    attempts: 1
+    last_attempt: '2026-02-13T23:39:53.041416'
+    completed_at: '2026-02-13T23:40:48.098427'
+    result_message: Added commented-out validation configuration section to .claude/orchestrator-config.yaml
+      after agents_dir. Documents enabled, run_after, validators, and max_validation_attempts
+      fields with inline comments explaining each option.
   - id: '5.2'
     name: Update sample-plan.yaml with validation example
     agent: coder
