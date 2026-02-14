@@ -290,7 +290,7 @@ sections:
       verified, all assertions pass.
 - id: phase-4
   name: Phase 4 - Unit Tests
-  status: in_progress
+  status: completed
   tasks:
   - id: '4.1'
     name: Write unit tests for BudgetConfig
@@ -398,7 +398,7 @@ sections:
   - id: '4.4'
     name: Write unit tests for PipelineBudgetGuard
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '3.1'
     - '4.3'
@@ -419,6 +419,12 @@ sections:
       \      max_quota_percent=80, quota_ceiling_usd=100.0, reserved_budget_usd=10.0).\n\
       \      Verify effective_limit_usd=80.0 (min of 80 and 90).\n\n3. Run: python3\
       \ -m pytest tests/test_budget_guard.py -v\n   Fix any failures.\n\nFiles: tests/test_budget_guard.py\n"
+    attempts: 1
+    last_attempt: '2026-02-14T10:12:32.539800'
+    completed_at: '2026-02-14T10:14:35.358718'
+    result_message: 'Added 4 PipelineBudgetGuard unit tests: disabled guard, under
+      budget, over budget, and effective limit. All 21 tests pass (6 BudgetConfig
+      + 7 BudgetGuard + 4 parse_budget_config + 4 PipelineBudgetGuard).'
 - id: phase-5
   name: Phase 5 - Verification
   status: pending
