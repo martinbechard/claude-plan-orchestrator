@@ -14,6 +14,7 @@ spec.loader.exec_module(mod)
 
 EscalationConfig = mod.EscalationConfig
 MODEL_TIERS = mod.MODEL_TIERS
+parse_escalation_config = mod.parse_escalation_config
 
 
 # --- EscalationConfig dataclass tests ---
@@ -78,3 +79,69 @@ def test_escalation_empty_model_uses_starting():
     cfg = EscalationConfig(enabled=True, starting_model="sonnet")
     assert cfg.get_effective_model("", 1) == "sonnet"
     assert cfg.get_effective_model("", 3) == "opus"
+
+
+# --- parse_escalation_config tests ---
+
+
+def test_parse_escalation_config_defaults():
+    """Empty plan dict returns disabled EscalationConfig with all defaults."""
+    cfg = parse_escalation_config({})
+    assert cfg.enabled is False
+    assert cfg.escalate_after == 2
+    assert cfg.max_model == "opus"
+    assert cfg.validation_model == "sonnet"
+    assert cfg.starting_model == "sonnet"
+
+
+def test_parse_escalation_config_enabled():
+    """Plan with model_escalation block returns configured EscalationConfig."""
+    plan = {
+        "meta": {
+            "model_escalation": {
+                "enabled": True,
+                "escalate_after": 3,
+                "max_model": "sonnet",
+            }
+        }
+    }
+    cfg = parse_escalation_config(plan)
+    assert cfg.enabled is True
+    assert cfg.escalate_after == 3
+    assert cfg.max_model == "sonnet"
+
+
+def test_parse_escalation_config_partial():
+    """Plan with only enabled=True uses defaults for remaining fields."""
+    plan = {"meta": {"model_escalation": {"enabled": True}}}
+    cfg = parse_escalation_config(plan)
+    assert cfg.enabled is True
+    assert cfg.escalate_after == 2
+    assert cfg.max_model == "opus"
+    assert cfg.validation_model == "sonnet"
+    assert cfg.starting_model == "sonnet"
+
+
+def test_parse_escalation_config_with_validation_model():
+    """Plan with validation_model override propagates to config."""
+    plan = {
+        "meta": {
+            "model_escalation": {
+                "enabled": True,
+                "validation_model": "haiku",
+            }
+        }
+    }
+    cfg = parse_escalation_config(plan)
+    assert cfg.validation_model == "haiku"
+
+
+def test_parse_escalation_config_no_meta():
+    """Plan without meta key returns disabled config."""
+    plan = {"sections": []}
+    cfg = parse_escalation_config(plan)
+    assert cfg.enabled is False
+    assert cfg.escalate_after == 2
+    assert cfg.max_model == "opus"
+    assert cfg.validation_model == "sonnet"
+    assert cfg.starting_model == "sonnet"
