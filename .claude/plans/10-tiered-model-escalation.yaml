@@ -295,12 +295,12 @@ sections:
       handling and sequential path) to pass escalation_config=escalation_config.
 - id: phase-4
   name: Phase 4 - Usage Report Enhancement
-  status: pending
+  status: completed
   tasks:
   - id: '4.1'
     name: Add model_used to usage report task records
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '3.2'
     description: "In scripts/plan-orchestrator.py, enhance the PlanUsageTracker to\
@@ -323,6 +323,13 @@ sections:
       \   - Parallel path: pass model=t.get(\"model_used\", \"\")\n\n6. Verify with:\
       \ python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
       \ doraise=True); print('syntax OK')\"\nFiles: scripts/plan-orchestrator.py\n"
+    attempts: 1
+    last_attempt: '2026-02-16T18:31:57.127847'
+    completed_at: '2026-02-16T18:35:00.697128'
+    result_message: Enhanced PlanUsageTracker to record and report model per task.
+      Added task_models dict to __init__, model parameter to record(), model tag in
+      format_summary_line(), model field in write_report() JSON output. Updated both
+      call sites (parallel and sequential paths) to pass effective model to the tracker.
 - id: phase-5
   name: Phase 5 - Unit Tests
   status: pending
