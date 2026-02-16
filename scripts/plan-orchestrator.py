@@ -704,6 +704,30 @@ class EscalationConfig:
         return MODEL_TIERS[effective_idx]
 
 
+def parse_escalation_config(plan: dict) -> EscalationConfig:
+    """Parse model escalation configuration from plan YAML meta.
+
+    Reads meta.model_escalation from the plan dict. When the block
+    is absent, returns a disabled EscalationConfig (backwards compatible).
+
+    Args:
+        plan: The full plan dict loaded from YAML.
+
+    Returns:
+        An EscalationConfig populated from plan meta or defaults.
+    """
+    esc_meta = plan.get("meta", {}).get("model_escalation", {})
+    if not esc_meta:
+        return EscalationConfig()
+    return EscalationConfig(
+        enabled=esc_meta.get("enabled", False),
+        escalate_after=esc_meta.get("escalate_after", DEFAULT_ESCALATE_AFTER_FAILURES),
+        max_model=esc_meta.get("max_model", DEFAULT_MAX_MODEL),
+        validation_model=esc_meta.get("validation_model", DEFAULT_VALIDATION_MODEL),
+        starting_model=esc_meta.get("starting_model", DEFAULT_STARTING_MODEL),
+    )
+
+
 def build_validation_prompt(
     task: dict,
     section: dict,
