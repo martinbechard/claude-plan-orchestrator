@@ -198,7 +198,7 @@ sections:
   - id: '3.2'
     name: Wire escalation into sequential task execution
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.1'
     - '3.1'
@@ -224,6 +224,14 @@ sections:
       \ model=effective_model)\n\n4. Verify with: python3 -c \"import py_compile;\
       \ py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax\
       \ OK')\"\nFiles: scripts/plan-orchestrator.py\n"
+    attempts: 1
+    last_attempt: '2026-02-16T18:22:36.997169'
+    completed_at: '2026-02-16T18:25:06.835003'
+    result_message: Wired model escalation into sequential task execution. Before
+      each run_claude_task() call, computes effective model from agent definition
+      + attempt count via escalation_config.get_effective_model(). Logs model selection
+      when escalation is enabled (including escalation vs same-model). Records model_used
+      on task dict for observability. Passes effective_model to run_claude_task().
   - id: '3.3'
     name: Wire escalation into parallel task execution
     agent: coder
