@@ -235,7 +235,7 @@ sections:
   - id: '3.3'
     name: Wire escalation into parallel task execution
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.2'
     - '3.1'
@@ -252,6 +252,14 @@ sections:
       \ to the run_parallel_task call by adding\n   model=par_effective_model as an\
       \ argument.\n\n4. Verify with: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
       \ doraise=True); print('syntax OK')\"\nFiles: scripts/plan-orchestrator.py\n"
+    attempts: 1
+    last_attempt: '2026-02-16T18:25:08.916443'
+    completed_at: '2026-02-16T18:28:28.877923'
+    result_message: Wired model escalation into parallel task execution. Computes
+      effective model per parallel task using agent definition + attempt count via
+      escalation_config.get_effective_model() before ThreadPoolExecutor submit. Stores
+      model_used on task dict for observability and passes it to run_parallel_task
+      via model kwarg. Logs model selection with escalation detection.
   - id: '3.4'
     name: Wire validation model override
     agent: coder
