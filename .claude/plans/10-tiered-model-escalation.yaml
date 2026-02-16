@@ -287,10 +287,12 @@ sections:
       \ doraise=True); print('syntax OK')\"\nFiles: scripts/plan-orchestrator.py\n"
     attempts: 1
     last_attempt: '2026-02-16T18:28:30.970770'
-    completed_at: '2026-02-16T18:30:00.000000'
+    completed_at: '2026-02-16T18:31:55.058706'
     result_message: Wired validation model override into run_validation(). Added escalation_config
-      parameter to signature, extracts validation_model when escalation is enabled,
-      and passes it to run_claude_task(). Updated both call sites in run_orchestrator().
+      parameter (Optional[EscalationConfig] = None) to function signature. When escalation
+      is enabled, extracts validation_model from escalation_config and passes it to
+      run_claude_task(). Updated both call sites in run_orchestrator() (parallel results
+      handling and sequential path) to pass escalation_config=escalation_config.
 - id: phase-4
   name: Phase 4 - Usage Report Enhancement
   status: pending
