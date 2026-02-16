@@ -332,7 +332,7 @@ sections:
       call sites (parallel and sequential paths) to pass effective model to the tracker.
 - id: phase-5
   name: Phase 5 - Unit Tests
-  status: in_progress
+  status: completed
   tasks:
   - id: '5.1'
     name: Write unit tests for EscalationConfig
@@ -386,7 +386,7 @@ sections:
   - id: '5.2'
     name: Write unit tests for parse_escalation_config
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.2'
     - '5.1'
@@ -407,6 +407,12 @@ sections:
       \ Call parse_escalation_config\n      with plan = {\"sections\": []}. Verify\
       \ returns disabled config.\n\n3. Run: python3 -m pytest tests/test_model_escalation.py\
       \ -v\n   Fix any failures.\n\nFiles: tests/test_model_escalation.py\n"
+    attempts: 1
+    last_attempt: '2026-02-16T18:36:59.010524'
+    completed_at: '2026-02-16T18:38:29.297733'
+    result_message: 'Added 5 parse_escalation_config unit tests: empty plan defaults,
+      fully specified config, partial config with defaults, validation_model override,
+      and missing meta key. All 14 tests pass.'
 - id: phase-6
   name: Phase 6 - Verification
   status: pending
