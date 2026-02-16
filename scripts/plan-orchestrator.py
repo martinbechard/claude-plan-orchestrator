@@ -892,6 +892,7 @@ def run_validation(
     task_result: "TaskResult",
     validation_config: ValidationConfig,
     dry_run: bool = False,
+    escalation_config: Optional[EscalationConfig] = None,
 ) -> ValidationVerdict:
     """Execute validation on a completed task using configured validator agents.
 
@@ -910,6 +911,8 @@ def run_validation(
         task_result: The TaskResult from the task's execution.
         validation_config: Validation settings from the plan meta.
         dry_run: If True, print a prompt preview and return PASS without executing.
+        escalation_config: Model escalation settings. When provided and enabled,
+            uses escalation_config.validation_model for the validator CLI call.
 
     Returns:
         A ValidationVerdict with the aggregate result of all validators.
@@ -944,7 +947,10 @@ def run_validation(
         clear_status_file()
 
         # 3d. Execute the validator via Claude CLI
-        validator_result = run_claude_task(prompt)
+        validation_model = ""
+        if escalation_config and escalation_config.enabled:
+            validation_model = escalation_config.validation_model
+        validator_result = run_claude_task(prompt, model=validation_model)
 
         # 3e. If the validator process itself failed, treat as FAIL
         if not validator_result.success:
@@ -2767,7 +2773,8 @@ def run_orchestrator(
                             validation_attempts = task.get("validation_attempts", 0)
                             if validation_attempts < validation_config.max_validation_attempts:
                                 verdict = run_validation(
-                                    task, section, task_result, validation_config, dry_run
+                                    task, section, task_result, validation_config, dry_run,
+                                    escalation_config=escalation_config,
                                 )
                                 if verdict.verdict == "FAIL":
                                     print(f"  [{task_id}] VALIDATION FAIL")
@@ -2969,7 +2976,8 @@ def run_orchestrator(
                 validation_attempts = task.get("validation_attempts", 0)
                 if validation_attempts < validation_config.max_validation_attempts:
                     verdict = run_validation(
-                        task, section, task_result, validation_config, dry_run
+                        task, section, task_result, validation_config, dry_run,
+                        escalation_config=escalation_config,
                     )
 
                     if verdict.verdict == "FAIL":
