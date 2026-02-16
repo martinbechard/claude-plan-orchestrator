@@ -332,12 +332,12 @@ sections:
       call sites (parallel and sequential paths) to pass effective model to the tracker.
 - id: phase-5
   name: Phase 5 - Unit Tests
-  status: pending
+  status: in_progress
   tasks:
   - id: '5.1'
     name: Write unit tests for EscalationConfig
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.2'
     description: "Create tests/test_model_escalation.py with unit tests for the EscalationConfig\
@@ -375,6 +375,14 @@ sections:
       \   spec.loader.exec_module(mod)\n   EscalationConfig = mod.EscalationConfig\n\
       \   MODEL_TIERS = mod.MODEL_TIERS\n\n3. Run: python3 -m pytest tests/test_model_escalation.py\
       \ -v\n   Fix any failures.\n\nFiles: tests/test_model_escalation.py\n"
+    attempts: 1
+    last_attempt: '2026-02-16T18:35:02.758865'
+    completed_at: '2026-02-16T18:36:56.925217'
+    result_message: 'Created tests/test_model_escalation.py with 9 unit tests for
+      EscalationConfig: defaults, disabled passthrough, base model within escalate_after
+      window, sonnet->opus escalation, haiku->sonnet->opus progression, max_model
+      cap, already-at-max, unknown model passthrough, and empty model fallback to
+      starting_model. All 9 tests pass.'
   - id: '5.2'
     name: Write unit tests for parse_escalation_config
     agent: coder
