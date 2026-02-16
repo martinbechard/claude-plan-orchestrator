@@ -2623,11 +2623,27 @@ def run_orchestrator(
                     # Clean up stale claims (older than 1 hour)
                     cleanup_stale_claims()
 
-                # Mark all tasks as in_progress
+                # Mark all tasks as in_progress and compute effective models
                 for section, task, _ in parallel_tasks:
                     task["status"] = "in_progress"
                     task["attempts"] = task.get("attempts", 0) + 1
                     task["last_attempt"] = datetime.now().isoformat()
+
+                    # Compute effective model for this parallel task
+                    par_agent_name = task.get("agent") or infer_agent_for_task(task) or FALLBACK_AGENT_NAME
+                    par_agent_def = load_agent_definition(par_agent_name)
+                    par_agent_model = par_agent_def.get("model", "") if par_agent_def else ""
+                    par_attempt = task.get("attempts", 1)
+                    par_effective_model = escalation_config.get_effective_model(par_agent_model, par_attempt)
+                    task["model_used"] = par_effective_model
+
+                    # Log model selection for parallel tasks
+                    if escalation_config.enabled:
+                        par_task_id = task.get("id")
+                        if par_effective_model != par_agent_model:
+                            print(f"Task {par_task_id} attempt {par_attempt}: escalating from {par_agent_model} to {par_effective_model}")
+                        else:
+                            print(f"Task {par_task_id} attempt {par_attempt}: using {par_effective_model}")
                 if not dry_run:
                     save_plan(plan_path, plan)
 
@@ -2644,7 +2660,8 @@ def run_orchestrator(
                         executor.submit(
                             run_parallel_task,
                             plan, section, task, plan_path, plan_name,
-                            group_name, sibling_task_ids, dry_run
+                            group_name, sibling_task_ids, dry_run,
+                            model=task.get("model_used", "")
                         ): task.get("id")
                         for section, task, _ in parallel_tasks
                     }
