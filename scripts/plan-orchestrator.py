@@ -52,6 +52,13 @@ DEFAULT_MAX_QUOTA_PERCENT = 100.0
 DEFAULT_QUOTA_CEILING_USD = 0.0
 DEFAULT_RESERVED_BUDGET_USD = 0.0
 
+# Model escalation defaults
+MODEL_TIERS: list[str] = ["haiku", "sonnet", "opus"]
+DEFAULT_ESCALATE_AFTER_FAILURES = 2
+DEFAULT_MAX_MODEL = "opus"
+DEFAULT_VALIDATION_MODEL = "sonnet"
+DEFAULT_STARTING_MODEL = "sonnet"
+
 
 def load_orchestrator_config() -> dict:
     """Load project-level orchestrator config from .claude/orchestrator-config.yaml.
@@ -656,6 +663,45 @@ def parse_validation_config(plan: dict) -> ValidationConfig:
         validators=val_dict.get("validators", ["validator"]),
         max_validation_attempts=val_dict.get("max_validation_attempts", 1),
     )
+
+
+@dataclass
+class EscalationConfig:
+    """Model escalation configuration for cost-aware tier promotion.
+
+    Controls automatic model upgrades when tasks fail repeatedly.
+    When disabled, models are unchanged (backwards compatible).
+    """
+    enabled: bool = False
+    escalate_after: int = DEFAULT_ESCALATE_AFTER_FAILURES
+    max_model: str = DEFAULT_MAX_MODEL
+    validation_model: str = DEFAULT_VALIDATION_MODEL
+    starting_model: str = DEFAULT_STARTING_MODEL
+
+    def get_effective_model(self, agent_model: str, attempt: int) -> str:
+        """Compute the effective model for a given agent and attempt number.
+
+        Uses the MODEL_TIERS ladder to determine escalation. Attempts 1 through
+        escalate_after use the base model. Each subsequent batch of escalate_after
+        attempts promotes one tier, capped at max_model.
+
+        Args:
+            agent_model: The agent's starting model from frontmatter.
+            attempt: The current attempt number (1-based).
+
+        Returns:
+            The model string to use for this attempt.
+        """
+        if not self.enabled:
+            return agent_model
+        base = agent_model or self.starting_model
+        if base not in MODEL_TIERS:
+            return base
+        base_idx = MODEL_TIERS.index(base)
+        max_idx = MODEL_TIERS.index(self.max_model) if self.max_model in MODEL_TIERS else len(MODEL_TIERS) - 1
+        steps = max(0, (attempt - 1) // self.escalate_after)
+        effective_idx = min(base_idx + steps, max_idx)
+        return MODEL_TIERS[effective_idx]
 
 
 def build_validation_prompt(
