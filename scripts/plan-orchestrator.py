@@ -2904,8 +2904,25 @@ def run_orchestrator(
             print(prompt[:500] + ("..." if len(prompt) > 500 else ""))
             print("-" * 40)
 
+        # Compute effective model for this task attempt
+        agent_name = task.get("agent") or infer_agent_for_task(task) or FALLBACK_AGENT_NAME
+        agent_def = load_agent_definition(agent_name)
+        agent_model = agent_def.get("model", "") if agent_def else ""
+        current_attempt = task.get("attempts", 1)
+        effective_model = escalation_config.get_effective_model(agent_model, current_attempt)
+
+        # Log model selection
+        if escalation_config.enabled:
+            if effective_model != agent_model:
+                print(f"Task {task_id} attempt {current_attempt}: escalating from {agent_model} to {effective_model}")
+            else:
+                print(f"Task {task_id} attempt {current_attempt}: using {effective_model}")
+
+        # Record model used for observability
+        task["model_used"] = effective_model
+
         verbose_log("Executing Claude task...", "TASK")
-        task_result = run_claude_task(prompt, dry_run=dry_run)
+        task_result = run_claude_task(prompt, dry_run=dry_run, model=effective_model)
         verbose_log(f"Task result: success={task_result.success}, message={task_result.message}", "TASK")
 
         print(f"Result: {'SUCCESS' if task_result.success else 'FAILED'}")
