@@ -1739,7 +1739,8 @@ def run_parallel_task(
     plan_name: str,
     parallel_group: str,
     sibling_task_ids: list[str],
-    dry_run: bool = False
+    dry_run: bool = False,
+    model: str = ""
 ) -> tuple[str, TaskResult]:
     """Run a single task in a worktree for parallel execution.
 
@@ -1784,7 +1785,10 @@ def run_parallel_task(
             "--print",
             prompt
         ]
+        if model:
+            cmd.extend(["--model", model])
 
+        verbose_log(f"[PARALLEL] Task {task_id} using model: {model or 'default'}", "PARALLEL")
         verbose_log(f"[PARALLEL] Running Claude for task {task_id} in {worktree_path}", "PARALLEL")
 
         process = subprocess.Popen(
