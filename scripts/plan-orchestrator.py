@@ -2183,7 +2183,7 @@ def stream_json_output(pipe, collector: OutputCollector, result_capture: dict) -
             verbose_log(f"Error streaming JSON: {e}", "ERROR")
 
 
-def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
+def run_claude_task(prompt: str, dry_run: bool = False, model: str = "") -> TaskResult:
     """Execute a task using Claude CLI."""
     if dry_run:
         print(f"[DRY RUN] Would execute:\n{prompt[:200]}...")
@@ -2198,6 +2198,8 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
         "--print",
         prompt
     ]
+    if model:
+        cmd.extend(["--model", model])
     # In verbose mode, use stream-json for real-time tool/text streaming
     # In non-verbose mode, use json to capture structured output with usage data
     if VERBOSE:
@@ -2206,6 +2208,8 @@ def run_claude_task(prompt: str, dry_run: bool = False) -> TaskResult:
         cmd.extend(["--output-format", "json"])
     verbose_log(f"Command: {' '.join(CLAUDE_CMD)} --dangerously-skip-permissions --print <prompt>", "EXEC")
     verbose_log(f"Prompt length: {len(prompt)} chars", "EXEC")
+    if model:
+        verbose_log(f"Model override: {model}", "EXEC")
     verbose_log(f"Working directory: {os.getcwd()}", "EXEC")
     verbose_log(f"Timeout: {CLAUDE_TIMEOUT_SECONDS}s", "EXEC")
 
