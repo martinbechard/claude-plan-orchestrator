@@ -366,10 +366,12 @@ class PlanUsageTracker:
 
     def __init__(self) -> None:
         self.task_usages: dict[str, TaskUsage] = {}
+        self.task_models: dict[str, str] = {}
 
-    def record(self, task_id: str, usage: TaskUsage) -> None:
+    def record(self, task_id: str, usage: TaskUsage, model: str = "") -> None:
         """Record usage for a completed task."""
         self.task_usages[task_id] = usage
+        self.task_models[task_id] = model
 
     def get_section_usage(self, plan: dict, section_id: str) -> TaskUsage:
         """Aggregate usage for all tasks in a given section."""
@@ -420,8 +422,10 @@ class PlanUsageTracker:
         total = self.get_total_usage()
         cache_denom = u.cache_read_tokens + u.input_tokens
         cache_pct = (u.cache_read_tokens / cache_denom * 100) if cache_denom > 0 else 0
+        model = self.task_models.get(task_id, "")
+        model_str = f" [{model}]" if model else ""
         return (
-            f"[Usage] Task {task_id}: ${u.total_cost_usd:.4f} | "
+            f"[Usage] Task {task_id}{model_str}: ${u.total_cost_usd:.4f} | "
             f"{u.input_tokens:,} in / {u.output_tokens:,} out / "
             f"{u.cache_read_tokens:,} cached ({cache_pct:.0f}% cache hit) | "
             f"Running: ${total.total_cost_usd:.4f}"
@@ -511,6 +515,7 @@ class PlanUsageTracker:
                 "cache_creation_tokens": u.cache_creation_tokens,
                 "num_turns": u.num_turns,
                 "duration_api_ms": u.duration_api_ms,
+                "model": self.task_models.get(tid, ""),
             })
         TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)
         with open(report_path, "w") as f:
@@ -2796,7 +2801,7 @@ def run_orchestrator(
                     task_id = task.get("id")
                     task_result = results.get(task_id)
                     if task_result and task_result.usage:
-                        usage_tracker.record(task_id, task_result.usage)
+                        usage_tracker.record(task_id, task_result.usage, model=task.get("model_used", ""))
                         print(usage_tracker.format_summary_line(task_id))
                     if task_result and task_result.success and task_id not in [f[0] for f in merge_failures]:
                         task["status"] = "completed"
@@ -2954,7 +2959,7 @@ def run_orchestrator(
         print(f"Message: {task_result.message}")
 
         if task_result.usage:
-            usage_tracker.record(task_id, task_result.usage)
+            usage_tracker.record(task_id, task_result.usage, model=effective_model)
             print(usage_tracker.format_summary_line(task_id))
 
         if budget_config.is_enabled:
