@@ -1,13 +1,14 @@
 meta:
   name: QA Audit Pipeline with Test Plan Generation
-  description: >
-    Create a QA audit pipeline that generates test plans from functional specs
-    and runs structured validation checklists against implemented features. Adds
-    a qa-auditor agent, domain-specific checklists stored in .claude/checklists/,
+  description: 'Create a QA audit pipeline that generates test plans from functional
+    specs and runs structured validation checklists against implemented features.
+    Adds a qa-auditor agent, domain-specific checklists stored in .claude/checklists/,
     QA_AUDITOR_KEYWORDS for agent inference, and integration tests. The qa-auditor
     plugs into the existing validation pipeline as an additional validator. Builds
     on Feature 02 (Agent Definition Framework) and Feature 03 (Per-Task Validation
     Pipeline) which are already implemented.
+
+    '
   plan_doc: docs/plans/2026-02-16-11-qa-audit-pipeline-design.md
   created: '2026-02-16'
   max_attempts_default: 3
@@ -18,99 +19,61 @@ meta:
     validators:
     - validator
     max_validation_attempts: 1
-
 sections:
 - id: phase-1
   name: Phase 1 - Domain Checklists
-  status: pending
+  status: in_progress
   tasks:
   - id: '1.1'
     name: Create CRUD operations domain checklist
     agent: coder
-    status: pending
-    description: >
-      Create the .claude/checklists/ directory and the CRUD operations checklist.
-
-      Reference: docs/plans/2026-02-16-11-qa-audit-pipeline-design.md
-
-      Steps:
-      1. Create directory .claude/checklists/ if it does not exist.
-
-      2. Create .claude/checklists/crud-operations.md with this content:
-
-         # CRUD Operations Checklist
-
-         Domain-specific validation rules for Create/Read/Update/Delete features.
-
-         ## Rules
-
-         - Create and edit operations use the same modal or form component
-         - Page loads correctly on browser refresh (no stale state)
-         - Data persists after save and is correct on reload
-         - Cancel discards unsaved changes without saving
-         - Save button enables only when all required fields are filled
-         - Validation errors display inline near the relevant field
-         - Delete requires a confirmation dialog before executing
-
-      3. Verify the file was created: ls -la .claude/checklists/crud-operations.md
-
-      Files: .claude/checklists/crud-operations.md
+    status: completed
+    description: "Create the .claude/checklists/ directory and the CRUD operations\
+      \ checklist.\nReference: docs/plans/2026-02-16-11-qa-audit-pipeline-design.md\n\
+      Steps: 1. Create directory .claude/checklists/ if it does not exist.\n2. Create\
+      \ .claude/checklists/crud-operations.md with this content:\n\n   # CRUD Operations\
+      \ Checklist\n\n   Domain-specific validation rules for Create/Read/Update/Delete\
+      \ features.\n\n   ## Rules\n\n   - Create and edit operations use the same modal\
+      \ or form component\n   - Page loads correctly on browser refresh (no stale\
+      \ state)\n   - Data persists after save and is correct on reload\n   - Cancel\
+      \ discards unsaved changes without saving\n   - Save button enables only when\
+      \ all required fields are filled\n   - Validation errors display inline near\
+      \ the relevant field\n   - Delete requires a confirmation dialog before executing\n\
+      \n3. Verify the file was created: ls -la .claude/checklists/crud-operations.md\n\
+      Files: .claude/checklists/crud-operations.md\n"
+    attempts: 1
+    last_attempt: '2026-02-16T18:45:04.418068'
+    model_used: sonnet
+    completed_at: '2026-02-16T18:46:31.109186'
+    result_message: Created .claude/checklists/ directory and crud-operations.md checklist
+      with 7 validation rules for CRUD features
   - id: '1.2'
     name: Create navigation domain checklist
     agent: coder
     status: pending
     parallel_group: checklists
-    description: >
-      Create the navigation domain checklist.
-
-      Reference: docs/plans/2026-02-16-11-qa-audit-pipeline-design.md
-
-      Steps:
-      1. Create .claude/checklists/navigation.md with this content:
-
-         # Navigation Checklist
-
-         Domain-specific validation rules for navigation and routing features.
-
-         ## Rules
-
-         - All links resolve to valid pages (no 404 errors)
-         - Back button returns to the previous page
-         - Breadcrumbs reflect the current location accurately
-         - Deep links work (direct URL access loads the correct page)
-
-      2. Verify: ls -la .claude/checklists/navigation.md
-
-      Files: .claude/checklists/navigation.md
+    description: "Create the navigation domain checklist.\nReference: docs/plans/2026-02-16-11-qa-audit-pipeline-design.md\n\
+      Steps: 1. Create .claude/checklists/navigation.md with this content:\n\n   #\
+      \ Navigation Checklist\n\n   Domain-specific validation rules for navigation\
+      \ and routing features.\n\n   ## Rules\n\n   - All links resolve to valid pages\
+      \ (no 404 errors)\n   - Back button returns to the previous page\n   - Breadcrumbs\
+      \ reflect the current location accurately\n   - Deep links work (direct URL\
+      \ access loads the correct page)\n\n2. Verify: ls -la .claude/checklists/navigation.md\n\
+      Files: .claude/checklists/navigation.md\n"
   - id: '1.3'
     name: Create data display domain checklist
     agent: coder
     status: pending
     parallel_group: checklists
-    description: >
-      Create the data display domain checklist.
-
-      Reference: docs/plans/2026-02-16-11-qa-audit-pipeline-design.md
-
-      Steps:
-      1. Create .claude/checklists/data-display.md with this content:
-
-         # Data Display Checklist
-
-         Domain-specific validation rules for data display and list features.
-
-         ## Rules
-
-         - Empty state shows a helpful message (not a blank area)
-         - Loading state shows a spinner or skeleton placeholder
-         - Error state shows an actionable message with recovery options
-         - Lists paginate or virtualize for large datasets
-         - Sort and filter controls work correctly and update results
-
-      2. Verify: ls -la .claude/checklists/data-display.md
-
-      Files: .claude/checklists/data-display.md
-
+    description: "Create the data display domain checklist.\nReference: docs/plans/2026-02-16-11-qa-audit-pipeline-design.md\n\
+      Steps: 1. Create .claude/checklists/data-display.md with this content:\n\n \
+      \  # Data Display Checklist\n\n   Domain-specific validation rules for data\
+      \ display and list features.\n\n   ## Rules\n\n   - Empty state shows a helpful\
+      \ message (not a blank area)\n   - Loading state shows a spinner or skeleton\
+      \ placeholder\n   - Error state shows an actionable message with recovery options\n\
+      \   - Lists paginate or virtualize for large datasets\n   - Sort and filter\
+      \ controls work correctly and update results\n\n2. Verify: ls -la .claude/checklists/data-display.md\n\
+      Files: .claude/checklists/data-display.md\n"
 - id: phase-2
   name: Phase 2 - QA Auditor Agent Definition
   status: pending
@@ -123,85 +86,45 @@ sections:
     - '1.1'
     - '1.2'
     - '1.3'
-    description: >
-      Create the qa-auditor agent definition file.
-
-      Reference: docs/plans/2026-02-16-11-qa-audit-pipeline-design.md
-
-      Steps:
-      1. Create .claude/agents/qa-auditor.md with YAML frontmatter and agent body.
-
-      The frontmatter must be:
-        ---
-        name: qa-auditor
-        description: >
-          QA audit specialist. Generates test plans from functional specs and runs
-          validation checklists against implemented features. Use after feature
-          implementation to verify coverage of user-facing behaviors.
-        tools:
-          - Read
-          - Grep
-          - Glob
-          - Bash
-        model: sonnet
-        ---
-
-      The body must describe:
-
-      a. Role: You are a QA audit specialist. Your job is to verify that
-         implemented features cover all user-facing behaviors described in
-         the functional spec. You produce a structured QA audit report with
-         a coverage matrix linking spec requirements to test scenarios.
-
-      b. Before Auditing section: Read the functional spec referenced in the
-         task description. Read the relevant domain checklists from
-         .claude/checklists/. Read the implemented source files.
-
-      c. Audit Pipeline section with four steps:
-         Step 1 - Extract Behaviors: List all user-facing behaviors from the
-         functional spec, grouped by page/component.
-         Step 2 - Map to Test Scenarios: For each behavior, create a test
-         scenario. Apply relevant domain checklists (CRUD, navigation, data
-         display) based on the feature type.
-         Step 3 - Run Checklist Audits: For each checklist item, search the
-         codebase for evidence that the rule is satisfied. Record PASS/FAIL
-         with file:line references.
-         Step 4 - Produce Report: Aggregate results into a coverage matrix
-         and checklist results section.
-
-      d. Output Format section: Must produce standard verdict format:
-         **Verdict: PASS** or **Verdict: WARN** or **Verdict: FAIL**
-         Followed by **Findings:** with - [PASS|WARN|FAIL] items.
-         Include a Coverage section showing X/Y requirements covered.
-
-      e. Verdict Rules:
-         PASS: All spec requirements have corresponding test scenarios and
-         all checklist items pass.
-         WARN: Coverage is above 80% but some non-critical items failed.
-         FAIL: Coverage is below 80% or critical checklist items failed.
-
-      f. Constraints: Read-only agent. Only use Bash for running build/test
-         commands. Do not modify source files.
-
-      g. Output Protocol: Write .claude/plans/task-status.json when done
-         (same format as other validators).
-
-      2. Verify the file loads correctly:
-         python3 -c "
-         import importlib.util
-         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
-         mod = importlib.util.module_from_spec(spec)
-         spec.loader.exec_module(mod)
-         agent = mod.load_agent_definition('qa-auditor')
-         assert agent is not None, 'qa-auditor agent not found'
-         assert agent['name'] == 'qa-auditor', f'Wrong name: {agent[\"name\"]}'
-         assert agent['model'] == 'sonnet', f'Wrong model: {agent[\"model\"]}'
-         assert 'Read' in agent['tools'], 'Missing Read tool'
-         print(f'qa-auditor agent loaded: {agent[\"name\"]}, model={agent[\"model\"]}')
-         "
-
-      Files: .claude/agents/qa-auditor.md
-
+    description: "Create the qa-auditor agent definition file.\nReference: docs/plans/2026-02-16-11-qa-audit-pipeline-design.md\n\
+      Steps: 1. Create .claude/agents/qa-auditor.md with YAML frontmatter and agent\
+      \ body.\nThe frontmatter must be:\n  ---\n  name: qa-auditor\n  description:\
+      \ >\n    QA audit specialist. Generates test plans from functional specs and\
+      \ runs\n    validation checklists against implemented features. Use after feature\n\
+      \    implementation to verify coverage of user-facing behaviors.\n  tools:\n\
+      \    - Read\n    - Grep\n    - Glob\n    - Bash\n  model: sonnet\n  ---\n\n\
+      The body must describe:\na. Role: You are a QA audit specialist. Your job is\
+      \ to verify that\n   implemented features cover all user-facing behaviors described\
+      \ in\n   the functional spec. You produce a structured QA audit report with\n\
+      \   a coverage matrix linking spec requirements to test scenarios.\n\nb. Before\
+      \ Auditing section: Read the functional spec referenced in the\n   task description.\
+      \ Read the relevant domain checklists from\n   .claude/checklists/. Read the\
+      \ implemented source files.\n\nc. Audit Pipeline section with four steps:\n\
+      \   Step 1 - Extract Behaviors: List all user-facing behaviors from the\n  \
+      \ functional spec, grouped by page/component.\n   Step 2 - Map to Test Scenarios:\
+      \ For each behavior, create a test\n   scenario. Apply relevant domain checklists\
+      \ (CRUD, navigation, data\n   display) based on the feature type.\n   Step 3\
+      \ - Run Checklist Audits: For each checklist item, search the\n   codebase for\
+      \ evidence that the rule is satisfied. Record PASS/FAIL\n   with file:line references.\n\
+      \   Step 4 - Produce Report: Aggregate results into a coverage matrix\n   and\
+      \ checklist results section.\n\nd. Output Format section: Must produce standard\
+      \ verdict format:\n   **Verdict: PASS** or **Verdict: WARN** or **Verdict: FAIL**\n\
+      \   Followed by **Findings:** with - [PASS|WARN|FAIL] items.\n   Include a Coverage\
+      \ section showing X/Y requirements covered.\n\ne. Verdict Rules:\n   PASS: All\
+      \ spec requirements have corresponding test scenarios and\n   all checklist\
+      \ items pass.\n   WARN: Coverage is above 80% but some non-critical items failed.\n\
+      \   FAIL: Coverage is below 80% or critical checklist items failed.\n\nf. Constraints:\
+      \ Read-only agent. Only use Bash for running build/test\n   commands. Do not\
+      \ modify source files.\n\ng. Output Protocol: Write .claude/plans/task-status.json\
+      \ when done\n   (same format as other validators).\n\n2. Verify the file loads\
+      \ correctly:\n   python3 -c \"\n   import importlib.util\n   spec = importlib.util.spec_from_file_location('po',\
+      \ 'scripts/plan-orchestrator.py')\n   mod = importlib.util.module_from_spec(spec)\n\
+      \   spec.loader.exec_module(mod)\n   agent = mod.load_agent_definition('qa-auditor')\n\
+      \   assert agent is not None, 'qa-auditor agent not found'\n   assert agent['name']\
+      \ == 'qa-auditor', f'Wrong name: {agent[\\\"name\\\"]}'\n   assert agent['model']\
+      \ == 'sonnet', f'Wrong model: {agent[\\\"model\\\"]}'\n   assert 'Read' in agent['tools'],\
+      \ 'Missing Read tool'\n   print(f'qa-auditor agent loaded: {agent[\\\"name\\\
+      \"]}, model={agent[\\\"model\\\"]}')\n   \"\n\nFiles: .claude/agents/qa-auditor.md\n"
 - id: phase-3
   name: Phase 3 - Orchestrator Integration
   status: pending
@@ -212,52 +135,29 @@ sections:
     status: pending
     depends_on:
     - '2.1'
-    description: >
-      In scripts/plan-orchestrator.py, add QA_AUDITOR_KEYWORDS for automatic
-      agent inference so tasks with audit/qa keywords auto-select qa-auditor.
-
-      Reference: docs/plans/2026-02-16-11-qa-audit-pipeline-design.md
-
-      Steps:
-      1. Read scripts/plan-orchestrator.py and find the existing keyword
-         constants: REVIEWER_KEYWORDS, DESIGNER_KEYWORDS, PLANNER_KEYWORDS
-         (around lines 147-162).
-
-      2. Add a new constant after PLANNER_KEYWORDS:
-
-         # Keywords indicating a QA audit task.
-         # When infer_agent_for_task() matches any of these, it selects "qa-auditor".
-         QA_AUDITOR_KEYWORDS = [
-             "qa audit", "test plan", "checklist audit", "coverage matrix",
-             "qa-auditor", "functional spec verification"
-         ]
-
-      3. In the infer_agent_for_task() function (around line 176), add a new
-         check AFTER the PLANNER_KEYWORDS check and BEFORE the
-         DESIGNER_KEYWORDS check. QA auditor keywords are multi-word phrases
-         so they should be checked before single-word designer keywords:
-
-         for keyword in QA_AUDITOR_KEYWORDS:
-             if keyword in text:
-                 return "qa-auditor"
-
-      4. Verify syntax:
-         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
-
-      5. Verify the inference works:
-         python3 -c "
-         import importlib.util
-         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
-         mod = importlib.util.module_from_spec(spec)
-         spec.loader.exec_module(mod)
-         task = {'name': 'Run QA audit', 'description': 'Run checklist audit against the feature'}
-         result = mod.infer_agent_for_task(task)
-         assert result == 'qa-auditor', f'Expected qa-auditor, got {result}'
-         print(f'Inference test passed: {result}')
-         "
-
-      Files: scripts/plan-orchestrator.py
-
+    description: "In scripts/plan-orchestrator.py, add QA_AUDITOR_KEYWORDS for automatic\
+      \ agent inference so tasks with audit/qa keywords auto-select qa-auditor.\n\
+      Reference: docs/plans/2026-02-16-11-qa-audit-pipeline-design.md\nSteps: 1. Read\
+      \ scripts/plan-orchestrator.py and find the existing keyword\n   constants:\
+      \ REVIEWER_KEYWORDS, DESIGNER_KEYWORDS, PLANNER_KEYWORDS\n   (around lines 147-162).\n\
+      \n2. Add a new constant after PLANNER_KEYWORDS:\n\n   # Keywords indicating\
+      \ a QA audit task.\n   # When infer_agent_for_task() matches any of these, it\
+      \ selects \"qa-auditor\".\n   QA_AUDITOR_KEYWORDS = [\n       \"qa audit\",\
+      \ \"test plan\", \"checklist audit\", \"coverage matrix\",\n       \"qa-auditor\"\
+      , \"functional spec verification\"\n   ]\n\n3. In the infer_agent_for_task()\
+      \ function (around line 176), add a new\n   check AFTER the PLANNER_KEYWORDS\
+      \ check and BEFORE the\n   DESIGNER_KEYWORDS check. QA auditor keywords are\
+      \ multi-word phrases\n   so they should be checked before single-word designer\
+      \ keywords:\n\n   for keyword in QA_AUDITOR_KEYWORDS:\n       if keyword in\
+      \ text:\n           return \"qa-auditor\"\n\n4. Verify syntax:\n   python3 -c\
+      \ \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True);\
+      \ print('syntax OK')\"\n\n5. Verify the inference works:\n   python3 -c \"\n\
+      \   import importlib.util\n   spec = importlib.util.spec_from_file_location('po',\
+      \ 'scripts/plan-orchestrator.py')\n   mod = importlib.util.module_from_spec(spec)\n\
+      \   spec.loader.exec_module(mod)\n   task = {'name': 'Run QA audit', 'description':\
+      \ 'Run checklist audit against the feature'}\n   result = mod.infer_agent_for_task(task)\n\
+      \   assert result == 'qa-auditor', f'Expected qa-auditor, got {result}'\n  \
+      \ print(f'Inference test passed: {result}')\n   \"\n\nFiles: scripts/plan-orchestrator.py\n"
 - id: phase-4
   name: Phase 4 - Unit Tests
   status: pending
@@ -268,69 +168,41 @@ sections:
     status: pending
     depends_on:
     - '3.1'
-    description: >
-      Create tests/test_qa_auditor_integration.py with unit tests verifying the
-      qa-auditor agent loads correctly, checklists parse, and keyword inference
-      works.
-
-      Reference: docs/plans/2026-02-16-11-qa-audit-pipeline-design.md
-
-      Steps:
-      1. Create tests/test_qa_auditor_integration.py with these test cases:
-
-         a. test_qa_auditor_agent_loads: Load the qa-auditor agent using
-            load_agent_definition("qa-auditor"). Assert it returns non-None.
-            Assert name == "qa-auditor", model == "sonnet". Assert "Read",
-            "Grep", "Glob", "Bash" are in tools.
-
-         b. test_qa_auditor_agent_body_has_pipeline_sections: Load the agent
-            and check that the body contains key sections: "Audit Pipeline",
-            "Output Format", "Verdict", "Constraints".
-
-         c. test_checklist_crud_operations_exists: Assert the file
-            .claude/checklists/crud-operations.md exists. Read it and verify
-            it contains "Create and edit" and "Delete requires confirmation".
-
-         d. test_checklist_navigation_exists: Assert .claude/checklists/navigation.md
-            exists. Verify it contains "Deep links" and "Breadcrumbs".
-
-         e. test_checklist_data_display_exists: Assert .claude/checklists/data-display.md
-            exists. Verify it contains "Empty state" and "Loading state".
-
-         f. test_infer_agent_for_qa_audit_task: Call infer_agent_for_task with
-            a task containing "qa audit" in description. Assert returns
-            "qa-auditor".
-
-         g. test_infer_agent_for_checklist_audit_task: Call infer_agent_for_task
-            with a task containing "checklist audit". Assert returns "qa-auditor".
-
-         h. test_infer_agent_for_test_plan_task: Call infer_agent_for_task with
-            a task containing "test plan". Assert returns "qa-auditor".
-
-         i. test_infer_agent_non_qa_task: Call infer_agent_for_task with a task
-            containing "implement the feature". Assert does NOT return "qa-auditor"
-            (should return "coder").
-
-         j. test_qa_auditor_in_validators_list: Create a ValidationConfig with
-            validators=["validator", "qa-auditor"]. Assert "qa-auditor" is in
-            validators. This verifies the qa-auditor can be referenced in plan
-            meta without code changes.
-
-      2. Import using importlib (same pattern as test_budget_guard.py):
-         import importlib.util
-         spec = importlib.util.spec_from_file_location(
-             "plan_orchestrator", "scripts/plan-orchestrator.py")
-         mod = importlib.util.module_from_spec(spec)
-         spec.loader.exec_module(mod)
-         load_agent_definition = mod.load_agent_definition
-         infer_agent_for_task = mod.infer_agent_for_task
-         ValidationConfig = mod.ValidationConfig
-
-      3. Run: python3 -m pytest tests/test_qa_auditor_integration.py -v
-         Fix any failures.
-
-      Files: tests/test_qa_auditor_integration.py
-
+    description: "Create tests/test_qa_auditor_integration.py with unit tests verifying\
+      \ the qa-auditor agent loads correctly, checklists parse, and keyword inference\
+      \ works.\nReference: docs/plans/2026-02-16-11-qa-audit-pipeline-design.md\n\
+      Steps: 1. Create tests/test_qa_auditor_integration.py with these test cases:\n\
+      \n   a. test_qa_auditor_agent_loads: Load the qa-auditor agent using\n     \
+      \ load_agent_definition(\"qa-auditor\"). Assert it returns non-None.\n     \
+      \ Assert name == \"qa-auditor\", model == \"sonnet\". Assert \"Read\",\n   \
+      \   \"Grep\", \"Glob\", \"Bash\" are in tools.\n\n   b. test_qa_auditor_agent_body_has_pipeline_sections:\
+      \ Load the agent\n      and check that the body contains key sections: \"Audit\
+      \ Pipeline\",\n      \"Output Format\", \"Verdict\", \"Constraints\".\n\n  \
+      \ c. test_checklist_crud_operations_exists: Assert the file\n      .claude/checklists/crud-operations.md\
+      \ exists. Read it and verify\n      it contains \"Create and edit\" and \"Delete\
+      \ requires confirmation\".\n\n   d. test_checklist_navigation_exists: Assert\
+      \ .claude/checklists/navigation.md\n      exists. Verify it contains \"Deep\
+      \ links\" and \"Breadcrumbs\".\n\n   e. test_checklist_data_display_exists:\
+      \ Assert .claude/checklists/data-display.md\n      exists. Verify it contains\
+      \ \"Empty state\" and \"Loading state\".\n\n   f. test_infer_agent_for_qa_audit_task:\
+      \ Call infer_agent_for_task with\n      a task containing \"qa audit\" in description.\
+      \ Assert returns\n      \"qa-auditor\".\n\n   g. test_infer_agent_for_checklist_audit_task:\
+      \ Call infer_agent_for_task\n      with a task containing \"checklist audit\"\
+      . Assert returns \"qa-auditor\".\n\n   h. test_infer_agent_for_test_plan_task:\
+      \ Call infer_agent_for_task with\n      a task containing \"test plan\". Assert\
+      \ returns \"qa-auditor\".\n\n   i. test_infer_agent_non_qa_task: Call infer_agent_for_task\
+      \ with a task\n      containing \"implement the feature\". Assert does NOT return\
+      \ \"qa-auditor\"\n      (should return \"coder\").\n\n   j. test_qa_auditor_in_validators_list:\
+      \ Create a ValidationConfig with\n      validators=[\"validator\", \"qa-auditor\"\
+      ]. Assert \"qa-auditor\" is in\n      validators. This verifies the qa-auditor\
+      \ can be referenced in plan\n      meta without code changes.\n\n2. Import using\
+      \ importlib (same pattern as test_budget_guard.py):\n   import importlib.util\n\
+      \   spec = importlib.util.spec_from_file_location(\n       \"plan_orchestrator\"\
+      , \"scripts/plan-orchestrator.py\")\n   mod = importlib.util.module_from_spec(spec)\n\
+      \   spec.loader.exec_module(mod)\n   load_agent_definition = mod.load_agent_definition\n\
+      \   infer_agent_for_task = mod.infer_agent_for_task\n   ValidationConfig = mod.ValidationConfig\n\
+      \n3. Run: python3 -m pytest tests/test_qa_auditor_integration.py -v\n   Fix\
+      \ any failures.\n\nFiles: tests/test_qa_auditor_integration.py\n"
 - id: phase-5
   name: Phase 5 - Verification
   status: pending
@@ -341,69 +213,38 @@ sections:
     status: pending
     depends_on:
     - '4.1'
-    description: >
-      Run verification checks to confirm the QA audit pipeline feature works
-      correctly.
-
-      Steps:
-      1. Check Python syntax for both scripts:
-         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
-
-      2. Run unit tests:
-         python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
-
-      3. Verify the qa-auditor agent loads with correct metadata:
-         python3 -c "
-         import importlib.util
-         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
-         mod = importlib.util.module_from_spec(spec)
-         spec.loader.exec_module(mod)
-         agent = mod.load_agent_definition('qa-auditor')
-         assert agent is not None, 'qa-auditor not found'
-         assert agent['name'] == 'qa-auditor'
-         assert agent['model'] == 'sonnet'
-         print('qa-auditor agent verified')
-         "
-
-      4. Verify all three checklists exist:
-         python3 -c "
-         import os
-         for name in ['crud-operations', 'navigation', 'data-display']:
-             path = f'.claude/checklists/{name}.md'
-             assert os.path.isfile(path), f'Missing checklist: {path}'
-             content = open(path).read()
-             assert len(content) > 50, f'Checklist too short: {path}'
-             print(f'Checklist verified: {path} ({len(content)} chars)')
-         print('All checklists verified')
-         "
-
-      5. Verify QA_AUDITOR_KEYWORDS exist in plan-orchestrator.py:
-         python3 -c "
-         import importlib.util
-         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
-         mod = importlib.util.module_from_spec(spec)
-         spec.loader.exec_module(mod)
-         assert hasattr(mod, 'QA_AUDITOR_KEYWORDS'), 'QA_AUDITOR_KEYWORDS not found'
-         assert len(mod.QA_AUDITOR_KEYWORDS) >= 4, f'Too few keywords: {len(mod.QA_AUDITOR_KEYWORDS)}'
-         print(f'QA_AUDITOR_KEYWORDS: {mod.QA_AUDITOR_KEYWORDS}')
-         "
-
-      6. Verify infer_agent_for_task returns qa-auditor for audit tasks:
-         python3 -c "
-         import importlib.util
-         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
-         mod = importlib.util.module_from_spec(spec)
-         spec.loader.exec_module(mod)
-         task = {'name': 'QA audit', 'description': 'Run qa audit on feature'}
-         result = mod.infer_agent_for_task(task)
-         assert result == 'qa-auditor', f'Expected qa-auditor, got {result}'
-         print(f'Agent inference verified: {result}')
-         "
-
-      7. Run orchestrator dry-run to verify no startup errors:
-         python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
-
-      If any check fails, report the failure with specific details.
-
-      Files: scripts/plan-orchestrator.py, .claude/agents/qa-auditor.md,
-             .claude/checklists/, tests/test_qa_auditor_integration.py
+    description: "Run verification checks to confirm the QA audit pipeline feature\
+      \ works correctly.\nSteps: 1. Check Python syntax for both scripts:\n   python3\
+      \ -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
+      \ py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\n\n2. Run\
+      \ unit tests:\n   python3 -m pytest tests/ 2>/dev/null || echo 'No test suite\
+      \ configured'\n\n3. Verify the qa-auditor agent loads with correct metadata:\n\
+      \   python3 -c \"\n   import importlib.util\n   spec = importlib.util.spec_from_file_location('po',\
+      \ 'scripts/plan-orchestrator.py')\n   mod = importlib.util.module_from_spec(spec)\n\
+      \   spec.loader.exec_module(mod)\n   agent = mod.load_agent_definition('qa-auditor')\n\
+      \   assert agent is not None, 'qa-auditor not found'\n   assert agent['name']\
+      \ == 'qa-auditor'\n   assert agent['model'] == 'sonnet'\n   print('qa-auditor\
+      \ agent verified')\n   \"\n\n4. Verify all three checklists exist:\n   python3\
+      \ -c \"\n   import os\n   for name in ['crud-operations', 'navigation', 'data-display']:\n\
+      \       path = f'.claude/checklists/{name}.md'\n       assert os.path.isfile(path),\
+      \ f'Missing checklist: {path}'\n       content = open(path).read()\n       assert\
+      \ len(content) > 50, f'Checklist too short: {path}'\n       print(f'Checklist\
+      \ verified: {path} ({len(content)} chars)')\n   print('All checklists verified')\n\
+      \   \"\n\n5. Verify QA_AUDITOR_KEYWORDS exist in plan-orchestrator.py:\n   python3\
+      \ -c \"\n   import importlib.util\n   spec = importlib.util.spec_from_file_location('po',\
+      \ 'scripts/plan-orchestrator.py')\n   mod = importlib.util.module_from_spec(spec)\n\
+      \   spec.loader.exec_module(mod)\n   assert hasattr(mod, 'QA_AUDITOR_KEYWORDS'),\
+      \ 'QA_AUDITOR_KEYWORDS not found'\n   assert len(mod.QA_AUDITOR_KEYWORDS) >=\
+      \ 4, f'Too few keywords: {len(mod.QA_AUDITOR_KEYWORDS)}'\n   print(f'QA_AUDITOR_KEYWORDS:\
+      \ {mod.QA_AUDITOR_KEYWORDS}')\n   \"\n\n6. Verify infer_agent_for_task returns\
+      \ qa-auditor for audit tasks:\n   python3 -c \"\n   import importlib.util\n\
+      \   spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')\n\
+      \   mod = importlib.util.module_from_spec(spec)\n   spec.loader.exec_module(mod)\n\
+      \   task = {'name': 'QA audit', 'description': 'Run qa audit on feature'}\n\
+      \   result = mod.infer_agent_for_task(task)\n   assert result == 'qa-auditor',\
+      \ f'Expected qa-auditor, got {result}'\n   print(f'Agent inference verified:\
+      \ {result}')\n   \"\n\n7. Run orchestrator dry-run to verify no startup errors:\n\
+      \   python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml\
+      \ --dry-run\n\nIf any check fails, report the failure with specific details.\n\
+      Files: scripts/plan-orchestrator.py, .claude/agents/qa-auditor.md,\n       .claude/checklists/,\
+      \ tests/test_qa_auditor_integration.py\n"
