@@ -2515,6 +2515,9 @@ def run_orchestrator(
     # Parse per-task validation configuration from plan meta
     validation_config = parse_validation_config(plan)
 
+    # Parse model escalation configuration
+    escalation_config = parse_escalation_config(plan)
+
     # Resolve the claude binary path
     global CLAUDE_CMD
     CLAUDE_CMD = resolve_claude_binary()
@@ -2545,6 +2548,12 @@ def run_orchestrator(
         print(f"  Ceiling: ${budget_config.quota_ceiling_usd:.2f}, Limit: ${budget_config.effective_limit_usd:.2f}")
     else:
         print("Budget: unlimited (no --quota-ceiling configured)")
+    if escalation_config.enabled:
+        print(f"Model escalation: enabled (escalate_after={escalation_config.escalate_after}, "
+              f"max_model={escalation_config.max_model}, "
+              f"validation_model={escalation_config.validation_model})")
+    else:
+        print("Model escalation: disabled (using agent default models)")
     print()
 
     # Find starting point
