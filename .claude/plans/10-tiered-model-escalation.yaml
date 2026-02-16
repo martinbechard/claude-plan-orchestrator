@@ -167,7 +167,7 @@ sections:
       introspection confirms correct wiring.'
 - id: phase-3
   name: Phase 3 - Orchestrator Integration
-  status: in_progress
+  status: completed
   tasks:
   - id: '3.1'
     name: Integrate escalation config into run_orchestrator initialization
@@ -263,7 +263,7 @@ sections:
   - id: '3.4'
     name: Wire validation model override
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.1'
     - '3.1'
@@ -285,6 +285,12 @@ sections:
       \ parallel results handling (around line 2663)\n   Add escalation_config=escalation_config\
       \ to both calls.\n\n4. Verify with: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
       \ doraise=True); print('syntax OK')\"\nFiles: scripts/plan-orchestrator.py\n"
+    attempts: 1
+    last_attempt: '2026-02-16T18:28:30.970770'
+    completed_at: '2026-02-16T18:30:00.000000'
+    result_message: Wired validation model override into run_validation(). Added escalation_config
+      parameter to signature, extracts validation_model when escalation is enabled,
+      and passes it to run_claude_task(). Updated both call sites in run_orchestrator().
 - id: phase-4
   name: Phase 4 - Usage Report Enhancement
   status: pending
