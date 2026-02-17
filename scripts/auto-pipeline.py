@@ -445,9 +445,8 @@ def scan_all_backlogs() -> list[BacklogItem]:
     features = scan_directory(FEATURE_DIR, "feature")
     all_items = defects + features
 
-    # Build the set of completed slugs for dependency resolution
-    done = completed_slugs()
-    verbose_log(f"Completed slugs: {done}")
+    # Lazy: only load completed slugs when needed for dependency resolution
+    done: set[str] | None = None
 
     # Filter items with unsatisfied dependencies
     ready: list[BacklogItem] = []
@@ -456,6 +455,10 @@ def scan_all_backlogs() -> list[BacklogItem]:
         if not deps:
             ready.append(item)
             continue
+
+        # First item with dependencies triggers the scan
+        if done is None:
+            done = completed_slugs()
 
         unsatisfied = [d for d in deps if d not in done]
         if unsatisfied:
