@@ -1683,6 +1683,11 @@ def main_loop(dry_run: bool = False, once: bool = False,
     CLAUDE_CMD = resolve_claude_binary()
     log(f"Claude binary: {' '.join(CLAUDE_CMD)}")
 
+    # Capture baseline hashes of source files for hot-reload detection
+    global _startup_file_hashes
+    _startup_file_hashes = snapshot_source_hashes()
+    log(f"Watching {len(_startup_file_hashes)} source file(s) for hot-reload")
+
     # Clear stale stop semaphore
     clear_stop_semaphore()
 
@@ -1741,6 +1746,21 @@ def main_loop(dry_run: bool = False, once: bool = False,
                         if not success:
                             failed_items.add(plan_path)
                             log(f"In-progress plan failed: {plan_path}")
+                    # Hot-reload check after resuming in-progress plans
+                    if check_code_changed():
+                        log("Source code changed. Restarting pipeline to pick up changes...")
+                        slack.send_status(
+                            "*Pipeline: restarting* Code change detected, hot-reloading...",
+                            level="info"
+                        )
+                        if session_tracker.work_item_costs:
+                            print(session_tracker.format_session_summary())
+                            session_tracker.write_session_report()
+                        slack.stop_background_polling()
+                        observer.stop()
+                        observer.join(timeout=5)
+                        restore_terminal_settings()
+                        os.execv(sys.executable, [sys.executable] + sys.argv)
                     # After resuming, re-scan (completed plans may unblock new items)
                     continue
 
@@ -1800,6 +1820,25 @@ def main_loop(dry_run: bool = False, once: bool = False,
                 if not success:
                     failed_items.add(item.path)
                     log(f"Item failed - will not retry in this session: {item.slug}")
+
+                # Hot-reload: check if source code changed between work items
+                if check_code_changed():
+                    log("Source code changed. Restarting pipeline to pick up changes...")
+                    slack.send_status(
+                        "*Pipeline: restarting* Code change detected, hot-reloading...",
+                        level="info"
+                    )
+                    # Graceful cleanup before self-restart
+                    if session_tracker.work_item_costs:
+                        print(session_tracker.format_session_summary())
+                        session_tracker.write_session_report()
+                    slack.stop_background_polling()
+                    if not once:
+                        observer.stop()
+                        observer.join(timeout=5)
+                    restore_terminal_settings()
+                    # Replace current process with fresh copy
+                    os.execv(sys.executable, [sys.executable] + sys.argv)
 
             # Brief pause before next scan
             time.sleep(2)
