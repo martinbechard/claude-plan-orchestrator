@@ -67,12 +67,12 @@ sections:
       function.
 - id: phase-2
   name: Phase 2 - Extract Restart Helper
-  status: pending
+  status: completed
   tasks:
   - id: '2.1'
     name: Extract _perform_restart() helper function
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.1'
     description: "In scripts/auto-pipeline.py, extract the restart logic that currently\n\
@@ -112,6 +112,13 @@ sections:
       \                code_monitor\n            )\n\n3. Verify syntax:\n   python3\
       \ -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
       \ print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py\n"
+    attempts: 1
+    last_attempt: '2026-02-17T13:32:29.798462'
+    model_used: sonnet
+    completed_at: '2026-02-17T13:35:18.537083'
+    result_message: Extracted restart logic into _perform_restart() helper function.
+      Replaced two inline restart blocks with calls to the helper. Ready for monitor
+      integration in task 3.1.
 - id: phase-3
   name: Phase 3 - Integrate Monitor into Main Loop
   status: pending
