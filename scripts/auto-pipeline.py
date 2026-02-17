@@ -73,6 +73,7 @@ PLAN_CREATION_TIMEOUT_SECONDS = 600
 CHILD_SHUTDOWN_TIMEOUT_SECONDS = 10
 RATE_LIMIT_BUFFER_SECONDS = 30
 RATE_LIMIT_DEFAULT_WAIT_SECONDS = 3600
+CODE_CHANGE_POLL_INTERVAL_SECONDS = 10
 DEFAULT_MAX_QUOTA_PERCENT = 100.0
 DEFAULT_QUOTA_CEILING_USD = 0.0
 DEFAULT_RESERVED_BUDGET_USD = 0.0
@@ -379,6 +380,47 @@ def check_code_changed() -> bool:
             log(f"Code change detected in {filepath}")
             return True
     return False
+
+
+class CodeChangeMonitor:
+    """Background thread that periodically checks for source code changes.
+
+    Uses the existing check_code_changed() function which compares current
+    file hashes against _startup_file_hashes. When a change is detected,
+    sets the restart_pending event so the main loop can initiate a restart.
+    """
+
+    def __init__(self, poll_interval: float = CODE_CHANGE_POLL_INTERVAL_SECONDS):
+        self.poll_interval = poll_interval
+        self.restart_pending = threading.Event()
+        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+
+    def start(self) -> None:
+        """Start the background monitoring thread."""
+        self._thread = threading.Thread(
+            target=self._monitor_loop, daemon=True, name="code-change-monitor"
+        )
+        self._thread.start()
+        verbose_log(f"CodeChangeMonitor started (polling every {self.poll_interval}s)")
+
+    def stop(self) -> None:
+        """Signal the monitoring thread to stop."""
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=2)
+
+    def _monitor_loop(self) -> None:
+        """Periodically check for source code changes."""
+        while not self._stop_event.is_set():
+            try:
+                if check_code_changed():
+                    log("CodeChangeMonitor: source code change detected")
+                    self.restart_pending.set()
+                    return  # Stop monitoring once change detected
+            except Exception as e:
+                verbose_log(f"CodeChangeMonitor error: {e}")
+            self._stop_event.wait(timeout=self.poll_interval)
 
 
 # ─── Backlog Scanning ────────────────────────────────────────────────
