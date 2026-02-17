@@ -3005,6 +3005,85 @@ class SlackNotifier:
 
         return ("acknowledgement", first_line, body)
 
+    def create_backlog_item(self, item_type: str, title: str, body: str,
+                           user: str = "", ts: str = "") -> str:
+        """Create a backlog markdown file from a Slack message.
+
+        Args:
+            item_type: 'feature' or 'defect'
+            title: Item title
+            body: Item description
+            user: Slack user ID who sent the message
+            ts: Message timestamp
+
+        Returns:
+            Created file path, or empty string on error
+        """
+        if item_type == "feature":
+            backlog_dir = "docs/feature-backlog"
+        elif item_type == "defect":
+            backlog_dir = "docs/defect-backlog"
+        else:
+            return ""
+
+        # Find next available number
+        try:
+            existing = [f for f in os.listdir(backlog_dir)
+                       if f.endswith(".md") and f[0].isdigit()]
+            numbers = []
+            for f in existing:
+                parts = f.split("-", 1)
+                if parts[0].isdigit():
+                    numbers.append(int(parts[0]))
+            next_num = max(numbers) + 1 if numbers else 1
+        except (OSError, ValueError):
+            next_num = 1
+
+        # Create slug from title
+        slug = title.lower().strip()
+        slug = slug.replace(" ", "-")
+        # Remove non-alphanumeric chars except hyphens
+        slug = "".join(c for c in slug if c.isalnum() or c == "-")
+        slug = slug.strip("-")
+        if not slug:
+            slug = "untitled"
+
+        filename = f"{next_num}-{slug}.md"
+        filepath = os.path.join(backlog_dir, filename)
+
+        # Build markdown content
+        source_line = "Created from Slack message"
+        if user:
+            source_line += f" by {user}"
+        if ts:
+            source_line += f" at {ts}"
+        source_line += "."
+
+        content = (
+            f"# {title}\n\n"
+            f"## Status: Open\n\n"
+            f"## Priority: Medium\n\n"
+            f"## Summary\n\n"
+            f"{body if body else title}\n\n"
+            f"## Source\n\n"
+            f"{source_line}\n"
+        )
+
+        try:
+            os.makedirs(backlog_dir, exist_ok=True)
+            with open(filepath, "w") as f:
+                f.write(content)
+            # Confirm in Slack
+            item_label = "feature" if item_type == "feature" else "defect"
+            self.send_status(
+                f"*Created {item_label} backlog item:* {filename}",
+                level="success"
+            )
+            return filepath
+        except IOError as e:
+            print(f"[SLACK] Failed to create backlog item: {e}")
+            return ""
+
 
 def update_section_status(section: dict) -> None:
     """Update section status based on task statuses."""
