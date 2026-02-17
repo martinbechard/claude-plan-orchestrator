@@ -124,10 +124,13 @@ Request: {text}
 
 Perform a 5 Whys analysis to uncover the root need behind this request.
 Then write a concise backlog item with a clear title and description.
+Also classify whether this is truly a {item_type} or should be categorized differently.
 
 Format your response exactly like this:
 
 Title: <one-line title for the backlog item>
+
+Classification: <defect|feature|question> - <one sentence explaining why>
 
 5 Whys:
 1. <why>
@@ -3573,14 +3576,19 @@ class SlackNotifier:
             text: The raw LLM response text
 
         Returns:
-            Dict with keys: title, root_need, description, five_whys (list)
+            Dict with keys: title, root_need, description, five_whys (list), classification
         """
-        result: dict = {"title": "", "root_need": "", "description": "", "five_whys": []}
+        result: dict = {"title": "", "root_need": "", "description": "", "five_whys": [], "classification": ""}
 
         # Extract Title: line
         title_match = re.search(r"^Title:\s*(.+)$", text, re.MULTILINE)
         if title_match:
             result["title"] = title_match.group(1).strip()
+
+        # Extract Classification: line
+        class_match = re.search(r"^Classification:\s*(.+)$", text, re.MULTILINE)
+        if class_match:
+            result["classification"] = class_match.group(1).strip()
 
         # Extract Root Need: line
         root_match = re.search(r"^Root Need:\s*(.+)$", text, re.MULTILINE)
@@ -3650,6 +3658,7 @@ class SlackNotifier:
             title = parsed["title"] or fallback_title
             root_need = parsed["root_need"]
             five_whys = parsed["five_whys"]
+            classification = parsed["classification"]
 
             # Build description: use parsed description, or the full LLM
             # response as-is if no structured description was found
