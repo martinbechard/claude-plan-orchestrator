@@ -2,9 +2,9 @@ meta:
   name: 'Feature: Hot-Reload Auto-Pipeline Code Without Disrupting Slack'
   description: 'Implement a self-restart mechanism for auto-pipeline.py that detects
     source code changes between work items and performs an os.execv() restart to pick
-    up new code. This avoids manual restarts that interrupt the Slack poller. The plan-orchestrator
-    already runs as a subprocess (always gets fresh code), so only auto-pipeline.py
-    needs modification.
+    up new code. This avoids manual restarts that interrupt the Slack poller. The
+    plan-orchestrator already runs as a subprocess (always gets fresh code), so only
+    auto-pipeline.py needs modification.
 
     '
   plan_doc: docs/plans/2026-02-17-6-new-feature-when-modifying-the-code-for-the-auto-pipeline-you-need-to-have-som-design.md
@@ -20,18 +20,18 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Implementation
-  status: pending
+  status: in_progress
   tasks:
   - id: '1.1'
     name: Add source hash snapshot and change detection functions
     agent: coder
-    status: pending
+    status: completed
     description: "In scripts/auto-pipeline.py, add the hot-reload detection mechanism.\n\
       \nStep 1: Add 'import hashlib' to the imports section (near line 20, after 'import\
       \ signal').\n\nStep 2: Add these constants after the existing configuration\
-      \ constants section (after line 76, near DEFAULT_RESERVED_BUDGET_USD):\n\n  \
-      \  # Source files to monitor for hot-reload\n    HOT_RELOAD_WATCHED_FILES = [\n\
-      \        \"scripts/auto-pipeline.py\",\n        \"scripts/plan-orchestrator.py\"\
+      \ constants section (after line 76, near DEFAULT_RESERVED_BUDGET_USD):\n\n \
+      \   # Source files to monitor for hot-reload\n    HOT_RELOAD_WATCHED_FILES =\
+      \ [\n        \"scripts/auto-pipeline.py\",\n        \"scripts/plan-orchestrator.py\"\
       ,\n    ]\n\nStep 3: Add a module-level variable to store startup hashes (after\
       \ the CLAUDE_CMD global state around line 131):\n\n    _startup_file_hashes:\
       \ dict[str, str] = {}  # Populated at startup by snapshot_source_hashes()\n\n\
@@ -45,31 +45,37 @@ sections:
       \ files.\n\n        Called at startup to establish a baseline. Later calls to\n\
       \        check_code_changed() compare current hashes against this snapshot.\n\
       \        \"\"\"\n        hashes: dict[str, str] = {}\n        for filepath in\
-      \ HOT_RELOAD_WATCHED_FILES:\n            h = _compute_file_hash(filepath)\n \
-      \           if h:\n                hashes[filepath] = h\n                verbose_log(f\"\
+      \ HOT_RELOAD_WATCHED_FILES:\n            h = _compute_file_hash(filepath)\n\
+      \            if h:\n                hashes[filepath] = h\n                verbose_log(f\"\
       Snapshot hash: {filepath} -> {h[:12]}...\")\n        return hashes\n\n    def\
       \ check_code_changed() -> bool:\n        \"\"\"Check if any watched source file\
       \ has changed since startup.\n\n        Compares current file hashes against\
-      \ _startup_file_hashes.\n        Returns True if any file has changed.\n    \
-      \    \"\"\"\n        for filepath, original_hash in _startup_file_hashes.items():\n\
+      \ _startup_file_hashes.\n        Returns True if any file has changed.\n   \
+      \     \"\"\"\n        for filepath, original_hash in _startup_file_hashes.items():\n\
       \            current_hash = _compute_file_hash(filepath)\n            if current_hash\
       \ and current_hash != original_hash:\n                log(f\"Code change detected\
       \ in {filepath}\")\n                return True\n        return False\n\nStep\
       \ 5: Verify syntax:\n  python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True)\"\n"
+    attempts: 1
+    last_attempt: '2026-02-17T12:09:30.045684'
+    model_used: sonnet
+    completed_at: '2026-02-17T12:11:39.295013'
+    result_message: 'Added hot-reload detection functions: snapshot_source_hashes()
+      and check_code_changed() with SHA-256 file hashing'
   - id: '1.2'
     name: Add self-restart logic to main_loop
     agent: coder
     depends_on:
     - '1.1'
     status: pending
-    description: "In scripts/auto-pipeline.py, modify the main_loop() and main()\
-      \ functions to support hot-reload self-restart.\n\nStep 1: In main_loop() (around\
-      \ line 1625), add a parameter for the startup hashes. Change the function signature\
-      \ to:\n\n    def main_loop(dry_run: bool = False, once: bool = False,\n     \
-      \         budget_guard: Optional[PipelineBudgetGuard] = None) -> None:\n\nNo\
-      \ signature change needed - we use the module-level _startup_file_hashes.\n\n\
-      Step 2: In main_loop(), right after the line:\n    CLAUDE_CMD = resolve_claude_binary()\n\
+    description: "In scripts/auto-pipeline.py, modify the main_loop() and main() functions\
+      \ to support hot-reload self-restart.\n\nStep 1: In main_loop() (around line\
+      \ 1625), add a parameter for the startup hashes. Change the function signature\
+      \ to:\n\n    def main_loop(dry_run: bool = False, once: bool = False,\n    \
+      \          budget_guard: Optional[PipelineBudgetGuard] = None) -> None:\n\n\
+      No signature change needed - we use the module-level _startup_file_hashes.\n\
+      \nStep 2: In main_loop(), right after the line:\n    CLAUDE_CMD = resolve_claude_binary()\n\
       add:\n    global _startup_file_hashes\n    _startup_file_hashes = snapshot_source_hashes()\n\
       \    log(f\"Watching {len(_startup_file_hashes)} source file(s) for hot-reload\"\
       )\n\nStep 3: In the main_loop() while-True loop, after each work item completes\
@@ -79,14 +85,14 @@ sections:
       \ {item.slug}\")\n    log(\"Exiting (--once mode).\")\n    break\n\nThis is\
       \ --once mode, no restart needed here since the process exits anyway.\n\nFind\
       \ the block in the continuous processing section (around line 1750):\n    success\
-      \ = process_item(item, dry_run, session_tracker)\n    if not success:\n     \
-      \   failed_items.add(item.path)\n        log(f\"Item failed - will not retry\
+      \ = process_item(item, dry_run, session_tracker)\n    if not success:\n    \
+      \    failed_items.add(item.path)\n        log(f\"Item failed - will not retry\
       \ in this session: {item.slug}\")\n\nAfter these lines (still inside the for\
       \ loop), add:\n\n    # Hot-reload: check if source code changed between work\
       \ items\n    if check_code_changed():\n        log(\"Source code changed. Restarting\
-      \ pipeline to pick up changes...\")\n        slack.send_status(\n            \"\
-      *Pipeline: restarting* Code change detected, hot-reloading...\",\n          \
-      \  level=\"info\"\n        )\n        # Graceful cleanup before self-restart\n\
+      \ pipeline to pick up changes...\")\n        slack.send_status(\n          \
+      \  \"*Pipeline: restarting* Code change detected, hot-reloading...\",\n    \
+      \        level=\"info\"\n        )\n        # Graceful cleanup before self-restart\n\
       \        if session_tracker.work_item_costs:\n            print(session_tracker.format_session_summary())\n\
       \            session_tracker.write_session_report()\n        slack.stop_background_polling()\n\
       \        if not once:\n            observer.stop()\n            observer.join(timeout=5)\n\
@@ -95,22 +101,22 @@ sections:
       \nStep 4: Also add the hot-reload check after the in-progress plan resumption\
       \ loop (around line 1696). After the 'continue' that follows in-progress plan\
       \ resumption, this won't work directly. Instead, add the check right before\
-      \ the 'continue' statement:\n\nFind this block:\n                    if not success:\n\
-      \                        failed_items.add(plan_path)\n                       \
-      \ log(f\"In-progress plan failed: {plan_path}\")\n                # After resuming,\
-      \ re-scan (completed plans may unblock new items)\n                continue\n\
-      \nBefore the 'continue', insert:\n                # Hot-reload check after resuming\
-      \ in-progress plans\n                if check_code_changed():\n             \
-      \       log(\"Source code changed. Restarting pipeline to pick up changes...\"\
-      )\n                    slack.send_status(\n                        \"*Pipeline:\
-      \ restarting* Code change detected, hot-reloading...\",\n                  \
-      \      level=\"info\"\n                    )\n                    if session_tracker.work_item_costs:\n\
-      \                        print(session_tracker.format_session_summary())\n  \
-      \                      session_tracker.write_session_report()\n             \
-      \       slack.stop_background_polling()\n                    observer.stop()\n\
+      \ the 'continue' statement:\n\nFind this block:\n                    if not\
+      \ success:\n                        failed_items.add(plan_path)\n          \
+      \              log(f\"In-progress plan failed: {plan_path}\")\n            \
+      \    # After resuming, re-scan (completed plans may unblock new items)\n   \
+      \             continue\n\nBefore the 'continue', insert:\n                #\
+      \ Hot-reload check after resuming in-progress plans\n                if check_code_changed():\n\
+      \                    log(\"Source code changed. Restarting pipeline to pick\
+      \ up changes...\")\n                    slack.send_status(\n               \
+      \         \"*Pipeline: restarting* Code change detected, hot-reloading...\"\
+      ,\n                        level=\"info\"\n                    )\n         \
+      \           if session_tracker.work_item_costs:\n                        print(session_tracker.format_session_summary())\n\
+      \                        session_tracker.write_session_report()\n          \
+      \          slack.stop_background_polling()\n                    observer.stop()\n\
       \                    observer.join(timeout=5)\n                    restore_terminal_settings()\n\
-      \                    os.execv(sys.executable, [sys.executable] + sys.argv)\n\n\
-      Step 5: Verify syntax:\n  python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \                    os.execv(sys.executable, [sys.executable] + sys.argv)\n\
+      \nStep 5: Verify syntax:\n  python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True)\"\n"
 - id: phase-2
   name: Phase 2 - Unit Tests
@@ -123,9 +129,9 @@ sections:
     - '1.2'
     status: pending
     description: "Add tests to tests/test_auto_pipeline.py (or create the file if\
-      \ it does not exist) for the hot-reload detection functions.\n\nFirst, read the\
-      \ existing test files in tests/ to understand the project's test patterns (imports,\
-      \ fixtures, mocking style).\n\nAdd the following tests:\n\n1. test_compute_file_hash_returns_consistent_hash:\n\
+      \ it does not exist) for the hot-reload detection functions.\n\nFirst, read\
+      \ the existing test files in tests/ to understand the project's test patterns\
+      \ (imports, fixtures, mocking style).\n\nAdd the following tests:\n\n1. test_compute_file_hash_returns_consistent_hash:\n\
       \   Create a temporary file with known content using tempfile.\n   Call _compute_file_hash()\
       \ twice on the same file.\n   Assert both calls return the same non-empty string.\n\
       \   Assert the hash is a valid 64-char hex string (SHA-256).\n\n2. test_compute_file_hash_missing_file:\n\
@@ -139,16 +145,17 @@ sections:
       \   Assert it returns False.\n\n5. test_check_code_changed_detects_modification:\n\
       \   Create a temp file, capture its hash in _startup_file_hashes.\n   Modify\
       \ the temp file content.\n   Call check_code_changed().\n   Assert it returns\
-      \ True.\n\n6. test_check_code_changed_ignores_missing_startup_hash:\n   Set _startup_file_hashes\
-      \ to empty dict.\n   Call check_code_changed().\n   Assert it returns False (no\
-      \ files to compare).\n\nImportant: Import the functions from auto-pipeline.py\
-      \ using importlib.util\n(same pattern used in the script itself for plan-orchestrator\
-      \ imports):\n\n    import importlib.util\n    _ap_spec = importlib.util.spec_from_file_location(\n\
-      \        \"auto_pipeline\", \"scripts/auto-pipeline.py\")\n    _ap_mod = importlib.util.module_from_spec(_ap_spec)\n\
-      \    _ap_spec.loader.exec_module(_ap_mod)\n\nThen access functions as _ap_mod._compute_file_hash,\
-      \ etc.\n\nNote: The module import will try to import plan-orchestrator.py which\n\
-      needs SlackNotifier. You may need to mock or patch the import. Check\nhow existing\
-      \ tests handle this.\n\nAfter writing tests, run them:\n  ~/.pyenv/versions/3.11.*/bin/python\
+      \ True.\n\n6. test_check_code_changed_ignores_missing_startup_hash:\n   Set\
+      \ _startup_file_hashes to empty dict.\n   Call check_code_changed().\n   Assert\
+      \ it returns False (no files to compare).\n\nImportant: Import the functions\
+      \ from auto-pipeline.py using importlib.util\n(same pattern used in the script\
+      \ itself for plan-orchestrator imports):\n\n    import importlib.util\n    _ap_spec\
+      \ = importlib.util.spec_from_file_location(\n        \"auto_pipeline\", \"scripts/auto-pipeline.py\"\
+      )\n    _ap_mod = importlib.util.module_from_spec(_ap_spec)\n    _ap_spec.loader.exec_module(_ap_mod)\n\
+      \nThen access functions as _ap_mod._compute_file_hash, etc.\n\nNote: The module\
+      \ import will try to import plan-orchestrator.py which\nneeds SlackNotifier.\
+      \ You may need to mock or patch the import. Check\nhow existing tests handle\
+      \ this.\n\nAfter writing tests, run them:\n  ~/.pyenv/versions/3.11.*/bin/python\
       \ -m pytest tests/ -v\n\nFix any failures immediately.\n"
 - id: phase-3
   name: Phase 3 - Verification
@@ -163,18 +170,19 @@ sections:
     description: "Run the following verification steps:\n\n1. Compile-check both main\
       \ scripts:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\
-      \n\n2. Run the full test suite:\n   python3 -m pytest tests/ 2>/dev/null || echo\
-      \ 'No test suite configured'\n\n3. Verify HOT_RELOAD_WATCHED_FILES constant\
+      \n\n2. Run the full test suite:\n   python3 -m pytest tests/ 2>/dev/null ||\
+      \ echo 'No test suite configured'\n\n3. Verify HOT_RELOAD_WATCHED_FILES constant\
       \ exists:\n   grep -n 'HOT_RELOAD_WATCHED_FILES' scripts/auto-pipeline.py\n\
       \   Expected: at least 2 matches (definition + usage).\n\n4. Verify snapshot_source_hashes\
       \ function exists:\n   grep -n 'def snapshot_source_hashes' scripts/auto-pipeline.py\n\
-      \   Expected: 1 match.\n\n5. Verify check_code_changed function exists:\n   grep\
-      \ -n 'def check_code_changed' scripts/auto-pipeline.py\n   Expected: 1 match.\n\
-      \n6. Verify os.execv self-restart is present:\n   grep -n 'os.execv' scripts/auto-pipeline.py\n\
-      \   Expected: at least 1 match in main_loop.\n\n7. Verify hashlib import:\n\
-      \   grep -n 'import hashlib' scripts/auto-pipeline.py\n   Expected: 1 match.\n\
-      \n8. Verify hot-reload tests exist:\n   grep -rn 'def test_.*hash\\|def test_.*code_changed\\\
-      |def test_.*hot.reload' tests/\n   Expected: at least 4 test functions.\n\n9.\
-      \ Verify startup hash snapshot is called in main_loop:\n   grep -n 'snapshot_source_hashes'\
-      \ scripts/auto-pipeline.py\n   Expected: at least 2 matches (definition + call\
-      \ in main_loop).\n\nReport findings as PASS/WARN/FAIL.\n"
+      \   Expected: 1 match.\n\n5. Verify check_code_changed function exists:\n  \
+      \ grep -n 'def check_code_changed' scripts/auto-pipeline.py\n   Expected: 1\
+      \ match.\n\n6. Verify os.execv self-restart is present:\n   grep -n 'os.execv'\
+      \ scripts/auto-pipeline.py\n   Expected: at least 1 match in main_loop.\n\n\
+      7. Verify hashlib import:\n   grep -n 'import hashlib' scripts/auto-pipeline.py\n\
+      \   Expected: 1 match.\n\n8. Verify hot-reload tests exist:\n   grep -rn 'def\
+      \ test_.*hash\\|def test_.*code_changed\\|def test_.*hot.reload' tests/\n  \
+      \ Expected: at least 4 test functions.\n\n9. Verify startup hash snapshot is\
+      \ called in main_loop:\n   grep -n 'snapshot_source_hashes' scripts/auto-pipeline.py\n\
+      \   Expected: at least 2 matches (definition + call in main_loop).\n\nReport\
+      \ findings as PASS/WARN/FAIL.\n"
