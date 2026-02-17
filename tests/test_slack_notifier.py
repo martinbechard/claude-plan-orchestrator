@@ -553,8 +553,7 @@ def test_slack_config_constants_exist():
     assert mod.SLACK_CONFIG_PATH == ".claude/slack.local.yaml"
     assert mod.SLACK_QUESTION_PATH == ".claude/slack-pending-question.json"
     assert mod.SLACK_ANSWER_PATH == ".claude/slack-answer.json"
-    assert mod.SLACK_POLL_INTERVAL_MIN_SECONDS == 5
-    assert mod.SLACK_POLL_INTERVAL_MAX_SECONDS == 60
+    assert mod.SLACK_POLL_INTERVAL_SECONDS == 15
     assert mod.SLACK_LAST_READ_PATH == ".claude/slack-last-read.json"
     assert mod.SLACK_INBOUND_POLL_LIMIT == 20
     assert isinstance(mod.SOCKET_MODE_AVAILABLE, bool)
@@ -1850,7 +1849,44 @@ def test_intake_state_independent_events():
     assert intake2.status == "analyzing"
 
 
-# --- Test: _run_intake_analysis with clear request (no questions needed) ---
+# --- Test: _parse_intake_response extracts structured fields ---
+
+
+def test_parse_intake_response_structured():
+    """_parse_intake_response should extract Title, Root Need, Description, 5 Whys."""
+    text = (
+        "Title: Implement Redis caching\n\n"
+        "5 Whys:\n"
+        "1. Users want faster responses\n"
+        "2. API calls are slow\n"
+        "3. No caching layer\n"
+        "4. Architecture gap\n"
+        "5. Need low-latency data access\n\n"
+        "Root Need: Low-latency data access for user retention\n\n"
+        "Description:\n"
+        "Add a Redis caching layer to reduce API response times."
+    )
+    result = SlackNotifier._parse_intake_response(text)
+
+    assert result["title"] == "Implement Redis caching"
+    assert result["root_need"] == "Low-latency data access for user retention"
+    assert "Redis caching layer" in result["description"]
+    assert len(result["five_whys"]) == 5
+    assert "faster responses" in result["five_whys"][0]
+
+
+def test_parse_intake_response_unstructured():
+    """_parse_intake_response should return empty fields for plain prose."""
+    text = "This is just a plain analysis without any structure."
+    result = SlackNotifier._parse_intake_response(text)
+
+    assert result["title"] == ""
+    assert result["root_need"] == ""
+    assert result["description"] == ""
+    assert result["five_whys"] == []
+
+
+# --- Test: _run_intake_analysis with clear request ---
 
 
 def test_intake_analysis_clear_request(tmp_path, monkeypatch):
@@ -1876,23 +1912,20 @@ def test_intake_analysis_clear_request(tmp_path, monkeypatch):
     notifier.create_backlog_item = mock_create
     notifier.send_status = mock_send
 
-    # Mock run_claude_task to return a clear analysis
-    clear_response = json.dumps({
-        "clear": True,
-        "five_whys": ["Surface", "Deeper", "Core", "Business", "Root"],
-        "root_need": "Fast page loads for user retention",
-        "questions": [],
-        "title": "Add response caching",
-        "description": "Implement caching layer for API responses",
-        "priority": "high",
-    })
-
-    original_run = mod.run_claude_task
-
-    def mock_run_claude(prompt, dry_run=False, model=""):
-        return mod.TaskResult(success=True, message=clear_response, duration_seconds=1)
-
-    mod.run_claude_task = mock_run_claude
+    # Mock _call_claude_print to return plain-text analysis
+    llm_response = (
+        "Title: Add response caching\n\n"
+        "5 Whys:\n"
+        "1. Surface need\n"
+        "2. Deeper need\n"
+        "3. Core need\n"
+        "4. Business need\n"
+        "5. Root need\n\n"
+        "Root Need: Fast page loads for user retention\n\n"
+        "Description:\n"
+        "Implement caching layer for API responses to reduce latency."
+    )
+    notifier._call_claude_print = lambda prompt, model="sonnet", timeout=120: llm_response
 
     intake = IntakeState(
         channel_id="C123",
@@ -1904,24 +1937,22 @@ def test_intake_analysis_clear_request(tmp_path, monkeypatch):
     )
     notifier._pending_intakes[f"{intake.channel_name}:{intake.ts}"] = intake
 
-    try:
-        notifier._run_intake_analysis(intake)
-    finally:
-        mod.run_claude_task = original_run
+    notifier._run_intake_analysis(intake)
 
     assert intake.status == "done"
     assert len(created_items) == 1
     assert created_items[0]["title"] == "Add response caching"
     assert "5 Whys Analysis" in created_items[0]["body"]
+    assert "Fast page loads" in created_items[0]["body"]
     # Success notification sent
     assert any("created" in m["msg"].lower() for m in sent_messages)
 
 
-# --- Test: _run_intake_analysis with unclear request (questions needed) ---
+# --- Test: _run_intake_analysis with unstructured LLM response ---
 
 
-def test_intake_analysis_unclear_request(tmp_path, monkeypatch):
-    """_run_intake_analysis should post questions when request is unclear."""
+def test_intake_analysis_unstructured_response(tmp_path, monkeypatch):
+    """_run_intake_analysis should use raw text when LLM returns no structure."""
     import os
 
     monkeypatch.chdir(tmp_path)
@@ -1933,7 +1964,7 @@ def test_intake_analysis_unclear_request(tmp_path, monkeypatch):
     created_items = []
 
     def mock_create(item_type, title, body, user="", ts=""):
-        created_items.append({"type": item_type, "title": title})
+        created_items.append({"type": item_type, "title": title, "body": body})
         return "docs/defect-backlog/1-test.md"
 
     def mock_send(msg, level="info", channel_id=None):
@@ -1942,39 +1973,9 @@ def test_intake_analysis_unclear_request(tmp_path, monkeypatch):
     notifier.create_backlog_item = mock_create
     notifier.send_status = mock_send
 
-    call_count = [0]
-
-    def mock_run_claude(prompt, dry_run=False, model=""):
-        call_count[0] += 1
-        if call_count[0] == 1:
-            # First call: unclear, needs questions
-            return mod.TaskResult(
-                success=True,
-                message=json.dumps({
-                    "clear": False,
-                    "five_whys": ["W1", "W2", "W3", "W4", "W5"],
-                    "root_need": "Stability under load",
-                    "questions": ["What browser?", "What URL?"],
-                    "title": "",
-                    "description": "",
-                    "priority": "medium",
-                }),
-                duration_seconds=1,
-            )
-        else:
-            # Second call: refined with answers
-            return mod.TaskResult(
-                success=True,
-                message=json.dumps({
-                    "title": "Fix crash on Chrome under load",
-                    "description": "App crashes in Chrome when >100 users",
-                    "priority": "high",
-                }),
-                duration_seconds=1,
-            )
-
-    original_run = mod.run_claude_task
-    mod.run_claude_task = mock_run_claude
+    # LLM returns plain prose without structured format
+    llm_response = "The app crashes because of a memory leak in the event handler."
+    notifier._call_claude_print = lambda prompt, model="sonnet", timeout=120: llm_response
 
     intake = IntakeState(
         channel_id="C789",
@@ -1986,46 +1987,37 @@ def test_intake_analysis_unclear_request(tmp_path, monkeypatch):
     )
     notifier._pending_intakes[f"{intake.channel_name}:{intake.ts}"] = intake
 
-    # Pre-set the answers and event so the intake thread finds them
-    # immediately when it reaches the wait. This avoids thread timing issues.
-    intake.answers.append("Chrome on MacOS")
-    intake.answer_event.set()
-
-    try:
-        notifier._run_intake_analysis(intake)
-    finally:
-        mod.run_claude_task = original_run
+    notifier._run_intake_analysis(intake)
 
     assert intake.status == "done"
     assert len(created_items) == 1
-    assert created_items[0]["title"] == "Fix crash on Chrome under load"
-    # Should have posted questions
-    assert any("clarification" in m["msg"].lower() for m in sent_messages)
+    # Falls back to first line of original text as title
+    assert created_items[0]["title"] == "App crashes sometimes"
+    # Description is the raw LLM response
+    assert "memory leak" in created_items[0]["body"]
+    # Notification sent
+    assert any("created" in m["msg"].lower() for m in sent_messages)
 
 
-# --- Test: intake answer routing in process_inbound ---
+# --- Test: feature message starts new intake analysis ---
 
 
-def test_intake_answer_routing(tmp_path, monkeypatch):
-    """process_inbound should route answers to pending intake."""
+def test_intake_feature_starts_analysis(tmp_path, monkeypatch):
+    """process_inbound should start a new intake for each feature message."""
+    import time
+
     notifier = _make_notifier(tmp_path)
 
-    # Set up a pending intake waiting for answers
-    intake = IntakeState(
-        channel_id="C123",
-        channel_name="orchestrator-features",
-        original_text="Add caching",
-        user="U456",
-        ts="100.200",
-        item_type="feature",
-        status="waiting_for_answers",
-    )
-    notifier._pending_intakes["orchestrator-features:100.200"] = intake
+    intake_started = []
 
-    # Mock poll_messages to return an answer message
+    def mock_run_intake(intake_state):
+        intake_started.append(intake_state)
+
+    notifier._run_intake_analysis = mock_run_intake
+
     def mock_poll():
         return [{
-            "text": "Yes, Redis caching please",
+            "text": "Add Redis caching please",
             "user": "U456",
             "ts": "100.300",
             "_channel_name": "orchestrator-features",
@@ -2035,11 +2027,11 @@ def test_intake_answer_routing(tmp_path, monkeypatch):
     notifier.poll_messages = mock_poll
 
     notifier.process_inbound()
+    time.sleep(0.1)  # Let thread start
 
-    # Answer should have been routed to the pending intake
-    assert len(intake.answers) == 1
-    assert "Redis caching" in intake.answers[0]
-    assert intake.answer_event.is_set()
+    assert len(intake_started) == 1
+    assert intake_started[0].item_type == "feature"
+    assert intake_started[0].original_text == "Add Redis caching please"
 
 
 # --- Test: intake thread does not block main loop ---
@@ -2088,8 +2080,8 @@ def test_intake_thread_nonblocking(tmp_path, monkeypatch):
 # --- Test: intake timeout creates fallback item ---
 
 
-def test_intake_timeout_creates_draft(tmp_path, monkeypatch):
-    """_run_intake_analysis should create item with raw text on LLM failure."""
+def test_intake_empty_response_creates_fallback(tmp_path, monkeypatch):
+    """_run_intake_analysis should create item with raw text when LLM returns empty."""
     import os
 
     monkeypatch.chdir(tmp_path)
@@ -2098,21 +2090,20 @@ def test_intake_timeout_creates_draft(tmp_path, monkeypatch):
     notifier = _make_notifier(tmp_path)
 
     created_items = []
+    sent_messages = []
 
     def mock_create(item_type, title, body, user="", ts=""):
         created_items.append({"type": item_type, "title": title, "body": body})
         return "docs/feature-backlog/1-test.md"
 
+    def mock_send(msg, level="info", channel_id=None):
+        sent_messages.append({"msg": msg, "level": level})
+
     notifier.create_backlog_item = mock_create
-    notifier.send_status = lambda msg, level="info", channel_id=None: None
+    notifier.send_status = mock_send
 
-    # Mock run_claude_task to fail
-    original_run = mod.run_claude_task
-
-    def mock_run_fail(prompt, dry_run=False, model=""):
-        return mod.TaskResult(success=False, message="LLM error", duration_seconds=0)
-
-    mod.run_claude_task = mock_run_fail
+    # Mock _call_claude_print to return empty (LLM failure)
+    notifier._call_claude_print = lambda prompt, model="sonnet", timeout=120: ""
 
     intake = IntakeState(
         channel_id="C123",
@@ -2124,15 +2115,14 @@ def test_intake_timeout_creates_draft(tmp_path, monkeypatch):
     )
     notifier._pending_intakes[f"{intake.channel_name}:{intake.ts}"] = intake
 
-    try:
-        notifier._run_intake_analysis(intake)
-    finally:
-        mod.run_claude_task = original_run
+    notifier._run_intake_analysis(intake)
 
-    assert intake.status == "failed"
+    assert intake.status == "done"
     assert len(created_items) == 1
     # Fallback: uses first line as title
     assert created_items[0]["title"] == "Some feature"
+    # Still sends confirmation
+    assert any("received" in m["msg"].lower() for m in sent_messages)
 
 
 # --- Test: intake constants exist ---
@@ -2140,7 +2130,7 @@ def test_intake_timeout_creates_draft(tmp_path, monkeypatch):
 
 def test_intake_constants():
     """Verify intake-related constants are defined."""
-    assert mod.INTAKE_ANSWER_TIMEOUT_SECONDS == 1800
+    assert mod.INTAKE_ANALYSIS_TIMEOUT_SECONDS == 120
     assert "{item_type}" in mod.INTAKE_ANALYSIS_PROMPT
     assert "{text}" in mod.INTAKE_ANALYSIS_PROMPT
 
@@ -2187,8 +2177,7 @@ def test_background_polling_starts_thread(tmp_path, monkeypatch):
         return []
 
     monkeypatch.setattr(notifier, "poll_messages", mock_poll_messages)
-    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_MIN_SECONDS", 0.05)
-    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_MAX_SECONDS", 0.05)
+    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_SECONDS", 0.05)
 
     notifier.start_background_polling()
 
@@ -2220,8 +2209,7 @@ def test_background_polling_idempotent(tmp_path, monkeypatch):
 
     notifier = SlackNotifier(config_path=str(config_file))
     monkeypatch.setattr(notifier, "poll_messages", lambda: [])
-    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_MIN_SECONDS", 0.05)
-    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_MAX_SECONDS", 0.05)
+    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_SECONDS", 0.05)
 
     notifier.start_background_polling()
     first_thread = notifier._poll_thread
@@ -2281,8 +2269,7 @@ def test_background_polling_survives_process_inbound_error(tmp_path, monkeypatch
         raise RuntimeError("Simulated poll failure")
 
     monkeypatch.setattr(notifier, "poll_messages", failing_poll_messages)
-    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_MIN_SECONDS", 0.05)
-    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_MAX_SECONDS", 0.05)
+    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_SECONDS", 0.05)
 
     notifier.start_background_polling()
 

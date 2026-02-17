@@ -73,9 +73,8 @@ DEFAULT_STARTING_MODEL = "sonnet"
 SLACK_CONFIG_PATH = ".claude/slack.local.yaml"
 SLACK_QUESTION_PATH = ".claude/slack-pending-question.json"
 SLACK_ANSWER_PATH = ".claude/slack-answer.json"
-SLACK_POLL_INTERVAL_MIN_SECONDS = 5
-SLACK_POLL_INTERVAL_MAX_SECONDS = 60
-SLACK_POLL_BACKOFF_FACTOR = 1.5  # Multiply interval after each empty poll
+SLACK_POLL_INTERVAL_SECONDS = 15  # Base polling interval
+SLACK_POLL_RATE_LIMIT_BACKOFF_SECONDS = 60  # Backoff on 429
 SLACK_LEVEL_EMOJI = {
     "info": ":large_blue_circle:",
     "success": ":white_check_mark:",
@@ -118,8 +117,6 @@ Answer:"""
 QUESTION_ANSWER_TIMEOUT_SECONDS = 60  # 1 minute for question answering
 
 # Intake analysis configuration
-INTAKE_ANSWER_TIMEOUT_SECONDS = 1800  # 30 minutes
-
 INTAKE_ANALYSIS_PROMPT = """Analyze this {item_type} request using the 5 Whys method.
 
 Request: {text}
@@ -569,10 +566,10 @@ class PlanUsageTracker:
         model = self.task_models.get(task_id, "")
         model_str = f" [{model}]" if model else ""
         return (
-            f"[Usage] Task {task_id}{model_str}: ${u.total_cost_usd:.4f} | "
+            f"[Usage] Task {task_id}{model_str}: ~${u.total_cost_usd:.4f} | "
             f"{u.input_tokens:,} in / {u.output_tokens:,} out / "
             f"{u.cache_read_tokens:,} cached ({cache_pct:.0f}% cache hit) | "
-            f"Running: ${total.total_cost_usd:.4f}"
+            f"Running: ~${total.total_cost_usd:.4f}"
         )
 
     def format_final_summary(self, plan: dict) -> str:
@@ -580,8 +577,9 @@ class PlanUsageTracker:
         total = self.get_total_usage()
         cache_rate = self.get_cache_hit_rate()
         lines = [
-            "\n=== Usage Summary ===",
-            f"Total cost: ${total.total_cost_usd:.4f}",
+            "\n=== Usage Summary (API-Equivalent Estimates) ===",
+            "(These are API-equivalent costs reported by Claude CLI, not actual subscription charges)",
+            f"Total API-equivalent cost: ~${total.total_cost_usd:.4f}",
             f"Total tokens: {total.input_tokens:,} input / {total.output_tokens:,} output",
             f"Cache: {total.cache_read_tokens:,} read / {total.cache_creation_tokens:,} created ({cache_rate:.0%} hit rate)",
             f"API time: {total.duration_api_ms / 1000:.1f}s across {total.num_turns} turns",
@@ -595,7 +593,7 @@ class PlanUsageTracker:
                 1 for t in section.get("tasks", []) if t.get("id") in self.task_usages
             )
             if task_count > 0:
-                lines.append(f"  {sname}: ${su.total_cost_usd:.4f} ({task_count} tasks)")
+                lines.append(f"  {sname}: ~${su.total_cost_usd:.4f} ({task_count} tasks)")
         return "\n".join(lines)
 
     def write_report(self, plan: dict, plan_path: str) -> Optional[Path]:
@@ -866,11 +864,8 @@ class IntakeState:
     user: str
     ts: str
     item_type: str  # "feature" or "defect"
-    status: str = "analyzing"  # "analyzing", "waiting_for_answers", "creating", "done", "failed"
-    questions_ts: str = ""  # ts of our question message in Slack
-    answers: list = field(default_factory=list)
+    status: str = "analyzing"  # "analyzing", "creating", "done", "failed"
     analysis: str = ""  # LLM 5-Whys output
-    answer_event: threading.Event = field(default_factory=threading.Event)
 
 
 def parse_escalation_config(plan: dict) -> EscalationConfig:
@@ -2804,6 +2799,16 @@ class SlackNotifier:
             }]
         }
 
+    def _get_notifications_channel_id(self) -> str:
+        """Return the channel ID for the notifications channel.
+
+        Looks up the orchestrator-notifications channel from discovered
+        channels. Falls back to the legacy single channel_id.
+        """
+        notifications_name = f"{self._channel_prefix}notifications"
+        channels = self._discover_channels()
+        return channels.get(notifications_name, self._channel_id)
+
     def send_status(self, message: str, level: str = "info",
                     channel_id: Optional[str] = None) -> None:
         """Send a status update to Slack. No-op if disabled.
@@ -2811,9 +2816,9 @@ class SlackNotifier:
         Args:
             message: Status message text
             level: Message level (info, success, error, warning)
-            channel_id: Target channel override. Falls back to default.
+            channel_id: Target channel override. Falls back to notifications channel.
         """
-        target = channel_id or self._channel_id
+        target = channel_id or self._get_notifications_channel_id()
         if not self._enabled or not self._bot_token or not target:
             return
 
@@ -3143,6 +3148,13 @@ class SlackNotifier:
                         m["_channel_id"] = channel_id
                         all_messages.append(m)
 
+            except urllib.error.HTTPError as e:
+                if e.code == 429:
+                    retry_after = int(e.headers.get("Retry-After", "30"))
+                    print(f"[SLACK] Rate limited, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                else:
+                    print(f"[SLACK] HTTP error polling #{channel_name}: {e}")
             except Exception as e:
                 print(f"[SLACK] Failed to poll #{channel_name}: {e}")
 
@@ -3474,13 +3486,41 @@ class SlackNotifier:
 
         return "\n".join(lines) if lines else "No pipeline state available."
 
+    def _call_claude_print(self, prompt: str, model: str = "sonnet",
+                           timeout: int = QUESTION_ANSWER_TIMEOUT_SECONDS
+                           ) -> str:
+        """Call Claude CLI with --print and return the text result.
+
+        Uses subprocess.run directly (NOT run_claude_task which reads stale
+        task-status.json). Parses the JSON stdout for the result field.
+
+        Args:
+            prompt: The prompt text
+            model: Model name (default: sonnet)
+            timeout: Subprocess timeout in seconds
+
+        Returns:
+            The LLM text response, or empty string on failure
+        """
+        cmd = [
+            *CLAUDE_CMD, "--print", prompt,
+            "--model", model,
+            "--output-format", "json",
+            "--dangerously-skip-permissions",
+        ]
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True,
+            timeout=timeout,
+            cwd=os.getcwd(), env=build_child_env(),
+        )
+        if proc.returncode == 0:
+            data = json.loads(proc.stdout)
+            return data.get("result", "").strip()
+        return ""
+
     def answer_question(self, question: str,
                         channel_id: Optional[str] = None) -> None:
         """Respond to a question from Slack using an LLM call with pipeline context.
-
-        Calls Claude CLI directly (bypassing run_claude_task which reads the
-        stale task-status.json from plan execution). Parses the JSON stdout
-        for the actual LLM response.
 
         Args:
             question: The question text
@@ -3495,23 +3535,7 @@ class SlackNotifier:
         )
 
         try:
-            cmd = [
-                *CLAUDE_CMD, "--print", prompt,
-                "--model", "sonnet",
-                "--output-format", "json",
-                "--dangerously-skip-permissions",
-            ]
-            proc = subprocess.run(
-                cmd, capture_output=True, text=True,
-                timeout=QUESTION_ANSWER_TIMEOUT_SECONDS,
-                cwd=os.getcwd(), env=build_child_env(),
-            )
-            if proc.returncode == 0:
-                data = json.loads(proc.stdout)
-                answer = data.get("result", "").strip()
-            else:
-                answer = ""
-
+            answer = self._call_claude_print(prompt)
             if not answer:
                 answer = f"_(LLM returned empty)_\n{state_context}"
         except Exception as e:
@@ -3521,134 +3545,111 @@ class SlackNotifier:
         print(f"[SLACK] Answer: {answer[:120]}")
         self.send_status(answer, level="info", channel_id=channel_id)
 
+    @staticmethod
+    def _parse_intake_response(text: str) -> dict:
+        """Parse a plain-text intake analysis response into fields.
+
+        Extracts Title:, Root Need:, Description:, and 5 Whys: sections
+        from the LLM response. Falls back gracefully if format is unexpected.
+
+        Args:
+            text: The raw LLM response text
+
+        Returns:
+            Dict with keys: title, root_need, description, five_whys (list)
+        """
+        result: dict = {"title": "", "root_need": "", "description": "", "five_whys": []}
+
+        # Extract Title: line
+        title_match = re.search(r"^Title:\s*(.+)$", text, re.MULTILINE)
+        if title_match:
+            result["title"] = title_match.group(1).strip()
+
+        # Extract Root Need: line
+        root_match = re.search(r"^Root Need:\s*(.+)$", text, re.MULTILINE)
+        if root_match:
+            result["root_need"] = root_match.group(1).strip()
+
+        # Extract Description: block (everything after "Description:" until end or next section)
+        desc_match = re.search(r"^Description:\s*\n(.*)", text, re.MULTILINE | re.DOTALL)
+        if desc_match:
+            result["description"] = desc_match.group(1).strip()
+
+        # Extract 5 Whys numbered list
+        whys_match = re.search(r"5 Whys:\s*\n((?:\d+\..+\n?)+)", text)
+        if whys_match:
+            whys_text = whys_match.group(1)
+            result["five_whys"] = [
+                m.group(1).strip()
+                for m in re.finditer(r"\d+\.\s*(.+)", whys_text)
+            ]
+
+        return result
+
     def _run_intake_analysis(self, intake: IntakeState) -> None:
         """Run 5 Whys intake analysis in a background thread.
 
-        Calls Claude CLI to analyze the request, optionally posts clarifying
-        questions to Slack and waits for answers, then creates the backlog item.
+        Calls Claude CLI directly via _call_claude_print to analyze the
+        request, then creates the backlog item. Sends Slack confirmation
+        regardless of whether parsing succeeds.
 
         Args:
             intake: The IntakeState tracking this analysis
         """
         intake_key = f"{intake.channel_name}:{intake.ts}"
+        fallback_title = intake.original_text.split("\n", 1)[0][:80]
+
         try:
             # Step 1: Call Claude CLI for 5 Whys analysis
             prompt = INTAKE_ANALYSIS_PROMPT.format(
                 item_type=intake.item_type, text=intake.original_text
             )
-            result = run_claude_task(prompt, model="opus")
+            response_text = self._call_claude_print(
+                prompt, model="sonnet",
+                timeout=INTAKE_ANALYSIS_TIMEOUT_SECONDS
+            )
 
-            if not result.success:
-                print(f"[INTAKE] LLM analysis failed: {result.message}")
-                intake.status = "failed"
+            if not response_text:
+                print("[INTAKE] LLM returned empty response")
                 self.create_backlog_item(
-                    intake.item_type,
-                    intake.original_text.split("\n", 1)[0][:80],
-                    intake.original_text,
-                    intake.user,
-                    intake.ts,
+                    intake.item_type, fallback_title,
+                    intake.original_text, intake.user, intake.ts,
                 )
-                return
-
-            # Step 2: Parse JSON response
-            response_text = result.message.strip()
-            # Extract JSON from possible markdown code fences
-            if "```" in response_text:
-                json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", response_text, re.DOTALL)
-                if json_match:
-                    response_text = json_match.group(1).strip()
-
-            try:
-                analysis = json.loads(response_text)
-            except json.JSONDecodeError:
-                print(f"[INTAKE] Failed to parse LLM response as JSON")
-                intake.status = "failed"
-                # Fall back: create item with raw text
-                self.create_backlog_item(
-                    intake.item_type,
-                    intake.original_text.split("\n", 1)[0][:80],
-                    intake.original_text,
-                    intake.user,
-                    intake.ts,
-                )
-                return
-
-            intake.analysis = response_text
-            five_whys = analysis.get("five_whys", [])
-            root_need = analysis.get("root_need", "")
-
-            # Step 3: If questions needed, post them and wait for answers
-            if not analysis.get("clear", True) and analysis.get("questions"):
-                questions = analysis["questions"]
-                question_text = (
-                    f"*Analyzing your {intake.item_type} request...*\n"
-                    f"I need a few clarifications:\n"
-                )
-                for i, q in enumerate(questions[:3], 1):
-                    question_text += f"{i}. {q}\n"
-                question_text += "\n_Reply here with your answers._"
-
-                intake.status = "waiting_for_answers"
                 self.send_status(
-                    question_text, level="question",
-                    channel_id=intake.channel_id
+                    f"*{intake.item_type.title()} received:* {fallback_title}\n"
+                    "_(Analysis unavailable, created from raw text)_",
+                    level="success", channel_id=intake.channel_id,
                 )
+                intake.status = "done"
+                return
 
-                # Wait for answers with timeout
-                answered = intake.answer_event.wait(
-                    timeout=INTAKE_ANSWER_TIMEOUT_SECONDS
-                )
+            # Step 2: Parse the plain-text response
+            parsed = self._parse_intake_response(response_text)
+            intake.analysis = response_text
 
-                if answered and intake.answers:
-                    # Re-analyze with answers
-                    followup_prompt = (
-                        f"Original {intake.item_type} request: {intake.original_text}\n\n"
-                        f"5 Whys analysis: {json.dumps(five_whys)}\n"
-                        f"Root need: {root_need}\n\n"
-                        f"Clarifying answers from user:\n"
-                    )
-                    for ans in intake.answers:
-                        followup_prompt += f"- {ans}\n"
-                    followup_prompt += (
-                        "\nNow create the final backlog item.\n"
-                        "Output as JSON: {{\"title\": \"...\", \"description\": \"...\", "
-                        "\"priority\": \"low/medium/high\"}}\n"
-                        "Only output JSON, no other text."
-                    )
-                    followup_result = run_claude_task(followup_prompt, model="opus")
-                    if followup_result.success:
-                        followup_text = followup_result.message.strip()
-                        if "```" in followup_text:
-                            json_match = re.search(
-                                r"```(?:json)?\s*\n?(.*?)\n?```",
-                                followup_text, re.DOTALL
-                            )
-                            if json_match:
-                                followup_text = json_match.group(1).strip()
-                        try:
-                            refined = json.loads(followup_text)
-                            analysis.update(refined)
-                        except json.JSONDecodeError:
-                            pass  # Use original analysis
+            title = parsed["title"] or fallback_title
+            root_need = parsed["root_need"]
+            five_whys = parsed["five_whys"]
 
-            # Step 4: Create backlog item
-            intake.status = "creating"
-            title = analysis.get("title", intake.original_text.split("\n", 1)[0][:80])
-            description = analysis.get("description", intake.original_text)
+            # Build description: use parsed description, or the full LLM
+            # response as-is if no structured description was found
+            description = parsed["description"] or response_text
 
-            # Enrich description with 5 Whys summary
+            # Enrich with 5 Whys summary if present
             if five_whys:
                 whys_text = "\n".join(f"  {i+1}. {w}" for i, w in enumerate(five_whys))
                 description += f"\n\n## 5 Whys Analysis\n\n{whys_text}"
             if root_need:
                 description += f"\n\n**Root Need:** {root_need}"
 
+            # Step 3: Create backlog item
+            intake.status = "creating"
             self.create_backlog_item(
                 intake.item_type, title, description,
-                intake.user, intake.ts
+                intake.user, intake.ts,
             )
 
-            # Step 5: Notify user
+            # Step 4: Notify user on Slack
             notify_msg = f"*{intake.item_type.title()} created:* {title}"
             if root_need:
                 notify_msg += f"\n_Root need: {root_need}_"
@@ -3658,14 +3659,15 @@ class SlackNotifier:
         except Exception as e:
             print(f"[INTAKE] Error in intake analysis: {e}")
             intake.status = "failed"
-            # Best-effort: create item with raw text
             try:
                 self.create_backlog_item(
-                    intake.item_type,
-                    intake.original_text.split("\n", 1)[0][:80],
-                    intake.original_text,
-                    intake.user,
-                    intake.ts,
+                    intake.item_type, fallback_title,
+                    intake.original_text, intake.user, intake.ts,
+                )
+                self.send_status(
+                    f"*{intake.item_type.title()} received:* {fallback_title}\n"
+                    f"_(Error during analysis: {e})_",
+                    level="warning", channel_id=intake.channel_id,
                 )
             except Exception:
                 pass
@@ -3676,9 +3678,8 @@ class SlackNotifier:
     def start_background_polling(self) -> None:
         """Start a background thread that polls Slack for inbound messages.
 
-        Starts at SLACK_POLL_INTERVAL_MIN_SECONDS (5s). When no messages are
-        found, backs off by SLACK_POLL_BACKOFF_FACTOR up to
-        SLACK_POLL_INTERVAL_MAX_SECONDS (60s). Resets to min on any message.
+        Polls every SLACK_POLL_INTERVAL_SECONDS (15s). Handles 429 rate
+        limits with Retry-After backoff.
         """
         if not self._enabled:
             return
@@ -3696,14 +3697,13 @@ class SlackNotifier:
                         self._handle_polled_messages(msgs)
                 except Exception as e:
                     print(f"[SLACK] Background poll error: {e}")
-                self._poll_stop_event.wait(timeout=SLACK_POLL_INTERVAL_MIN_SECONDS)
+                self._poll_stop_event.wait(timeout=SLACK_POLL_INTERVAL_SECONDS)
 
         self._poll_thread = threading.Thread(
             target=_poll_loop, daemon=True, name="slack-poller"
         )
         self._poll_thread.start()
-        print(f"[SLACK] Background polling started "
-              f"({SLACK_POLL_INTERVAL_MIN_SECONDS}s-{SLACK_POLL_INTERVAL_MAX_SECONDS}s adaptive)")
+        print(f"[SLACK] Background polling started ({SLACK_POLL_INTERVAL_SECONDS}s interval)")
 
     def stop_background_polling(self) -> None:
         """Stop the background polling thread."""
@@ -3746,42 +3746,23 @@ class SlackNotifier:
             # Channel-based routing: the channel determines the type
             if channel_role in ("feature", "defect"):
                 intake_key = f"{channel_name}:{ts}"
+                print(f"[SLACK] {channel_role.title()} request from "
+                      f"#{channel_name}: {text[:80]}")
+                intake = IntakeState(
+                    channel_id=reply_to,
+                    channel_name=channel_name,
+                    original_text=text,
+                    user=user,
+                    ts=ts,
+                    item_type=channel_role,
+                )
                 with self._intake_lock:
-                    pending = self._pending_intakes.get(intake_key)
-                if pending and pending.status == "waiting_for_answers":
-                    pending.answers.append(text)
-                    pending.answer_event.set()
-                    print(f"[SLACK] Intake answer received for {intake_key}")
-                else:
-                    routed_to_pending = False
-                    with self._intake_lock:
-                        for key, state in self._pending_intakes.items():
-                            if (state.channel_id == reply_to
-                                    and state.status == "waiting_for_answers"):
-                                state.answers.append(text)
-                                state.answer_event.set()
-                                routed_to_pending = True
-                                print(f"[SLACK] Intake answer routed to {key}")
-                                break
-                    if not routed_to_pending:
-                        print(f"[SLACK] {channel_role.title()} request from "
-                              f"#{channel_name}: {text[:80]}")
-                        intake = IntakeState(
-                            channel_id=reply_to,
-                            channel_name=channel_name,
-                            original_text=text,
-                            user=user,
-                            ts=ts,
-                            item_type=channel_role,
-                        )
-                        with self._intake_lock:
-                            self._pending_intakes[intake_key] = intake
-                        thread = threading.Thread(
-                            target=self._run_intake_analysis,
-                            args=(intake,),
-                            daemon=True,
-                        )
-                        thread.start()
+                    self._pending_intakes[intake_key] = intake
+                threading.Thread(
+                    target=self._run_intake_analysis,
+                    args=(intake,),
+                    daemon=True,
+                ).start()
 
             elif channel_role == "question":
                 print(f"[SLACK] Question from #{channel_name}: {text[:80]}")
