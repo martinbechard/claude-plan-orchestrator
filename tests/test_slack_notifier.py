@@ -1197,31 +1197,26 @@ def test_create_backlog_feature(tmp_path, monkeypatch):
 
     notifier = SlackNotifier(config_path=str(config_file))
 
-    # Monkey-patch _post_message to capture calls
-    calls = []
-
-    def mock_post_message(payload, channel_id=None):
-        calls.append(payload)
-        return True
-
-    notifier._post_message = mock_post_message
-
     # Create backlog item
     result = notifier.create_backlog_item(
         "feature", "Cache TTL", "Add configurable expiry", "U123", "1234.5678"
     )
 
     # Verify file was created
-    assert result != ""
-    assert os.path.exists(result)
+    assert result
+    assert os.path.exists(result['filepath'])
+
+    # Verify metadata
+    assert result['item_number'] == 1
+    assert result['filename'].startswith("1-")
 
     # Verify filename starts with "1-"
-    filename = os.path.basename(result)
+    filename = os.path.basename(result['filepath'])
     assert filename.startswith("1-")
     assert filename.endswith(".md")
 
     # Verify file content
-    with open(result, "r") as f:
+    with open(result['filepath'], "r") as f:
         content = f.read()
 
     assert "# Cache TTL" in content
@@ -1231,9 +1226,6 @@ def test_create_backlog_feature(tmp_path, monkeypatch):
     assert "Created from Slack message" in content
     assert "by U123" in content
     assert "at 1234.5678" in content
-
-    # Verify Slack notification
-    assert len(calls) == 1
 
 
 # --- Test: create_backlog_item creates defect file ---
@@ -1261,27 +1253,18 @@ def test_create_backlog_defect(tmp_path, monkeypatch):
 
     notifier = SlackNotifier(config_path=str(config_file))
 
-    # Monkey-patch _post_message
-    calls = []
-
-    def mock_post_message(payload, channel_id=None):
-        calls.append(payload)
-        return True
-
-    notifier._post_message = mock_post_message
-
     # Create defect item
     result = notifier.create_backlog_item(
         "defect", "Broken import", "Import fails in auth module", "U456", "2345.6789"
     )
 
     # Verify file was created in defect-backlog
-    assert result != ""
-    assert "defect-backlog" in result
-    assert os.path.exists(result)
+    assert result
+    assert "defect-backlog" in result['filepath']
+    assert os.path.exists(result['filepath'])
 
     # Verify content
-    with open(result, "r") as f:
+    with open(result['filepath'], "r") as f:
         content = f.read()
 
     assert "# Broken import" in content
@@ -1325,7 +1308,7 @@ def test_create_backlog_numbering(tmp_path, monkeypatch):
     result = notifier.create_backlog_item("feature", "New Feature", "", "", "")
 
     # Verify filename starts with "16-"
-    filename = os.path.basename(result)
+    filename = os.path.basename(result['filepath'])
     assert filename.startswith("16-")
 
 
