@@ -2525,13 +2525,14 @@ Use the admin notification system or console log if notifications aren't configu
 
 
 class SlackNotifier:
-    """Sends messages to Slack via Incoming Webhooks.
+    """Sends messages to Slack via Slack Web API.
 
     Reads .claude/slack.local.yaml on init. If the file is missing or
     slack.enabled is false, all methods are no-ops (silent, no errors).
-    Uses urllib.request (stdlib only) for HTTP POST to the webhook URL.
+    Uses urllib.request (stdlib only) for HTTP POST with Bearer token auth.
+    Requires bot_token and channel_id from config.
 
-    Reference: docs/plans/2026-02-16-13-slack-agent-communication-design.md
+    Reference: docs/plans/2026-02-16-14-slack-app-migration-design.md
     """
 
     def __init__(self, config_path: str = SLACK_CONFIG_PATH):
@@ -2541,7 +2542,9 @@ class SlackNotifier:
             config_path: Path to slack.local.yaml config file
         """
         self._enabled = False
-        self._webhook_url = ""
+        self._bot_token = ""
+        self._app_token = ""
+        self._channel_id = ""
         self._notify_config = {}
         self._question_config = {}
 
@@ -2560,7 +2563,9 @@ class SlackNotifier:
             if not self._enabled:
                 return
 
-            self._webhook_url = slack_config.get("webhook_url", "")
+            self._bot_token = slack_config.get("bot_token", "")
+            self._app_token = slack_config.get("app_token", "")
+            self._channel_id = slack_config.get("channel_id", "")
             self._notify_config = slack_config.get("notify", {})
             self._question_config = slack_config.get("questions", {})
 
@@ -2587,33 +2592,39 @@ class SlackNotifier:
         """
         return self._enabled and self._notify_config.get(event, False)
 
-    def _post_webhook(self, payload: dict) -> bool:
-        """POST a JSON payload to the Slack webhook URL.
+    def _post_message(self, payload: dict) -> bool:
+        """POST a message to Slack via chat.postMessage API.
 
-        Uses urllib.request. Returns True on success, False on error.
+        Uses urllib.request with Bearer token auth. Returns True on success.
         Catches all exceptions and logs errors without raising.
 
         Args:
             payload: Slack Block Kit payload dict
 
         Returns:
-            True on HTTP 200, False otherwise
+            True if API returns ok: true, False otherwise
         """
-        if not self._webhook_url:
+        if not self._bot_token or not self._channel_id:
             return False
+
+        payload["channel"] = self._channel_id
 
         try:
             req = urllib.request.Request(
-                self._webhook_url,
+                "https://slack.com/api/chat.postMessage",
                 data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"}
+                headers={
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Authorization": f"Bearer {self._bot_token}"
+                }
             )
 
-            with urllib.request.urlopen(req, timeout=10) as response:
-                return response.status == 200
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read())
+                return result.get("ok", False)
 
         except Exception as e:
-            print(f"[SLACK] Failed to post webhook: {e}")
+            print(f"[SLACK] Failed to post message: {e}")
             return False
 
     def _build_status_block(self, message: str, level: str) -> dict:
@@ -2641,11 +2652,11 @@ class SlackNotifier:
             message: Status message text
             level: Message level (info, success, error, warning)
         """
-        if not self._enabled or not self._webhook_url:
+        if not self._enabled or not self._bot_token or not self._channel_id:
             return
 
         payload = self._build_status_block(message, level)
-        self._post_webhook(payload)
+        self._post_message(payload)
 
     def send_question(
         self,
@@ -2677,7 +2688,7 @@ class SlackNotifier:
         # Post question to Slack
         options_text = " | ".join(f"`{opt}`" for opt in options)
         msg = f":question: *{question}*\nOptions: {options_text}\n_Reply by creating `.claude/slack-answer.json` with `{{\"answer\": \"your_choice\"}}`_"
-        self._post_webhook(self._build_status_block(msg, "question"))
+        self._post_message(self._build_status_block(msg, "question"))
 
         # Write pending question file
         question_data = {
@@ -2748,7 +2759,7 @@ class SlackNotifier:
         if description:
             msg += f"\n{description}"
 
-        self._post_webhook(self._build_status_block(msg, "error"))
+        self._post_message(self._build_status_block(msg, "error"))
 
     def send_idea(self, title: str, description: str) -> None:
         """Send a feature idea to Slack.
@@ -2764,7 +2775,7 @@ class SlackNotifier:
         if description:
             msg += f"\n{description}"
 
-        self._post_webhook(self._build_status_block(msg, "info"))
+        self._post_message(self._build_status_block(msg, "info"))
 
     def process_agent_messages(self, status: dict) -> None:
         """Process slack_messages from a task-status.json dict.
