@@ -1,0 +1,111 @@
+meta:
+  name: 'Defect Fix: Noisy Log Output From Long Plan Filenames'
+  description: 'Add a compact_plan_label() helper to auto-pipeline.py that truncates
+    long plan filenames for use as log prefixes. Print the full plan path once at
+    plan start, then use the compact form for all subsequent streamed output lines.
+    Also apply the compact label to create_plan() and validate child process descriptions.
+
+    '
+  plan_doc: docs/plans/2026-02-17-03-noisy-log-output-from-long-plan-filenames-design.md
+  created: '2026-02-17'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - issue-verifier
+    max_validation_attempts: 1
+sections:
+- id: phase-1
+  name: Phase 1 - Implementation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add compact_plan_label() helper and apply to log prefixes
+    agent: coder
+    status: pending
+    description: "In scripts/auto-pipeline.py, make the following changes:\n\n1. Add\
+      \ a new constant near the top of the file (near other constants like MAX_PLAN_NAME_LENGTH):\n\
+      \n   MAX_LOG_PREFIX_LENGTH = 30\n\n2. Add a new helper function after the logging\
+      \ section (after the verbose_log function around line 180):\n\n   def compact_plan_label(plan_path:\
+      \ str) -> str:\n       \"\"\"Produce a compact label from a plan filename for\
+      \ log prefixes.\n\n       Strips the .yaml extension and truncates to MAX_LOG_PREFIX_LENGTH\
+      \ chars\n       with ellipsis if the basename exceeds the limit.\n\n       Examples:\n\
+      \           \"long-filename-here.yaml\" -> \"long-filename-here...\"\n      \
+      \     \"short.yaml\" -> \"short\"\n       \"\"\"\n       stem = Path(plan_path).stem\n\
+      \       if len(stem) <= MAX_LOG_PREFIX_LENGTH:\n           return stem\n    \
+      \   return stem[:MAX_LOG_PREFIX_LENGTH - 3] + \"...\"\n\n3. Modify execute_plan()\
+      \ (around line 1132) to:\n   a. Compute the compact label: label = compact_plan_label(plan_path)\n\
+      \   b. Add a log line printing the full plan path once: log(f\"Executing plan:\
+      \ {plan_path}\")\n      Place this AFTER the dry_run check but BEFORE run_child_process.\n\
+      \   c. Change the description on line 1148 from:\n        description=f\"Orchestrator:\
+      \ {os.path.basename(plan_path)}\"\n      to:\n        description=f\"Orch: {label}\"\
+      \n\n4. Modify create_plan() (around line 965) to use compact labels:\n   a.\
+      \ On line 1004, change:\n        description=f\"Plan creation for {item.slug}\"\
+      \n      to:\n        description=f\"Plan: {compact_plan_label(item.slug)}\"\n\
+      \   b. On line 1026, change:\n        description=f\"Plan validation for {item.slug}\"\
+      \n      to:\n        description=f\"Validate: {compact_plan_label(item.slug)}\"\
+      \n\n   Note: compact_plan_label works on slugs too since they have no extension\
+      \ (Path.stem returns the full string when there is no extension, but slugs won't\
+      \ have .yaml so stem just returns the slug itself).\n\nAfter making changes,\
+      \ verify syntax:\n  python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True)\"\n"
+- id: phase-2
+  name: Phase 2 - Tests
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add unit tests for compact_plan_label()
+    agent: coder
+    depends_on:
+    - '1.1'
+    status: pending
+    description: "Create or extend tests/test_auto_pipeline.py with unit tests for\
+      \ the compact_plan_label() helper function.\n\nFirst, check if tests/test_auto_pipeline.py\
+      \ exists. If it does, add the tests to the existing file. If not, create a new\
+      \ test file.\n\nImport the module using importlib:\n  import importlib.util\n\
+      \  spec = importlib.util.spec_from_file_location(\"auto_pipeline\", \"scripts/auto-pipeline.py\"\
+      )\n  mod = importlib.util.module_from_spec(spec)\n  spec.loader.exec_module(mod)\n\
+      \  compact_plan_label = mod.compact_plan_label\n  MAX_LOG_PREFIX_LENGTH = mod.MAX_LOG_PREFIX_LENGTH\n\
+      \nWrite the following tests:\n\n1. test_compact_plan_label_short_filename:\n\
+      \   - Input: \"03-per-task-validation.yaml\"\n   - Expected: \"03-per-task-validation\"\
+      \ (just strips .yaml, within limit)\n\n2. test_compact_plan_label_long_filename:\n\
+      \   - Input: \"2-i-want-to-be-able-to-use-separate-slack-channels-depending-on-the-project-by-de.yaml\"\
+      \n   - Expected: stem truncated to MAX_LOG_PREFIX_LENGTH chars with \"...\" suffix\n\
+      \   - Assert len(result) == MAX_LOG_PREFIX_LENGTH\n   - Assert result.endswith(\"\
+      ...\")\n\n3. test_compact_plan_label_exact_limit:\n   - Create a filename whose\
+      \ stem is exactly MAX_LOG_PREFIX_LENGTH chars\n   - Assert it passes through\
+      \ unchanged (no truncation, no ellipsis)\n\n4. test_compact_plan_label_slug_no_extension:\n\
+      \   - Input: \"2-i-want-to-be-able-to-use-separate-slack-channels-depending-on-the-project-by-de\"\
+      \n   - Expected: truncated with ellipsis (works on slugs without .yaml)\n\n5.\
+      \ test_compact_plan_label_full_path:\n   - Input: \".claude/plans/03-noisy-log.yaml\"\
+      \n   - Expected: \"03-noisy-log\" (extracts basename and strips extension)\n\n\
+      After writing tests, run them:\n  python3 -m pytest tests/test_auto_pipeline.py\
+      \ -v\n\nFix any failures immediately.\n"
+- id: phase-3
+  name: Phase 3 - Verification
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Verify syntax and run full test suite
+    agent: code-reviewer
+    depends_on:
+    - '2.1'
+    status: pending
+    description: "Run the following verification steps:\n\n1. Compile-check both main\
+      \ scripts:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\
+      \n\n2. Run the full test suite:\n   python3 -m pytest tests/ 2>/dev/null || echo\
+      \ 'No test suite configured'\n\n3. Verify compact_plan_label function exists:\n\
+      \   grep -n \"def compact_plan_label\" scripts/auto-pipeline.py\n   Expected:\
+      \ exactly one match.\n\n4. Verify MAX_LOG_PREFIX_LENGTH constant exists:\n  \
+      \ grep -n \"MAX_LOG_PREFIX_LENGTH\" scripts/auto-pipeline.py\n   Expected: at\
+      \ least two matches (definition + usage).\n\n5. Verify execute_plan uses the\
+      \ compact label:\n   grep -n \"compact_plan_label\" scripts/auto-pipeline.py\n\
+      \   Expected: at least 3 matches (definition + execute_plan + create_plan usages).\n\
+      \n6. Verify the old long prefix pattern is gone:\n   grep -n 'os.path.basename(plan_path)'\
+      \ scripts/auto-pipeline.py\n   Expected: zero matches in execute_plan description\
+      \ lines.\n\n7. Verify that the full plan path is still printed once at plan start:\n\
+      \   grep -n 'Executing plan:' scripts/auto-pipeline.py\n   Expected: one match\
+      \ showing the full path is logged.\n\nReport findings as PASS/WARN/FAIL.\n"
