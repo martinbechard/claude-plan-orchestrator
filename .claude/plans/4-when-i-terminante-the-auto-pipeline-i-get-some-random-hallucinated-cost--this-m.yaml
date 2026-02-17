@@ -1,0 +1,142 @@
+meta:
+  name: 'Defect Fix: Clarify Cost Reporting as API-Equivalent Estimates'
+  description: 'Add "API-equivalent" context labels to all cost output in both
+    auto-pipeline.py and plan-orchestrator.py. Users on Claude Code Max subscriptions
+    see raw dollar amounts when terminating the pipeline and mistakenly think costs
+    are fabricated. The fix adds qualifying text to cost summaries, suppresses
+    zero-cost summaries on early termination, and ensures consistent labeling
+    across both scripts.
+
+    '
+  plan_doc: docs/plans/2026-02-17-4-when-i-terminante-the-auto-pipeline-i-get-some-random-hallucinated-cost--this-m-design.md
+  created: '2026-02-17'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - issue-verifier
+    max_validation_attempts: 1
+sections:
+- id: phase-1
+  name: Phase 1 - Implementation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add API-equivalent context to SessionUsageTracker in auto-pipeline.py
+    agent: coder
+    status: pending
+    description: "Read the design document at docs/plans/2026-02-17-4-when-i-terminante-the-auto-pipeline-i-get-some-random-hallucinated-cost--this-m-design.md
+      for full context.\n\nIn scripts/auto-pipeline.py, modify the SessionUsageTracker
+      class (around line 531):\n\n1. In record_from_report() (line 554), change the
+      log line from:\n     log(f\"[Usage] {work_item_name}: ${cost:.4f}\")\n   to:\n
+      \    log(f\"[Usage] {work_item_name}: ~${cost:.4f} (API-equivalent)\")\n\n2.
+      In format_session_summary() (line 558-570), make these changes:\n   a. Change
+      the header from:\n        \"\\n=== Pipeline Session Usage ===\"\n      to:\n
+      \       \"\\n=== Pipeline Session Usage (API-Equivalent Estimates) ===\"\n   b.
+      Add a context line right after the header:\n        lines.append(\"(These are
+      API-equivalent costs reported by Claude CLI, not actual subscription charges)\")\n
+      \  c. Change \"Total cost:\" to \"Total API-equivalent cost:\" on the next line\n
+      \  d. In the per-item breakdown, change:\n        lines.append(f\"  {item['name']}:
+      ${item['cost_usd']:.4f}\")\n      to:\n        lines.append(f\"  {item['name']}:
+      ~${item['cost_usd']:.4f}\")\n\n3. In the finally block of auto_pipeline() (around
+      line 1685-1689), wrap the summary printing with a guard so it only prints when
+      there is actual usage data:\n   Change:\n     print(session_tracker.format_session_summary())\n
+      \    session_report = session_tracker.write_session_report()\n     if session_report:\n
+      \        log(f\"[Session usage report: {session_report}]\")\n   To:\n     if session_tracker.work_item_costs:\n
+      \        print(session_tracker.format_session_summary())\n         session_report
+      = session_tracker.write_session_report()\n         if session_report:\n             log(f\"[Session
+      usage report: {session_report}]\")\n\nAfter making changes, verify syntax:\n
+      \ python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',
+      doraise=True)\"\n"
+  - id: '1.2'
+    name: Add API-equivalent context to PlanUsageTracker in plan-orchestrator.py
+    agent: coder
+    status: pending
+    description: "Read the design document at docs/plans/2026-02-17-4-when-i-terminante-the-auto-pipeline-i-get-some-random-hallucinated-cost--this-m-design.md
+      for full context.\n\nIn scripts/plan-orchestrator.py, modify the PlanUsageTracker
+      class:\n\n1. In format_summary_line() (around line 558-572), change the return
+      string:\n   From:\n     f\"[Usage] Task {task_id}{model_str}: ${u.total_cost_usd:.4f}
+      | \"\n     ...\n     f\"Running: ${total.total_cost_usd:.4f}\"\n   To:\n     f\"[Usage]
+      Task {task_id}{model_str}: ~${u.total_cost_usd:.4f} | \"\n     ...\n     f\"Running:
+      ~${total.total_cost_usd:.4f}\"\n   (Add tilde prefix to both cost amounts to
+      indicate they are estimates)\n\n2. In format_final_summary() (around line 575-596),
+      make these changes:\n   a. Change the header from:\n        \"\\n=== Usage Summary
+      ===\"\n      to:\n        \"\\n=== Usage Summary (API-Equivalent Estimates) ===\"\n
+      \  b. Add a context line right after the header:\n        \"(Costs are API-equivalent
+      estimates from Claude CLI, not actual subscription charges)\"\n   c. Change \"Total
+      cost:\" to \"Total API-equivalent cost:\"\n   d. In the per-section breakdown,
+      change:\n        lines.append(f\"  {sname}: ${su.total_cost_usd:.4f} ({task_count}
+      tasks)\")\n      to:\n        lines.append(f\"  {sname}: ~${su.total_cost_usd:.4f}
+      ({task_count} tasks)\")\n\nAfter making changes, verify syntax:\n  python3 -c
+      \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\n"
+- id: phase-2
+  name: Phase 2 - Tests
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add regression tests for cost labeling
+    agent: coder
+    depends_on:
+    - '1.1'
+    - '1.2'
+    status: pending
+    description: "Create or extend tests to verify the cost reporting changes.\n\n
+      First, check if tests/test_auto_pipeline.py exists. If so, add tests to the
+      existing file. If not, create it.\n\nFor auto-pipeline.py tests:\n\nImport the
+      module using importlib:\n  import importlib.util\n  spec = importlib.util.spec_from_file_location(\"\
+      auto_pipeline\", \"scripts/auto-pipeline.py\")\n  mod = importlib.util.module_from_spec(spec)\n
+      \ spec.loader.exec_module(mod)\n  SessionUsageTracker = mod.SessionUsageTracker\n\
+      \nWrite the following tests:\n\n1. test_session_summary_contains_api_equivalent_header:\n
+      \  - Create a SessionUsageTracker instance\n   - Add a mock cost entry to work_item_costs:
+      [{\"name\": \"test-item\", \"cost_usd\": 1.5}]\n   - Set total_cost_usd = 1.5\n
+      \  - Call format_session_summary()\n   - Assert \"API-Equivalent Estimates\" is
+      in the result\n   - Assert \"not actual subscription charges\" is in the result\n
+      \  - Assert \"Total API-equivalent cost:\" is in the result\n\n2. test_session_summary_per_item_has_tilde:\n
+      \  - Create a SessionUsageTracker, add a work_item_costs entry\n   - Call format_session_summary()\n
+      \  - Assert \"~$\" appears in the per-item breakdown line\n\n3. test_session_summary_suppressed_when_empty:\n
+      \  - Create a SessionUsageTracker with no data\n   - Assert work_item_costs is
+      empty ([])\n   - This verifies the guard condition added in the finally block
+      works correctly\n\nFor plan-orchestrator.py tests:\n\nCheck if tests/test_plan_orchestrator.py
+      exists. If so, add tests. If not, create it.\n\nImport using importlib:\n  spec
+      = importlib.util.spec_from_file_location(\"plan_orchestrator\", \"scripts/plan-orchestrator.py\"\
+      )\n  mod = importlib.util.module_from_spec(spec)\n  spec.loader.exec_module(mod)\n
+      \ PlanUsageTracker = mod.PlanUsageTracker\n  TaskUsage = mod.TaskUsage\n\nWrite
+      the following tests:\n\n4. test_plan_usage_summary_line_has_tilde:\n   - Create
+      a PlanUsageTracker\n   - Record a task usage: tracker.record(\"1.1\", TaskUsage(input_tokens=100,
+      output_tokens=50, total_cost_usd=0.5))\n   - Call format_summary_line(\"1.1\")\n
+      \  - Assert \"~$\" appears in the result (tilde prefix on cost)\n\n5. test_plan_final_summary_has_api_equivalent_header:\n
+      \  - Create a PlanUsageTracker\n   - Record a task usage\n   - Call format_final_summary()
+      with a minimal plan dict:\n     {\"sections\": [{\"id\": \"s1\", \"name\": \"Section
+      1\", \"tasks\": [{\"id\": \"1.1\"}]}]}\n   - Assert \"API-Equivalent Estimates\"
+      is in the result\n   - Assert \"not actual subscription charges\" is in the result\n
+      \  - Assert \"Total API-equivalent cost:\" is in the result\n\nAfter writing tests,
+      run them:\n  python3 -m pytest tests/ -v\n\nFix any failures immediately.\n"
+- id: phase-3
+  name: Phase 3 - Verification
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Verify syntax and run full test suite
+    agent: code-reviewer
+    depends_on:
+    - '2.1'
+    status: pending
+    description: "Run the following verification steps:\n\n1. Compile-check both main
+      scripts:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',
+      doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\n\n2.
+      Run the full test suite:\n   python3 -m pytest tests/ 2>/dev/null || echo 'No
+      test suite configured'\n\n3. Verify the old bare \"Total cost:\" pattern is gone
+      from format_session_summary:\n   grep -n 'Total cost:' scripts/auto-pipeline.py\n
+      \  Expected: zero matches (should now say \"Total API-equivalent cost:\")\n\n4.
+      Verify \"API-Equivalent Estimates\" appears in both scripts:\n   grep -n 'API-Equivalent
+      Estimates' scripts/auto-pipeline.py scripts/plan-orchestrator.py\n   Expected:
+      at least one match in each file.\n\n5. Verify \"not actual subscription charges\"
+      context appears:\n   grep -n 'not actual subscription charges' scripts/auto-pipeline.py
+      scripts/plan-orchestrator.py\n   Expected: at least one match in each file.\n\n6.
+      Verify the zero-cost guard is in place:\n   grep -n 'if session_tracker.work_item_costs'
+      scripts/auto-pipeline.py\n   Expected: at least one match in the finally block.\n\n7.
+      Verify tilde prefix on per-item costs:\n   grep -n '~\\$' scripts/auto-pipeline.py
+      scripts/plan-orchestrator.py\n   Expected: multiple matches across both files.\n\nReport
+      findings as PASS/WARN/FAIL.\n"
