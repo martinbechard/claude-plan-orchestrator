@@ -401,3 +401,199 @@ def test_intake_retry_uses_better_result(tmp_path):
 
     finally:
         os.chdir(original_cwd)
+
+
+# --- _run_intake_analysis acknowledgment tests ---
+
+
+def test_intake_sends_immediate_ack(tmp_path):
+    """Verify immediate ack is sent before LLM analysis begins."""
+    import unittest.mock
+
+    defect_dir = tmp_path / "docs" / "defect-backlog"
+    defect_dir.mkdir(parents=True)
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        # Mock _call_claude_print to return complete response
+        complete_response = build_intake_response(num_whys=5)
+        with unittest.mock.patch.object(notifier, '_call_claude_print', return_value=complete_response):
+            with unittest.mock.patch.object(notifier, 'create_backlog_item', return_value={"filepath": "test.md", "filename": "1-test.md", "item_number": 1}):
+                with unittest.mock.patch.object(notifier, 'send_status') as mock_send:
+                    intake = IntakeState(
+                        channel_id="C123",
+                        channel_name="test-channel",
+                        original_text="Test feature request",
+                        user="U123",
+                        ts="1234567890.123456",
+                        item_type="feature",
+                        analysis=None
+                    )
+
+                    notifier._run_intake_analysis(intake)
+
+                    # Verify send_status was called at least once
+                    assert mock_send.call_count >= 1
+
+                    # Check the first call contains the immediate ack
+                    first_call_args = mock_send.call_args_list[0]
+                    message = first_call_args[0][0]  # First positional arg
+                    kwargs = first_call_args[1]
+
+                    assert "Received your feature" in message
+                    assert kwargs.get("level") == "info"
+                    assert kwargs.get("channel_id") == "C123"
+
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_intake_sends_analysis_summary(tmp_path):
+    """Verify analysis summary is sent with parsed details."""
+    import unittest.mock
+
+    defect_dir = tmp_path / "docs" / "defect-backlog"
+    defect_dir.mkdir(parents=True)
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        # Mock _call_claude_print to return complete response
+        complete_response = build_intake_response(num_whys=5, title="Test Feature Title")
+        with unittest.mock.patch.object(notifier, '_call_claude_print', return_value=complete_response):
+            with unittest.mock.patch.object(notifier, 'create_backlog_item', return_value={"filepath": "test.md", "filename": "1-test.md", "item_number": 1}):
+                with unittest.mock.patch.object(notifier, 'send_status') as mock_send:
+                    intake = IntakeState(
+                        channel_id="C123",
+                        channel_name="test-channel",
+                        original_text="Test feature request",
+                        user="U123",
+                        ts="1234567890.123456",
+                        item_type="feature",
+                        analysis=None
+                    )
+
+                    notifier._run_intake_analysis(intake)
+
+                    # Should have at least 3 calls: immediate ack, analysis summary, final success
+                    assert mock_send.call_count >= 3
+
+                    # Find the analysis summary call (contains "Here is my understanding")
+                    summary_call = None
+                    for call_args in mock_send.call_args_list:
+                        message = call_args[0][0]
+                        if "Here is my understanding" in message:
+                            summary_call = call_args
+                            break
+
+                    assert summary_call is not None, "Analysis summary not found"
+                    message = summary_call[0][0]
+                    kwargs = summary_call[1]
+
+                    # Verify content
+                    assert "Test Feature Title" in message
+                    assert "defect" in message.lower()  # classification
+                    assert "Test root need" in message
+                    assert kwargs.get("level") == "info"
+
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_intake_ack_on_empty_response(tmp_path):
+    """Verify immediate ack is sent even when LLM returns empty."""
+    import unittest.mock
+
+    defect_dir = tmp_path / "docs" / "defect-backlog"
+    defect_dir.mkdir(parents=True)
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        # Mock _call_claude_print to return empty string
+        with unittest.mock.patch.object(notifier, '_call_claude_print', return_value=""):
+            with unittest.mock.patch.object(notifier, 'create_backlog_item', return_value={"filepath": "test.md", "filename": "1-test.md", "item_number": 1}):
+                with unittest.mock.patch.object(notifier, 'send_status') as mock_send:
+                    intake = IntakeState(
+                        channel_id="C123",
+                        channel_name="test-channel",
+                        original_text="Test defect submission",
+                        user="U123",
+                        ts="1234567890.123456",
+                        item_type="defect",
+                        analysis=None
+                    )
+
+                    notifier._run_intake_analysis(intake)
+
+                    # Verify immediate ack was sent
+                    first_call_args = mock_send.call_args_list[0]
+                    message = first_call_args[0][0]
+                    assert "Received your defect" in message
+
+                    # Analysis summary should NOT be sent (empty response path)
+                    all_messages = [call[0][0] for call in mock_send.call_args_list]
+                    assert not any("Here is my understanding" in msg for msg in all_messages)
+
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_intake_ack_on_analysis_error(tmp_path):
+    """Verify immediate ack is sent even when analysis raises exception."""
+    import unittest.mock
+
+    defect_dir = tmp_path / "docs" / "defect-backlog"
+    defect_dir.mkdir(parents=True)
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        # Mock _call_claude_print to raise an exception
+        with unittest.mock.patch.object(notifier, '_call_claude_print', side_effect=Exception("LLM error")):
+            with unittest.mock.patch.object(notifier, 'send_status') as mock_send:
+                intake = IntakeState(
+                    channel_id="C123",
+                    channel_name="test-channel",
+                    original_text="Test defect submission",
+                    user="U123",
+                    ts="1234567890.123456",
+                    item_type="defect",
+                    analysis=None
+                )
+
+                # The exception will propagate, but we still verify immediate ack was sent
+                try:
+                    notifier._run_intake_analysis(intake)
+                except Exception:
+                    pass  # Expected
+
+                # Verify immediate ack was sent before the error
+                assert mock_send.call_count >= 1
+                first_call_args = mock_send.call_args_list[0]
+                message = first_call_args[0][0]
+                assert "Received your defect" in message
+
+                # Analysis summary should NOT be sent (error path)
+                all_messages = [call[0][0] for call in mock_send.call_args_list]
+                assert not any("Here is my understanding" in msg for msg in all_messages)
+
+    finally:
+        os.chdir(original_cwd)
