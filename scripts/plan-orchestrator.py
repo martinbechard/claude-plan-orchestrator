@@ -18,6 +18,7 @@ import subprocess
 import sys
 import time
 import threading
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -58,6 +59,19 @@ DEFAULT_ESCALATE_AFTER_FAILURES = 2
 DEFAULT_MAX_MODEL = "opus"
 DEFAULT_VALIDATION_MODEL = "sonnet"
 DEFAULT_STARTING_MODEL = "sonnet"
+
+# Slack notification configuration
+SLACK_CONFIG_PATH = ".claude/slack.local.yaml"
+SLACK_QUESTION_PATH = ".claude/slack-pending-question.json"
+SLACK_ANSWER_PATH = ".claude/slack-answer.json"
+SLACK_POLL_INTERVAL_SECONDS = 30
+SLACK_LEVEL_EMOJI = {
+    "info": ":large_blue_circle:",
+    "success": ":white_check_mark:",
+    "error": ":x:",
+    "warning": ":warning:",
+    "question": ":question:",
+}
 
 
 def load_orchestrator_config() -> dict:
@@ -2508,6 +2522,266 @@ Use the admin notification system or console log if notifications aren't configu
         )
     except Exception as e:
         print(f"[NOTIFICATION FAILED] {subject}: {message} (Error: {e})")
+
+
+class SlackNotifier:
+    """Sends messages to Slack via Incoming Webhooks.
+
+    Reads .claude/slack.local.yaml on init. If the file is missing or
+    slack.enabled is false, all methods are no-ops (silent, no errors).
+    Uses urllib.request (stdlib only) for HTTP POST to the webhook URL.
+
+    Reference: docs/plans/2026-02-16-13-slack-agent-communication-design.md
+    """
+
+    def __init__(self, config_path: str = SLACK_CONFIG_PATH):
+        """Initialize SlackNotifier from config file.
+
+        Args:
+            config_path: Path to slack.local.yaml config file
+        """
+        self._enabled = False
+        self._webhook_url = ""
+        self._notify_config = {}
+        self._question_config = {}
+
+        try:
+            with open(config_path, "r") as f:
+                config = yaml.safe_load(f)
+
+            if not isinstance(config, dict):
+                return
+
+            slack_config = config.get("slack", {})
+            if not isinstance(slack_config, dict):
+                return
+
+            self._enabled = slack_config.get("enabled", False)
+            if not self._enabled:
+                return
+
+            self._webhook_url = slack_config.get("webhook_url", "")
+            self._notify_config = slack_config.get("notify", {})
+            self._question_config = slack_config.get("questions", {})
+
+        except (IOError, yaml.YAMLError):
+            # Config file missing or invalid - remain disabled
+            pass
+
+    def is_enabled(self) -> bool:
+        """Check if Slack notifications are enabled.
+
+        Returns:
+            True if enabled and configured, False otherwise
+        """
+        return self._enabled
+
+    def _should_notify(self, event: str) -> bool:
+        """Check if a specific event type is enabled in config.
+
+        Args:
+            event: Event name (e.g., "on_task_complete")
+
+        Returns:
+            True if enabled and event is configured for notification
+        """
+        return self._enabled and self._notify_config.get(event, False)
+
+    def _post_webhook(self, payload: dict) -> bool:
+        """POST a JSON payload to the Slack webhook URL.
+
+        Uses urllib.request. Returns True on success, False on error.
+        Catches all exceptions and logs errors without raising.
+
+        Args:
+            payload: Slack Block Kit payload dict
+
+        Returns:
+            True on HTTP 200, False otherwise
+        """
+        if not self._webhook_url:
+            return False
+
+        try:
+            req = urllib.request.Request(
+                self._webhook_url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+
+            with urllib.request.urlopen(req, timeout=10) as response:
+                return response.status == 200
+
+        except Exception as e:
+            print(f"[SLACK] Failed to post webhook: {e}")
+            return False
+
+    def _build_status_block(self, message: str, level: str) -> dict:
+        """Build a Slack Block Kit payload for a status message.
+
+        Args:
+            message: Message text (supports Slack markdown)
+            level: Message level (info, success, error, warning, question)
+
+        Returns:
+            Slack Block Kit payload dict
+        """
+        emoji = SLACK_LEVEL_EMOJI.get(level, ":large_blue_circle:")
+        return {
+            "blocks": [{
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"{emoji} {message}"}
+            }]
+        }
+
+    def send_status(self, message: str, level: str = "info") -> None:
+        """Send a status update to Slack. No-op if disabled.
+
+        Args:
+            message: Status message text
+            level: Message level (info, success, error, warning)
+        """
+        if not self._enabled or not self._webhook_url:
+            return
+
+        payload = self._build_status_block(message, level)
+        self._post_webhook(payload)
+
+    def send_question(
+        self,
+        question: str,
+        options: list[str],
+        timeout_minutes: int = 0
+    ) -> str | None:
+        """Send a question to Slack and poll for answer via file.
+
+        Posts question to Slack, then polls for .claude/slack-answer.json.
+        Returns the answer string, or None on timeout.
+
+        Args:
+            question: Question text
+            options: List of valid answer options
+            timeout_minutes: Timeout in minutes (0 = use config default)
+
+        Returns:
+            Answer string if received, fallback value on timeout, None on error
+        """
+        if not self._should_notify("on_question"):
+            return None
+        if not self._question_config.get("enabled", False):
+            return None
+
+        effective_timeout = timeout_minutes or self._question_config.get("timeout_minutes", 60)
+        fallback = self._question_config.get("fallback", "skip")
+
+        # Post question to Slack
+        options_text = " | ".join(f"`{opt}`" for opt in options)
+        msg = f":question: *{question}*\nOptions: {options_text}\n_Reply by creating `.claude/slack-answer.json` with `{{\"answer\": \"your_choice\"}}`_"
+        self._post_webhook(self._build_status_block(msg, "question"))
+
+        # Write pending question file
+        question_data = {
+            "question": question,
+            "options": options,
+            "asked_at": datetime.now(ZoneInfo("UTC")).isoformat(),
+            "timeout_minutes": effective_timeout
+        }
+
+        try:
+            with open(SLACK_QUESTION_PATH, "w") as f:
+                json.dump(question_data, f, indent=2)
+        except IOError as e:
+            print(f"[SLACK] Failed to write question file: {e}")
+            return None
+
+        # Poll for answer
+        start_time = time.time()
+        timeout_seconds = effective_timeout * 60
+
+        while time.time() - start_time < timeout_seconds:
+            try:
+                if os.path.exists(SLACK_ANSWER_PATH):
+                    with open(SLACK_ANSWER_PATH, "r") as f:
+                        answer_data = json.load(f)
+
+                    answer = answer_data.get("answer", "")
+
+                    # Clean up files
+                    try:
+                        os.remove(SLACK_ANSWER_PATH)
+                    except OSError:
+                        pass
+                    try:
+                        os.remove(SLACK_QUESTION_PATH)
+                    except OSError:
+                        pass
+
+                    return answer
+
+            except (IOError, json.JSONDecodeError) as e:
+                print(f"[SLACK] Error reading answer file: {e}")
+
+            time.sleep(SLACK_POLL_INTERVAL_SECONDS)
+
+        # Timeout - clean up and return fallback
+        try:
+            os.remove(SLACK_QUESTION_PATH)
+        except OSError:
+            pass
+
+        return fallback
+
+    def send_defect(self, title: str, description: str, file_path: str = "") -> None:
+        """Send a defect report to Slack.
+
+        Args:
+            title: Defect title
+            description: Defect description
+            file_path: Optional file path where defect was found
+        """
+        if not self._should_notify("on_defect_found"):
+            return
+
+        msg = f":beetle: *Defect found:* {title}"
+        if file_path:
+            msg += f"\n`{file_path}`"
+        if description:
+            msg += f"\n{description}"
+
+        self._post_webhook(self._build_status_block(msg, "error"))
+
+    def send_idea(self, title: str, description: str) -> None:
+        """Send a feature idea to Slack.
+
+        Args:
+            title: Idea title
+            description: Idea description
+        """
+        if not self._should_notify("on_idea_found"):
+            return
+
+        msg = f":bulb: *Idea:* {title}"
+        if description:
+            msg += f"\n{description}"
+
+        self._post_webhook(self._build_status_block(msg, "info"))
+
+    def process_agent_messages(self, status: dict) -> None:
+        """Process slack_messages from a task-status.json dict.
+
+        Args:
+            status: Task status dict potentially containing slack_messages field
+        """
+        messages = status.get("slack_messages", [])
+        for msg in messages:
+            msg_type = msg.get("type", "")
+            title = msg.get("title", "")
+            desc = msg.get("description", "")
+
+            if msg_type == "defect":
+                self.send_defect(title, desc, msg.get("file_path", ""))
+            elif msg_type == "idea":
+                self.send_idea(title, desc)
 
 
 def update_section_status(section: dict) -> None:
