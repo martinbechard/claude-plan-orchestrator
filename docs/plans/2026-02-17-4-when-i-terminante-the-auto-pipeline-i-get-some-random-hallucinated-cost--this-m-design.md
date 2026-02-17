@@ -1,4 +1,4 @@
-# Design: Clarify Cost Reporting in Auto-Pipeline
+# Design: Clarify Cost Reporting as API-Equivalent Estimates
 
 ## Problem
 
@@ -8,58 +8,56 @@ Code Max subscriptions interpret these as "hallucinated" costs because they
 believe Claude Code is free. In reality, these are API-equivalent cost estimates
 reported by the Claude CLI - not actual charges.
 
-The plan-orchestrator.py already has contextual labeling in two places:
-- The Slack Q&A system prompt (line 105-107) explains these are API-equivalent estimates
-- The _format_state_context method (line 3482-3483) labels costs as "API-equivalent cost ... not actual subscription charges"
+## Current State (after Verification #1)
 
-But auto-pipeline.py's SessionUsageTracker.format_session_summary() has no such
-context - it prints "Total cost: $X.XXXX" without qualification.
+auto-pipeline.py has been fully fixed:
+- "API-Equivalent Estimates" header in SessionUsageTracker.format_session_summary()
+- "not actual subscription charges" context line
+- Tilde prefix (~$) on per-item costs
+- Zero-cost guard suppresses summary when no work items completed
 
-## Root Cause
+plan-orchestrator.py is NOT yet fixed. The PlanUsageTracker class still uses:
+- "Usage Summary" header (should say "API-Equivalent Estimates")
+- "Total cost:" label without "API-Equivalent" qualifier
+- Bare "$" amounts without tilde prefix in format_summary_line() and format_final_summary()
+- No "(not actual subscription charges)" context line
 
-SessionUsageTracker.format_session_summary() in auto-pipeline.py (line 558-570)
-formats cost data without any clarifying label. Users see bare dollar amounts
-and assume they are being charged.
+## Remaining Work
 
-## Solution
+### 1. Update format_summary_line() in plan-orchestrator.py (line 558)
 
-### 1. Add "API-equivalent estimate" context to all cost output in auto-pipeline.py
-
-Modify SessionUsageTracker.format_session_summary() to:
-- Change header from "Pipeline Session Usage" to include "API-Equivalent" qualifier
-- Add a one-line explanation below the header
-- Change "Total cost:" to "API-equivalent cost:" throughout
-
-### 2. Add context to per-item usage log lines
-
-Modify the log line in record_from_report() (line 554) from:
-  "[Usage] {name}: ${cost:.4f}"
+Change per-task usage lines from:
+  [Usage] Task {id}: ${cost} | ... | Running: ${total}
 to:
-  "[Usage] {name}: ~${cost:.4f} (API-equivalent)"
+  [Usage] Task {id}: ~${cost} | ... | Running: ~${total}
 
-### 3. Suppress summary when no costs were tracked
+### 2. Update format_final_summary() in plan-orchestrator.py (line 575)
 
-If the session tracker has zero work items and zero cost, skip printing the
-summary entirely. This handles the case where the user terminates before any
-work item completes (which would show a confusing "$0.0000" line).
+Change the final summary block from:
+  === Usage Summary ===
+  Total cost: ${cost}
+to:
+  === Usage Summary (API-Equivalent Estimates) ===
+  (These are API-equivalent costs reported by Claude CLI, not actual subscription charges)
+  Total API-equivalent cost: ~${cost}
 
-### 4. Add context to PlanUsageTracker in plan-orchestrator.py
+Also add tilde prefix to per-section cost lines.
 
-Apply the same "API-equivalent" labeling to:
-- format_summary_line() per-task output
-- format_final_summary() final summary header
+### 3. Add regression tests for plan-orchestrator cost formatting
 
-This ensures consistency between both scripts.
+Test that format_summary_line() and format_final_summary() output contains:
+- Tilde prefix (~$) on all cost amounts
+- "API-Equivalent" in the final summary header
+- "not actual subscription charges" context line
 
 ## Files to Modify
 
-- scripts/auto-pipeline.py - SessionUsageTracker class (format_session_summary, record_from_report)
-- scripts/plan-orchestrator.py - PlanUsageTracker class (format_summary_line, format_final_summary)
-- tests/test_auto_pipeline.py or new test file - regression tests
+- scripts/plan-orchestrator.py - PlanUsageTracker.format_summary_line(), PlanUsageTracker.format_final_summary()
+- tests/test_plan_orchestrator_usage.py - regression tests for cost formatting
 
 ## Design Decisions
 
 1. Use "API-equivalent" rather than "estimated" to be precise about what the number represents
-2. Keep dollar formatting as-is ($X.XXXX) since the values are real API-equivalent costs
-3. Suppress zero-cost summaries entirely to avoid confusion on early termination
-4. Add the "(not actual subscription charges)" qualifier only in the summary header, not on every line, to keep log output concise
+2. Use tilde prefix (~$) on all cost amounts for visual distinction from actual charges
+3. Add "(not actual subscription charges)" qualifier in the summary header only, not on every line
+4. Match the formatting pattern already established in auto-pipeline.py for consistency
