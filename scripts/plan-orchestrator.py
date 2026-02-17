@@ -3640,12 +3640,12 @@ class SlackNotifier:
                     intake.item_type, fallback_title,
                     intake.original_text, intake.user, intake.ts,
                 )
-                notify_msg = f"*{intake.item_type.title()} received:* {fallback_title}\n"
-                notify_msg += "_(Analysis unavailable, created from raw text)_"
-                if item_info and "filename" in item_info:
-                    notify_msg += f"\n📄 `{item_info['filename']}`"
+                item_ref = ""
+                if item_info:
+                    item_ref = f" (#{item_info['item_number']} - `{item_info['filename']}`)"
                 self.send_status(
-                    notify_msg,
+                    f"*{intake.item_type.title()} received{item_ref}:* {fallback_title}\n"
+                    "_(Analysis unavailable, created from raw text)_",
                     level="success", channel_id=intake.channel_id,
                 )
                 intake.status = "done"
@@ -3679,11 +3679,15 @@ class SlackNotifier:
             )
 
             # Step 4: Notify user on Slack
-            notify_msg = f"*{intake.item_type.title()} created:* {title}"
+            # Build comprehensive notification with item reference
+            item_ref = ""
+            if item_info:
+                item_ref = f" (#{item_info['item_number']} - `{item_info['filename']}`)"
+            notify_msg = f"*{intake.item_type.title()} created{item_ref}:* {title}"
+            if classification:
+                notify_msg += f"\n_Classification: {classification}_"
             if root_need:
                 notify_msg += f"\n_Root need: {root_need}_"
-            if item_info and "filename" in item_info:
-                notify_msg += f"\n📄 `{item_info['filename']}`"
             self.send_status(notify_msg, level="success", channel_id=intake.channel_id)
             intake.status = "done"
 
@@ -3695,12 +3699,12 @@ class SlackNotifier:
                     intake.item_type, fallback_title,
                     intake.original_text, intake.user, intake.ts,
                 )
-                notify_msg = f"*{intake.item_type.title()} received:* {fallback_title}\n"
-                notify_msg += f"_(Error during analysis: {e})_"
-                if item_info and "filename" in item_info:
-                    notify_msg += f"\n📄 `{item_info['filename']}`"
+                item_ref = ""
+                if item_info:
+                    item_ref = f" (#{item_info['item_number']} - `{item_info['filename']}`)"
                 self.send_status(
-                    notify_msg,
+                    f"*{intake.item_type.title()} received{item_ref}:* {fallback_title}\n"
+                    f"_(Error during analysis: {e})_",
                     level="warning", channel_id=intake.channel_id,
                 )
             except Exception:
