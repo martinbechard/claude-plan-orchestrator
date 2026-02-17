@@ -853,11 +853,11 @@ def test_poll_messages_updates_last_read(tmp_path):
         mod.SLACK_LAST_READ_PATH = original_path
 
 
-# --- Test: classify_message patterns ---
+# --- Test: _route_message_via_llm ---
 
 
-def test_classify_feature_request(tmp_path):
-    """classify_message should identify 'feature:' prefix as new_feature."""
+def test_route_via_llm_parse_valid_json(tmp_path):
+    """_route_message_via_llm should parse valid JSON from LLM response."""
     config_file = tmp_path / "slack.yaml"
     config_data = {
         "slack": {
@@ -872,14 +872,57 @@ def test_classify_feature_request(tmp_path):
 
     notifier = SlackNotifier(config_path=str(config_file))
 
-    classification, title, body = notifier.classify_message("feature: Add cache TTL")
-    assert classification == "new_feature"
-    assert title == "Add cache TTL"
-    assert body == ""
+    llm_response = '{"action": "stop_pipeline"}'
+    notifier._call_claude_print = lambda *a, **kw: llm_response
+
+    result = notifier._route_message_via_llm("please stop the pipeline")
+    assert result == {"action": "stop_pipeline"}
 
 
-def test_classify_feature_with_body(tmp_path):
-    """classify_message should parse multi-line feature messages."""
+def test_route_via_llm_fallback_on_empty(tmp_path):
+    """_route_message_via_llm should return none action on empty LLM response."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+    notifier._call_claude_print = lambda *a, **kw: ""
+
+    result = notifier._route_message_via_llm("hello")
+    assert result == {"action": "none"}
+
+
+def test_route_via_llm_fallback_on_invalid_json(tmp_path):
+    """_route_message_via_llm should return none action on invalid JSON."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+    notifier._call_claude_print = lambda *a, **kw: "not valid json at all"
+
+    result = notifier._route_message_via_llm("test message")
+    assert result == {"action": "none"}
+
+
+def test_route_via_llm_empty_text(tmp_path):
+    """_route_message_via_llm should return none for empty/blank text."""
     config_file = tmp_path / "slack.yaml"
     config_data = {
         "slack": {
@@ -894,16 +937,18 @@ def test_classify_feature_with_body(tmp_path):
 
     notifier = SlackNotifier(config_path=str(config_file))
 
-    classification, title, body = notifier.classify_message(
-        "feature: Cache TTL\nNeeds configurable expiry"
-    )
-    assert classification == "new_feature"
-    assert title == "Cache TTL"
-    assert body == "Needs configurable expiry"
+    result = notifier._route_message_via_llm("")
+    assert result == {"action": "none"}
+
+    result = notifier._route_message_via_llm("   ")
+    assert result == {"action": "none"}
 
 
-def test_classify_enhancement(tmp_path):
-    """classify_message should identify 'enhancement:' as new_feature."""
+# --- Test: _execute_routed_action ---
+
+
+def test_execute_stop_creates_semaphore(tmp_path, monkeypatch):
+    """_execute_routed_action stop_pipeline should write stop semaphore."""
     config_file = tmp_path / "slack.yaml"
     config_data = {
         "slack": {
@@ -918,14 +963,23 @@ def test_classify_enhancement(tmp_path):
 
     notifier = SlackNotifier(config_path=str(config_file))
 
-    classification, title, body = notifier.classify_message("enhancement: Better logging")
-    assert classification == "new_feature"
-    assert title == "Better logging"
-    assert body == ""
+    semaphore_path = tmp_path / ".stop"
+    monkeypatch.setattr(mod, "STOP_SEMAPHORE_PATH", str(semaphore_path))
+
+    # Stub send_status to avoid real Slack calls
+    sent_messages = []
+    notifier.send_status = lambda msg, **kw: sent_messages.append(msg)
+
+    routing = {"action": "stop_pipeline"}
+    notifier._execute_routed_action(routing, "U123", "1.0", "C999")
+
+    assert semaphore_path.exists()
+    assert len(sent_messages) == 1
+    assert "Stop requested" in sent_messages[0]
 
 
-def test_classify_defect(tmp_path):
-    """classify_message should identify 'defect:' prefix as new_defect."""
+def test_execute_status_calls_answer(tmp_path):
+    """_execute_routed_action get_status should call answer_question."""
     config_file = tmp_path / "slack.yaml"
     config_data = {
         "slack": {
@@ -940,16 +994,23 @@ def test_classify_defect(tmp_path):
 
     notifier = SlackNotifier(config_path=str(config_file))
 
-    classification, title, body = notifier.classify_message(
-        "defect: Broken import in auth"
-    )
-    assert classification == "new_defect"
-    assert title == "Broken import in auth"
-    assert body == ""
+    called_with = []
+    original_answer = notifier.answer_question
+    notifier.answer_question = lambda q, **kw: called_with.append((q, kw))
+
+    routing = {"action": "get_status"}
+    notifier._execute_routed_action(routing, "U123", "1.0", "C999")
+
+    # The answer_question call happens in a thread; give it a moment
+    import time
+    time.sleep(0.2)
+    assert len(called_with) == 1
+    assert called_with[0][0] == "status"
+    assert called_with[0][1].get("channel_id") == "C999"
 
 
-def test_classify_bug(tmp_path):
-    """classify_message should identify 'bug:' prefix as new_defect."""
+def test_execute_none_is_noop(tmp_path):
+    """_execute_routed_action with none action should do nothing."""
     config_file = tmp_path / "slack.yaml"
     config_data = {
         "slack": {
@@ -964,16 +1025,13 @@ def test_classify_bug(tmp_path):
 
     notifier = SlackNotifier(config_path=str(config_file))
 
-    classification, title, body = notifier.classify_message(
-        "bug: NullPointerException on startup"
-    )
-    assert classification == "new_defect"
-    assert title == "NullPointerException on startup"
-    assert body == ""
+    # Should not raise any errors
+    routing = {"action": "none"}
+    notifier._execute_routed_action(routing, "U123", "1.0", "C999")
 
 
-def test_classify_stop(tmp_path):
-    """classify_message should identify 'stop' command as control_stop."""
+def test_execute_create_feature_starts_intake(tmp_path):
+    """_execute_routed_action create_feature should start intake analysis."""
     config_file = tmp_path / "slack.yaml"
     config_data = {
         "slack": {
@@ -988,188 +1046,27 @@ def test_classify_stop(tmp_path):
 
     notifier = SlackNotifier(config_path=str(config_file))
 
-    classification, title, body = notifier.classify_message("stop")
-    assert classification == "control_stop"
-    assert title == "stop"
-    assert body == ""
+    # Stub _run_intake_analysis to capture the intake without doing real work
+    captured_intakes = []
+    notifier._run_intake_analysis = lambda intake: captured_intakes.append(intake)
 
-
-def test_classify_pause(tmp_path):
-    """classify_message should identify 'pause' command as control_stop."""
-    config_file = tmp_path / "slack.yaml"
-    config_data = {
-        "slack": {
-            "enabled": True,
-            "bot_token": "xoxb-test-token",
-            "channel_id": "C0123456789",
-        }
+    routing = {
+        "action": "create_feature",
+        "title": "Add dark mode",
+        "body": "Users want a dark theme",
     }
+    notifier._execute_routed_action(routing, "U123", "1.0", "C999")
 
-    with open(config_file, "w") as f:
-        yaml.dump(config_data, f)
+    # Thread starts _run_intake_analysis; give it a moment
+    import time
+    time.sleep(0.2)
 
-    notifier = SlackNotifier(config_path=str(config_file))
-
-    classification, title, body = notifier.classify_message("pause")
-    assert classification == "control_stop"
-    assert title == "pause"
-    assert body == ""
-
-
-def test_classify_skip(tmp_path):
-    """classify_message should identify 'skip' command as control_skip."""
-    config_file = tmp_path / "slack.yaml"
-    config_data = {
-        "slack": {
-            "enabled": True,
-            "bot_token": "xoxb-test-token",
-            "channel_id": "C0123456789",
-        }
-    }
-
-    with open(config_file, "w") as f:
-        yaml.dump(config_data, f)
-
-    notifier = SlackNotifier(config_path=str(config_file))
-
-    classification, title, body = notifier.classify_message("skip")
-    assert classification == "control_skip"
-    assert title == "skip"
-    assert body == ""
-
-
-def test_classify_status(tmp_path):
-    """classify_message should identify 'status' as info_request."""
-    config_file = tmp_path / "slack.yaml"
-    config_data = {
-        "slack": {
-            "enabled": True,
-            "bot_token": "xoxb-test-token",
-            "channel_id": "C0123456789",
-        }
-    }
-
-    with open(config_file, "w") as f:
-        yaml.dump(config_data, f)
-
-    notifier = SlackNotifier(config_path=str(config_file))
-
-    classification, title, body = notifier.classify_message("status")
-    assert classification == "info_request"
-    assert title == "status"
-    assert body == ""
-
-
-def test_classify_question_mark(tmp_path):
-    """classify_message should identify messages ending with '?' as question."""
-    config_file = tmp_path / "slack.yaml"
-    config_data = {
-        "slack": {
-            "enabled": True,
-            "bot_token": "xoxb-test-token",
-            "channel_id": "C0123456789",
-        }
-    }
-
-    with open(config_file, "w") as f:
-        yaml.dump(config_data, f)
-
-    notifier = SlackNotifier(config_path=str(config_file))
-
-    classification, title, body = notifier.classify_message("how much budget is left?")
-    assert classification == "question"
-    # Title and body content is implementation-dependent; just verify classification
-
-
-def test_classify_question_word(tmp_path):
-    """classify_message should identify messages starting with question words."""
-    config_file = tmp_path / "slack.yaml"
-    config_data = {
-        "slack": {
-            "enabled": True,
-            "bot_token": "xoxb-test-token",
-            "channel_id": "C0123456789",
-        }
-    }
-
-    with open(config_file, "w") as f:
-        yaml.dump(config_data, f)
-
-    notifier = SlackNotifier(config_path=str(config_file))
-
-    classification, title, body = notifier.classify_message("what is in the backlog")
-    assert classification == "question"
-
-
-def test_classify_acknowledgement(tmp_path):
-    """classify_message should classify generic messages as acknowledgement."""
-    config_file = tmp_path / "slack.yaml"
-    config_data = {
-        "slack": {
-            "enabled": True,
-            "bot_token": "xoxb-test-token",
-            "channel_id": "C0123456789",
-        }
-    }
-
-    with open(config_file, "w") as f:
-        yaml.dump(config_data, f)
-
-    notifier = SlackNotifier(config_path=str(config_file))
-
-    classification, title, body = notifier.classify_message("sounds good")
-    assert classification == "acknowledgement"
-    assert title == "sounds good"
-    assert body == ""
-
-
-def test_classify_empty(tmp_path):
-    """classify_message should handle empty strings as acknowledgement."""
-    config_file = tmp_path / "slack.yaml"
-    config_data = {
-        "slack": {
-            "enabled": True,
-            "bot_token": "xoxb-test-token",
-            "channel_id": "C0123456789",
-        }
-    }
-
-    with open(config_file, "w") as f:
-        yaml.dump(config_data, f)
-
-    notifier = SlackNotifier(config_path=str(config_file))
-
-    classification, title, body = notifier.classify_message("")
-    assert classification == "acknowledgement"
-    assert title == ""
-    assert body == ""
-
-
-def test_classify_case_insensitive(tmp_path):
-    """classify_message should perform case-insensitive matching."""
-    config_file = tmp_path / "slack.yaml"
-    config_data = {
-        "slack": {
-            "enabled": True,
-            "bot_token": "xoxb-test-token",
-            "channel_id": "C0123456789",
-        }
-    }
-
-    with open(config_file, "w") as f:
-        yaml.dump(config_data, f)
-
-    notifier = SlackNotifier(config_path=str(config_file))
-
-    # Test uppercase FEATURE
-    classification, title, body = notifier.classify_message("FEATURE: Test")
-    assert classification == "new_feature"
-    assert title == "Test"
-
-    # Test mixed case Bug
-    classification, title, body = notifier.classify_message("Bug: something")
-    assert classification == "new_defect"
-    assert title == "something"
+    assert len(captured_intakes) == 1
+    intake = captured_intakes[0]
+    assert intake.item_type == "feature"
+    assert "Add dark mode" in intake.original_text
+    assert intake.user == "U123"
+    assert intake.channel_id == "C999"
 
 
 # --- Test: create_backlog_item creates feature file ---
@@ -1328,8 +1225,9 @@ def test_process_inbound_disabled(tmp_path):
 
 
 def test_process_inbound_dispatches_feature(tmp_path, monkeypatch):
-    """process_inbound should call create_backlog_item for feature messages."""
+    """process_inbound should start intake for feature via LLM routing."""
     import os
+    import time
 
     # Create temp working directory structure
     monkeypatch.chdir(tmp_path)
@@ -1355,16 +1253,16 @@ def test_process_inbound_dispatches_feature(tmp_path, monkeypatch):
 
     notifier.poll_messages = mock_poll_messages
 
-    # Track create_backlog_item calls
-    backlog_calls = []
+    # Mock LLM routing to return create_feature action
+    notifier._route_message_via_llm = lambda text: {
+        "action": "create_feature",
+        "title": "New feature",
+        "body": "",
+    }
 
-    original_create_backlog_item = notifier.create_backlog_item
-
-    def mock_create_backlog_item(item_type, title, body, user, ts):
-        backlog_calls.append((item_type, title, body, user, ts))
-        return original_create_backlog_item(item_type, title, body, user, ts)
-
-    notifier.create_backlog_item = mock_create_backlog_item
+    # Track _run_intake_analysis calls
+    intake_calls = []
+    notifier._run_intake_analysis = lambda intake: intake_calls.append(intake)
 
     # Monkey-patch _post_message
     notifier._post_message = lambda payload, channel_id=None: True
@@ -1372,19 +1270,21 @@ def test_process_inbound_dispatches_feature(tmp_path, monkeypatch):
     # Process inbound
     notifier.process_inbound()
 
-    # Verify create_backlog_item was called
-    assert len(backlog_calls) == 1
-    assert backlog_calls[0][0] == "feature"
-    assert backlog_calls[0][1] == "New feature"
-    assert backlog_calls[0][3] == "U1"
-    assert backlog_calls[0][4] == "1.0"
+    # Give the thread a moment to start
+    time.sleep(0.2)
+
+    # Verify intake analysis was started
+    assert len(intake_calls) == 1
+    assert intake_calls[0].item_type == "feature"
+    assert "New feature" in intake_calls[0].original_text
+    assert intake_calls[0].user == "U1"
 
 
 # --- Test: process_inbound dispatches stop command ---
 
 
-def test_process_inbound_dispatches_stop(tmp_path):
-    """process_inbound should call handle_control_command for stop messages."""
+def test_process_inbound_dispatches_stop(tmp_path, monkeypatch):
+    """process_inbound should call handle_control_command for stop via LLM routing."""
     config_file = tmp_path / "slack.yaml"
     config_data = {
         "slack": {
@@ -1405,6 +1305,9 @@ def test_process_inbound_dispatches_stop(tmp_path):
 
     notifier.poll_messages = mock_poll_messages
 
+    # Mock LLM routing to return stop_pipeline action
+    notifier._route_message_via_llm = lambda text: {"action": "stop_pipeline"}
+
     # Track handle_control_command calls
     control_calls = []
 
@@ -1412,7 +1315,6 @@ def test_process_inbound_dispatches_stop(tmp_path):
 
     def mock_handle_control_command(command, classification, channel_id=None):
         control_calls.append((command, classification))
-        original_handle_control_command(command, classification, channel_id=channel_id)
 
     notifier.handle_control_command = mock_handle_control_command
 
@@ -1424,7 +1326,6 @@ def test_process_inbound_dispatches_stop(tmp_path):
 
     # Verify handle_control_command was called
     assert len(control_calls) == 1
-    assert control_calls[0][0] == "stop"
     assert control_calls[0][1] == "control_stop"
 
 
@@ -1887,7 +1788,8 @@ def test_intake_analysis_clear_request(tmp_path, monkeypatch):
 
     def mock_create(item_type, title, body, user="", ts=""):
         created_items.append({"type": item_type, "title": title, "body": body})
-        return "docs/feature-backlog/1-test.md"
+        return {"filepath": "docs/feature-backlog/1-test.md",
+                "filename": "1-test.md", "item_number": 1}
 
     def mock_send(msg, level="info", channel_id=None):
         sent_messages.append({"msg": msg, "level": level})
@@ -1948,7 +1850,8 @@ def test_intake_analysis_unstructured_response(tmp_path, monkeypatch):
 
     def mock_create(item_type, title, body, user="", ts=""):
         created_items.append({"type": item_type, "title": title, "body": body})
-        return "docs/defect-backlog/1-test.md"
+        return {"filepath": "docs/defect-backlog/1-test.md",
+                "filename": "1-test.md", "item_number": 1}
 
     def mock_send(msg, level="info", channel_id=None):
         sent_messages.append({"msg": msg, "level": level})
@@ -2077,7 +1980,8 @@ def test_intake_empty_response_creates_fallback(tmp_path, monkeypatch):
 
     def mock_create(item_type, title, body, user="", ts=""):
         created_items.append({"type": item_type, "title": title, "body": body})
-        return "docs/feature-backlog/1-test.md"
+        return {"filepath": "docs/feature-backlog/1-test.md",
+                "filename": "1-test.md", "item_number": 1}
 
     def mock_send(msg, level="info", channel_id=None):
         sent_messages.append({"msg": msg, "level": level})
