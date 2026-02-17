@@ -1,0 +1,20 @@
+# Slack notifications for the plan orchestrator.
+# Copy this file to .claude/slack.local.yaml and fill in your webhook URL.
+# The .local.yaml file is gitignored and must never be committed.
+slack:
+  enabled: true
+  webhook_url: "https://hooks.slack.com/services/T.../B.../xxx"
+  channel: "#orchestrator-updates"
+  notify:
+    on_plan_start: true
+    on_task_complete: true
+    on_plan_complete: true
+    on_validation_fail: true
+    on_budget_threshold: true
+    on_question: true
+    on_defect_found: true
+    on_idea_found: true
+  questions:
+    enabled: true
+    timeout_minutes: 60
+    fallback: "skip"

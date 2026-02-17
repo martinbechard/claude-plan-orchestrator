@@ -17,6 +17,8 @@ venv/
 .claude/plans/.stop
 .claude/subagent-status/
 .claude/agent-claims.json
+.claude/slack.local.yaml
+.claude/slack-*.json
 
 # OS
 .DS_Store
