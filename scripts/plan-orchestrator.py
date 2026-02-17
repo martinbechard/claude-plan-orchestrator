@@ -92,6 +92,7 @@ SLACK_CHANNEL_ROLE_SUFFIXES = {
     "notifications": "control",
 }
 SLACK_CHANNEL_CACHE_SECONDS = 300
+SLACK_BLOCK_TEXT_MAX_LENGTH = 2900
 
 # Question-answering prompt for LLM-powered responses
 QUESTION_ANSWER_PROMPT = """You are an AI pipeline orchestrator answering a human's question via Slack.
@@ -2792,12 +2793,33 @@ class SlackNotifier:
             Slack Block Kit payload dict
         """
         emoji = SLACK_LEVEL_EMOJI.get(level, ":large_blue_circle:")
+        full_text = self._truncate_for_slack(f"{emoji} {message}")
         return {
             "blocks": [{
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": f"{emoji} {message}"}
+                "text": {"type": "mrkdwn", "text": full_text}
             }]
         }
+
+    @staticmethod
+    def _truncate_for_slack(text: str,
+                           max_length: int = SLACK_BLOCK_TEXT_MAX_LENGTH) -> str:
+        """Truncate text to fit Slack Block Kit section text limit.
+
+        If text exceeds max_length, truncates and appends an indicator
+        showing how many characters were omitted.
+
+        Args:
+            text: Message text to truncate
+            max_length: Maximum allowed length (default SLACK_BLOCK_TEXT_MAX_LENGTH)
+
+        Returns:
+            Text that fits within max_length
+        """
+        if len(text) <= max_length:
+            return text
+        omitted = len(text) - max_length + 40
+        return text[:max_length - 40] + f"\n_...({omitted} chars omitted)_"
 
     def _get_notifications_channel_id(self) -> str:
         """Return the channel ID for the notifications channel.
