@@ -3632,9 +3632,12 @@ class SlackNotifier:
                     intake.item_type, fallback_title,
                     intake.original_text, intake.user, intake.ts,
                 )
+                notify_msg = f"*{intake.item_type.title()} received:* {fallback_title}\n"
+                notify_msg += "_(Analysis unavailable, created from raw text)_"
+                if item_info and "filename" in item_info:
+                    notify_msg += f"\n📄 `{item_info['filename']}`"
                 self.send_status(
-                    f"*{intake.item_type.title()} received:* {fallback_title}\n"
-                    "_(Analysis unavailable, created from raw text)_",
+                    notify_msg,
                     level="success", channel_id=intake.channel_id,
                 )
                 intake.status = "done"
@@ -3670,6 +3673,8 @@ class SlackNotifier:
             notify_msg = f"*{intake.item_type.title()} created:* {title}"
             if root_need:
                 notify_msg += f"\n_Root need: {root_need}_"
+            if item_info and "filename" in item_info:
+                notify_msg += f"\n📄 `{item_info['filename']}`"
             self.send_status(notify_msg, level="success", channel_id=intake.channel_id)
             intake.status = "done"
 
@@ -3681,9 +3686,12 @@ class SlackNotifier:
                     intake.item_type, fallback_title,
                     intake.original_text, intake.user, intake.ts,
                 )
+                notify_msg = f"*{intake.item_type.title()} received:* {fallback_title}\n"
+                notify_msg += f"_(Error during analysis: {e})_"
+                if item_info and "filename" in item_info:
+                    notify_msg += f"\n📄 `{item_info['filename']}`"
                 self.send_status(
-                    f"*{intake.item_type.title()} received:* {fallback_title}\n"
-                    f"_(Error during analysis: {e})_",
+                    notify_msg,
                     level="warning", channel_id=intake.channel_id,
                 )
             except Exception:
