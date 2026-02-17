@@ -3316,6 +3316,9 @@ def run_orchestrator(
             os.remove(STOP_SEMAPHORE_PATH)
             break
 
+        # Poll for inbound Slack messages between tasks
+        slack.process_inbound()
+
         # Check circuit breaker before proceeding
         verbose_log(f"Circuit breaker state: open={circuit_breaker.is_open}, failures={circuit_breaker.consecutive_failures}", "LOOP")
         if not circuit_breaker.can_proceed():
@@ -3743,6 +3746,8 @@ def run_orchestrator(
                         task["validation_attempts"] = validation_attempts + 1
                         if not dry_run:
                             save_plan(plan_path, plan)
+                        # Poll for inbound Slack messages after validation
+                        slack.process_inbound()
                         continue  # Retry the task
 
                     elif verdict.verdict == "WARN":
