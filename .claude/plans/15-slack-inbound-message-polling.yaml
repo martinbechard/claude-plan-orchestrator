@@ -404,12 +404,12 @@ sections:
       Verified syntax and confirmed both calls exist.'
 - id: phase-4
   name: Phase 4 - Unit Tests
-  status: pending
+  status: in_progress
   tasks:
   - id: '4.1'
     name: Test poll_messages and last-read tracking
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '3.2'
     description: "Add unit tests for poll_messages and last-read state management\
@@ -443,6 +443,13 @@ sections:
       \   assert mod.SLACK_LAST_READ_PATH == \".claude/slack-last-read.json\"\n  \
       \ assert mod.SLACK_INBOUND_POLL_LIMIT == 20\n\n5. Run tests:\n   python3 -m\
       \ pytest tests/test_slack_notifier.py -v\n   Fix any failures.\n\nFiles: tests/test_slack_notifier.py"
+    attempts: 1
+    last_attempt: '2026-02-16T21:04:15.780752'
+    model_used: sonnet
+    completed_at: '2026-02-16T21:06:41.610715'
+    result_message: 'Added 6 unit tests for poll_messages and last-read tracking:
+      load/save state, first-run behavior, bot filtering, and timestamp updates. Updated
+      constants test. All 25 tests pass.'
   - id: '4.2'
     name: Test classify_message
     agent: coder
