@@ -18,6 +18,8 @@ spec.loader.exec_module(mod)
 
 SlackNotifier = mod.SlackNotifier
 SLACK_BLOCK_TEXT_MAX_LENGTH = mod.SLACK_BLOCK_TEXT_MAX_LENGTH
+IntakeState = mod.IntakeState
+REQUIRED_FIVE_WHYS_COUNT = mod.REQUIRED_FIVE_WHYS_COUNT
 
 
 # --- _truncate_for_slack tests ---
@@ -207,3 +209,195 @@ def test_create_backlog_item_invalid_type(tmp_path):
 
     # Should return empty dict
     assert result == {}
+
+
+# --- _run_intake_analysis 5 Whys retry tests ---
+
+
+def build_intake_response(num_whys=5, title="Test Title"):
+    """Build a valid LLM response string with a given number of Whys."""
+    whys = "\n".join(f"{i+1}. Why {i+1} goes here" for i in range(num_whys))
+    return f"""Title: {title}
+Classification: defect - test
+
+5 Whys:
+{whys}
+
+Root Need: Test root need
+
+Description:
+Test description."""
+
+
+def test_intake_no_retry_when_five_whys_complete(tmp_path):
+    """Verify no retry when initial analysis has 5 Whys."""
+    import unittest.mock
+
+    # Setup directories
+    defect_dir = tmp_path / "docs" / "defect-backlog"
+    defect_dir.mkdir(parents=True)
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        # Mock _call_claude_print to return 5 Whys
+        complete_response = build_intake_response(num_whys=5)
+        with unittest.mock.patch.object(notifier, '_call_claude_print', return_value=complete_response):
+            with unittest.mock.patch.object(notifier, 'create_backlog_item', return_value={"filepath": "test.md", "filename": "1-test.md", "item_number": 1}):
+                with unittest.mock.patch.object(notifier, 'send_status'):
+                    # Create IntakeState
+                    intake = IntakeState(
+                        channel_id="C123",
+                        channel_name="test-channel",
+                        original_text="Test defect submission",
+                        user="U123",
+                        ts="1234567890.123456",
+                        item_type="defect",
+                        analysis=None
+                    )
+
+                    # Run analysis
+                    notifier._run_intake_analysis(intake)
+
+                    # Assert _call_claude_print was called exactly once (no retry)
+                    assert notifier._call_claude_print.call_count == 1
+
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_intake_retries_on_incomplete_whys(tmp_path):
+    """Verify retry when initial analysis has fewer than 5 Whys."""
+    import unittest.mock
+
+    defect_dir = tmp_path / "docs" / "defect-backlog"
+    defect_dir.mkdir(parents=True)
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        # Mock _call_claude_print: first returns 2 Whys, then 5 on retry
+        incomplete_response = build_intake_response(num_whys=2)
+        complete_response = build_intake_response(num_whys=5)
+
+        with unittest.mock.patch.object(notifier, '_call_claude_print', side_effect=[incomplete_response, complete_response]):
+            with unittest.mock.patch.object(notifier, 'create_backlog_item', return_value={"filepath": "test.md", "filename": "1-test.md", "item_number": 1}) as mock_create:
+                with unittest.mock.patch.object(notifier, 'send_status'):
+                    intake = IntakeState(
+                        channel_id="C123",
+                        channel_name="test-channel",
+                        original_text="Test defect submission",
+                        user="U123",
+                        ts="1234567890.123456",
+                        item_type="defect",
+                        analysis=None
+                    )
+
+                    notifier._run_intake_analysis(intake)
+
+                    # Assert _call_claude_print was called exactly twice (retry happened)
+                    assert notifier._call_claude_print.call_count == 2
+                    # Assert backlog item was created
+                    assert mock_create.call_count == 1
+
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_intake_proceeds_after_failed_retry(tmp_path):
+    """Verify backlog item created even when retry fails to get 5 Whys."""
+    import unittest.mock
+
+    defect_dir = tmp_path / "docs" / "defect-backlog"
+    defect_dir.mkdir(parents=True)
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        # Mock _call_claude_print: both calls return 2 Whys
+        incomplete_response = build_intake_response(num_whys=2)
+
+        with unittest.mock.patch.object(notifier, '_call_claude_print', side_effect=[incomplete_response, incomplete_response]):
+            with unittest.mock.patch.object(notifier, 'create_backlog_item', return_value={"filepath": "test.md", "filename": "1-test.md", "item_number": 1}) as mock_create:
+                with unittest.mock.patch.object(notifier, 'send_status'):
+                    intake = IntakeState(
+                        channel_id="C123",
+                        channel_name="test-channel",
+                        original_text="Test defect submission",
+                        user="U123",
+                        ts="1234567890.123456",
+                        item_type="defect",
+                        analysis=None
+                    )
+
+                    notifier._run_intake_analysis(intake)
+
+                    # Assert _call_claude_print was called twice
+                    assert notifier._call_claude_print.call_count == 2
+                    # Assert backlog item was still created (graceful degradation)
+                    assert mock_create.call_count == 1
+
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_intake_retry_uses_better_result(tmp_path):
+    """Verify retry result is used when it has more Whys than initial."""
+    import unittest.mock
+
+    defect_dir = tmp_path / "docs" / "defect-backlog"
+    defect_dir.mkdir(parents=True)
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        # Mock _call_claude_print: first returns 2 Whys, retry returns 4
+        first_response = build_intake_response(num_whys=2, title="Initial Title")
+        retry_response = build_intake_response(num_whys=4, title="Retry Title")
+
+        with unittest.mock.patch.object(notifier, '_call_claude_print', side_effect=[first_response, retry_response]):
+            with unittest.mock.patch.object(notifier, 'create_backlog_item', return_value={"filepath": "test.md", "filename": "1-test.md", "item_number": 1}) as mock_create:
+                with unittest.mock.patch.object(notifier, 'send_status'):
+                    intake = IntakeState(
+                        channel_id="C123",
+                        channel_name="test-channel",
+                        original_text="Test defect submission",
+                        user="U123",
+                        ts="1234567890.123456",
+                        item_type="defect",
+                        analysis=None
+                    )
+
+                    notifier._run_intake_analysis(intake)
+
+                    # Assert _call_claude_print was called twice
+                    assert notifier._call_claude_print.call_count == 2
+
+                    # Check that create_backlog_item was called with data from retry
+                    # The body should contain 4 Why items (from retry)
+                    # create_backlog_item(item_type, title, body, user, ts)
+                    call_args = mock_create.call_args.args
+                    body_content = call_args[2]  # body is the 3rd positional arg
+
+                    # Count the number of "Why" lines in the body
+                    why_lines = [line for line in body_content.split('\n') if line.strip().startswith(('1.', '2.', '3.', '4.'))]
+                    assert len(why_lines) >= 4  # Should have at least 4 Whys from retry
+
+    finally:
+        os.chdir(original_cwd)
