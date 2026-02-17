@@ -13,6 +13,7 @@ Copyright (c) 2025 Martin Bechard [martin.bechard@DevConsult.ca]
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -75,6 +76,12 @@ DEFAULT_MAX_QUOTA_PERCENT = 100.0
 DEFAULT_QUOTA_CEILING_USD = 0.0
 DEFAULT_RESERVED_BUDGET_USD = 0.0
 
+# Source files to monitor for hot-reload
+HOT_RELOAD_WATCHED_FILES = [
+    "scripts/auto-pipeline.py",
+    "scripts/plan-orchestrator.py",
+]
+
 
 def load_orchestrator_config() -> dict:
     """Load project-level orchestrator config from .claude/orchestrator-config.yaml.
@@ -130,6 +137,7 @@ CLAUDE_BINARY_SEARCH_PATHS = [
 VERBOSE = False
 CLAUDE_CMD: list[str] = ["claude"]
 _saved_terminal_settings = None  # Saved termios settings for restoration
+_startup_file_hashes: dict[str, str] = {}  # Populated at startup by snapshot_source_hashes()
 
 # ─── Terminal Management ─────────────────────────────────────────────
 
@@ -329,6 +337,47 @@ def clear_stop_semaphore() -> None:
     if os.path.exists(STOP_SEMAPHORE_PATH):
         os.remove(STOP_SEMAPHORE_PATH)
         log(f"Cleared stale stop semaphore: {STOP_SEMAPHORE_PATH}")
+
+
+# ─── Hot-Reload Detection ────────────────────────────────────────────
+
+
+def _compute_file_hash(filepath: str) -> str:
+    """Compute SHA-256 hash of a file. Returns empty string if file not found."""
+    try:
+        with open(filepath, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except (IOError, OSError):
+        return ""
+
+
+def snapshot_source_hashes() -> dict[str, str]:
+    """Capture SHA-256 hashes of all watched source files.
+
+    Called at startup to establish a baseline. Later calls to
+    check_code_changed() compare current hashes against this snapshot.
+    """
+    hashes: dict[str, str] = {}
+    for filepath in HOT_RELOAD_WATCHED_FILES:
+        h = _compute_file_hash(filepath)
+        if h:
+            hashes[filepath] = h
+            verbose_log(f"Snapshot hash: {filepath} -> {h[:12]}...")
+    return hashes
+
+
+def check_code_changed() -> bool:
+    """Check if any watched source file has changed since startup.
+
+    Compares current file hashes against _startup_file_hashes.
+    Returns True if any file has changed.
+    """
+    for filepath, original_hash in _startup_file_hashes.items():
+        current_hash = _compute_file_hash(filepath)
+        if current_hash and current_hash != original_hash:
+            log(f"Code change detected in {filepath}")
+            return True
+    return False
 
 
 # ─── Backlog Scanning ────────────────────────────────────────────────
@@ -982,6 +1031,30 @@ def check_existing_plan(item: BacklogItem) -> Optional[str]:
     return plan_path
 
 
+def is_plan_fully_completed(plan_path: str) -> bool:
+    """Check if all tasks in a YAML plan are completed (no pending tasks remain).
+
+    Returns True only if the plan has at least one completed task and zero
+    pending/in_progress tasks. Returns False for invalid or missing plans.
+    """
+    try:
+        with open(plan_path, "r") as f:
+            plan = yaml.safe_load(f)
+        if not plan or "sections" not in plan:
+            return False
+        done = 0
+        for section in plan.get("sections", []):
+            for task in section.get("tasks", []):
+                status = task.get("status", "pending")
+                if status == "completed":
+                    done += 1
+                elif status in ("pending", "in_progress"):
+                    return False
+        return done > 0
+    except (IOError, yaml.YAMLError):
+        return False
+
+
 def create_plan(item: BacklogItem, dry_run: bool = False) -> Optional[str]:
     """Create a design doc and YAML plan for a backlog item.
 
@@ -1441,6 +1514,37 @@ def _try_record_usage(
         session_tracker.record_from_report(str(report_path), work_item_name)
 
 
+def _archive_and_report(
+    item: BacklogItem, slack: "SlackNotifier",
+    item_start: float, dry_run: bool,
+) -> bool:
+    """Archive a completed item and send Slack status. Returns True on success."""
+    log("Phase 4: Archiving...")
+    archived = archive_item(item, dry_run)
+
+    elapsed = time.time() - item_start
+    minutes = int(elapsed // 60)
+    seconds = int(elapsed % 60)
+
+    if not archived:
+        log(f"WARNING: Archive failed for {item.display_name} - "
+            "item will not be retried this session")
+        slack.send_status(
+            f"*Pipeline: archive failed* {item.display_name}\n"
+            "Item completed but could not be moved to completed-backlog.",
+            level="warning"
+        )
+        return False
+
+    log(f"Item complete: {item.display_name} ({minutes}m {seconds}s)")
+    slack.send_status(
+        f"*Pipeline: completed* {item.display_name}\n"
+        f"Duration: {minutes}m {seconds}s",
+        level="success"
+    )
+    return True
+
+
 def process_item(
     item: BacklogItem,
     dry_run: bool = False,
@@ -1450,12 +1554,18 @@ def process_item(
 
     For defects, runs a verify-then-fix cycle:
       Phase 1: Create plan
-      Phase 2: Execute plan (orchestrator)
+      Phase 2: Execute plan (orchestrator) -- skipped if plan already completed
       Phase 3: Verify symptoms resolved (verifier agent, append-only)
         - If PASS: Phase 4 (archive)
         - If FAIL: Delete stale plan, loop back to Phase 1
           (next plan creation sees verification findings in the defect file)
       Phase 4: Archive
+
+    Optimizations to avoid wasting credits:
+    - If verification already passed (PASS verdict exists), skips to archive
+    - Prior verification attempts count against MAX_VERIFICATION_CYCLES
+    - Fully-completed plans skip the orchestrator (Phase 2)
+    - Plan YAML is cleaned up after max cycles to prevent loops on restart
 
     Returns True on success, False on failure or max cycles exceeded.
     """
@@ -1474,17 +1584,36 @@ def process_item(
         level="info"
     )
 
-    prior_verifications = count_verification_attempts(item.path)
+    # Fast path: if verification already passed, skip straight to archive
+    if last_verification_passed(item.path):
+        log("Prior verification PASSED - skipping to archive")
+        return _archive_and_report(item, slack, item_start, dry_run)
 
-    for cycle in range(MAX_VERIFICATION_CYCLES):
-        cycle_num = prior_verifications + cycle + 1
+    # Subtract prior verification attempts from the cycle budget
+    prior_verifications = count_verification_attempts(item.path)
+    remaining_cycles = max(0, MAX_VERIFICATION_CYCLES - prior_verifications)
+
+    if remaining_cycles == 0:
+        log(f"Max verification cycles ({MAX_VERIFICATION_CYCLES}) already reached "
+            f"({prior_verifications} prior attempts). Skipping {item.slug}.")
+        # Clean up leftover plan YAML to prevent re-processing on restart
+        plan_path = f"{PLANS_DIR}/{item.slug}.yaml"
+        if os.path.exists(plan_path):
+            os.remove(plan_path)
+            log(f"Cleaned up stale plan: {plan_path}")
+        return False
+
+    plan_path = None
+
+    for cycle in range(remaining_cycles):
+        cycle_label = f"{prior_verifications + cycle + 1}/{MAX_VERIFICATION_CYCLES}"
 
         if check_stop_requested():
             log("Stop requested during processing.")
             return False
 
         # Phase 1: Create plan
-        log(f"Phase 1: Creating plan (cycle {cycle + 1}/{MAX_VERIFICATION_CYCLES})...")
+        log(f"Phase 1: Creating plan (cycle {cycle_label})...")
         plan_path = create_plan(item, dry_run)
         if not plan_path:
             log(f"FAILED: Could not create plan for {item.display_name}")
@@ -1494,57 +1623,36 @@ def process_item(
             )
             return False
 
-        # Phase 2: Execute plan
-        log("Phase 2: Running orchestrator...")
-        success = execute_plan(plan_path, dry_run)
+        # Phase 2: Execute plan (skip if all tasks already completed)
+        if is_plan_fully_completed(plan_path):
+            log("Phase 2: Plan already fully completed - skipping orchestrator")
+        else:
+            log("Phase 2: Running orchestrator...")
+            success = execute_plan(plan_path, dry_run)
 
-        # Record usage from the orchestrator's report (regardless of success)
-        if session_tracker and plan_path:
-            _try_record_usage(session_tracker, plan_path, item.display_name)
+            # Record usage from the orchestrator's report (regardless of success)
+            if session_tracker and plan_path:
+                _try_record_usage(session_tracker, plan_path, item.display_name)
 
-        if not success:
-            log(f"FAILED: Orchestrator failed for {item.display_name}")
-            slack.send_status(
-                f"*Pipeline: failed* {item.display_name}",
-                level="error"
-            )
-            return False
+            if not success:
+                log(f"FAILED: Orchestrator failed for {item.display_name}")
+                slack.send_status(
+                    f"*Pipeline: failed* {item.display_name}",
+                    level="error"
+                )
+                return False
 
         # Phase 3: Verify symptoms
         log("Phase 3: Verifying symptoms...")
         verified = verify_item(item, dry_run)
 
         if verified:
-            # Phase 4: Archive
-            log("Phase 4: Archiving...")
-            archived = archive_item(item, dry_run)
-
-            elapsed = time.time() - item_start
-            minutes = int(elapsed // 60)
-            seconds = int(elapsed % 60)
-
-            if not archived:
-                log(f"WARNING: Archive failed for {item.display_name} - "
-                    "item will not be retried this session")
-                slack.send_status(
-                    f"*Pipeline: archive failed* {item.display_name}\n"
-                    "Item completed but could not be moved to completed-backlog.",
-                    level="warning"
-                )
-                return False
-
-            log(f"Item complete: {item.display_name} ({minutes}m {seconds}s)")
-            slack.send_status(
-                f"*Pipeline: completed* {item.display_name}\n"
-                f"Duration: {minutes}m {seconds}s",
-                level="success"
-            )
-            return True
+            return _archive_and_report(item, slack, item_start, dry_run)
 
         # Verification failed - prepare for next cycle
-        log(f"Verification failed (cycle {cycle + 1}/{MAX_VERIFICATION_CYCLES})")
+        log(f"Verification failed (cycle {cycle_label})")
 
-        if cycle + 1 < MAX_VERIFICATION_CYCLES:
+        if cycle + 1 < remaining_cycles:
             # Delete the stale plan so next cycle creates a fresh one
             # that incorporates the verification findings
             if plan_path and os.path.exists(plan_path):
@@ -1553,7 +1661,12 @@ def process_item(
             log("Cycling back to Phase 1 with verification findings...")
         else:
             log(f"Max verification cycles ({MAX_VERIFICATION_CYCLES}) reached for {item.slug}")
-            log("Defect stays in queue with accumulated verification findings.")
+
+    # Clean up plan YAML after max cycles to prevent re-processing on restart
+    if plan_path and os.path.exists(plan_path):
+        os.remove(plan_path)
+        log(f"Cleaned up plan after max cycles: {plan_path}")
+    log("Defect stays in queue with accumulated verification findings.")
 
     return False
 
