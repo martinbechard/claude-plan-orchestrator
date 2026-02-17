@@ -1,0 +1,209 @@
+# tests/test_plan_orchestrator.py
+# Unit tests for SlackNotifier methods in plan-orchestrator.py
+# Design ref: docs/plans/2026-02-17-5-slack-bot-provides-truncated-unhelpful-responses-when-defect-submission-fails-validation-design.md
+
+import importlib.util
+import os
+import tempfile
+import shutil
+from pathlib import Path
+
+# plan-orchestrator.py has a hyphen in the filename, so we must use importlib
+# to load it as a module under a valid Python identifier.
+spec = importlib.util.spec_from_file_location(
+    "plan_orchestrator", "scripts/plan-orchestrator.py"
+)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+
+SlackNotifier = mod.SlackNotifier
+SLACK_BLOCK_TEXT_MAX_LENGTH = mod.SLACK_BLOCK_TEXT_MAX_LENGTH
+
+
+# --- _truncate_for_slack tests ---
+
+
+def test_truncate_for_slack_short_message():
+    """Short message should remain unchanged."""
+    input_text = "Hello world"
+    result = SlackNotifier._truncate_for_slack(input_text)
+    assert result == "Hello world"
+
+
+def test_truncate_for_slack_exact_limit():
+    """Message exactly at limit should remain unchanged."""
+    input_text = "x" * SLACK_BLOCK_TEXT_MAX_LENGTH
+    result = SlackNotifier._truncate_for_slack(input_text)
+    assert result == input_text
+    assert len(result) == SLACK_BLOCK_TEXT_MAX_LENGTH
+
+
+def test_truncate_for_slack_over_limit():
+    """Message over limit should be truncated with omission indicator."""
+    input_text = "x" * (SLACK_BLOCK_TEXT_MAX_LENGTH + 500)
+    result = SlackNotifier._truncate_for_slack(input_text)
+    assert len(result) <= SLACK_BLOCK_TEXT_MAX_LENGTH
+    assert "chars omitted" in result
+
+
+def test_truncate_for_slack_custom_limit():
+    """Truncation should respect custom max_length parameter."""
+    input_text = "x" * 200
+    result = SlackNotifier._truncate_for_slack(input_text, max_length=100)
+    assert len(result) <= 100
+    assert "chars omitted" in result
+
+
+# --- _parse_intake_response tests ---
+
+
+def test_parse_intake_response_with_classification():
+    """Parse response with classification field."""
+    response = """Title: Fix login bug
+Classification: defect - This describes a broken feature that should work
+Root Need: Users need to authenticate
+Description:
+Login button is not responding when clicked.
+
+5 Whys:
+1. Why does the login fail? Button handler not attached.
+2. Why wasn't it attached? Event listener setup was removed.
+"""
+    result = SlackNotifier._parse_intake_response(response)
+    assert result["title"] == "Fix login bug"
+    assert result["classification"] != ""
+    assert "defect" in result["classification"].lower()
+    assert result["root_need"] == "Users need to authenticate"
+    assert "Login button is not responding" in result["description"]
+
+
+def test_parse_intake_response_without_classification():
+    """Parse response missing classification field."""
+    response = """Title: Add dark mode
+Root Need: Users want customizable themes
+Description:
+Implement dark mode toggle in settings.
+"""
+    result = SlackNotifier._parse_intake_response(response)
+    assert result["title"] == "Add dark mode"
+    assert result["classification"] == ""
+    assert result["root_need"] == "Users want customizable themes"
+
+
+# --- create_backlog_item tests ---
+
+
+def test_create_backlog_item_returns_dict(tmp_path):
+    """Verify create_backlog_item returns dict with expected keys."""
+    # Create temporary backlog directories
+    feature_dir = tmp_path / "docs" / "feature-backlog"
+    defect_dir = tmp_path / "docs" / "defect-backlog"
+    feature_dir.mkdir(parents=True)
+    defect_dir.mkdir(parents=True)
+
+    # Change to tmp directory to avoid creating real files
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        # Create a minimal SlackNotifier (disabled so it doesn't try to connect)
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        # Call create_backlog_item for a defect
+        result = notifier.create_backlog_item(
+            item_type="defect",
+            title="Test defect title",
+            body="Test defect body",
+            user="U123ABC",
+            ts="1234567890.123456"
+        )
+
+        # Assert result has expected keys
+        assert "filepath" in result
+        assert "filename" in result
+        assert "item_number" in result
+
+        # Assert item_number is an int
+        assert isinstance(result["item_number"], int)
+        assert result["item_number"] == 1  # First item in empty backlog
+
+        # Verify file was created
+        assert os.path.exists(result["filepath"])
+
+        # Verify filename format
+        assert result["filename"].startswith("1-")
+        assert result["filename"].endswith(".md")
+
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_create_backlog_item_increments_number(tmp_path):
+    """Verify item numbers increment correctly."""
+    defect_dir = tmp_path / "docs" / "defect-backlog"
+    defect_dir.mkdir(parents=True)
+
+    # Create an existing item
+    (defect_dir / "1-existing-item.md").write_text("# Existing\n")
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        result = notifier.create_backlog_item(
+            item_type="defect",
+            title="Second item",
+            body="Body"
+        )
+
+        # Should be numbered 2
+        assert result["item_number"] == 2
+        assert result["filename"].startswith("2-")
+
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_create_backlog_item_feature_type(tmp_path):
+    """Verify feature items go to feature-backlog."""
+    feature_dir = tmp_path / "docs" / "feature-backlog"
+    feature_dir.mkdir(parents=True)
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        result = notifier.create_backlog_item(
+            item_type="feature",
+            title="New feature",
+            body="Feature description"
+        )
+
+        # Should create in feature-backlog
+        assert "feature-backlog" in result["filepath"]
+        assert os.path.exists(result["filepath"])
+
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_create_backlog_item_invalid_type(tmp_path):
+    """Verify invalid item type returns empty dict."""
+    nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+    notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+    result = notifier.create_backlog_item(
+        item_type="invalid",
+        title="Test",
+        body="Body"
+    )
+
+    # Should return empty dict
+    assert result == {}
