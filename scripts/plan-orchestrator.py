@@ -217,6 +217,16 @@ Keep it concise and actionable."""
 
 INTAKE_ANALYSIS_TIMEOUT_SECONDS = 120  # 2 minutes for intake LLM call
 
+INTAKE_ACK_TEMPLATE = (
+    "*Here is my understanding of your {item_type}:*\n"
+    "\n"
+    "*Title:* {title}\n"
+    "*Classification:* {classification}\n"
+    "*Root need:* {root_need}\n"
+    "\n"
+    "_Creating backlog item..._"
+)
+
 
 def load_orchestrator_config() -> dict:
     """Load project-level orchestrator config from .claude/orchestrator-config.yaml.
@@ -3750,6 +3760,15 @@ class SlackNotifier:
         intake_key = f"{intake.channel_name}:{intake.ts}"
         fallback_title = intake.original_text.split("\n", 1)[0][:80]
 
+        # Send immediate acknowledgment
+        try:
+            self.send_status(
+                f"*Received your {intake.item_type} request.* Analyzing...",
+                level="info", channel_id=intake.channel_id,
+            )
+        except Exception:
+            pass  # Best-effort, do not block analysis
+
         try:
             # Step 1: Call Claude CLI for 5 Whys analysis
             prompt = INTAKE_ANALYSIS_PROMPT.format(
@@ -3813,6 +3832,18 @@ class SlackNotifier:
 
             if len(five_whys) < REQUIRED_FIVE_WHYS_COUNT:
                 print(f"[INTAKE] WARNING: Only {len(five_whys)}/{REQUIRED_FIVE_WHYS_COUNT} Whys in final analysis")
+
+            # Send analysis summary before creating backlog item
+            try:
+                ack_msg = INTAKE_ACK_TEMPLATE.format(
+                    item_type=intake.item_type,
+                    title=title,
+                    classification=classification or "unknown",
+                    root_need=root_need or "not identified",
+                )
+                self.send_status(ack_msg, level="info", channel_id=intake.channel_id)
+            except Exception:
+                pass  # Best-effort, do not block backlog creation
 
             # Build description: use parsed description, or the full LLM
             # response as-is if no structured description was found
