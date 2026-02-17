@@ -1,0 +1,312 @@
+meta:
+  name: Per-Project Slack Channel Prefix
+  description: 'Allow each project to configure its own Slack channel name prefix
+    instead of the hardcoded "orchestrator-". Add a channel_prefix field to
+    slack.local.yaml config, update SlackNotifier to read it, replace the
+    hardcoded SLACK_CHANNEL_ROLES dict with a suffix-based lookup, and update
+    _discover_channels and _handle_polled_messages to use the configurable prefix.'
+  plan_doc: docs/plans/2026-02-16-1-i-want-to-be-able-to-use-separate-slack-channels-depending-on-the-project-by-de-design.md
+  created: '2026-02-16'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - validator
+    max_validation_attempts: 1
+sections:
+- id: phase-1
+  name: Phase 1 - Config Template Update
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add channel_prefix to config template
+    agent: coder
+    status: pending
+    description: >
+      Update the Slack config template to include a channel_prefix field.
+
+      Reference: docs/plans/2026-02-16-1-i-want-to-be-able-to-use-separate-slack-channels-depending-on-the-project-by-de-design.md
+
+      Steps:
+
+      1. Read .claude/slack.local.yaml.template.
+
+      2. After the "channel_id" line (line 17), add:
+         # Prefix for Slack channel names used by this project.
+         # Channels are discovered by this prefix + role suffix:
+         #   {prefix}features, {prefix}defects, {prefix}questions, {prefix}notifications
+         # Default: "orchestrator-"
+         channel_prefix: "orchestrator-"
+
+      3. Verify the template is still valid YAML:
+         python3 -c "
+         import yaml
+         with open('.claude/slack.local.yaml.template') as f:
+             config = yaml.safe_load(f)
+         assert config['slack']['enabled'] is True
+         assert 'channel_prefix' in config['slack']
+         assert config['slack']['channel_prefix'] == 'orchestrator-'
+         print('Template validated OK with channel_prefix field')
+         "
+
+      Files: .claude/slack.local.yaml.template
+
+- id: phase-2
+  name: Phase 2 - Implementation
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Replace SLACK_CHANNEL_ROLES with suffix-based lookup and update SlackNotifier
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.1'
+    description: >
+      Update scripts/plan-orchestrator.py to support a configurable channel prefix.
+
+      Reference: docs/plans/2026-02-16-1-i-want-to-be-able-to-use-separate-slack-channels-depending-on-the-project-by-de-design.md
+
+      Steps:
+
+      1. Read scripts/plan-orchestrator.py. Find the Slack constants section (lines 88-94).
+
+      2. Replace the SLACK_CHANNEL_ROLES dict with a suffix-based mapping.
+         Change:
+           SLACK_CHANNEL_ROLES = {
+               "orchestrator-features": "feature",
+               "orchestrator-defects": "defect",
+               "orchestrator-questions": "question",
+               "orchestrator-notifications": "control",
+           }
+         To:
+           SLACK_CHANNEL_ROLE_SUFFIXES = {
+               "features": "feature",
+               "defects": "defect",
+               "questions": "question",
+               "notifications": "control",
+           }
+         Keep SLACK_CHANNEL_PREFIX = "orchestrator-" as the default.
+
+      3. In SlackNotifier.__init__ (around line 2617), after self._channels_discovered_at = 0.0,
+         add:
+           self._channel_prefix = SLACK_CHANNEL_PREFIX
+         Then in the config loading block (after self._question_config is set, around line 2658),
+         add:
+           prefix = slack_config.get("channel_prefix", "")
+           if prefix:
+               # Ensure prefix ends with a separator
+               if not prefix.endswith("-"):
+                   prefix += "-"
+               self._channel_prefix = prefix
+
+      4. In _discover_channels (around line 3016), change:
+           if name.startswith(SLACK_CHANNEL_PREFIX):
+         To:
+           if name.startswith(self._channel_prefix):
+
+      5. Add a new method _get_channel_role right after _discover_channels:
+           def _get_channel_role(self, channel_name: str) -> str:
+               """Get the role for a channel name based on its suffix.
+
+               Strips the configured prefix and looks up the remaining suffix
+               in SLACK_CHANNEL_ROLE_SUFFIXES.
+
+               Returns the role string (e.g. "feature", "defect") or empty
+               string if the suffix is not recognized.
+               """
+               if not channel_name.startswith(self._channel_prefix):
+                   return ""
+               suffix = channel_name[len(self._channel_prefix):]
+               return SLACK_CHANNEL_ROLE_SUFFIXES.get(suffix, "")
+
+      6. In _handle_polled_messages (around line 3690), change:
+           channel_role = SLACK_CHANNEL_ROLES.get(channel_name, "")
+         To:
+           channel_role = self._get_channel_role(channel_name)
+
+      7. Update the docstring of _discover_channels to say "prefix-* channels"
+         instead of "orchestrator-* channels".
+
+      8. Update the docstring of poll_messages to say "prefix-* channels"
+         instead of "orchestrator-* channels".
+
+      9. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      10. Verify the new constant and method exist:
+          python3 -c "
+          import importlib.util
+          spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+          mod = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          assert hasattr(mod, 'SLACK_CHANNEL_ROLE_SUFFIXES'), 'Missing SLACK_CHANNEL_ROLE_SUFFIXES'
+          assert 'features' in mod.SLACK_CHANNEL_ROLE_SUFFIXES, 'Missing features suffix'
+          notifier = mod.SlackNotifier('/nonexistent')
+          assert hasattr(notifier, '_get_channel_role'), 'Missing _get_channel_role'
+          assert hasattr(notifier, '_channel_prefix'), 'Missing _channel_prefix'
+          assert notifier._channel_prefix == 'orchestrator-', f'Wrong default prefix: {notifier._channel_prefix}'
+          print('Channel prefix refactoring verified OK')
+          "
+
+      Files: scripts/plan-orchestrator.py
+
+- id: phase-3
+  name: Phase 3 - Unit Tests
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Add tests for configurable channel prefix
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.1'
+    description: >
+      Add unit tests for the configurable channel prefix to tests/test_slack_notifier.py.
+
+      Reference: docs/plans/2026-02-16-1-i-want-to-be-able-to-use-separate-slack-channels-depending-on-the-project-by-de-design.md
+
+      Steps:
+
+      1. Read tests/test_slack_notifier.py and scripts/plan-orchestrator.py to understand
+         the current test structure and the new _channel_prefix / _get_channel_role /
+         SLACK_CHANNEL_ROLE_SUFFIXES implementation.
+
+      2. Add the following test cases:
+
+         a. test_default_channel_prefix:
+            Create a SlackNotifier with a valid config that has NO channel_prefix field.
+            Assert notifier._channel_prefix == "orchestrator-".
+
+         b. test_custom_channel_prefix:
+            Create a config YAML in tmp_path with:
+              slack:
+                enabled: true
+                bot_token: "xoxb-test"
+                channel_id: "C123"
+                channel_prefix: "myproject-"
+            Create SlackNotifier with this config.
+            Assert notifier._channel_prefix == "myproject-".
+
+         c. test_channel_prefix_auto_append_dash:
+            Create a config with channel_prefix: "myproject" (no trailing dash).
+            Assert notifier._channel_prefix == "myproject-" (dash appended).
+
+         d. test_get_channel_role_default_prefix:
+            Create a disabled SlackNotifier (default prefix).
+            Assert notifier._get_channel_role("orchestrator-features") == "feature".
+            Assert notifier._get_channel_role("orchestrator-defects") == "defect".
+            Assert notifier._get_channel_role("orchestrator-questions") == "question".
+            Assert notifier._get_channel_role("orchestrator-notifications") == "control".
+            Assert notifier._get_channel_role("orchestrator-unknown") == "".
+            Assert notifier._get_channel_role("other-channel") == "".
+
+         e. test_get_channel_role_custom_prefix:
+            Create a SlackNotifier with channel_prefix: "proj-".
+            Assert notifier._get_channel_role("proj-features") == "feature".
+            Assert notifier._get_channel_role("proj-defects") == "defect".
+            Assert notifier._get_channel_role("orchestrator-features") == ""
+            (wrong prefix returns empty).
+
+         f. test_slack_channel_role_suffixes_constant:
+            Assert mod.SLACK_CHANNEL_ROLE_SUFFIXES has exactly 4 entries:
+            features->feature, defects->defect, questions->question,
+            notifications->control.
+            Also assert that the old SLACK_CHANNEL_ROLES constant no longer
+            exists (getattr(mod, 'SLACK_CHANNEL_ROLES', None) is None).
+
+      3. Run all tests:
+         python3 -m pytest tests/test_slack_notifier.py -v
+         Fix any failures.
+
+      Files: tests/test_slack_notifier.py
+
+- id: phase-4
+  name: Phase 4 - Verification
+  status: pending
+  tasks:
+  - id: '4.1'
+    name: Verify syntax, tests, and dry-run
+    agent: code-reviewer
+    status: pending
+    depends_on:
+    - '3.1'
+    description: >
+      Run verification checks to confirm the per-project channel prefix feature works.
+
+      Steps:
+
+      1. Check Python syntax for both scripts:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+      2. Run all unit tests:
+         python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
+
+      3. Verify SLACK_CHANNEL_ROLE_SUFFIXES replaces SLACK_CHANNEL_ROLES:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert hasattr(mod, 'SLACK_CHANNEL_ROLE_SUFFIXES'), 'Missing SLACK_CHANNEL_ROLE_SUFFIXES'
+         assert not hasattr(mod, 'SLACK_CHANNEL_ROLES'), 'SLACK_CHANNEL_ROLES should be removed'
+         suffixes = mod.SLACK_CHANNEL_ROLE_SUFFIXES
+         assert suffixes['features'] == 'feature'
+         assert suffixes['defects'] == 'defect'
+         assert suffixes['questions'] == 'question'
+         assert suffixes['notifications'] == 'control'
+         print('SLACK_CHANNEL_ROLE_SUFFIXES verified')
+         "
+
+      4. Verify SlackNotifier reads channel_prefix from config:
+         python3 -c "
+         import importlib.util, tempfile, os, yaml
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         # Test default prefix
+         notifier = mod.SlackNotifier('/nonexistent')
+         assert notifier._channel_prefix == 'orchestrator-', 'Bad default prefix'
+         # Test custom prefix via config
+         with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+             yaml.dump({'slack': {'enabled': True, 'bot_token': 'xoxb-test', 'channel_id': 'C1', 'channel_prefix': 'myproj-'}}, f)
+             tmp = f.name
+         try:
+             n2 = mod.SlackNotifier(config_path=tmp)
+             assert n2._channel_prefix == 'myproj-', f'Bad custom prefix: {n2._channel_prefix}'
+         finally:
+             os.unlink(tmp)
+         print('channel_prefix config loading verified')
+         "
+
+      5. Verify _get_channel_role works:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         notifier = mod.SlackNotifier('/nonexistent')
+         assert notifier._get_channel_role('orchestrator-features') == 'feature'
+         assert notifier._get_channel_role('orchestrator-defects') == 'defect'
+         assert notifier._get_channel_role('other-features') == ''
+         print('_get_channel_role verified')
+         "
+
+      6. Verify config template has channel_prefix field:
+         python3 -c "
+         import yaml
+         with open('.claude/slack.local.yaml.template') as f:
+             config = yaml.safe_load(f)
+         assert 'channel_prefix' in config['slack'], 'Missing channel_prefix in template'
+         assert config['slack']['channel_prefix'] == 'orchestrator-'
+         print('Config template has channel_prefix field')
+         "
+
+      7. Run orchestrator dry-run to verify no startup errors:
+         python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
+
+      If any check fails, report the failure with specific details.
+
+      Files: scripts/plan-orchestrator.py, scripts/auto-pipeline.py,
+             .claude/slack.local.yaml.template, tests/test_slack_notifier.py
