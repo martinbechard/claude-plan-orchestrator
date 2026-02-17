@@ -38,6 +38,14 @@ except ImportError:
     print("[AUTO-PIPELINE] ERROR: watchdog not installed. Run: pip install watchdog")
     sys.exit(1)
 
+# Import SlackNotifier from plan-orchestrator
+import importlib.util
+_po_spec = importlib.util.spec_from_file_location(
+    "plan_orchestrator", "scripts/plan-orchestrator.py")
+_po_mod = importlib.util.module_from_spec(_po_spec)
+_po_spec.loader.exec_module(_po_mod)
+SlackNotifier = _po_mod.SlackNotifier
+
 # ─── Configuration ────────────────────────────────────────────────────
 
 ORCHESTRATOR_CONFIG_PATH = ".claude/orchestrator-config.yaml"
@@ -1425,6 +1433,7 @@ def process_item(
 
     Returns True on success, False on failure or max cycles exceeded.
     """
+    slack = SlackNotifier()
     item_start = time.time()
     log(f"{'=' * 60}")
     log(f"Processing {item.display_name}")
@@ -1432,6 +1441,12 @@ def process_item(
     log(f"  File: {item.path}")
     log(f"  Pipeline PID: {_PIPELINE_PID}")
     log(f"{'=' * 60}")
+
+    slack.send_status(
+        f"*Pipeline: processing* {item.display_name}\n"
+        f"Type: {item.item_type}",
+        level="info"
+    )
 
     prior_verifications = count_verification_attempts(item.path)
 
@@ -1447,6 +1462,10 @@ def process_item(
         plan_path = create_plan(item, dry_run)
         if not plan_path:
             log(f"FAILED: Could not create plan for {item.display_name}")
+            slack.send_status(
+                f"*Pipeline: failed* {item.display_name}",
+                level="error"
+            )
             return False
 
         # Phase 2: Execute plan
@@ -1459,6 +1478,10 @@ def process_item(
 
         if not success:
             log(f"FAILED: Orchestrator failed for {item.display_name}")
+            slack.send_status(
+                f"*Pipeline: failed* {item.display_name}",
+                level="error"
+            )
             return False
 
         # Phase 3: Verify symptoms
@@ -1474,6 +1497,11 @@ def process_item(
             minutes = int(elapsed // 60)
             seconds = int(elapsed % 60)
             log(f"Item complete: {item.display_name} ({minutes}m {seconds}s)")
+            slack.send_status(
+                f"*Pipeline: completed* {item.display_name}\n"
+                f"Duration: {minutes}m {seconds}s",
+                level="success"
+            )
             return True
 
         # Verification failed - prepare for next cycle
@@ -1533,11 +1561,14 @@ def main_loop(dry_run: bool = False, once: bool = False,
         observer.start()
         log("Filesystem watcher started")
 
+    slack = SlackNotifier()
+
     try:
         while True:
             # Check stop semaphore
             if check_stop_requested():
                 log("Stop requested via semaphore. Exiting.")
+                slack.send_status("*Pipeline stopped:* Graceful stop requested", level="warning")
                 break
 
             # Resume in-progress plans before scanning for new work.
@@ -1604,6 +1635,7 @@ def main_loop(dry_run: bool = False, once: bool = False,
             for item in items:
                 if check_stop_requested():
                     log("Stop requested. Finishing current session.")
+                    slack.send_status("*Pipeline stopped:* Graceful stop requested", level="warning")
                     break
 
                 if budget_guard and budget_guard.is_enabled:
