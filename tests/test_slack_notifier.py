@@ -554,6 +554,8 @@ def test_slack_config_constants_exist():
     assert mod.SLACK_QUESTION_PATH == ".claude/slack-pending-question.json"
     assert mod.SLACK_ANSWER_PATH == ".claude/slack-answer.json"
     assert mod.SLACK_POLL_INTERVAL_SECONDS == 30
+    assert mod.SLACK_LAST_READ_PATH == ".claude/slack-last-read.json"
+    assert mod.SLACK_INBOUND_POLL_LIMIT == 20
     assert isinstance(mod.SOCKET_MODE_AVAILABLE, bool)
 
 
@@ -569,3 +571,251 @@ def test_slack_level_emoji_map():
         assert key in emoji_map, f"Missing emoji for level: {key}"
         assert emoji_map[key].startswith(":"), f"Emoji for {key} should start with ':'"
         assert emoji_map[key].endswith(":"), f"Emoji for {key} should end with ':'"
+
+
+# --- Test: _load_last_read with no file ---
+
+
+def test_load_last_read_no_file(tmp_path):
+    """_load_last_read should return '0' when no state file exists."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    # Monkey-patch SLACK_LAST_READ_PATH to a nonexistent path
+    original_path = mod.SLACK_LAST_READ_PATH
+    mod.SLACK_LAST_READ_PATH = str(tmp_path / "nonexistent-last-read.json")
+
+    try:
+        result = notifier._load_last_read()
+        assert result == "0"
+    finally:
+        mod.SLACK_LAST_READ_PATH = original_path
+
+
+# --- Test: save and load last-read state ---
+
+
+def test_save_and_load_last_read(tmp_path):
+    """_save_last_read should persist state and _load_last_read should retrieve it."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    # Monkey-patch SLACK_LAST_READ_PATH to tmp_path
+    original_path = mod.SLACK_LAST_READ_PATH
+    last_read_file = tmp_path / "last-read.json"
+    mod.SLACK_LAST_READ_PATH = str(last_read_file)
+
+    try:
+        notifier._save_last_read("1234567890.123456")
+        result = notifier._load_last_read()
+        assert result == "1234567890.123456"
+
+        # Verify the file contains the channel_id
+        with open(last_read_file, "r") as f:
+            data = json.load(f)
+        assert data.get("channel_id") == "C0123456789"
+        assert data.get("last_ts") == "1234567890.123456"
+    finally:
+        mod.SLACK_LAST_READ_PATH = original_path
+
+
+# --- Test: poll_messages when disabled ---
+
+
+def test_poll_messages_disabled(tmp_path):
+    """poll_messages should return empty list when disabled."""
+    nonexistent_path = tmp_path / "nonexistent.yaml"
+    notifier = SlackNotifier(config_path=str(nonexistent_path))
+
+    result = notifier.poll_messages()
+    assert result == []
+
+
+# --- Test: poll_messages first run sets timestamp ---
+
+
+def test_poll_messages_first_run_sets_timestamp(tmp_path):
+    """poll_messages should save current time on first run and return empty list."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    # Monkey-patch SLACK_LAST_READ_PATH to tmp_path
+    original_path = mod.SLACK_LAST_READ_PATH
+    last_read_file = tmp_path / "last-read.json"
+    mod.SLACK_LAST_READ_PATH = str(last_read_file)
+
+    try:
+        result = notifier.poll_messages()
+        assert result == []
+
+        # Verify the last-read file was created
+        assert last_read_file.exists()
+
+        # Verify it contains a timestamp (not "0")
+        with open(last_read_file, "r") as f:
+            data = json.load(f)
+        assert data.get("last_ts") != "0"
+        assert float(data.get("last_ts")) > 0
+    finally:
+        mod.SLACK_LAST_READ_PATH = original_path
+
+
+# --- Test: poll_messages filters bot messages ---
+
+
+def test_poll_messages_filters_bots(tmp_path):
+    """poll_messages should filter out bot messages and messages with subtypes."""
+    import urllib.request
+
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    # Monkey-patch SLACK_LAST_READ_PATH
+    original_path = mod.SLACK_LAST_READ_PATH
+    last_read_file = tmp_path / "last-read.json"
+    mod.SLACK_LAST_READ_PATH = str(last_read_file)
+
+    # Set up an initial last-read state
+    notifier._save_last_read("1.0")
+
+    # Mock conversations.history response
+    mock_response_data = {
+        "ok": True,
+        "messages": [
+            {"text": "joined", "subtype": "channel_join", "ts": "1.3"},
+            {"text": "status update", "bot_id": "B123", "ts": "1.2"},
+            {"text": "hello", "user": "U123", "ts": "1.1"},
+        ]
+    }
+
+    original_urlopen = urllib.request.urlopen
+
+    def mock_urlopen(req, timeout=None):
+        class MockResponse:
+            def read(self):
+                return json.dumps(mock_response_data).encode("utf-8")
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+        return MockResponse()
+
+    urllib.request.urlopen = mock_urlopen
+
+    try:
+        result = notifier.poll_messages()
+        # Should return only the human message
+        assert len(result) == 1
+        assert result[0]["text"] == "hello"
+        assert result[0]["user"] == "U123"
+    finally:
+        urllib.request.urlopen = original_urlopen
+        mod.SLACK_LAST_READ_PATH = original_path
+
+
+# --- Test: poll_messages updates last-read timestamp ---
+
+
+def test_poll_messages_updates_last_read(tmp_path):
+    """poll_messages should update last-read timestamp to newest message."""
+    import urllib.request
+
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    # Monkey-patch SLACK_LAST_READ_PATH
+    original_path = mod.SLACK_LAST_READ_PATH
+    last_read_file = tmp_path / "last-read.json"
+    mod.SLACK_LAST_READ_PATH = str(last_read_file)
+
+    # Set up an initial last-read state
+    notifier._save_last_read("1.0")
+
+    # Mock conversations.history response (newest first)
+    mock_response_data = {
+        "ok": True,
+        "messages": [
+            {"text": "newest", "user": "U123", "ts": "1.5"},
+            {"text": "older", "user": "U123", "ts": "1.2"},
+        ]
+    }
+
+    original_urlopen = urllib.request.urlopen
+
+    def mock_urlopen(req, timeout=None):
+        class MockResponse:
+            def read(self):
+                return json.dumps(mock_response_data).encode("utf-8")
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+        return MockResponse()
+
+    urllib.request.urlopen = mock_urlopen
+
+    try:
+        result = notifier.poll_messages()
+        assert len(result) == 2
+
+        # Verify last-read was updated to newest timestamp
+        saved_ts = notifier._load_last_read()
+        assert saved_ts == "1.5"
+    finally:
+        urllib.request.urlopen = original_urlopen
+        mod.SLACK_LAST_READ_PATH = original_path
