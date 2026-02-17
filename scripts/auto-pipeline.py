@@ -1829,6 +1829,10 @@ def main_loop(dry_run: bool = False, once: bool = False,
         observer.start()
         log("Filesystem watcher started")
 
+    # Set up code change monitor (runs in both continuous and --once modes)
+    code_monitor = CodeChangeMonitor()
+    code_monitor.start()
+
     slack = SlackNotifier()
     slack.start_background_polling()
 
@@ -1888,6 +1892,11 @@ def main_loop(dry_run: bool = False, once: bool = False,
                 # Wait for either a filesystem event or the safety scan interval
                 new_item_event.clear()
                 new_item_event.wait(timeout=SAFETY_SCAN_INTERVAL_SECONDS)
+                if code_monitor.restart_pending.is_set():
+                    _perform_restart(
+                        "Code change detected while idle",
+                        slack, session_tracker, observer, code_monitor
+                    )
                 continue
 
             # In --once mode, process only the first item then exit
@@ -1947,6 +1956,7 @@ def main_loop(dry_run: bool = False, once: bool = False,
             if session_report:
                 log(f"[Session usage report: {session_report}]")
 
+        code_monitor.stop()
         slack.stop_background_polling()
         if not once:
             observer.stop()
