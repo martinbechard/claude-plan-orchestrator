@@ -1536,6 +1536,43 @@ def verify_item(item: BacklogItem, dry_run: bool = False) -> bool:
 # ─── Main Pipeline ────────────────────────────────────────────────────
 
 
+def _perform_restart(
+    reason: str,
+    slack: "SlackNotifier",
+    session_tracker: SessionUsageTracker,
+    observer: Optional["Observer"] = None,
+    code_monitor: Optional["CodeChangeMonitor"] = None,
+) -> None:
+    """Perform a graceful pipeline restart via os.execv().
+
+    Handles cleanup: Slack notification, session summary, stopping
+    background threads, and restoring terminal settings.
+
+    Args:
+        reason: Human-readable reason for the restart (for logs/Slack).
+        slack: SlackNotifier instance for sending notifications.
+        session_tracker: Session usage tracker for summary output.
+        observer: Watchdog observer to stop (None in --once mode).
+        code_monitor: CodeChangeMonitor to stop before restart.
+    """
+    log(f"Restarting pipeline: {reason}")
+    slack.send_status(
+        f"*Pipeline: restarting* {reason}",
+        level="info"
+    )
+    if session_tracker.work_item_costs:
+        print(session_tracker.format_session_summary())
+        session_tracker.write_session_report()
+    if code_monitor:
+        code_monitor.stop()
+    slack.stop_background_polling()
+    if observer:
+        observer.stop()
+        observer.join(timeout=5)
+    restore_terminal_settings()
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+
 def _read_plan_name(plan_path: str) -> str:
     """Read the plan name from a YAML plan file's meta.name field."""
     try:
@@ -1823,20 +1860,11 @@ def main_loop(dry_run: bool = False, once: bool = False,
                             failed_items.add(plan_path)
                             log(f"In-progress plan failed: {plan_path}")
                     # Hot-reload check after resuming in-progress plans
-                    if check_code_changed():
-                        log("Source code changed. Restarting pipeline to pick up changes...")
-                        slack.send_status(
-                            "*Pipeline: restarting* Code change detected, hot-reloading...",
-                            level="info"
+                    if code_monitor.restart_pending.is_set():
+                        _perform_restart(
+                            "Code change detected after resuming plans",
+                            slack, session_tracker, observer, code_monitor
                         )
-                        if session_tracker.work_item_costs:
-                            print(session_tracker.format_session_summary())
-                            session_tracker.write_session_report()
-                        slack.stop_background_polling()
-                        observer.stop()
-                        observer.join(timeout=5)
-                        restore_terminal_settings()
-                        os.execv(sys.executable, [sys.executable] + sys.argv)
                     # After resuming, re-scan (completed plans may unblock new items)
                     continue
 
@@ -1898,23 +1926,13 @@ def main_loop(dry_run: bool = False, once: bool = False,
                     log(f"Item failed - will not retry in this session: {item.slug}")
 
                 # Hot-reload: check if source code changed between work items
-                if check_code_changed():
-                    log("Source code changed. Restarting pipeline to pick up changes...")
-                    slack.send_status(
-                        "*Pipeline: restarting* Code change detected, hot-reloading...",
-                        level="info"
+                if code_monitor.restart_pending.is_set():
+                    _perform_restart(
+                        "Code change detected between work items",
+                        slack, session_tracker,
+                        observer if not once else None,
+                        code_monitor
                     )
-                    # Graceful cleanup before self-restart
-                    if session_tracker.work_item_costs:
-                        print(session_tracker.format_session_summary())
-                        session_tracker.write_session_report()
-                    slack.stop_background_polling()
-                    if not once:
-                        observer.stop()
-                        observer.join(timeout=5)
-                    restore_terminal_settings()
-                    # Replace current process with fresh copy
-                    os.execv(sys.executable, [sys.executable] + sys.argv)
 
             # Brief pause before next scan
             time.sleep(2)
