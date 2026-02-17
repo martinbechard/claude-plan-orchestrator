@@ -168,7 +168,7 @@ def test_post_message_called_on_send_status(tmp_path):
     # Monkey-patch _post_message to record calls
     calls = []
 
-    def mock_post_message(payload):
+    def mock_post_message(payload, channel_id=None):
         calls.append(payload)
         return True
 
@@ -553,7 +553,8 @@ def test_slack_config_constants_exist():
     assert mod.SLACK_CONFIG_PATH == ".claude/slack.local.yaml"
     assert mod.SLACK_QUESTION_PATH == ".claude/slack-pending-question.json"
     assert mod.SLACK_ANSWER_PATH == ".claude/slack-answer.json"
-    assert mod.SLACK_POLL_INTERVAL_SECONDS == 30
+    assert mod.SLACK_POLL_INTERVAL_MIN_SECONDS == 5
+    assert mod.SLACK_POLL_INTERVAL_MAX_SECONDS == 60
     assert mod.SLACK_LAST_READ_PATH == ".claude/slack-last-read.json"
     assert mod.SLACK_INBOUND_POLL_LIMIT == 20
     assert isinstance(mod.SOCKET_MODE_AVAILABLE, bool)
@@ -577,7 +578,7 @@ def test_slack_level_emoji_map():
 
 
 def test_load_last_read_no_file(tmp_path):
-    """_load_last_read should return '0' when no state file exists."""
+    """_load_last_read_all should return empty dict when no state file exists."""
     config_file = tmp_path / "slack.yaml"
     config_data = {
         "slack": {
@@ -597,8 +598,8 @@ def test_load_last_read_no_file(tmp_path):
     mod.SLACK_LAST_READ_PATH = str(tmp_path / "nonexistent-last-read.json")
 
     try:
-        result = notifier._load_last_read()
-        assert result == "0"
+        result = notifier._load_last_read_all()
+        assert result == {}
     finally:
         mod.SLACK_LAST_READ_PATH = original_path
 
@@ -607,7 +608,7 @@ def test_load_last_read_no_file(tmp_path):
 
 
 def test_save_and_load_last_read(tmp_path):
-    """_save_last_read should persist state and _load_last_read should retrieve it."""
+    """_save_last_read_all should persist per-channel state and _load_last_read_all should retrieve it."""
     config_file = tmp_path / "slack.yaml"
     config_data = {
         "slack": {
@@ -628,15 +629,16 @@ def test_save_and_load_last_read(tmp_path):
     mod.SLACK_LAST_READ_PATH = str(last_read_file)
 
     try:
-        notifier._save_last_read("1234567890.123456")
-        result = notifier._load_last_read()
-        assert result == "1234567890.123456"
+        channels = {"C0123456789": "1234567890.123456", "C9876543210": "9999.1111"}
+        notifier._save_last_read_all(channels)
+        result = notifier._load_last_read_all()
+        assert result == channels
 
-        # Verify the file contains the channel_id
+        # Verify the file uses the multi-channel format
         with open(last_read_file, "r") as f:
             data = json.load(f)
-        assert data.get("channel_id") == "C0123456789"
-        assert data.get("last_ts") == "1234567890.123456"
+        assert "channels" in data
+        assert data["channels"]["C0123456789"] == "1234567890.123456"
     finally:
         mod.SLACK_LAST_READ_PATH = original_path
 
@@ -657,7 +659,9 @@ def test_poll_messages_disabled(tmp_path):
 
 
 def test_poll_messages_first_run_sets_timestamp(tmp_path):
-    """poll_messages should save current time on first run and return empty list."""
+    """poll_messages should seed timestamps on first discovery and fetch recent messages."""
+    import urllib.request
+
     config_file = tmp_path / "slack.yaml"
     config_data = {
         "slack": {
@@ -677,6 +681,24 @@ def test_poll_messages_first_run_sets_timestamp(tmp_path):
     last_read_file = tmp_path / "last-read.json"
     mod.SLACK_LAST_READ_PATH = str(last_read_file)
 
+    # Mock _discover_channels to return a test channel
+    notifier._discover_channels = lambda: {"orchestrator-questions": "C0123456789"}
+
+    # Mock conversations.history to return no messages (empty channel)
+    original_urlopen = urllib.request.urlopen
+
+    def mock_urlopen(req, timeout=None):
+        class MockResponse:
+            def read(self_inner):
+                return json.dumps({"ok": True, "messages": []}).encode("utf-8")
+            def __enter__(self_inner):
+                return self_inner
+            def __exit__(self_inner, *args):
+                pass
+        return MockResponse()
+
+    urllib.request.urlopen = mock_urlopen
+
     try:
         result = notifier.poll_messages()
         assert result == []
@@ -684,12 +706,14 @@ def test_poll_messages_first_run_sets_timestamp(tmp_path):
         # Verify the last-read file was created
         assert last_read_file.exists()
 
-        # Verify it contains a timestamp (not "0")
+        # Verify it uses the multi-channel format with a seeded timestamp
         with open(last_read_file, "r") as f:
             data = json.load(f)
-        assert data.get("last_ts") != "0"
-        assert float(data.get("last_ts")) > 0
+        assert "channels" in data
+        assert "C0123456789" in data["channels"]
+        assert float(data["channels"]["C0123456789"]) > 0
     finally:
+        urllib.request.urlopen = original_urlopen
         mod.SLACK_LAST_READ_PATH = original_path
 
 
@@ -719,8 +743,11 @@ def test_poll_messages_filters_bots(tmp_path):
     last_read_file = tmp_path / "last-read.json"
     mod.SLACK_LAST_READ_PATH = str(last_read_file)
 
-    # Set up an initial last-read state
-    notifier._save_last_read("1.0")
+    # Set up initial last-read state in multi-channel format
+    notifier._save_last_read_all({"C0123456789": "1.0"})
+
+    # Mock _discover_channels to return our test channel
+    notifier._discover_channels = lambda: {"orchestrator-questions": "C0123456789"}
 
     # Mock conversations.history response
     mock_response_data = {
@@ -736,11 +763,11 @@ def test_poll_messages_filters_bots(tmp_path):
 
     def mock_urlopen(req, timeout=None):
         class MockResponse:
-            def read(self):
+            def read(self_inner):
                 return json.dumps(mock_response_data).encode("utf-8")
-            def __enter__(self):
-                return self
-            def __exit__(self, *args):
+            def __enter__(self_inner):
+                return self_inner
+            def __exit__(self_inner, *args):
                 pass
         return MockResponse()
 
@@ -752,6 +779,9 @@ def test_poll_messages_filters_bots(tmp_path):
         assert len(result) == 1
         assert result[0]["text"] == "hello"
         assert result[0]["user"] == "U123"
+        # Should have channel metadata tags
+        assert result[0]["_channel_name"] == "orchestrator-questions"
+        assert result[0]["_channel_id"] == "C0123456789"
     finally:
         urllib.request.urlopen = original_urlopen
         mod.SLACK_LAST_READ_PATH = original_path
@@ -761,7 +791,7 @@ def test_poll_messages_filters_bots(tmp_path):
 
 
 def test_poll_messages_updates_last_read(tmp_path):
-    """poll_messages should update last-read timestamp to newest message."""
+    """poll_messages should update last-read timestamp to newest message per channel."""
     import urllib.request
 
     config_file = tmp_path / "slack.yaml"
@@ -783,8 +813,11 @@ def test_poll_messages_updates_last_read(tmp_path):
     last_read_file = tmp_path / "last-read.json"
     mod.SLACK_LAST_READ_PATH = str(last_read_file)
 
-    # Set up an initial last-read state
-    notifier._save_last_read("1.0")
+    # Set up initial last-read state in multi-channel format
+    notifier._save_last_read_all({"C0123456789": "1.0"})
+
+    # Mock _discover_channels
+    notifier._discover_channels = lambda: {"orchestrator-questions": "C0123456789"}
 
     # Mock conversations.history response (newest first)
     mock_response_data = {
@@ -799,11 +832,11 @@ def test_poll_messages_updates_last_read(tmp_path):
 
     def mock_urlopen(req, timeout=None):
         class MockResponse:
-            def read(self):
+            def read(self_inner):
                 return json.dumps(mock_response_data).encode("utf-8")
-            def __enter__(self):
-                return self
-            def __exit__(self, *args):
+            def __enter__(self_inner):
+                return self_inner
+            def __exit__(self_inner, *args):
                 pass
         return MockResponse()
 
@@ -813,9 +846,9 @@ def test_poll_messages_updates_last_read(tmp_path):
         result = notifier.poll_messages()
         assert len(result) == 2
 
-        # Verify last-read was updated to newest timestamp
-        saved_ts = notifier._load_last_read()
-        assert saved_ts == "1.5"
+        # Verify last-read was updated to newest timestamp for this channel
+        all_ts = notifier._load_last_read_all()
+        assert all_ts.get("C0123456789") == "1.5"
     finally:
         urllib.request.urlopen = original_urlopen
         mod.SLACK_LAST_READ_PATH = original_path
@@ -1168,7 +1201,7 @@ def test_create_backlog_feature(tmp_path, monkeypatch):
     # Monkey-patch _post_message to capture calls
     calls = []
 
-    def mock_post_message(payload):
+    def mock_post_message(payload, channel_id=None):
         calls.append(payload)
         return True
 
@@ -1232,7 +1265,7 @@ def test_create_backlog_defect(tmp_path, monkeypatch):
     # Monkey-patch _post_message
     calls = []
 
-    def mock_post_message(payload):
+    def mock_post_message(payload, channel_id=None):
         calls.append(payload)
         return True
 
@@ -1287,7 +1320,7 @@ def test_create_backlog_numbering(tmp_path, monkeypatch):
     notifier = SlackNotifier(config_path=str(config_file))
 
     # Monkey-patch _post_message
-    notifier._post_message = lambda payload: True
+    notifier._post_message = lambda payload, channel_id=None: True
 
     # Create new item
     result = notifier.create_backlog_item("feature", "New Feature", "", "", "")
@@ -1352,7 +1385,7 @@ def test_process_inbound_dispatches_feature(tmp_path, monkeypatch):
     notifier.create_backlog_item = mock_create_backlog_item
 
     # Monkey-patch _post_message
-    notifier._post_message = lambda payload: True
+    notifier._post_message = lambda payload, channel_id=None: True
 
     # Process inbound
     notifier.process_inbound()
@@ -1395,14 +1428,14 @@ def test_process_inbound_dispatches_stop(tmp_path):
 
     original_handle_control_command = notifier.handle_control_command
 
-    def mock_handle_control_command(command, classification):
+    def mock_handle_control_command(command, classification, channel_id=None):
         control_calls.append((command, classification))
-        original_handle_control_command(command, classification)
+        original_handle_control_command(command, classification, channel_id=channel_id)
 
     notifier.handle_control_command = mock_handle_control_command
 
     # Monkey-patch _post_message
-    notifier._post_message = lambda payload: True
+    notifier._post_message = lambda payload, channel_id=None: True
 
     # Process inbound
     notifier.process_inbound()
@@ -1440,3 +1473,962 @@ def test_process_inbound_error_resilience(tmp_path):
 
     # Should not raise any errors
     notifier.process_inbound()
+
+
+# ============================================================================
+# Tests for answer_question (LLM-powered) and pipeline state gathering
+# ============================================================================
+
+
+def _make_notifier(tmp_path):
+    """Helper to create a test-configured SlackNotifier."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+    return SlackNotifier(config_path=str(config_file))
+
+
+# --- Test: _gather_pipeline_state with empty directories ---
+
+
+def test_gather_state_empty(tmp_path, monkeypatch):
+    """_gather_pipeline_state should return None sections when no files exist."""
+    monkeypatch.chdir(tmp_path)
+    notifier = _make_notifier(tmp_path)
+
+    state = notifier._gather_pipeline_state()
+    assert state["active_plan"] is None
+    assert state["last_task"] is None
+    assert state["session_cost"] is None
+
+
+# --- Test: _gather_pipeline_state with populated state ---
+
+
+def test_gather_state_populated(tmp_path, monkeypatch):
+    """_gather_pipeline_state should read real state from disk."""
+    import os
+
+    monkeypatch.chdir(tmp_path)
+
+    # Create a plan yaml
+    plans_dir = tmp_path / ".claude" / "plans"
+    plans_dir.mkdir(parents=True)
+    plan_data = {
+        "meta": {"name": "Test Plan"},
+        "sections": [
+            {
+                "id": "phase-1",
+                "name": "Phase 1",
+                "status": "in_progress",
+                "tasks": [
+                    {"id": "1.1", "name": "Task A", "status": "completed"},
+                    {"id": "1.2", "name": "Task B", "status": "in_progress"},
+                    {"id": "1.3", "name": "Task C", "status": "pending"},
+                ],
+            }
+        ],
+    }
+    with open(plans_dir / "01-test.yaml", "w") as f:
+        yaml.dump(plan_data, f)
+
+    # Create sample-plan.yaml (should be skipped)
+    with open(plans_dir / "sample-plan.yaml", "w") as f:
+        yaml.dump({"meta": {"name": "Sample"}, "sections": []}, f)
+
+    # Create task-status.json
+    task_status = {
+        "task_id": "1.1",
+        "status": "completed",
+        "message": "All done",
+        "timestamp": "2026-02-16T12:00:00",
+    }
+    with open(plans_dir / "task-status.json", "w") as f:
+        json.dump(task_status, f)
+
+    # Create backlog directories with files
+    os.makedirs("docs/feature-backlog")
+    Path("docs/feature-backlog/1-feat.md").write_text("# Feature")
+    Path("docs/feature-backlog/2-feat2.md").write_text("# Feature 2")
+    os.makedirs("docs/defect-backlog")
+    Path("docs/defect-backlog/1-bug.md").write_text("# Bug")
+
+    # Create completed directory
+    os.makedirs("docs/completed-backlog/features", exist_ok=True)
+    Path("docs/completed-backlog/features/1-done.md").write_text("# Done")
+    os.makedirs("docs/completed-backlog/defects", exist_ok=True)
+
+    # Create session log
+    logs_dir = plans_dir / "logs"
+    logs_dir.mkdir()
+    session_data = {
+        "session_timestamp": "2026-02-16T10:00:00",
+        "total_cost_usd": 2.50,
+        "work_items": [{"name": "item1"}, {"name": "item2"}],
+    }
+    with open(logs_dir / "pipeline-session-20260216-100000.json", "w") as f:
+        json.dump(session_data, f)
+
+    notifier = _make_notifier(tmp_path)
+    state = notifier._gather_pipeline_state()
+
+    # Active plan
+    assert state["active_plan"] is not None
+    assert state["active_plan"]["name"] == "Test Plan"
+    assert state["active_plan"]["total"] == 3
+    assert state["active_plan"]["completed"] == 1
+    assert state["active_plan"]["in_progress"] == 1
+
+    # Last task
+    assert state["last_task"] is not None
+    assert state["last_task"]["task_id"] == "1.1"
+    assert state["last_task"]["status"] == "completed"
+
+    # Backlog
+    assert state["backlog"]["pending_features"] == 2
+    assert state["backlog"]["pending_defects"] == 1
+
+    # Completed
+    assert state["completed"]["completed_features"] == 1
+    assert state["completed"]["completed_defects"] == 0
+
+    # Session cost
+    assert state["session_cost"]["total_cost_usd"] == 2.50
+    assert state["session_cost"]["work_items"] == 2
+
+
+# --- Test: _format_state_context includes all sections ---
+
+
+def test_format_state_context_populated(tmp_path, monkeypatch):
+    """_format_state_context should produce plain text with all state sections."""
+    notifier = SlackNotifier.__new__(SlackNotifier)
+    state = {
+        "active_plan": {
+            "name": "Test Plan",
+            "total": 5,
+            "completed": 3,
+            "in_progress": 1,
+            "failed": 0,
+        },
+        "last_task": {
+            "task_id": "2.1",
+            "status": "completed",
+            "message": "Task passed",
+            "timestamp": "2026-02-16T12:00:00",
+        },
+        "backlog": {"pending_features": 2, "pending_defects": 1},
+        "completed": {"completed_features": 5, "completed_defects": 2},
+        "session_cost": {"total_cost_usd": 1.23, "work_items": 3},
+    }
+
+    result = notifier._format_state_context(state)
+    assert "Test Plan" in result
+    assert "3/5" in result
+    assert "2.1" in result
+    assert "2 features" in result
+    assert "1 defects" in result
+    assert "API-equivalent" in result
+    assert "subscription" in result.lower()
+
+
+# --- Test: _format_state_context with empty state ---
+
+
+def test_format_state_context_empty():
+    """_format_state_context should handle None values gracefully."""
+    notifier = SlackNotifier.__new__(SlackNotifier)
+    state = {
+        "active_plan": None,
+        "last_task": None,
+        "backlog": None,
+        "completed": None,
+        "session_cost": None,
+    }
+
+    result = notifier._format_state_context(state)
+    assert "none" in result.lower()
+
+
+# --- Test: answer_question calls LLM with state context ---
+
+
+def test_answer_question_calls_llm(tmp_path, monkeypatch):
+    """answer_question should call Claude CLI directly and send the result."""
+    import subprocess as sp
+
+    monkeypatch.chdir(tmp_path)
+
+    plans_dir = tmp_path / ".claude" / "plans"
+    plans_dir.mkdir(parents=True)
+
+    notifier = _make_notifier(tmp_path)
+
+    cli_calls = []
+    sent = []
+
+    def mock_subprocess_run(*args, **kwargs):
+        cli_calls.append(args[0] if args else kwargs.get("args"))
+        result = sp.CompletedProcess(
+            args=args[0] if args else [],
+            returncode=0,
+            stdout=json.dumps({
+                "result": "Nope, no active work right now. Last task was 3.1."
+            }),
+            stderr="",
+        )
+        return result
+
+    def mock_send_status(msg, level="info", channel_id=None):
+        sent.append({"msg": msg, "level": level, "channel_id": channel_id})
+
+    monkeypatch.setattr(sp, "run", mock_subprocess_run)
+    notifier.send_status = mock_send_status
+
+    notifier.answer_question("do you have any work?", channel_id="C999")
+
+    # CLI was called with sonnet model and the question in the prompt
+    assert len(cli_calls) == 1
+    cmd = cli_calls[0]
+    assert "--model" in cmd
+    assert cmd[cmd.index("--model") + 1] == "sonnet"
+    prompt_arg = cmd[cmd.index("--print") + 1]
+    assert "do you have any work?" in prompt_arg
+
+    # LLM response was sent to Slack
+    assert len(sent) == 1
+    assert "no active work" in sent[0]["msg"].lower()
+    assert sent[0]["channel_id"] == "C999"
+
+
+# --- Test: answer_question falls back on CLI failure ---
+
+
+def test_answer_question_fallback_on_llm_failure(tmp_path, monkeypatch):
+    """answer_question should send raw state if CLI returns non-zero."""
+    import subprocess as sp
+
+    monkeypatch.chdir(tmp_path)
+
+    plans_dir = tmp_path / ".claude" / "plans"
+    plans_dir.mkdir(parents=True)
+
+    notifier = _make_notifier(tmp_path)
+
+    sent = []
+
+    def mock_subprocess_run(*args, **kwargs):
+        return sp.CompletedProcess(args=[], returncode=1, stdout="", stderr="error")
+
+    def mock_send_status(msg, level="info", channel_id=None):
+        sent.append({"msg": msg})
+
+    monkeypatch.setattr(sp, "run", mock_subprocess_run)
+    notifier.send_status = mock_send_status
+
+    notifier.answer_question("what's happening?")
+
+    assert len(sent) == 1
+    assert "LLM returned empty" in sent[0]["msg"]
+
+
+# --- Test: answer_question falls back on exception ---
+
+
+def test_answer_question_fallback_on_exception(tmp_path, monkeypatch):
+    """answer_question should send raw state if subprocess raises."""
+    import subprocess as sp
+
+    monkeypatch.chdir(tmp_path)
+
+    plans_dir = tmp_path / ".claude" / "plans"
+    plans_dir.mkdir(parents=True)
+
+    notifier = _make_notifier(tmp_path)
+
+    sent = []
+
+    def mock_subprocess_run(*args, **kwargs):
+        raise RuntimeError("connection failed")
+
+    def mock_send_status(msg, level="info", channel_id=None):
+        sent.append({"msg": msg})
+
+    monkeypatch.setattr(sp, "run", mock_subprocess_run)
+    notifier.send_status = mock_send_status
+
+    notifier.answer_question("hello?")
+
+    assert len(sent) == 1
+    assert "LLM unavailable" in sent[0]["msg"]
+
+
+# --- Test: handle_control_command info_request uses answer_question ---
+
+
+def test_info_request_uses_answer_question(tmp_path, monkeypatch):
+    """handle_control_command with info_request should call answer_question."""
+    monkeypatch.chdir(tmp_path)
+
+    plans_dir = tmp_path / ".claude" / "plans"
+    plans_dir.mkdir(parents=True)
+
+    notifier = _make_notifier(tmp_path)
+
+    aq_calls = []
+
+    def mock_answer_question(question, channel_id=None):
+        aq_calls.append({"question": question, "channel_id": channel_id})
+
+    notifier.answer_question = mock_answer_question
+
+    notifier.handle_control_command("status", "info_request", channel_id="C888")
+
+    assert len(aq_calls) == 1
+    assert aq_calls[0]["question"] == "status"
+    assert aq_calls[0]["channel_id"] == "C888"
+
+
+# --- Test: QUESTION_ANSWER_PROMPT contains expected placeholders ---
+
+
+def test_question_answer_prompt():
+    """QUESTION_ANSWER_PROMPT should contain required placeholders."""
+    prompt = mod.QUESTION_ANSWER_PROMPT
+    assert "{state_context}" in prompt
+    assert "{question}" in prompt
+    assert "Max subscription" in prompt
+    assert "API-equivalent" in prompt
+
+
+# ============================================================================
+# Tests for Change C: Async LLM-Powered Intake with 5 Whys
+# ============================================================================
+
+IntakeState = mod.IntakeState
+
+
+# --- Test: IntakeState dataclass creation ---
+
+
+def test_intake_state_creation():
+    """IntakeState should initialize with correct defaults."""
+    intake = IntakeState(
+        channel_id="C123",
+        channel_name="orchestrator-features",
+        original_text="Add caching",
+        user="U456",
+        ts="123.456",
+        item_type="feature",
+    )
+    assert intake.status == "analyzing"
+    assert intake.analysis == ""
+
+
+# --- Test: IntakeState instances are independent ---
+
+
+def test_intake_state_independent_events():
+    """Each IntakeState should track its own status independently."""
+    intake1 = IntakeState(
+        channel_id="C1", channel_name="ch1", original_text="t1",
+        user="U1", ts="1.0", item_type="feature"
+    )
+    intake2 = IntakeState(
+        channel_id="C2", channel_name="ch2", original_text="t2",
+        user="U2", ts="2.0", item_type="defect"
+    )
+    intake1.status = "done"
+    assert intake1.status == "done"
+    assert intake2.status == "analyzing"
+
+
+# --- Test: _run_intake_analysis with clear request (no questions needed) ---
+
+
+def test_intake_analysis_clear_request(tmp_path, monkeypatch):
+    """_run_intake_analysis should create backlog item when request is clear."""
+    import os
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("docs/feature-backlog")
+
+    notifier = _make_notifier(tmp_path)
+
+    # Track calls
+    created_items = []
+    sent_messages = []
+
+    def mock_create(item_type, title, body, user="", ts=""):
+        created_items.append({"type": item_type, "title": title, "body": body})
+        return "docs/feature-backlog/1-test.md"
+
+    def mock_send(msg, level="info", channel_id=None):
+        sent_messages.append({"msg": msg, "level": level})
+
+    notifier.create_backlog_item = mock_create
+    notifier.send_status = mock_send
+
+    # Mock run_claude_task to return a clear analysis
+    clear_response = json.dumps({
+        "clear": True,
+        "five_whys": ["Surface", "Deeper", "Core", "Business", "Root"],
+        "root_need": "Fast page loads for user retention",
+        "questions": [],
+        "title": "Add response caching",
+        "description": "Implement caching layer for API responses",
+        "priority": "high",
+    })
+
+    original_run = mod.run_claude_task
+
+    def mock_run_claude(prompt, dry_run=False, model=""):
+        return mod.TaskResult(success=True, message=clear_response, duration_seconds=1)
+
+    mod.run_claude_task = mock_run_claude
+
+    intake = IntakeState(
+        channel_id="C123",
+        channel_name="orchestrator-features",
+        original_text="Add caching to the API",
+        user="U456",
+        ts="100.200",
+        item_type="feature",
+    )
+    notifier._pending_intakes[f"{intake.channel_name}:{intake.ts}"] = intake
+
+    try:
+        notifier._run_intake_analysis(intake)
+    finally:
+        mod.run_claude_task = original_run
+
+    assert intake.status == "done"
+    assert len(created_items) == 1
+    assert created_items[0]["title"] == "Add response caching"
+    assert "5 Whys Analysis" in created_items[0]["body"]
+    # Success notification sent
+    assert any("created" in m["msg"].lower() for m in sent_messages)
+
+
+# --- Test: _run_intake_analysis with unclear request (questions needed) ---
+
+
+def test_intake_analysis_unclear_request(tmp_path, monkeypatch):
+    """_run_intake_analysis should post questions when request is unclear."""
+    import os
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("docs/defect-backlog")
+
+    notifier = _make_notifier(tmp_path)
+
+    sent_messages = []
+    created_items = []
+
+    def mock_create(item_type, title, body, user="", ts=""):
+        created_items.append({"type": item_type, "title": title})
+        return "docs/defect-backlog/1-test.md"
+
+    def mock_send(msg, level="info", channel_id=None):
+        sent_messages.append({"msg": msg, "level": level})
+
+    notifier.create_backlog_item = mock_create
+    notifier.send_status = mock_send
+
+    call_count = [0]
+
+    def mock_run_claude(prompt, dry_run=False, model=""):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            # First call: unclear, needs questions
+            return mod.TaskResult(
+                success=True,
+                message=json.dumps({
+                    "clear": False,
+                    "five_whys": ["W1", "W2", "W3", "W4", "W5"],
+                    "root_need": "Stability under load",
+                    "questions": ["What browser?", "What URL?"],
+                    "title": "",
+                    "description": "",
+                    "priority": "medium",
+                }),
+                duration_seconds=1,
+            )
+        else:
+            # Second call: refined with answers
+            return mod.TaskResult(
+                success=True,
+                message=json.dumps({
+                    "title": "Fix crash on Chrome under load",
+                    "description": "App crashes in Chrome when >100 users",
+                    "priority": "high",
+                }),
+                duration_seconds=1,
+            )
+
+    original_run = mod.run_claude_task
+    mod.run_claude_task = mock_run_claude
+
+    intake = IntakeState(
+        channel_id="C789",
+        channel_name="orchestrator-defects",
+        original_text="App crashes sometimes",
+        user="U111",
+        ts="200.300",
+        item_type="defect",
+    )
+    notifier._pending_intakes[f"{intake.channel_name}:{intake.ts}"] = intake
+
+    # Pre-set the answers and event so the intake thread finds them
+    # immediately when it reaches the wait. This avoids thread timing issues.
+    intake.answers.append("Chrome on MacOS")
+    intake.answer_event.set()
+
+    try:
+        notifier._run_intake_analysis(intake)
+    finally:
+        mod.run_claude_task = original_run
+
+    assert intake.status == "done"
+    assert len(created_items) == 1
+    assert created_items[0]["title"] == "Fix crash on Chrome under load"
+    # Should have posted questions
+    assert any("clarification" in m["msg"].lower() for m in sent_messages)
+
+
+# --- Test: intake answer routing in process_inbound ---
+
+
+def test_intake_answer_routing(tmp_path, monkeypatch):
+    """process_inbound should route answers to pending intake."""
+    notifier = _make_notifier(tmp_path)
+
+    # Set up a pending intake waiting for answers
+    intake = IntakeState(
+        channel_id="C123",
+        channel_name="orchestrator-features",
+        original_text="Add caching",
+        user="U456",
+        ts="100.200",
+        item_type="feature",
+        status="waiting_for_answers",
+    )
+    notifier._pending_intakes["orchestrator-features:100.200"] = intake
+
+    # Mock poll_messages to return an answer message
+    def mock_poll():
+        return [{
+            "text": "Yes, Redis caching please",
+            "user": "U456",
+            "ts": "100.300",
+            "_channel_name": "orchestrator-features",
+            "_channel_id": "C123",
+        }]
+
+    notifier.poll_messages = mock_poll
+
+    notifier.process_inbound()
+
+    # Answer should have been routed to the pending intake
+    assert len(intake.answers) == 1
+    assert "Redis caching" in intake.answers[0]
+    assert intake.answer_event.is_set()
+
+
+# --- Test: intake thread does not block main loop ---
+
+
+def test_intake_thread_nonblocking(tmp_path, monkeypatch):
+    """Starting an intake should not block process_inbound."""
+    import time
+
+    notifier = _make_notifier(tmp_path)
+
+    # Track that _run_intake_analysis was called
+    intake_started = []
+
+    def mock_run_intake(intake_state):
+        intake_started.append(intake_state)
+        # Simulate long-running analysis
+        time.sleep(0.5)
+
+    notifier._run_intake_analysis = mock_run_intake
+
+    # Mock poll_messages to return a feature message
+    def mock_poll():
+        return [{
+            "text": "Add new feature X",
+            "user": "U789",
+            "ts": "300.400",
+            "_channel_name": "orchestrator-features",
+            "_channel_id": "C555",
+        }]
+
+    notifier.poll_messages = mock_poll
+
+    start = time.time()
+    notifier.process_inbound()
+    elapsed = time.time() - start
+
+    # process_inbound should return quickly (< 0.2s) even though
+    # the intake analysis takes 0.5s
+    assert elapsed < 0.2
+    # Give thread time to start
+    time.sleep(0.1)
+    assert len(intake_started) == 1
+
+
+# --- Test: intake timeout creates fallback item ---
+
+
+def test_intake_timeout_creates_draft(tmp_path, monkeypatch):
+    """_run_intake_analysis should create item with raw text on LLM failure."""
+    import os
+
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("docs/feature-backlog")
+
+    notifier = _make_notifier(tmp_path)
+
+    created_items = []
+
+    def mock_create(item_type, title, body, user="", ts=""):
+        created_items.append({"type": item_type, "title": title, "body": body})
+        return "docs/feature-backlog/1-test.md"
+
+    notifier.create_backlog_item = mock_create
+    notifier.send_status = lambda msg, level="info", channel_id=None: None
+
+    # Mock run_claude_task to fail
+    original_run = mod.run_claude_task
+
+    def mock_run_fail(prompt, dry_run=False, model=""):
+        return mod.TaskResult(success=False, message="LLM error", duration_seconds=0)
+
+    mod.run_claude_task = mock_run_fail
+
+    intake = IntakeState(
+        channel_id="C123",
+        channel_name="orchestrator-features",
+        original_text="Some feature\nWith details",
+        user="U456",
+        ts="400.500",
+        item_type="feature",
+    )
+    notifier._pending_intakes[f"{intake.channel_name}:{intake.ts}"] = intake
+
+    try:
+        notifier._run_intake_analysis(intake)
+    finally:
+        mod.run_claude_task = original_run
+
+    assert intake.status == "failed"
+    assert len(created_items) == 1
+    # Fallback: uses first line as title
+    assert created_items[0]["title"] == "Some feature"
+
+
+# --- Test: intake constants exist ---
+
+
+def test_intake_constants():
+    """Verify intake-related constants are defined."""
+    assert mod.INTAKE_ANSWER_TIMEOUT_SECONDS == 1800
+    assert "{item_type}" in mod.INTAKE_ANALYSIS_PROMPT
+    assert "{text}" in mod.INTAKE_ANALYSIS_PROMPT
+
+
+# --- Test: Background polling ---
+
+
+def test_background_polling_noop_when_disabled(tmp_path):
+    """start_background_polling should be a no-op when Slack is disabled."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {"slack": {"enabled": False}}
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+    notifier.start_background_polling()
+
+    assert notifier._poll_thread is None
+
+
+def test_background_polling_starts_thread(tmp_path, monkeypatch):
+    """start_background_polling should spawn a daemon thread that calls process_inbound."""
+    import threading
+    import time
+
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    call_count = 0
+
+    def mock_poll_messages():
+        nonlocal call_count
+        call_count += 1
+        return []
+
+    monkeypatch.setattr(notifier, "poll_messages", mock_poll_messages)
+    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_MIN_SECONDS", 0.05)
+    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_MAX_SECONDS", 0.05)
+
+    notifier.start_background_polling()
+
+    assert notifier._poll_thread is not None
+    assert notifier._poll_thread.daemon is True
+    assert notifier._poll_thread.is_alive()
+
+    # Wait enough for at least one poll cycle
+    time.sleep(0.2)
+
+    notifier.stop_background_polling()
+
+    assert call_count >= 1
+    assert notifier._poll_thread is None
+
+
+def test_background_polling_idempotent(tmp_path, monkeypatch):
+    """Calling start_background_polling twice should not create a second thread."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+    monkeypatch.setattr(notifier, "poll_messages", lambda: [])
+    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_MIN_SECONDS", 0.05)
+    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_MAX_SECONDS", 0.05)
+
+    notifier.start_background_polling()
+    first_thread = notifier._poll_thread
+
+    notifier.start_background_polling()
+    second_thread = notifier._poll_thread
+
+    assert first_thread is second_thread
+
+    notifier.stop_background_polling()
+
+
+def test_background_polling_stop_without_start(tmp_path):
+    """stop_background_polling should be safe to call even if never started."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+    # Should not raise
+    notifier.stop_background_polling()
+    assert notifier._poll_thread is None
+
+
+def test_background_polling_survives_process_inbound_error(tmp_path, monkeypatch):
+    """Background polling thread should survive exceptions in process_inbound."""
+    import threading
+
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    call_count = 0
+    second_call = threading.Event()
+
+    def failing_poll_messages():
+        nonlocal call_count
+        call_count += 1
+        if call_count >= 2:
+            second_call.set()
+        raise RuntimeError("Simulated poll failure")
+
+    monkeypatch.setattr(notifier, "poll_messages", failing_poll_messages)
+    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_MIN_SECONDS", 0.05)
+    monkeypatch.setattr(mod, "SLACK_POLL_INTERVAL_MAX_SECONDS", 0.05)
+
+    notifier.start_background_polling()
+
+    # Wait for the thread to make at least 2 calls (proving it survives exceptions)
+    got_second = second_call.wait(timeout=5)
+
+    assert got_second, f"Expected at least 2 calls, got {call_count}"
+    assert notifier._poll_thread.is_alive()
+
+    notifier.stop_background_polling()
+
+
+# ============================================================================
+# Tests for configurable channel prefix
+# ============================================================================
+
+
+# --- Test: default channel prefix when not configured ---
+
+
+def test_default_channel_prefix(tmp_path):
+    """SlackNotifier should use default prefix when channel_prefix is not set."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+    assert notifier._channel_prefix == "orchestrator-"
+
+
+# --- Test: custom channel prefix ---
+
+
+def test_custom_channel_prefix(tmp_path):
+    """SlackNotifier should use custom channel_prefix from config."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+            "channel_prefix": "myproject-",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+    assert notifier._channel_prefix == "myproject-"
+
+
+# --- Test: channel prefix auto append dash ---
+
+
+def test_channel_prefix_auto_append_dash(tmp_path):
+    """SlackNotifier should append dash to channel_prefix if missing."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+            "channel_prefix": "myproject",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+    assert notifier._channel_prefix == "myproject-"
+
+
+# --- Test: get_channel_role with default prefix ---
+
+
+def test_get_channel_role_default_prefix(tmp_path):
+    """_get_channel_role should match channels with default prefix."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    assert notifier._get_channel_role("orchestrator-features") == "feature"
+    assert notifier._get_channel_role("orchestrator-defects") == "defect"
+    assert notifier._get_channel_role("orchestrator-questions") == "question"
+    assert notifier._get_channel_role("orchestrator-notifications") == "control"
+    assert notifier._get_channel_role("orchestrator-unknown") == ""
+    assert notifier._get_channel_role("other-channel") == ""
+
+
+# --- Test: get_channel_role with custom prefix ---
+
+
+def test_get_channel_role_custom_prefix(tmp_path):
+    """_get_channel_role should match channels with custom prefix."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+            "channel_prefix": "proj-",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    assert notifier._get_channel_role("proj-features") == "feature"
+    assert notifier._get_channel_role("proj-defects") == "defect"
+    assert notifier._get_channel_role("orchestrator-features") == ""
+
+
+# --- Test: SLACK_CHANNEL_ROLE_SUFFIXES constant ---
+
+
+def test_slack_channel_role_suffixes_constant():
+    """SLACK_CHANNEL_ROLE_SUFFIXES should have exactly 4 entries."""
+    suffixes = mod.SLACK_CHANNEL_ROLE_SUFFIXES
+
+    assert len(suffixes) == 4
+    assert suffixes["features"] == "feature"
+    assert suffixes["defects"] == "defect"
+    assert suffixes["questions"] == "question"
+    assert suffixes["notifications"] == "control"
+
+    # Verify the old SLACK_CHANNEL_ROLES constant no longer exists
+    assert getattr(mod, "SLACK_CHANNEL_ROLES", None) is None
