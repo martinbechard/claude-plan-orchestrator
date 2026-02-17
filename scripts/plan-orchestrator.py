@@ -3231,7 +3231,7 @@ class SlackNotifier:
         return ("acknowledgement", first_line, body)
 
     def create_backlog_item(self, item_type: str, title: str, body: str,
-                           user: str = "", ts: str = "") -> str:
+                           user: str = "", ts: str = "") -> dict:
         """Create a backlog markdown file from a Slack message.
 
         Args:
@@ -3242,14 +3242,15 @@ class SlackNotifier:
             ts: Message timestamp
 
         Returns:
-            Created file path, or empty string on error
+            Dict with keys filepath, filename, item_number on success,
+            or empty dict on error
         """
         if item_type == "feature":
             backlog_dir = "docs/feature-backlog"
         elif item_type == "defect":
             backlog_dir = "docs/defect-backlog"
         else:
-            return ""
+            return {}
 
         # Find next available number
         try:
@@ -3298,16 +3299,10 @@ class SlackNotifier:
             os.makedirs(backlog_dir, exist_ok=True)
             with open(filepath, "w") as f:
                 f.write(content)
-            # Confirm in Slack
-            item_label = "feature" if item_type == "feature" else "defect"
-            self.send_status(
-                f"*Created {item_label} backlog item:* {filename}",
-                level="success"
-            )
-            return filepath
+            return {"filepath": filepath, "filename": filename, "item_number": next_num}
         except IOError as e:
             print(f"[SLACK] Failed to create backlog item: {e}")
-            return ""
+            return {}
 
     def handle_control_command(self, command: str, classification: str,
                               channel_id: Optional[str] = None) -> None:
@@ -3633,7 +3628,7 @@ class SlackNotifier:
 
             if not response_text:
                 print("[INTAKE] LLM returned empty response")
-                self.create_backlog_item(
+                item_info = self.create_backlog_item(
                     intake.item_type, fallback_title,
                     intake.original_text, intake.user, intake.ts,
                 )
@@ -3666,7 +3661,7 @@ class SlackNotifier:
 
             # Step 3: Create backlog item
             intake.status = "creating"
-            self.create_backlog_item(
+            item_info = self.create_backlog_item(
                 intake.item_type, title, description,
                 intake.user, intake.ts,
             )
@@ -3682,7 +3677,7 @@ class SlackNotifier:
             print(f"[INTAKE] Error in intake analysis: {e}")
             intake.status = "failed"
             try:
-                self.create_backlog_item(
+                item_info = self.create_backlog_item(
                     intake.item_type, fallback_title,
                     intake.original_text, intake.user, intake.ts,
                 )
