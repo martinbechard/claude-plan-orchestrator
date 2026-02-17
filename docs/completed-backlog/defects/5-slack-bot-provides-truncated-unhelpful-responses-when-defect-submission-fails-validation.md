@@ -1,6 +1,6 @@
 # Slack bot provides truncated, unhelpful responses when defect submission fails validation
 
-## Status: Open
+## Status: Archived (verification failed)
 
 ## Priority: Medium
 
