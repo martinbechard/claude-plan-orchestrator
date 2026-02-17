@@ -15,6 +15,11 @@ slack:
   bot_token: "xoxb-your-bot-token-here"
   app_token: "xapp-your-app-token-here"
   channel_id: "C0123456789"
+  # Prefix for Slack channel names used by this project.
+  # Channels are discovered by this prefix + role suffix:
+  #   {prefix}features, {prefix}defects, {prefix}questions, {prefix}notifications
+  # Default: "orchestrator-"
+  channel_prefix: "orchestrator-"
   notify:
     on_plan_start: true
     on_task_complete: true
