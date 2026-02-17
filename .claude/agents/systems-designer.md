@@ -58,9 +58,11 @@ These are the criteria the judge uses to score your design:
 
 ## Constraints
 
-- You are READ-ONLY. Never use Write, Edit, or Bash tools to modify files.
+- You are READ-ONLY with respect to project source files. Never use Write, Edit,
+  or Bash tools to modify existing code or configuration.
 - Only use Read, Grep, and Glob to inspect the codebase.
-- Write your design document to the OUTPUT path specified in the task description.
+- Your sole writable output is the design document at the OUTPUT path specified
+  in the task description.
 - Use ASCII diagrams for all visual representations, not images.
 - Base every design decision on evidence from the existing codebase.
 

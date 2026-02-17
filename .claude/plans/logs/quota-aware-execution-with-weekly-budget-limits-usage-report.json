@@ -1,0 +1,159 @@
+{
+  "plan_name": "Quota-Aware Execution with Weekly Budget Limits",
+  "plan_path": ".claude/plans/07-quota-aware-execution.yaml",
+  "completed_at": "2026-02-14T10:16:26.168813",
+  "total": {
+    "cost_usd": 10.11760725,
+    "input_tokens": 228,
+    "output_tokens": 58821,
+    "cache_read_tokens": 11457059,
+    "cache_creation_tokens": 445251,
+    "cache_hit_rate": 0.9999801000009862,
+    "num_turns": 257,
+    "duration_api_ms": 1294676
+  },
+  "sections": [
+    {
+      "id": "phase-1",
+      "name": "Phase 1 - BudgetConfig and BudgetGuard Classes",
+      "cost_usd": 2.3058565,
+      "task_count": 3
+    },
+    {
+      "id": "phase-2",
+      "name": "Phase 2 - Orchestrator Integration",
+      "cost_usd": 2.41697725,
+      "task_count": 2
+    },
+    {
+      "id": "phase-3",
+      "name": "Phase 3 - Auto-Pipeline Integration",
+      "cost_usd": 1.6130109999999998,
+      "task_count": 1
+    },
+    {
+      "id": "phase-4",
+      "name": "Phase 4 - Unit Tests",
+      "cost_usd": 3.0966414999999996,
+      "task_count": 4
+    },
+    {
+      "id": "phase-5",
+      "name": "Phase 5 - Verification",
+      "cost_usd": 0.6851209999999998,
+      "task_count": 1
+    }
+  ],
+  "tasks": [
+    {
+      "id": "1.1",
+      "cost_usd": 0.7126609999999998,
+      "input_tokens": 17,
+      "output_tokens": 4517,
+      "cache_read_tokens": 760149,
+      "cache_creation_tokens": 33582,
+      "num_turns": 21,
+      "duration_api_ms": 99164
+    },
+    {
+      "id": "1.2",
+      "cost_usd": 1.018751,
+      "input_tokens": 25,
+      "output_tokens": 7164,
+      "cache_read_tokens": 1151989,
+      "cache_creation_tokens": 39162,
+      "num_turns": 29,
+      "duration_api_ms": 147287
+    },
+    {
+      "id": "1.3",
+      "cost_usd": 0.5744445,
+      "input_tokens": 13,
+      "output_tokens": 3355,
+      "cache_read_tokens": 544298,
+      "cache_creation_tokens": 32794,
+      "num_turns": 17,
+      "duration_api_ms": 77373
+    },
+    {
+      "id": "2.1",
+      "cost_usd": 0.7596292499999999,
+      "input_tokens": 20,
+      "output_tokens": 4345,
+      "cache_read_tokens": 861714,
+      "cache_creation_tokens": 33873,
+      "num_turns": 23,
+      "duration_api_ms": 101013
+    },
+    {
+      "id": "2.2",
+      "cost_usd": 1.657348,
+      "input_tokens": 39,
+      "output_tokens": 9003,
+      "cache_read_tokens": 2199073,
+      "cache_creation_tokens": 51366,
+      "num_turns": 40,
+      "duration_api_ms": 209584
+    },
+    {
+      "id": "3.1",
+      "cost_usd": 1.6130109999999998,
+      "input_tokens": 30,
+      "output_tokens": 8384,
+      "cache_read_tokens": 2010211,
+      "cache_creation_tokens": 61666,
+      "num_turns": 31,
+      "duration_api_ms": 169839
+    },
+    {
+      "id": "4.1",
+      "cost_usd": 0.79712425,
+      "input_tokens": 17,
+      "output_tokens": 3777,
+      "cache_read_tokens": 868631,
+      "cache_creation_tokens": 41651,
+      "num_turns": 19,
+      "duration_api_ms": 88374
+    },
+    {
+      "id": "4.2",
+      "cost_usd": 0.81036,
+      "input_tokens": 17,
+      "output_tokens": 5630,
+      "cache_read_tokens": 818341,
+      "cache_creation_tokens": 39694,
+      "num_turns": 19,
+      "duration_api_ms": 111186
+    },
+    {
+      "id": "4.3",
+      "cost_usd": 0.7967279999999999,
+      "input_tokens": 20,
+      "output_tokens": 4364,
+      "cache_read_tokens": 898853,
+      "cache_creation_tokens": 36666,
+      "num_turns": 21,
+      "duration_api_ms": 106330
+    },
+    {
+      "id": "4.4",
+      "cost_usd": 0.6924292500000002,
+      "input_tokens": 16,
+      "output_tokens": 4063,
+      "cache_read_tokens": 695267,
+      "cache_creation_tokens": 37591,
+      "num_turns": 18,
+      "duration_api_ms": 82649
+    },
+    {
+      "id": "5.1",
+      "cost_usd": 0.6851209999999998,
+      "input_tokens": 14,
+      "output_tokens": 4219,
+      "cache_read_tokens": 648533,
+      "cache_creation_tokens": 37206,
+      "num_turns": 19,
+      "duration_api_ms": 101877
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "plan_name": "Move Completed Items Outside Backlog Directories",
+  "plan_path": ".claude/plans/09-move-completed-outside-backlog.yaml",
+  "completed_at": "2026-02-14T10:34:17.434744",
+  "total": {
+    "cost_usd": 2.8301147500000003,
+    "input_tokens": 62,
+    "output_tokens": 16314,
+    "cache_read_tokens": 2905806,
+    "cache_creation_tokens": 146687,
+    "cache_hit_rate": 0.9999786638622263,
+    "num_turns": 76,
+    "duration_api_ms": 398065
+  },
+  "sections": [
+    {
+      "id": "phase-1",
+      "name": "Phase 1 - Implementation",
+      "cost_usd": 1.5482655000000003,
+      "task_count": 2
+    },
+    {
+      "id": "phase-2",
+      "name": "Phase 2 - Unit Tests",
+      "cost_usd": 0.8461127500000001,
+      "task_count": 1
+    },
+    {
+      "id": "phase-3",
+      "name": "Phase 3 - Verification",
+      "cost_usd": 0.43573649999999997,
+      "task_count": 1
+    }
+  ],
+  "tasks": [
+    {
+      "id": "1.1",
+      "cost_usd": 1.0906397500000002,
+      "input_tokens": 23,
+      "output_tokens": 5760,
+      "cache_read_tokens": 1268121,
+      "cache_creation_tokens": 48801,
+      "num_turns": 24,
+      "duration_api_ms": 125409
+    },
+    {
+      "id": "1.2",
+      "cost_usd": 0.45762575000000005,
+      "input_tokens": 13,
+      "output_tokens": 2731,
+      "cache_read_tokens": 453529,
+      "cache_creation_tokens": 23205,
+      "num_turns": 15,
+      "duration_api_ms": 83782
+    },
+    {
+      "id": "2.1",
+      "cost_usd": 0.8461127500000001,
+      "input_tokens": 16,
+      "output_tokens": 4026,
+      "cache_read_tokens": 841394,
+      "cache_creation_tokens": 50559,
+      "num_turns": 18,
+      "duration_api_ms": 94045
+    },
+    {
+      "id": "3.1",
+      "cost_usd": 0.43573649999999997,
+      "input_tokens": 10,
+      "output_tokens": 3797,
+      "cache_read_tokens": 342762,
+      "cache_creation_tokens": 24122,
+      "num_turns": 19,
+      "duration_api_ms": 94829
+    }
+  ]
+}

@@ -1,0 +1,175 @@
+{
+  "plan_name": "Tiered Model Selection with Cost-Aware Escalation",
+  "plan_path": ".claude/plans/10-tiered-model-escalation.yaml",
+  "completed_at": "2026-02-16T18:41:14.700194",
+  "total": {
+    "cost_usd": 9.823116250000002,
+    "input_tokens": 307,
+    "output_tokens": 57836,
+    "cache_read_tokens": 10783876,
+    "cache_creation_tokens": 456165,
+    "cache_hit_rate": 0.9999715323821935,
+    "num_turns": 286,
+    "duration_api_ms": 1281215
+  },
+  "sections": [
+    {
+      "id": "phase-1",
+      "name": "Phase 1 - EscalationConfig and Model Tier Logic",
+      "cost_usd": 1.18418425,
+      "task_count": 2
+    },
+    {
+      "id": "phase-2",
+      "name": "Phase 2 - CLI Model Flag Injection",
+      "cost_usd": 1.52966325,
+      "task_count": 2
+    },
+    {
+      "id": "phase-3",
+      "name": "Phase 3 - Orchestrator Integration",
+      "cost_usd": 3.54353425,
+      "task_count": 4
+    },
+    {
+      "id": "phase-4",
+      "name": "Phase 4 - Usage Report Enhancement",
+      "cost_usd": 1.1191837500000001,
+      "task_count": 1
+    },
+    {
+      "id": "phase-5",
+      "name": "Phase 5 - Unit Tests",
+      "cost_usd": 1.126513,
+      "task_count": 2
+    },
+    {
+      "id": "phase-6",
+      "name": "Phase 6 - Verification",
+      "cost_usd": 1.32003775,
+      "task_count": 1
+    }
+  ],
+  "tasks": [
+    {
+      "id": "1.1",
+      "cost_usd": 0.70851175,
+      "input_tokens": 18,
+      "output_tokens": 4546,
+      "cache_read_tokens": 752466,
+      "cache_creation_tokens": 33423,
+      "num_turns": 20,
+      "duration_api_ms": 100552
+    },
+    {
+      "id": "1.2",
+      "cost_usd": 0.4756725,
+      "input_tokens": 12,
+      "output_tokens": 2692,
+      "cache_read_tokens": 426723,
+      "cache_creation_tokens": 29756,
+      "num_turns": 14,
+      "duration_api_ms": 67875
+    },
+    {
+      "id": "2.1",
+      "cost_usd": 0.8717702499999999,
+      "input_tokens": 24,
+      "output_tokens": 4256,
+      "cache_read_tokens": 1074074,
+      "cache_creation_tokens": 34857,
+      "num_turns": 25,
+      "duration_api_ms": 112413
+    },
+    {
+      "id": "2.2",
+      "cost_usd": 0.6578930000000001,
+      "input_tokens": 17,
+      "output_tokens": 3282,
+      "cache_read_tokens": 710994,
+      "cache_creation_tokens": 33712,
+      "num_turns": 18,
+      "duration_api_ms": 85791
+    },
+    {
+      "id": "3.1",
+      "cost_usd": 0.51945625,
+      "input_tokens": 13,
+      "output_tokens": 2246,
+      "cache_read_tokens": 498042,
+      "cache_creation_tokens": 32937,
+      "num_turns": 14,
+      "duration_api_ms": 63578
+    },
+    {
+      "id": "3.2",
+      "cost_usd": 0.6130559999999999,
+      "input_tokens": 87,
+      "output_tokens": 3785,
+      "cache_read_tokens": 593265,
+      "cache_creation_tokens": 34302,
+      "num_turns": 23,
+      "duration_api_ms": 83598
+    },
+    {
+      "id": "3.3",
+      "cost_usd": 1.0427617499999997,
+      "input_tokens": 26,
+      "output_tokens": 7143,
+      "cache_read_tokens": 1221092,
+      "cache_creation_tokens": 39411,
+      "num_turns": 30,
+      "duration_api_ms": 139989
+    },
+    {
+      "id": "3.4",
+      "cost_usd": 1.36826025,
+      "input_tokens": 35,
+      "output_tokens": 8064,
+      "cache_read_tokens": 1772167,
+      "cache_creation_tokens": 42307,
+      "num_turns": 38,
+      "duration_api_ms": 172639
+    },
+    {
+      "id": "4.1",
+      "cost_usd": 1.1191837500000001,
+      "input_tokens": 27,
+      "output_tokens": 7416,
+      "cache_read_tokens": 1322529,
+      "cache_creation_tokens": 41117,
+      "num_turns": 31,
+      "duration_api_ms": 149985
+    },
+    {
+      "id": "5.1",
+      "cost_usd": 0.6428922499999999,
+      "input_tokens": 12,
+      "output_tokens": 3413,
+      "cache_read_tokens": 569133,
+      "cache_creation_tokens": 42383,
+      "num_turns": 15,
+      "duration_api_ms": 76954
+    },
+    {
+      "id": "5.2",
+      "cost_usd": 0.48362075000000004,
+      "input_tokens": 11,
+      "output_tokens": 2751,
+      "cache_read_tokens": 397433,
+      "cache_creation_tokens": 33257,
+      "num_turns": 13,
+      "duration_api_ms": 60007
+    },
+    {
+      "id": "6.1",
+      "cost_usd": 1.32003775,
+      "input_tokens": 25,
+      "output_tokens": 8242,
+      "cache_read_tokens": 1445958,
+      "cache_creation_tokens": 58703,
+      "num_turns": 45,
+      "duration_api_ms": 167834
+    }
+  ]
+}

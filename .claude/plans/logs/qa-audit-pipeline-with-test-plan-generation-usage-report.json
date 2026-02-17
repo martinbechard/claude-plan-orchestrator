@@ -1,0 +1,126 @@
+{
+  "plan_name": "QA Audit Pipeline with Test Plan Generation",
+  "plan_path": ".claude/plans/11-qa-audit-pipeline.yaml",
+  "completed_at": "2026-02-16T18:58:27.390288",
+  "total": {
+    "cost_usd": 3.8446169999999995,
+    "input_tokens": 277,
+    "output_tokens": 21236,
+    "cache_read_tokens": 3021596,
+    "cache_creation_tokens": 275604,
+    "cache_hit_rate": 0.9999083349962093,
+    "num_turns": 94,
+    "duration_api_ms": 545183
+  },
+  "sections": [
+    {
+      "id": "phase-1",
+      "name": "Phase 1 - Domain Checklists",
+      "cost_usd": 1.3984367500000001,
+      "task_count": 3
+    },
+    {
+      "id": "phase-2",
+      "name": "Phase 2 - QA Auditor Agent Definition",
+      "cost_usd": 0.49648649999999994,
+      "task_count": 1
+    },
+    {
+      "id": "phase-3",
+      "name": "Phase 3 - Orchestrator Integration",
+      "cost_usd": 0.6471622499999996,
+      "task_count": 1
+    },
+    {
+      "id": "phase-4",
+      "name": "Phase 4 - Unit Tests",
+      "cost_usd": 0.7382524999999998,
+      "task_count": 1
+    },
+    {
+      "id": "phase-5",
+      "name": "Phase 5 - Verification",
+      "cost_usd": 0.5642790000000001,
+      "task_count": 1
+    }
+  ],
+  "tasks": [
+    {
+      "id": "1.1",
+      "cost_usd": 0.5529122500000001,
+      "input_tokens": 40,
+      "output_tokens": 1884,
+      "cache_read_tokens": 374043,
+      "cache_creation_tokens": 49731,
+      "num_turns": 11,
+      "duration_api_ms": 59181,
+      "model": "sonnet"
+    },
+    {
+      "id": "1.2",
+      "cost_usd": 0.4050125,
+      "input_tokens": 35,
+      "output_tokens": 1678,
+      "cache_read_tokens": 345892,
+      "cache_creation_tokens": 29238,
+      "num_turns": 10,
+      "duration_api_ms": 51941,
+      "model": "sonnet"
+    },
+    {
+      "id": "1.3",
+      "cost_usd": 0.44051200000000007,
+      "input_tokens": 40,
+      "output_tokens": 1832,
+      "cache_read_tokens": 399231,
+      "cache_creation_tokens": 30114,
+      "num_turns": 12,
+      "duration_api_ms": 56722,
+      "model": "sonnet"
+    },
+    {
+      "id": "2.1",
+      "cost_usd": 0.49648649999999994,
+      "input_tokens": 40,
+      "output_tokens": 3090,
+      "cache_read_tokens": 412234,
+      "cache_creation_tokens": 32594,
+      "num_turns": 11,
+      "duration_api_ms": 81686,
+      "model": "sonnet"
+    },
+    {
+      "id": "3.1",
+      "cost_usd": 0.6471622499999996,
+      "input_tokens": 25,
+      "output_tokens": 4184,
+      "cache_read_tokens": 448052,
+      "cache_creation_tokens": 48289,
+      "num_turns": 13,
+      "duration_api_ms": 94088,
+      "model": "sonnet"
+    },
+    {
+      "id": "4.1",
+      "cost_usd": 0.7382524999999998,
+      "input_tokens": 57,
+      "output_tokens": 4816,
+      "cache_read_tokens": 656779,
+      "cache_creation_tokens": 44824,
+      "num_turns": 18,
+      "duration_api_ms": 105441,
+      "model": "sonnet"
+    },
+    {
+      "id": "5.1",
+      "cost_usd": 0.5642790000000001,
+      "input_tokens": 40,
+      "output_tokens": 3752,
+      "cache_read_tokens": 385365,
+      "cache_creation_tokens": 40814,
+      "num_turns": 19,
+      "duration_api_ms": 96124,
+      "model": "sonnet"
+    }
+  ]
+}
