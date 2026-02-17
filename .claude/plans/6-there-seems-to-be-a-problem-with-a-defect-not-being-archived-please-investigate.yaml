@@ -1,0 +1,140 @@
+meta:
+  name: 'Defect Fix: Archive defects when max verification cycles are exhausted'
+  description: 'When a defect exceeds MAX_VERIFICATION_CYCLES, process_item() cleans up
+    the plan YAML but leaves the source markdown in defect-backlog/, creating an inconsistent
+    limbo state. The fix archives exhausted defects to completed-backlog/defects/ with a
+    status marker indicating verification failure, providing a clean terminal state.
+
+    Two code paths need fixing: (1) the early check at lines 1596-1604 when remaining_cycles == 0
+    on restart, and (2) the post-loop path at lines 1663-1671 when all cycles are used in one
+    session. Both must call _archive_and_report() after marking the defect as verification-exhausted.
+
+    '
+  plan_doc: docs/plans/2026-02-17-6-there-seems-to-be-a-problem-with-a-defect-not-being-archived-please-investigate-design.md
+  created: '2026-02-17'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - issue-verifier
+    max_validation_attempts: 1
+sections:
+- id: phase-1
+  name: Phase 1 - Implementation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add _mark_as_verification_exhausted helper and fix both max-cycle paths
+    agent: coder
+    status: pending
+    description: "In scripts/auto-pipeline.py, make the following changes to fix the\
+      \ orphaned defect archiving bug.\n\nFirst, read the design document at:\n  docs/plans/2026-02-17-6-there-seems-to-be-a-problem-with-a-defect-not-being-archived-please-investigate-design.md\n\
+      \nThen read scripts/auto-pipeline.py focusing on:\n  - The constants at lines 59-67\
+      \ (COMPLETED_DEFECTS_DIR, PLANS_DIR, etc.)\n  - The archive_item() function at line\
+      \ 1326\n  - The _archive_and_report() function at line 1517\n  - The process_item()\
+      \ function at line 1548, especially:\n    - Lines 1596-1604 (early max-cycles check)\n\
+      \    - Lines 1662-1671 (post-loop max-cycles cleanup)\n\nStep 1: Add a helper function\
+      \ _mark_as_verification_exhausted(item_path: str) -> None\n\nPlace it right before\
+      \ process_item() (around line 1546). This function:\n  - Reads the markdown file at\
+      \ item_path\n  - Replaces '## Status: Open' with '## Status: Archived (verification\
+      \ failed)'\n  - Writes the updated content back\n  - Uses a constant VERIFICATION_EXHAUSTED_STATUS\
+      \ = 'Archived (verification failed)' defined near the other constants at the top of\
+      \ the file\n  - Logs the status change\n  - Wraps in try/except IOError with a warning\
+      \ log (file might not exist in edge cases)\n\nStep 2: Fix the early max-cycles path\
+      \ (lines 1596-1604)\n\nCurrently this code:\n  if remaining_cycles == 0:\n      log(f\"\
+      Max verification cycles ({MAX_VERIFICATION_CYCLES}) already reached \"\n          f\"\
+      ({prior_verifications} prior attempts). Skipping {item.slug}.\")\n      plan_path =\
+      \ f\"{PLANS_DIR}/{item.slug}.yaml\"\n      if os.path.exists(plan_path):\n        \
+      \  os.remove(plan_path)\n          log(f\"Cleaned up stale plan: {plan_path}\")\n \
+      \     return False\n\nChange it to:\n  if remaining_cycles == 0:\n      log(f\"Max\
+      \ verification cycles ({MAX_VERIFICATION_CYCLES}) already reached \"\n          f\"\
+      ({prior_verifications} prior attempts). Archiving {item.slug}.\")\n      plan_path\
+      \ = f\"{PLANS_DIR}/{item.slug}.yaml\"\n      if os.path.exists(plan_path):\n      \
+      \    os.remove(plan_path)\n          log(f\"Cleaned up stale plan: {plan_path}\")\n\
+      \      _mark_as_verification_exhausted(item.path)\n      slack.send_status(\n     \
+      \     f\"*Pipeline: verification exhausted* {item.display_name}\\n\"\n          f\"\
+      Archived after {MAX_VERIFICATION_CYCLES} failed verification cycles.\",\n         \
+      \ level=\"warning\"\n      )\n      _archive_and_report(item, slack, item_start, dry_run)\n\
+      \      return False\n\nStep 3: Fix the post-loop max-cycles path (lines 1662-1671)\n\
+      \nCurrently this code after the for-loop:\n  # Clean up plan YAML after max cycles\
+      \ to prevent re-processing on restart\n  if plan_path and os.path.exists(plan_path):\n\
+      \      os.remove(plan_path)\n      log(f\"Cleaned up plan after max cycles: {plan_path}\"\
+      )\n  log(\"Defect stays in queue with accumulated verification findings.\")\n\n  return\
+      \ False\n\nChange it to:\n  # Clean up plan YAML after max cycles\n  if plan_path\
+      \ and os.path.exists(plan_path):\n      os.remove(plan_path)\n      log(f\"Cleaned\
+      \ up plan after max cycles: {plan_path}\")\n  _mark_as_verification_exhausted(item.path)\n\
+      \  slack.send_status(\n      f\"*Pipeline: verification exhausted* {item.display_name}\\\
+      n\"\n      f\"Archived after {MAX_VERIFICATION_CYCLES} failed verification cycles.\"\
+      ,\n      level=\"warning\"\n  )\n  _archive_and_report(item, slack, item_start, dry_run)\n\
+      \  log(\"Defect archived with accumulated verification findings.\")\n\n  return False\n\
+      \nAfter making changes, verify syntax:\n  python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True)\"\n"
+- id: phase-2
+  name: Phase 2 - Tests
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add unit tests for max-cycle archiving behavior
+    agent: coder
+    depends_on:
+    - '1.1'
+    status: pending
+    description: "Add tests to tests/test_completed_archive.py for the new archiving\
+      \ behavior when max verification cycles are exhausted.\n\nFirst read tests/test_completed_archive.py\
+      \ to understand the existing test patterns (importlib-based module loading, BacklogItem\
+      \ creation, patching COMPLETED_DIRS, etc.).\n\nAlso read the top of scripts/auto-pipeline.py\
+      \ to see the module-level constants, especially VERIFICATION_EXHAUSTED_STATUS.\n\n\
+      Then read the _mark_as_verification_exhausted() function and the two fixed paths in\
+      \ process_item().\n\nAdd these test functions at the end of tests/test_completed_archive.py:\n\
+      \n1. test_mark_as_verification_exhausted_updates_status(tmp_path):\n   - Import _mark_as_verification_exhausted\
+      \ from the module (mod._mark_as_verification_exhausted)\n   - Also import VERIFICATION_EXHAUSTED_STATUS\
+      \ from the module\n   - Create a temp markdown file with content including '## Status:\
+      \ Open'\n   - Call _mark_as_verification_exhausted(str(temp_file))\n   - Read the file\
+      \ back and assert '## Status: Open' is gone\n   - Assert f'## Status: {VERIFICATION_EXHAUSTED_STATUS}'\
+      \ is present\n\n2. test_mark_as_verification_exhausted_handles_missing_file(tmp_path):\n\
+      \   - Call _mark_as_verification_exhausted(str(tmp_path / 'nonexistent.md'))\n   -\
+      \ Assert no exception is raised (function handles IOError gracefully)\n\n3. test_mark_as_verification_exhausted_no_status_line(tmp_path):\n\
+      \   - Create a file without '## Status:' line\n   - Call _mark_as_verification_exhausted()\n\
+      \   - Assert file content is unchanged (nothing to replace)\n\n4. test_process_item_archives_when_max_cycles_reached:\n\
+      \   - This tests the early path (remaining_cycles == 0)\n   - Create a BacklogItem\
+      \ pointing to a temp markdown file with 3 verification entries\n     (so count_verification_attempts\
+      \ returns 3 and remaining_cycles == 0)\n   - The markdown content should include:\n\
+      \     '## Status: Open\\n\\n## Verification Log\\n### Verification #1\\n**Verdict:\
+      \ FAIL**\\n### Verification #2\\n**Verdict: FAIL**\\n### Verification #3\\n**Verdict:\
+      \ FAIL**'\n   - Patch SlackNotifier (mock its __init__, send_status methods)\n   -\
+      \ Patch archive_item to return True\n   - Patch _mark_as_verification_exhausted to\
+      \ track calls\n   - Call process_item(item, dry_run=False)\n   - Assert _mark_as_verification_exhausted\
+      \ was called with the item path\n   - Assert archive_item was called\n   - Assert process_item\
+      \ returned False (item failed verification but was archived)\n\nImport process_item,\
+      \ _mark_as_verification_exhausted, VERIFICATION_EXHAUSTED_STATUS,\ncount_verification_attempts,\
+      \ MAX_VERIFICATION_CYCLES from the module at the top of the file\nwhere other imports\
+      \ are declared.\n\nAfter writing tests, run them:\n  ~/.pyenv/versions/3.11.*/bin/python\
+      \ -m pytest tests/test_completed_archive.py -v\n\nFix any failures immediately.\n"
+- id: phase-3
+  name: Phase 3 - Verification
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Verify syntax and run full test suite
+    agent: code-reviewer
+    depends_on:
+    - '2.1'
+    status: pending
+    description: "Run the following verification steps:\n\n1. Compile-check both main\
+      \ scripts:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\
+      \n\n2. Run the full test suite:\n   python3 -m pytest tests/ 2>/dev/null || echo 'No\
+      \ test suite configured'\n\n3. Verify _mark_as_verification_exhausted exists:\n   grep\
+      \ -n 'def _mark_as_verification_exhausted' scripts/auto-pipeline.py\n   Expected:\
+      \ 1 match.\n\n4. Verify VERIFICATION_EXHAUSTED_STATUS constant exists:\n   grep -n\
+      \ 'VERIFICATION_EXHAUSTED_STATUS' scripts/auto-pipeline.py\n   Expected: at least\
+      \ 3 matches (definition + 2 usages).\n\n5. Verify _archive_and_report is called in\
+      \ max-cycle paths:\n   grep -n '_archive_and_report' scripts/auto-pipeline.py\n  \
+      \ Expected: at least 4 matches (definition + fast-path + 2 new max-cycle calls).\n\
+      \n6. Verify the old 'Defect stays in queue' log message is gone:\n   grep -n 'Defect\
+      \ stays in queue' scripts/auto-pipeline.py\n   Expected: 0 matches (replaced with\
+      \ archiving logic).\n\n7. Verify the new tests exist:\n   grep -n 'def test_mark_as_verification_exhausted\\\
+      |def test_process_item_archives' tests/test_completed_archive.py\n   Expected: at least\
+      \ 3 test functions.\n\nReport findings as PASS/WARN/FAIL.\n"
