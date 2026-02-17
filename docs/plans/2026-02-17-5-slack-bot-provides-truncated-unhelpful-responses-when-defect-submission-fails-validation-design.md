@@ -9,70 +9,68 @@ responses that lack:
 3. Clear classification feedback explaining why the submission was classified
    as a defect vs feature
 
-The confirmation flow is also fragmented: create_backlog_item() sends its own
-notification, and _run_intake_analysis() sends a separate one, creating
-duplicate or confusing messages.
+## Current State
+
+The production code in scripts/plan-orchestrator.py has been fixed:
+
+- _truncate_for_slack() helper added at line 2808, using SLACK_BLOCK_TEXT_MAX_LENGTH = 2900
+- create_backlog_item() now returns a dict with filepath/filename/item_number
+- _run_intake_analysis() now builds comprehensive notifications with item
+  references, classification, and root need
+
+However, 6 unit tests in tests/test_slack_notifier.py are broken because
+their mocks still return strings instead of the new dict return type.
 
 ## Architecture Overview
 
 All changes are in scripts/plan-orchestrator.py within the SlackNotifier class.
+The remaining work is purely in tests/test_slack_notifier.py.
 
 ### Key Files
 
-- scripts/plan-orchestrator.py - All Slack notification and intake logic
-- tests/test_plan_orchestrator.py - Unit tests (may need creation)
+- scripts/plan-orchestrator.py - Production code (already fixed)
+- tests/test_slack_notifier.py - 6 failing tests that need mock updates
 
-### Constants to Add
+### Broken Tests and Required Fixes
 
-- SLACK_BLOCK_TEXT_MAX_LENGTH = 2900 (safe margin below Slack's 3000-char limit)
+#### Group 1: Tests that call create_backlog_item() directly (3 tests)
 
-### Changes
+These tests call the real create_backlog_item() and assert on the string
+return value. They must be updated to use the dict return type:
 
-#### 1. Add _truncate_for_slack() helper method
+1. test_create_backlog_feature (line 1178)
+   - Change: assert on result['filepath'] instead of result directly
+   - Verify: os.path.exists(result['filepath']), 'item_number' key exists
 
-A private method on SlackNotifier that ensures a message string fits within
-Slack Block Kit section text limits. If the message exceeds the limit, it
-truncates with an ellipsis indicator showing how many characters were omitted.
+2. test_create_backlog_defect (line 1242)
+   - Change: assert 'defect-backlog' in result['filepath']
+   - Verify: os.path.exists(result['filepath'])
 
-Location: After _build_status_block() (around line 2800)
+3. test_create_backlog_numbering (line 1294)
+   - Change: os.path.basename(result['filepath']) for filename check
 
-#### 2. Apply truncation in _build_status_block()
+#### Group 2: Tests that mock create_backlog_item() for intake analysis (3 tests)
 
-Call _truncate_for_slack() on the formatted message before including it in the
-Block Kit payload. This is the single chokepoint for all outbound messages,
-so fixing it here prevents truncation issues everywhere.
+These tests provide mock_create that returns a string. The mock must return
+a dict matching the real return type:
 
-#### 3. Update create_backlog_item() to return item metadata
+4. test_intake_analysis_clear_request (line 1892)
+   - Change mock return to: {"filepath": "docs/feature-backlog/1-test.md",
+     "filename": "1-test.md", "item_number": 1}
 
-Change create_backlog_item() to return a dict with filepath, filename, and
-item_number instead of just the filepath string. This lets callers include
-the item number in their notifications.
+5. test_intake_analysis_unstructured_response (line 1954)
+   - Change mock return to: {"filepath": "docs/defect-backlog/1-test.md",
+     "filename": "1-test.md", "item_number": 1}
 
-#### 4. Consolidate notifications in _run_intake_analysis()
-
-Remove the duplicate notification from create_backlog_item() (the one that
-says "Created {item_label} backlog item: {filename}"). Instead, have
-_run_intake_analysis() send a single, comprehensive notification that includes:
-- The item type and classification decision
-- The title
-- The root need (if available)
-- The backlog item filename and number for reference
-
-#### 5. Update INTAKE_ANALYSIS_PROMPT to request classification rationale
-
-Add a "Classification:" field to the prompt so the LLM explains whether
-the submission is truly a defect and why. Parse the result and include it
-in the Slack response.
+6. test_intake_empty_response_creates_fallback (line 2083)
+   - Change mock return to: {"filepath": "docs/feature-backlog/1-test.md",
+     "filename": "1-test.md", "item_number": 1}
 
 ## Design Decisions
 
-- Truncation at _build_status_block level ensures all outbound messages are safe,
-  not just intake notifications. This is the architectural chokepoint.
+- Truncation at _build_block_payload level ensures all outbound messages
+  are safe, not just intake notifications
 - The 2900-char limit provides a 100-char safety margin for the emoji prefix
-  that _build_status_block prepends.
-- The duplicate notification removal means create_backlog_item() becomes a pure
-  data operation that no longer sends Slack messages. The caller is responsible
-  for notification, which is cleaner separation of concerns.
-- Classification rationale is added to the LLM prompt rather than hardcoded
-  rules, because the LLM already classifies during analysis and just needs
-  to be explicit about it.
+- create_backlog_item() returning a dict is cleaner than returning a string
+  and parsing it - callers get structured access to item_number and filename
+- Classification rationale uses LLM analysis rather than hardcoded rules

@@ -1,12 +1,11 @@
 meta:
-  name: 'Defect Fix: Slack Bot Truncated/Unhelpful Responses on Defect Submission'
-  description: 'Fix three issues with Slack bot responses when defects are submitted:
-    (1) Add message truncation to respect Slack Block Kit 3000-char limit, (2) Include
-    backlog item ID and filename in confirmation messages, (3) Add classification
-    rationale so users understand the decision. Also consolidate duplicate notifications
-    between create_backlog_item() and _run_intake_analysis().
-
-    '
+  name: 'Defect Fix: Slack Bot Truncated Responses - Test Alignment'
+  description: >
+    The production code fix for truncated Slack responses is already in place
+    (create_backlog_item returns dict, _truncate_for_slack helper, comprehensive
+    notifications). Six unit tests in tests/test_slack_notifier.py are broken
+    because their mocks/assertions still use the old string return type.
+    This plan updates those tests to match the new API contract.
   plan_doc: docs/plans/2026-02-17-5-slack-bot-provides-truncated-unhelpful-responses-when-defect-submission-fails-validation-design.md
   created: '2026-02-17'
   max_attempts_default: 3
@@ -17,241 +16,108 @@ meta:
     validators:
     - issue-verifier
     max_validation_attempts: 1
+
 sections:
 - id: phase-1
-  name: Phase 1 - Implementation
-  status: completed
-  tasks:
-  - id: '1.1'
-    name: Add _truncate_for_slack() helper and apply in _build_status_block()
-    agent: coder
-    status: completed
-    description: "In scripts/plan-orchestrator.py, make the following changes:\n1.\
-      \ Add a new constant near the other Slack constants (around line 94):\n\n  \
-      \ SLACK_BLOCK_TEXT_MAX_LENGTH = 2900\n\n   This is 100 chars below Slack's 3000-char\
-      \ Block Kit section text limit,\n   leaving room for the emoji prefix added\
-      \ by _build_status_block().\n\n2. Add a new static method after _build_status_block()\
-      \ (around line 2800):\n\n   @staticmethod\n   def _truncate_for_slack(text:\
-      \ str,\n                           max_length: int = SLACK_BLOCK_TEXT_MAX_LENGTH)\
-      \ -> str:\n       \"\"\"Truncate text to fit Slack Block Kit section text limit.\n\
-      \n       If text exceeds max_length, truncates and appends an indicator\n  \
-      \     showing how many characters were omitted.\n\n       Args:\n          \
-      \ text: Message text to truncate\n           max_length: Maximum allowed length\
-      \ (default SLACK_BLOCK_TEXT_MAX_LENGTH)\n\n       Returns:\n           Text\
-      \ that fits within max_length\n       \"\"\"\n       if len(text) <= max_length:\n\
-      \           return text\n       omitted = len(text) - max_length + 40\n    \
-      \   return text[:max_length - 40] + f\"\\n_...({omitted} chars omitted)_\"\n\
-      \n3. In _build_status_block() (around line 2794), apply truncation to the\n\
-      \   combined emoji + message string before inserting into the block:\n\n   Change\
-      \ this line:\n       \"text\": {\"type\": \"mrkdwn\", \"text\": f\"{emoji} {message}\"\
-      }\n   To:\n       full_text = self._truncate_for_slack(f\"{emoji} {message}\"\
-      )\n       ...\n       \"text\": {\"type\": \"mrkdwn\", \"text\": full_text}\n\
-      \n   Restructure the method body so full_text is computed first, then used\n\
-      \   in the return dict.\n\nAfter making changes, verify syntax:\n  python3 -c\
-      \ \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\
-      \n"
-    attempts: 1
-    last_attempt: '2026-02-17T00:52:54.258254'
-    model_used: sonnet
-    completed_at: '2026-02-17T00:55:12.958493'
-    result_message: Added SLACK_BLOCK_TEXT_MAX_LENGTH constant, _truncate_for_slack()
-      helper method, and applied truncation in _build_status_block(). All Slack messages
-      now protected from exceeding Block Kit 3000-char limit.
-  - id: '1.2'
-    name: Update create_backlog_item() to return metadata dict and remove its notification
-    agent: coder
-    depends_on:
-    - '1.1'
-    status: completed
-    description: "In scripts/plan-orchestrator.py, modify create_backlog_item() (line\
-      \ 3211):\n1. Change the return type from str to dict. The method currently returns\n\
-      \   the filepath string on success or empty string on error. Change it to\n\
-      \   return a dict with keys: filepath, filename, item_number on success,\n \
-      \  or an empty dict on error.\n\n   On error paths (line 3230 \"return ''\"\
-      \ and line 3287 \"return ''\"),\n   change to: return {}\n\n   On the success\
-      \ path (line 3285 \"return filepath\"), change to:\n     return {\"filepath\"\
-      : filepath, \"filename\": filename, \"item_number\": next_num}\n\n2. Remove\
-      \ the duplicate Slack notification from create_backlog_item().\n   Delete lines\
-      \ 3280-3284 which send:\n     self.send_status(\n         f\"*Created {item_label}\
-      \ backlog item:* {filename}\",\n         level=\"success\"\n     )\n   The caller\
-      \ (_run_intake_analysis) will handle notifications instead.\n\n3. Update all\
-      \ callers of create_backlog_item() to handle the new dict return:\n\n   In _run_intake_analysis()\
-      \ (lines 3614-3617 and 3647-3650), the return\n   value is currently ignored.\
-      \ Capture it:\n     item_info = self.create_backlog_item(...)\n\n   In the exception\
-      \ handler (lines 3663-3666), same change:\n     item_info = self.create_backlog_item(...)\n\
-      \nAfter making changes, verify syntax:\n  python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
-      \ doraise=True)\"\n"
-    attempts: 2
-    last_attempt: '2026-02-17T01:07:42.306900'
-    model_used: sonnet
-    validation_findings: ''
-    validation_attempts: 1
-    completed_at: '2026-02-17T01:09:00.903631'
-    result_message: Updated all three callers in _run_intake_analysis() to use item_info
-      dict and include filename in notifications
-  - id: '1.3'
-    name: Add classification to intake prompt and parse response
-    agent: coder
-    depends_on:
-    - '1.2'
-    status: completed
-    description: "In scripts/plan-orchestrator.py, make the following changes:\n1.\
-      \ Update INTAKE_ANALYSIS_PROMPT (line 120) to add a Classification field.\n\
-      \   Replace the entire prompt template with:\n\n   INTAKE_ANALYSIS_PROMPT =\
-      \ \"\"\"Analyze this {item_type} request using the 5 Whys method.\n\n   Request:\
-      \ {text}\n\n   Perform a 5 Whys analysis to uncover the root need behind this\
-      \ request.\n   Then write a concise backlog item with a clear title and description.\n\
-      \   Also classify whether this is truly a {item_type} or should be categorized\
-      \ differently.\n\n   Format your response exactly like this:\n\n   Title: <one-line\
-      \ title for the backlog item>\n\n   Classification: <defect|feature|question>\
-      \ - <one sentence explaining why>\n\n   5 Whys:\n   1. <why>\n   2. <why>\n\
-      \   3. <why>\n   4. <why>\n   5. <why>\n\n   Root Need: <the root need uncovered\
-      \ by the analysis>\n\n   Description:\n   <2-4 sentence description of the backlog\
-      \ item, incorporating the root need>\n   Keep it concise and actionable.\"\"\
-      \"\n\n2. Update _parse_intake_response() (line 3549) to extract the Classification\
-      \ field.\n\n   Add to the result dict initialization (line 3561):\n     \"classification\"\
-      : \"\"\n\n   Add parsing after the title extraction (around line 3567):\n  \
-      \   class_match = re.search(r\"^Classification:\\s*(.+)$\", text, re.MULTILINE)\n\
-      \     if class_match:\n         result[\"classification\"] = class_match.group(1).strip()\n\
-      \n3. Update _run_intake_analysis() (around line 3630) to capture and use\n \
-      \  the classification field:\n\n   After the existing line: root_need = parsed[\"\
-      root_need\"]\n   Add: classification = parsed[\"classification\"]\n\nAfter making\
-      \ changes, verify syntax:\n  python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
-      \ doraise=True)\"\n"
-    attempts: 1
-    last_attempt: '2026-02-17T01:09:03.179615'
-    model_used: sonnet
-    completed_at: '2026-02-17T01:11:03.968509'
-    result_message: 'Added classification field to intake analysis: updated INTAKE_ANALYSIS_PROMPT
-      to request classification rationale, added parsing in _parse_intake_response(),
-      and captured classification variable in _run_intake_analysis(). Syntax verified
-      successfully.'
-  - id: '1.4'
-    name: Consolidate intake notifications with item reference and classification
-    agent: coder
-    depends_on:
-    - '1.2'
-    - '1.3'
-    status: completed
-    description: "In scripts/plan-orchestrator.py, update _run_intake_analysis() to\
-      \ send comprehensive, consolidated Slack notifications.\n1. Update the successful\
-      \ analysis path (around line 3652-3656).\n   Replace the existing notification\
-      \ code:\n\n     notify_msg = f\"*{intake.item_type.title()} created:* {title}\"\
-      \n     if root_need:\n         notify_msg += f\"\\n_Root need: {root_need}_\"\
-      \n     self.send_status(notify_msg, level=\"success\", channel_id=intake.channel_id)\n\
-      \n   With a version that includes item reference and classification:\n\n   \
-      \  # Build comprehensive notification\n     item_ref = \"\"\n     if item_info:\n\
-      \         item_ref = f\" (#{item_info['item_number']} - `{item_info['filename']}`)\"\
-      \n     notify_msg = f\"*{intake.item_type.title()} created{item_ref}:* {title}\"\
-      \n     if classification:\n         notify_msg += f\"\\n_Classification: {classification}_\"\
-      \n     if root_need:\n         notify_msg += f\"\\n_Root need: {root_need}_\"\
-      \n     self.send_status(notify_msg, level=\"success\", channel_id=intake.channel_id)\n\
-      \n2. Update the empty LLM response fallback path (around line 3618-3622).\n\
-      \   After self.create_backlog_item(), capture the return:\n\n     item_info\
-      \ = self.create_backlog_item(...)\n     item_ref = \"\"\n     if item_info:\n\
-      \         item_ref = f\" (#{item_info['item_number']} - `{item_info['filename']}`)\"\
-      \n     self.send_status(\n         f\"*{intake.item_type.title()} received{item_ref}:*\
-      \ {fallback_title}\\n\"\n         \"_(Analysis unavailable, created from raw\
-      \ text)_\",\n         level=\"success\", channel_id=intake.channel_id,\n   \
-      \  )\n\n3. Update the exception handler fallback path (around line 3662-3671).\n\
-      \   Same pattern - capture return and include item reference:\n\n     item_info\
-      \ = self.create_backlog_item(...)\n     item_ref = \"\"\n     if item_info:\n\
-      \         item_ref = f\" (#{item_info['item_number']} - `{item_info['filename']}`)\"\
-      \n     self.send_status(\n         f\"*{intake.item_type.title()} received{item_ref}:*\
-      \ {fallback_title}\\n\"\n         f\"_(Error during analysis: {e})_\",\n   \
-      \      level=\"warning\", channel_id=intake.channel_id,\n     )\n\nAfter making\
-      \ changes, verify syntax:\n  python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
-      \ doraise=True)\"\n"
-    attempts: 1
-    last_attempt: '2026-02-17T01:11:07.963517'
-    model_used: sonnet
-    completed_at: '2026-02-17T01:14:07.073448'
-    result_message: Consolidated intake notifications with item reference (#number
-      - filename) and classification display across all three notification paths in
-      _run_intake_analysis()
-- id: phase-2
-  name: Phase 2 - Unit Tests
-  status: completed
-  tasks:
-  - id: '2.1'
-    name: Add unit tests for _truncate_for_slack() and updated intake notification
-      flow
-    agent: coder
-    depends_on:
-    - '1.4'
-    status: completed
-    description: "Create or extend tests for the changes in scripts/plan-orchestrator.py.\n\
-      First check if tests/test_plan_orchestrator.py exists. If not, create it. Import\
-      \ the module using importlib:\n\n  import importlib.util\n  spec = importlib.util.spec_from_file_location(\"\
-      plan_orchestrator\", \"scripts/plan-orchestrator.py\")\n  mod = importlib.util.module_from_spec(spec)\n\
-      \  spec.loader.exec_module(mod)\n  SlackNotifier = mod.SlackNotifier\n  SLACK_BLOCK_TEXT_MAX_LENGTH\
-      \ = mod.SLACK_BLOCK_TEXT_MAX_LENGTH\n\nWrite these tests:\n1. test_truncate_for_slack_short_message:\n\
-      \   - Input: \"Hello world\" (well under limit)\n   - Expected: unchanged output\n\
-      \   - Assert result == \"Hello world\"\n\n2. test_truncate_for_slack_exact_limit:\n\
-      \   - Input: \"x\" * SLACK_BLOCK_TEXT_MAX_LENGTH\n   - Expected: unchanged (exactly\
-      \ at limit, not over)\n   - Assert len(result) == SLACK_BLOCK_TEXT_MAX_LENGTH\n\
-      \n3. test_truncate_for_slack_over_limit:\n   - Input: \"x\" * (SLACK_BLOCK_TEXT_MAX_LENGTH\
-      \ + 500)\n   - Expected: truncated with omission indicator\n   - Assert len(result)\
-      \ <= SLACK_BLOCK_TEXT_MAX_LENGTH\n   - Assert \"chars omitted\" in result\n\n\
-      4. test_truncate_for_slack_custom_limit:\n   - Input: \"x\" * 200, max_length=100\n\
-      \   - Expected: truncated to fit 100 chars\n   - Assert len(result) <= 100\n\
-      \   - Assert \"chars omitted\" in result\n\n5. test_parse_intake_response_with_classification:\n\
-      \   - Call SlackNotifier._parse_intake_response() with a response that\n   \
-      \  includes a Classification: line\n   - Assert result[\"classification\"] is\
-      \ extracted correctly\n\n6. test_parse_intake_response_without_classification:\n\
-      \   - Call _parse_intake_response() with a response missing Classification:\n\
-      \   - Assert result[\"classification\"] == \"\"\n\n7. test_create_backlog_item_returns_dict:\n\
-      \   - This test verifies create_backlog_item returns a dict with the\n     expected\
-      \ keys. Create a minimal SlackNotifier with _enabled=False\n     and call create_backlog_item()\
-      \ for a defect with a test title.\n   - Use a temporary directory or mock os.makedirs\
-      \ and open to avoid\n     creating real files. Alternatively, if the test creates\
-      \ files,\n     clean them up in a finally block.\n   - Assert result has keys:\
-      \ filepath, filename, item_number\n   - Assert result[\"item_number\"] is an\
-      \ int\n\nAfter writing tests, run them:\n  python3 -m pytest tests/test_plan_orchestrator.py\
-      \ -v\n\nFix any failures immediately. If there are more than 3 failures, rewrite\
-      \ the failing tests based on the actual code behavior.\n"
-    attempts: 1
-    last_attempt: '2026-02-17T01:14:10.437054'
-    model_used: sonnet
-    completed_at: '2026-02-17T01:17:37.750455'
-    result_message: Added 10 unit tests for _truncate_for_slack(), _parse_intake_response(),
-      and create_backlog_item(). All tests passing.
-- id: phase-3
-  name: Phase 3 - Verification
+  name: Phase 1 - Fix Unit Tests
   status: pending
   tasks:
-  - id: '3.1'
-    name: Verify syntax and run full test suite
+  - id: '1.1'
+    name: Update create_backlog_item direct-call tests to use dict return type
+    agent: coder
+    status: pending
+    description: >
+      In tests/test_slack_notifier.py, update 3 tests that call create_backlog_item()
+      directly and assert on the string return value. The method now returns a dict
+      with keys: filepath, filename, item_number (or empty dict on error).
+
+
+      1. test_create_backlog_feature (around line 1178):
+         - Line "assert result != ''" -> assert result (truthy dict check)
+         - Line "assert os.path.exists(result)" -> assert os.path.exists(result['filepath'])
+         - Line "filename = os.path.basename(result)" -> filename = os.path.basename(result['filepath'])
+         - Add: assert result['item_number'] == 1
+         - Add: assert result['filename'].startswith("1-")
+         - Lines that read the file: change "open(result" to "open(result['filepath']"
+
+      2. test_create_backlog_defect (around line 1242):
+         - Line "assert result != ''" -> assert result (truthy dict check)
+         - Line "assert 'defect-backlog' in result" -> assert 'defect-backlog' in result['filepath']
+         - Line "assert os.path.exists(result)" -> assert os.path.exists(result['filepath'])
+         - Lines that read the file: change "open(result" to "open(result['filepath']"
+
+      3. test_create_backlog_numbering (around line 1294):
+         - Line "filename = os.path.basename(result)" -> filename = os.path.basename(result['filepath'])
+         - Keep the filename.startswith("16-") assertion unchanged since it uses basename
+
+
+      After making changes, run only these 3 tests to verify:
+        ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_slack_notifier.py::test_create_backlog_feature tests/test_slack_notifier.py::test_create_backlog_defect tests/test_slack_notifier.py::test_create_backlog_numbering -v
+
+  - id: '1.2'
+    name: Update intake analysis mock tests to return dict from create_backlog_item
+    agent: coder
+    status: pending
+    description: >
+      In tests/test_slack_notifier.py, update 3 tests that mock create_backlog_item()
+      for intake analysis. The mocks currently return a string but must return a dict
+      because _run_intake_analysis() now accesses item_info['item_number'] and
+      item_info['filename'] on the result.
+
+
+      1. test_intake_analysis_clear_request (around line 1892):
+         Find the mock_create function that returns "docs/feature-backlog/1-test.md"
+         and change the return to:
+           return {"filepath": "docs/feature-backlog/1-test.md", "filename": "1-test.md", "item_number": 1}
+
+      2. test_intake_analysis_unstructured_response (around line 1954):
+         Find the mock_create function that returns "docs/defect-backlog/1-test.md"
+         and change the return to:
+           return {"filepath": "docs/defect-backlog/1-test.md", "filename": "1-test.md", "item_number": 1}
+
+      3. test_intake_empty_response_creates_fallback (around line 2083):
+         Find the mock_create function that returns "docs/feature-backlog/1-test.md"
+         and change the return to:
+           return {"filepath": "docs/feature-backlog/1-test.md", "filename": "1-test.md", "item_number": 1}
+
+
+      After making changes, run only these 3 tests to verify:
+        python3 -m pytest tests/test_slack_notifier.py::test_intake_analysis_clear_request tests/test_slack_notifier.py::test_intake_analysis_unstructured_response tests/test_slack_notifier.py::test_intake_empty_response_creates_fallback -v
+
+- id: phase-2
+  name: Phase 2 - Verification
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Verify build and full test suite pass
     agent: code-reviewer
     depends_on:
-    - '2.1'
-    status: failed
-    description: "Run the following verification steps:\n1. Compile-check both main\
-      \ scripts:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
-      \ doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\
-      \n\n2. Run the full test suite:\n   python3 -m pytest tests/ 2>/dev/null ||\
-      \ echo 'No test suite configured'\n\n3. Verify SLACK_BLOCK_TEXT_MAX_LENGTH constant\
-      \ exists:\n   grep -n \"SLACK_BLOCK_TEXT_MAX_LENGTH\" scripts/plan-orchestrator.py\n\
-      \   Expected: at least 2 matches (definition + usage).\n\n4. Verify _truncate_for_slack\
-      \ method exists:\n   grep -n \"def _truncate_for_slack\" scripts/plan-orchestrator.py\n\
-      \   Expected: exactly one match.\n\n5. Verify _build_status_block calls _truncate_for_slack:\n\
-      \   grep -A5 \"def _build_status_block\" scripts/plan-orchestrator.py\n   Expected:\
-      \ _truncate_for_slack appears in the method body.\n\n6. Verify create_backlog_item\
-      \ returns dict (no more bare string returns):\n   grep -n \"return filepath\"\
-      \ scripts/plan-orchestrator.py\n   Expected: zero matches (old pattern removed).\n\
-      \   grep -n \"item_number\" scripts/plan-orchestrator.py\n   Expected: matches\
-      \ in both create_backlog_item and _run_intake_analysis.\n\n7. Verify classification\
-      \ parsing exists:\n   grep -n \"classification\" scripts/plan-orchestrator.py\n\
-      \   Expected: matches in _parse_intake_response, INTAKE_ANALYSIS_PROMPT,\n \
-      \  and _run_intake_analysis.\n\n8. Verify create_backlog_item no longer sends\
-      \ its own notification:\n   grep -n \"Created.*backlog item\" scripts/plan-orchestrator.py\n\
-      \   Expected: zero matches (removed the duplicate notification).\n\n9. Verify\
-      \ intake notifications include item reference:\n   grep -n \"item_ref\" scripts/plan-orchestrator.py\n\
-      \   Expected: multiple matches in _run_intake_analysis.\n\nReport findings as\
-      \ PASS/WARN/FAIL for each check.\n"
-    attempts: 3
-    last_attempt: '2026-02-17T01:21:09.849984'
-    model_used: sonnet
-    last_error: 'VERDICT: FAIL - Syntax passes but 6 test failures due to mock implementations
-      not updated to match new create_backlog_item() API contract (returns dict instead
-      of string)'
+    - '1.1'
+    - '1.2'
+    status: pending
+    description: >
+      Run the following verification steps:
+
+
+      1. Compile-check both main scripts:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+      2. Run the full test suite:
+         python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
+
+      3. Verify the 6 previously-failing tests now pass by checking the test output
+         for these specific test names:
+         - test_create_backlog_feature
+         - test_create_backlog_defect
+         - test_create_backlog_numbering
+         - test_intake_analysis_clear_request
+         - test_intake_analysis_unstructured_response
+         - test_intake_empty_response_creates_fallback
+
+      4. Verify the production fix is intact:
+         - grep for _truncate_for_slack in scripts/plan-orchestrator.py (should exist)
+         - grep for SLACK_BLOCK_TEXT_MAX_LENGTH in scripts/plan-orchestrator.py (should be 2900)
+         - grep for "item_info\['item_number'\]" in scripts/plan-orchestrator.py (should have matches in _run_intake_analysis)
+
+
+      Report findings as PASS/WARN/FAIL with specific evidence.
