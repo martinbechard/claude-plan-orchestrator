@@ -551,14 +551,15 @@ class SessionUsageTracker:
                 "name": work_item_name,
                 "cost_usd": cost,
             })
-            log(f"[Usage] {work_item_name}: ${cost:.4f}")
+            log(f"[Usage] {work_item_name}: ~${cost:.4f} (API-equivalent)")
         except (FileNotFoundError, json.JSONDecodeError, ValueError):
             pass  # Report not available, skip silently
 
     def format_session_summary(self) -> str:
         """Format session-level usage summary."""
-        lines = ["\n=== Pipeline Session Usage ==="]
-        lines.append(f"Total cost: ${self.total_cost_usd:.4f}")
+        lines = ["\n=== Pipeline Session Usage (API-Equivalent Estimates) ==="]
+        lines.append("(These are API-equivalent costs reported by Claude CLI, not actual subscription charges)")
+        lines.append(f"Total API-equivalent cost: ${self.total_cost_usd:.4f}")
         lines.append(
             f"Total tokens: {self.total_input_tokens:,} input / "
             f"{self.total_output_tokens:,} output"
@@ -566,7 +567,7 @@ class SessionUsageTracker:
         if self.work_item_costs:
             lines.append("Per work item:")
             for item in self.work_item_costs:
-                lines.append(f"  {item['name']}: ${item['cost_usd']:.4f}")
+                lines.append(f"  {item['name']}: ~${item['cost_usd']:.4f}")
         return "\n".join(lines)
 
     def write_session_report(self) -> Optional[str]:
@@ -1683,10 +1684,11 @@ def main_loop(dry_run: bool = False, once: bool = False,
         log("Interrupted by user. Shutting down...")
     finally:
         # Print and write session usage summary
-        print(session_tracker.format_session_summary())
-        session_report = session_tracker.write_session_report()
-        if session_report:
-            log(f"[Session usage report: {session_report}]")
+        if session_tracker.work_item_costs:
+            print(session_tracker.format_session_summary())
+            session_report = session_tracker.write_session_report()
+            if session_report:
+                log(f"[Session usage report: {session_report}]")
 
         slack.stop_background_polling()
         if not once:
