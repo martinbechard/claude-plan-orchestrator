@@ -1,10 +1,10 @@
 meta:
   name: 'Defect Fix: Enforce Complete 5 Whys Analysis in Intake Pipeline'
   description: 'Add retry logic to _run_intake_analysis() in plan-orchestrator.py
-    so that when the LLM returns fewer than 5 Whys, the system retries once with
-    INTAKE_RETRY_PROMPT before proceeding. The constants and prompt templates already
-    exist from a prior partial fix (Task 1.1). This plan completes the remaining
-    work: wiring up the retry logic, adding unit tests, and verifying the fix.
+    so that when the LLM returns fewer than 5 Whys, the system retries once with INTAKE_RETRY_PROMPT
+    before proceeding. The constants and prompt templates already exist from a prior
+    partial fix (Task 1.1). This plan completes the remaining work: wiring up the
+    retry logic, adding unit tests, and verifying the fix.
 
     Prior verification found: constants REQUIRED_FIVE_WHYS_COUNT, MAX_INTAKE_RETRIES,
     and INTAKE_RETRY_PROMPT are defined but unused. _run_intake_analysis() does not
@@ -24,12 +24,12 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Implementation
-  status: pending
+  status: completed
   tasks:
   - id: '1.1'
     name: Add 5 Whys validation and retry logic to _run_intake_analysis
     agent: coder
-    status: pending
+    status: completed
     description: "In scripts/plan-orchestrator.py, modify the _run_intake_analysis()\
       \ method to validate the 5 Whys count and retry if incomplete.\n\nContext: The\
       \ constants REQUIRED_FIVE_WHYS_COUNT=5, MAX_INTAKE_RETRIES=1, and INTAKE_RETRY_PROMPT\
@@ -47,16 +47,16 @@ sections:
       \            count=len(five_whys),\n            item_type=intake.item_type,\n\
       \            text=intake.original_text,\n            analysis=response_text,\n\
       \        )\n        retry_text = self._call_claude_print(\n            retry_prompt,\
-      \ model=\"sonnet\",\n            timeout=INTAKE_ANALYSIS_TIMEOUT_SECONDS\n  \
-      \      )\n        if retry_text:\n            retry_parsed = self._parse_intake_response(retry_text)\n\
-      \            if len(retry_parsed[\"five_whys\"]) >= len(five_whys):\n       \
-      \         # Retry produced equal or better results\n                parsed =\
-      \ retry_parsed\n                response_text = retry_text\n               \
-      \ title = parsed[\"title\"] or fallback_title\n                root_need = parsed[\"\
-      root_need\"]\n                five_whys = parsed[\"five_whys\"]\n           \
-      \     classification = parsed[\"classification\"]\n                intake.analysis\
-      \ = response_text\n\n    if len(five_whys) < REQUIRED_FIVE_WHYS_COUNT:\n   \
-      \     print(f\"[INTAKE] WARNING: Only {len(five_whys)}/{REQUIRED_FIVE_WHYS_COUNT}\
+      \ model=\"sonnet\",\n            timeout=INTAKE_ANALYSIS_TIMEOUT_SECONDS\n \
+      \       )\n        if retry_text:\n            retry_parsed = self._parse_intake_response(retry_text)\n\
+      \            if len(retry_parsed[\"five_whys\"]) >= len(five_whys):\n      \
+      \          # Retry produced equal or better results\n                parsed\
+      \ = retry_parsed\n                response_text = retry_text\n             \
+      \   title = parsed[\"title\"] or fallback_title\n                root_need =\
+      \ parsed[\"root_need\"]\n                five_whys = parsed[\"five_whys\"]\n\
+      \                classification = parsed[\"classification\"]\n             \
+      \   intake.analysis = response_text\n\n    if len(five_whys) < REQUIRED_FIVE_WHYS_COUNT:\n\
+      \        print(f\"[INTAKE] WARNING: Only {len(five_whys)}/{REQUIRED_FIVE_WHYS_COUNT}\
       \ Whys in final analysis\")\n\n    # Build description: use parsed description,\
       \ or the full LLM\n    # response as-is if no structured description was found\n\
       \    description = parsed[\"description\"] or response_text\n\nIMPORTANT: Remove\
@@ -65,6 +65,13 @@ sections:
       \ assignment moves to after the retry block.\n\nAfter making changes, verify\
       \ syntax:\n  python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
       \ doraise=True)\"\n"
+    attempts: 1
+    last_attempt: '2026-02-17T11:46:50.547188'
+    model_used: sonnet
+    completed_at: '2026-02-17T11:49:04.346819'
+    result_message: Added 5 Whys validation and retry logic to _run_intake_analysis
+      method. Validates count after parsing, retries with INTAKE_RETRY_PROMPT if incomplete,
+      and logs warning if final count is below 5.
 - id: phase-2
   name: Phase 2 - Tests
   status: pending
@@ -97,8 +104,8 @@ sections:
       \   Assert _call_claude_print was called twice.\n   Assert create_backlog_item\
       \ was still called (graceful degradation).\n\n4. test_intake_retry_uses_better_result:\n\
       \   Mock _call_claude_print: first returns 2 Whys, retry returns 4 Whys.\n \
-      \  Call _run_intake_analysis.\n   Assert _call_claude_print called twice.\n \
-      \  Check the description passed to create_backlog_item contains 4 Why items\
+      \  Call _run_intake_analysis.\n   Assert _call_claude_print called twice.\n\
+      \   Check the description passed to create_backlog_item contains 4 Why items\
       \ (the retry result was used since 4 >= 2).\n\nHelper: create a function that\
       \ builds a valid LLM response string with a given number of Whys:\n\n  def build_intake_response(num_whys=5,\
       \ title=\"Test Title\"):\n      whys = \"\\n\".join(f\"{i+1}. Why {i+1} goes\
