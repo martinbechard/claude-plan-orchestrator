@@ -75,12 +75,12 @@ sections:
       working with orchestrator- prefix)'
 - id: phase-2
   name: Phase 2 - Archive Duplicate
-  status: pending
+  status: completed
   tasks:
   - id: '2.1'
     name: Archive duplicate backlog item
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.1'
     description: "Move the duplicate backlog item to completed-backlog.\nSteps:\n\
@@ -97,3 +97,10 @@ sections:
       \       content = f.read()\n   assert 'Duplicate' in content, 'Missing duplicate\
       \ note in file'\n   print('Backlog item archived as duplicate')\n   \"\n\nFiles:\
       \ docs/feature-backlog/2-i-want-to-be-able-to-use-separate-slack-channels-depending-on-the-project-by-de.md\n"
+    attempts: 2
+    last_attempt: '2026-02-17T00:14:41.895202'
+    model_used: sonnet
+    completed_at: '2026-02-17T00:16:11.493594'
+    result_message: 'Archived duplicate backlog item #2. File moved to docs/completed-backlog/features/
+      with status updated to ''Closed (Duplicate)'' and note explaining it''s a duplicate
+      of item #1. Work was already completed in previous attempt.'
