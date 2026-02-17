@@ -168,6 +168,20 @@ QA_AUDITOR_KEYWORDS = [
     "qa-auditor", "functional spec verification"
 ]
 
+# Keywords indicating a spec verification task.
+# When infer_agent_for_task() matches any of these, it selects "spec-verifier".
+SPEC_VERIFIER_KEYWORDS = [
+    "spec verifier", "spec verification", "functional spec",
+    "spec-verifier", "spec compliance"
+]
+
+# Keywords indicating a UX review task.
+# When infer_agent_for_task() matches any of these, it selects "ux-reviewer".
+UX_REVIEWER_KEYWORDS = [
+    "ux review", "ux-reviewer", "usability review",
+    "accessibility review", "ui quality"
+]
+
 # Regex patterns for parsing validation verdicts from validator agent output.
 # Matches structured output like: **Verdict: PASS**
 VERDICT_PATTERN = re.compile(
@@ -184,13 +198,17 @@ def infer_agent_for_task(task: dict) -> Optional[str]:
     """Infer which agent should execute a task based on name and description keywords.
 
     Combines the task name and description, then scans for keywords in priority order:
-    1. REVIEWER_KEYWORDS -> "code-reviewer"
-    2. PLANNER_KEYWORDS (multi-word phrases, checked before single-word designer
-       keywords to avoid false matches on words like "design") -> "planner"
-    3. QA_AUDITOR_KEYWORDS (multi-word phrases, checked before single-word designer
-       keywords to avoid false matches) -> "qa-auditor"
-    4. DESIGNER_KEYWORDS -> "systems-designer"
-    5. Default -> "coder"
+    1. PLANNER_KEYWORDS (multi-word phrases, checked before single-word keywords
+       to avoid false matches on words like "design") -> "planner"
+    2. QA_AUDITOR_KEYWORDS (multi-word phrases, checked before single-word keywords
+       to avoid false matches) -> "qa-auditor"
+    3. SPEC_VERIFIER_KEYWORDS (multi-word phrases, checked before REVIEWER_KEYWORDS
+       to avoid false matches on "verification") -> "spec-verifier"
+    4. UX_REVIEWER_KEYWORDS (multi-word phrases, checked before REVIEWER_KEYWORDS
+       to avoid false matches on "review") -> "ux-reviewer"
+    5. REVIEWER_KEYWORDS -> "code-reviewer"
+    6. DESIGNER_KEYWORDS -> "systems-designer"
+    7. Default -> "coder"
 
     Returns None if the agents directory (AGENTS_DIR) does not exist, which
     preserves backward compatibility for projects that have not adopted agents.
@@ -200,10 +218,6 @@ def infer_agent_for_task(task: dict) -> Optional[str]:
 
     text = (task.get("name", "") + " " + task.get("description", "")).lower()
 
-    for keyword in REVIEWER_KEYWORDS:
-        if keyword in text:
-            return "code-reviewer"
-
     for keyword in PLANNER_KEYWORDS:
         if keyword in text:
             return "planner"
@@ -211,6 +225,18 @@ def infer_agent_for_task(task: dict) -> Optional[str]:
     for keyword in QA_AUDITOR_KEYWORDS:
         if keyword in text:
             return "qa-auditor"
+
+    for keyword in SPEC_VERIFIER_KEYWORDS:
+        if keyword in text:
+            return "spec-verifier"
+
+    for keyword in UX_REVIEWER_KEYWORDS:
+        if keyword in text:
+            return "ux-reviewer"
+
+    for keyword in REVIEWER_KEYWORDS:
+        if keyword in text:
+            return "code-reviewer"
 
     for keyword in DESIGNER_KEYWORDS:
         if keyword in text:
