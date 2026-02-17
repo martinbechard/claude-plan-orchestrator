@@ -1517,11 +1517,22 @@ def process_item(
         if verified:
             # Phase 4: Archive
             log("Phase 4: Archiving...")
-            archive_item(item, dry_run)
+            archived = archive_item(item, dry_run)
 
             elapsed = time.time() - item_start
             minutes = int(elapsed // 60)
             seconds = int(elapsed % 60)
+
+            if not archived:
+                log(f"WARNING: Archive failed for {item.display_name} - "
+                    "item will not be retried this session")
+                slack.send_status(
+                    f"*Pipeline: archive failed* {item.display_name}\n"
+                    "Item completed but could not be moved to completed-backlog.",
+                    level="warning"
+                )
+                return False
+
             log(f"Item complete: {item.display_name} ({minutes}m {seconds}s)")
             slack.send_status(
                 f"*Pipeline: completed* {item.display_name}\n"
