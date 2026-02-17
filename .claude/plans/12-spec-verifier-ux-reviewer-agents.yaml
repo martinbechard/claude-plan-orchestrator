@@ -1,0 +1,451 @@
+meta:
+  name: Spec Verifier and UX Reviewer Agents
+  description: >
+    Create two missing validator agents: spec-verifier (checks code against
+    functional specifications) and ux-reviewer (evaluates UI quality and
+    usability). Both are read-only validators producing PASS/WARN/FAIL verdicts.
+    Add SPEC_VERIFIER_KEYWORDS and UX_REVIEWER_KEYWORDS to plan-orchestrator.py
+    for automatic agent inference. Write integration tests. Both agents integrate
+    with the existing validation pipeline as additional validators.
+  plan_doc: docs/plans/2026-02-16-12-spec-verifier-ux-reviewer-agents-design.md
+  created: '2026-02-16'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+      - coder
+    validators:
+      - validator
+    max_validation_attempts: 1
+sections:
+  - id: phase-1
+    name: Phase 1 - Agent Definitions
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: Create spec-verifier agent definition
+        agent: coder
+        status: pending
+        description: >
+          Create the spec-verifier agent definition file.
+
+          Reference: docs/plans/2026-02-16-12-spec-verifier-ux-reviewer-agents-design.md
+
+          Steps:
+
+          1. Create .claude/agents/spec-verifier.md with YAML frontmatter and agent body.
+
+          The frontmatter must be:
+            ---
+            name: spec-verifier
+            description: >
+              Functional specification verifier. Use after UI changes to validate that
+              component placement, data display, and user workflow match the spec.
+              Read-only: does not modify code.
+            tools:
+              - Read
+              - Grep
+              - Glob
+            model: sonnet
+            ---
+
+          The body must describe:
+
+          a. Role: You are a functional specification verifier. Your job is to
+             independently verify that code changes match the project functional
+             specifications. You do NOT fix issues - you only inspect, compare, and
+             report findings.
+
+          b. Before Verifying section: Read the functional spec for every page
+             affected by the changes. Read the relevant domain checklists from
+             .claude/checklists/ (especially crud-operations.md for CRUD features).
+             Read the implemented source files.
+
+          c. Verification Checklist section with these checks:
+             - For each UI component added or moved:
+               - Does it appear on the correct page per the spec?
+               - Is it in the correct section/position within the page?
+               - Does it match the workflow described in the spec?
+             - For each data display:
+               - Is real data shown when available?
+               - When data is unavailable, does it show an appropriate empty state?
+               - Is there any fallback to data from a different source? (FAIL if yes)
+             - For CRUD operations (reference .claude/checklists/crud-operations.md):
+               - Do create and edit use the same form/modal?
+               - Is data properly saved and reloaded?
+               - Can the user cancel without saving?
+               - Are mandatory field validations present?
+             - For removed components: was removal explicitly requested?
+
+          d. Output Format section: Must produce standard verdict format:
+             **Verdict: PASS** or **Verdict: WARN** or **Verdict: FAIL**
+             Followed by **Findings:** with - [PASS|WARN|FAIL] items and file:line refs.
+             Followed by **Evidence:** with spec references and code references.
+
+          e. Verdict Rules:
+             PASS: All spec requirements are implemented correctly.
+             WARN: Minor deviations found (positioning, styling) but core functionality matches.
+             FAIL: Components on wrong page, data from wrong source, missing required
+             functionality, or removed components without explicit request.
+
+          f. Constraints: Read-only agent. Only use Read, Grep, and Glob to inspect
+             the codebase. Do not modify source files.
+
+          g. Output Protocol: Write .claude/plans/task-status.json when done
+             (same format as other validators).
+
+          2. Verify the file loads correctly:
+             python3 -c "
+             import importlib.util
+             spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+             mod = importlib.util.module_from_spec(spec)
+             spec.loader.exec_module(mod)
+             agent = mod.load_agent_definition('spec-verifier')
+             assert agent is not None, 'spec-verifier agent not found'
+             assert agent['name'] == 'spec-verifier', f'Wrong name: {agent[\"name\"]}'
+             assert agent['model'] == 'sonnet', f'Wrong model: {agent[\"model\"]}'
+             assert 'Read' in agent['tools'], 'Missing Read tool'
+             assert 'Grep' in agent['tools'], 'Missing Grep tool'
+             assert 'Glob' in agent['tools'], 'Missing Glob tool'
+             assert 'Bash' not in agent['tools'], 'spec-verifier should not have Bash'
+             print(f'spec-verifier agent loaded: {agent[\"name\"]}, model={agent[\"model\"]}')
+             "
+
+          Files: .claude/agents/spec-verifier.md
+      - id: '1.2'
+        name: Create ux-reviewer agent definition
+        agent: coder
+        parallel_group: agent-definitions
+        status: pending
+        description: >
+          Create the ux-reviewer agent definition file.
+
+          Reference: docs/plans/2026-02-16-12-spec-verifier-ux-reviewer-agents-design.md
+
+          Steps:
+
+          1. Create .claude/agents/ux-reviewer.md with YAML frontmatter and agent body.
+
+          The frontmatter must be:
+            ---
+            name: ux-reviewer
+            description: >
+              UX/UI quality reviewer. Use after UI changes to evaluate design quality,
+              accessibility, and usability. Read-only: does not modify code.
+              Distinct from ux-designer which generates designs.
+            tools:
+              - Read
+              - Grep
+              - Glob
+            model: sonnet
+            ---
+
+          The body must describe:
+
+          a. Role: You are a UX/UI quality reviewer. Your job is to independently
+             evaluate implemented UI code for design quality, accessibility, and
+             usability. You do NOT fix issues or generate designs - you only inspect
+             and report findings.
+
+          b. Before Reviewing section: Read the implemented source files for all
+             UI components modified. Read existing UI components to understand the
+             project design system and component library. Read the design document
+             referenced in the task (if any).
+
+          c. Review Checklist section with these checks:
+             - Responsive layout: components work on mobile and desktop viewports
+             - Accessibility: ARIA labels on interactive elements, keyboard
+               navigation, sufficient color contrast, screen reader compatibility
+             - State coverage: loading states, error states, empty states all handled
+             - Visual hierarchy: information density is appropriate, primary actions
+               are visually prominent
+             - Interaction patterns: hover states, focus indicators, click targets
+               are large enough for touch
+             - Consistency: uses project component library, follows existing patterns
+             - Feedback: uses centralized notification/toast system, not inline ad-hoc divs
+
+          d. Output Format section: Must produce standard verdict format:
+             **Verdict: PASS** or **Verdict: WARN** or **Verdict: FAIL**
+             Followed by **Findings:** with - [PASS|WARN|FAIL] items and file:line refs.
+             Followed by **Evidence:** with code references.
+             Followed by **Quality Score:** with scores for:
+             - Clarity: X/10
+             - Consistency: X/10
+             - Accessibility: X/10
+             - Implementation Feasibility: X/10
+
+          e. Verdict Rules:
+             PASS: All usability checks pass. Quality scores average 7 or above.
+             WARN: Minor issues found (missing hover states, suboptimal layout) but
+             no accessibility violations. Quality scores average 5-7.
+             FAIL: Accessibility violations, missing loading/error/empty states, or
+             components that do not work on mobile. Quality scores average below 5.
+
+          f. Constraints: Read-only agent. Only use Read, Grep, and Glob to inspect
+             the codebase. Do not modify source files. You are distinct from
+             ux-designer which generates designs in Phase 0.
+
+          g. Output Protocol: Write .claude/plans/task-status.json when done
+             (same format as other validators).
+
+          2. Verify the file loads correctly:
+             python3 -c "
+             import importlib.util
+             spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+             mod = importlib.util.module_from_spec(spec)
+             spec.loader.exec_module(mod)
+             agent = mod.load_agent_definition('ux-reviewer')
+             assert agent is not None, 'ux-reviewer agent not found'
+             assert agent['name'] == 'ux-reviewer', f'Wrong name: {agent[\"name\"]}'
+             assert agent['model'] == 'sonnet', f'Wrong model: {agent[\"model\"]}'
+             assert 'Read' in agent['tools'], 'Missing Read tool'
+             assert 'Bash' not in agent['tools'], 'ux-reviewer should not have Bash'
+             print(f'ux-reviewer agent loaded: {agent[\"name\"]}, model={agent[\"model\"]}')
+             "
+
+          Files: .claude/agents/ux-reviewer.md
+  - id: phase-2
+    name: Phase 2 - Orchestrator Integration
+    status: pending
+    tasks:
+      - id: '2.1'
+        name: Add SPEC_VERIFIER_KEYWORDS and UX_REVIEWER_KEYWORDS to infer_agent_for_task
+        agent: coder
+        status: pending
+        depends_on:
+          - '1.1'
+          - '1.2'
+        description: >
+          In scripts/plan-orchestrator.py, add two new keyword constants for
+          automatic agent inference so tasks with spec/ux keywords auto-select
+          the correct agent.
+
+          Reference: docs/plans/2026-02-16-12-spec-verifier-ux-reviewer-agents-design.md
+
+          Steps:
+
+          1. Read scripts/plan-orchestrator.py and find the existing keyword
+             constants: REVIEWER_KEYWORDS, PLANNER_KEYWORDS, QA_AUDITOR_KEYWORDS,
+             DESIGNER_KEYWORDS (around lines 144-169).
+
+          2. Add two new constants after QA_AUDITOR_KEYWORDS:
+
+             # Keywords indicating a spec verification task.
+             # When infer_agent_for_task() matches any of these, it selects "spec-verifier".
+             SPEC_VERIFIER_KEYWORDS = [
+                 "spec verifier", "spec verification", "functional spec",
+                 "spec-verifier", "spec compliance"
+             ]
+
+             # Keywords indicating a UX review task.
+             # When infer_agent_for_task() matches any of these, it selects "ux-reviewer".
+             UX_REVIEWER_KEYWORDS = [
+                 "ux review", "ux-reviewer", "usability review",
+                 "accessibility review", "ui quality"
+             ]
+
+          3. In the infer_agent_for_task() function, add two new checks.
+             These must go AFTER the QA_AUDITOR_KEYWORDS check and BEFORE the
+             DESIGNER_KEYWORDS check. The spec-verifier and ux-reviewer keywords
+             are multi-word phrases so they should be checked before single-word
+             designer keywords to avoid false positives:
+
+             for keyword in SPEC_VERIFIER_KEYWORDS:
+                 if keyword in text:
+                     return "spec-verifier"
+
+             for keyword in UX_REVIEWER_KEYWORDS:
+                 if keyword in text:
+                     return "ux-reviewer"
+
+          4. Update the docstring of infer_agent_for_task() to include the new
+             steps in the priority order list:
+             1. REVIEWER_KEYWORDS -> "code-reviewer"
+             2. PLANNER_KEYWORDS -> "planner"
+             3. QA_AUDITOR_KEYWORDS -> "qa-auditor"
+             4. SPEC_VERIFIER_KEYWORDS -> "spec-verifier"
+             5. UX_REVIEWER_KEYWORDS -> "ux-reviewer"
+             6. DESIGNER_KEYWORDS -> "systems-designer"
+             7. Default -> "coder"
+
+          5. Verify syntax:
+             python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+          6. Verify the inference works:
+             python3 -c "
+             import importlib.util
+             spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+             mod = importlib.util.module_from_spec(spec)
+             spec.loader.exec_module(mod)
+             task1 = {'name': 'Spec verification', 'description': 'Run spec verifier on the feature'}
+             result1 = mod.infer_agent_for_task(task1)
+             assert result1 == 'spec-verifier', f'Expected spec-verifier, got {result1}'
+             task2 = {'name': 'UX review', 'description': 'Run ux review on the component'}
+             result2 = mod.infer_agent_for_task(task2)
+             assert result2 == 'ux-reviewer', f'Expected ux-reviewer, got {result2}'
+             print(f'Inference tests passed: {result1}, {result2}')
+             "
+
+          Files: scripts/plan-orchestrator.py
+  - id: phase-3
+    name: Phase 3 - Unit Tests
+    status: pending
+    tasks:
+      - id: '3.1'
+        name: Write unit tests for spec-verifier and ux-reviewer integration
+        agent: coder
+        status: pending
+        depends_on:
+          - '2.1'
+        description: >
+          Create tests/test_spec_verifier_ux_reviewer.py with unit tests verifying
+          that both agent definitions load correctly, keyword inference works, and
+          both agents integrate with ValidationConfig.
+
+          Reference: docs/plans/2026-02-16-12-spec-verifier-ux-reviewer-agents-design.md
+
+          Steps:
+
+          1. Create tests/test_spec_verifier_ux_reviewer.py with these test cases:
+
+             a. test_spec_verifier_agent_loads: Load the spec-verifier agent using
+                load_agent_definition("spec-verifier"). Assert it returns non-None.
+                Assert name == "spec-verifier", model == "sonnet". Assert "Read",
+                "Grep", "Glob" are in tools. Assert "Bash" is NOT in tools.
+
+             b. test_spec_verifier_agent_body_has_sections: Load the agent and check
+                that the body contains key sections: "Verification Checklist",
+                "Output Format", "Verdict", "Constraints".
+
+             c. test_spec_verifier_references_crud_checklist: Load the agent and
+                verify the body references ".claude/checklists/crud-operations.md"
+                to confirm it reuses existing domain knowledge.
+
+             d. test_ux_reviewer_agent_loads: Load the ux-reviewer agent using
+                load_agent_definition("ux-reviewer"). Assert it returns non-None.
+                Assert name == "ux-reviewer", model == "sonnet". Assert "Read",
+                "Grep", "Glob" are in tools. Assert "Bash" is NOT in tools.
+
+             e. test_ux_reviewer_agent_body_has_sections: Load the agent and check
+                that the body contains key sections: "Review Checklist",
+                "Output Format", "Verdict", "Quality Score", "Constraints".
+
+             f. test_ux_reviewer_distinct_from_ux_designer: Load both ux-reviewer
+                and ux-designer agents. Assert they have different names. Assert
+                ux-reviewer model is "sonnet" and ux-designer model is "opus".
+
+             g. test_infer_agent_for_spec_verification_task: Call infer_agent_for_task
+                with a task containing "spec verification" in description. Assert
+                returns "spec-verifier".
+
+             h. test_infer_agent_for_functional_spec_task: Call infer_agent_for_task
+                with a task containing "functional spec" in description. Assert
+                returns "spec-verifier".
+
+             i. test_infer_agent_for_ux_review_task: Call infer_agent_for_task with
+                a task containing "ux review" in description. Assert returns
+                "ux-reviewer".
+
+             j. test_infer_agent_for_accessibility_review_task: Call
+                infer_agent_for_task with a task containing "accessibility review".
+                Assert returns "ux-reviewer".
+
+             k. test_infer_agent_non_spec_ux_task: Call infer_agent_for_task with
+                a task containing "implement the feature". Assert does NOT return
+                "spec-verifier" or "ux-reviewer" (should return "coder").
+
+             l. test_validators_list_accepts_new_agents: Create a ValidationConfig
+                with validators=["code-reviewer", "spec-verifier", "ux-reviewer"].
+                Assert "spec-verifier" and "ux-reviewer" are in validators.
+
+          2. Import using importlib (same pattern as test_qa_auditor_integration.py):
+             import importlib.util
+             spec = importlib.util.spec_from_file_location(
+                 "plan_orchestrator", "scripts/plan-orchestrator.py")
+             mod = importlib.util.module_from_spec(spec)
+             spec.loader.exec_module(mod)
+             load_agent_definition = mod.load_agent_definition
+             infer_agent_for_task = mod.infer_agent_for_task
+             ValidationConfig = mod.ValidationConfig
+
+          3. Run: python3 -m pytest tests/test_spec_verifier_ux_reviewer.py -v
+             Fix any failures.
+
+          Files: tests/test_spec_verifier_ux_reviewer.py
+  - id: phase-4
+    name: Phase 4 - Verification
+    status: pending
+    tasks:
+      - id: '4.1'
+        name: Verify syntax, tests, and dry-run
+        agent: code-reviewer
+        status: pending
+        depends_on:
+          - '3.1'
+        description: >
+          Run verification checks to confirm the spec-verifier and ux-reviewer
+          agents feature works correctly.
+
+          Steps:
+
+          1. Check Python syntax for both scripts:
+             python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+          2. Run unit tests:
+             python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
+
+          3. Verify both new agents load with correct metadata:
+             python3 -c "
+             import importlib.util
+             spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+             mod = importlib.util.module_from_spec(spec)
+             spec.loader.exec_module(mod)
+             for name in ['spec-verifier', 'ux-reviewer']:
+                 agent = mod.load_agent_definition(name)
+                 assert agent is not None, f'{name} not found'
+                 assert agent['name'] == name, f'Wrong name for {name}'
+                 assert agent['model'] == 'sonnet', f'Wrong model for {name}'
+                 assert 'Bash' not in agent['tools'], f'{name} should not have Bash'
+                 print(f'{name} agent verified: model={agent[\"model\"]}, tools={agent[\"tools\"]}')
+             print('Both agents verified')
+             "
+
+          4. Verify SPEC_VERIFIER_KEYWORDS and UX_REVIEWER_KEYWORDS exist:
+             python3 -c "
+             import importlib.util
+             spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+             mod = importlib.util.module_from_spec(spec)
+             spec.loader.exec_module(mod)
+             assert hasattr(mod, 'SPEC_VERIFIER_KEYWORDS'), 'SPEC_VERIFIER_KEYWORDS not found'
+             assert len(mod.SPEC_VERIFIER_KEYWORDS) >= 4, f'Too few spec keywords: {len(mod.SPEC_VERIFIER_KEYWORDS)}'
+             assert hasattr(mod, 'UX_REVIEWER_KEYWORDS'), 'UX_REVIEWER_KEYWORDS not found'
+             assert len(mod.UX_REVIEWER_KEYWORDS) >= 4, f'Too few ux keywords: {len(mod.UX_REVIEWER_KEYWORDS)}'
+             print(f'SPEC_VERIFIER_KEYWORDS: {mod.SPEC_VERIFIER_KEYWORDS}')
+             print(f'UX_REVIEWER_KEYWORDS: {mod.UX_REVIEWER_KEYWORDS}')
+             "
+
+          5. Verify infer_agent_for_task returns correct agents:
+             python3 -c "
+             import importlib.util
+             spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+             mod = importlib.util.module_from_spec(spec)
+             spec.loader.exec_module(mod)
+             tests = [
+                 ({'name': 'Spec verification', 'description': 'Run spec verifier'}, 'spec-verifier'),
+                 ({'name': 'UX review', 'description': 'Run ux review'}, 'ux-reviewer'),
+                 ({'name': 'Implement feature', 'description': 'Build the feature'}, 'coder'),
+             ]
+             for task, expected in tests:
+                 result = mod.infer_agent_for_task(task)
+                 assert result == expected, f'Expected {expected}, got {result} for {task[\"name\"]}'
+                 print(f'PASS: {task[\"name\"]} -> {result}')
+             print('All inference tests passed')
+             "
+
+          6. Run orchestrator dry-run to verify no startup errors:
+             python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
+
+          If any check fails, report the failure with specific details.
+
+          Files: scripts/plan-orchestrator.py, .claude/agents/spec-verifier.md,
+                 .claude/agents/ux-reviewer.md, tests/test_spec_verifier_ux_reviewer.py
