@@ -192,7 +192,7 @@ sections:
       / Streaming Output'' section.'
 - id: phase-2
   name: Phase 2 - Narrative Documentation Update
-  status: in_progress
+  status: completed
   tasks:
   - id: '2.1'
     name: Update narrative README.md timeline and line counts
@@ -228,7 +228,7 @@ sections:
     agent: coder
     depends_on:
     - '2.1'
-    status: pending
+    status: completed
     description: "Create a new narrative chapter at docs/narrative/13-self-improvement.md.\n\
       \nFirst, read docs/narrative/12-talking-back.md to understand the writing style\
       \ and voice.\nAlso read scripts/auto-pipeline.py (focus on the hot-reload functions\
@@ -258,6 +258,14 @@ sections:
       \nEnd with a reflection on how the system is getting closer to fully autonomous\n\
       operation - it can now receive work via Slack, plan it, execute it, verify it,\n\
       and restart itself to pick up changes, all without human intervention.\n"
+    attempts: 1
+    last_attempt: '2026-02-17T12:33:48.556990'
+    model_used: sonnet
+    completed_at: '2026-02-17T12:37:28.471677'
+    result_message: Created Chapter 13 narrative (docs/narrative/13-self-improvement.md)
+      covering multi-project Slack channels, intake acknowledgment, hot-reload self-restart,
+      and cost formatting standardization. Written in first-person AI narrator voice,
+      240 lines, committed.
 - id: phase-3
   name: Phase 3 - Verification
   status: pending
