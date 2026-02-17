@@ -118,11 +118,15 @@ Answer:"""
 QUESTION_ANSWER_TIMEOUT_SECONDS = 60  # 1 minute for question answering
 
 # Intake analysis configuration
+REQUIRED_FIVE_WHYS_COUNT = 5
+MAX_INTAKE_RETRIES = 1
+
 INTAKE_ANALYSIS_PROMPT = """Analyze this {item_type} request using the 5 Whys method.
 
 Request: {text}
 
 Perform a 5 Whys analysis to uncover the root need behind this request.
+IMPORTANT: You MUST provide exactly 5 numbered "Why" questions and answers. Do not stop at fewer than 5. Each Why should dig deeper into the root cause of the previous answer.
 Then write a concise backlog item with a clear title and description.
 Also classify whether this is truly a {item_type} or should be categorized differently.
 
@@ -162,6 +166,34 @@ Root Need: <the root need, refined with the new information>
 
 Description:
 <2-4 sentence description incorporating the answers and root need>"""
+
+INTAKE_RETRY_PROMPT = """Your previous 5 Whys analysis was incomplete - you only provided {count} out of 5 required Whys.
+
+Original {item_type} request: {text}
+
+Your previous analysis:
+{analysis}
+
+Please redo the analysis with EXACTLY 5 numbered Whys. Each Why must dig deeper into the previous answer to uncover the true root cause.
+
+Format your response exactly like this:
+
+Title: <one-line title for the backlog item>
+
+Classification: <defect|feature|question> - <one sentence explaining why>
+
+5 Whys:
+1. <why>
+2. <why>
+3. <why>
+4. <why>
+5. <why>
+
+Root Need: <the root need uncovered by the analysis>
+
+Description:
+<2-4 sentence description of the backlog item, incorporating the root need>
+Keep it concise and actionable."""
 
 INTAKE_ANALYSIS_TIMEOUT_SECONDS = 120  # 2 minutes for intake LLM call
 
