@@ -73,7 +73,9 @@ DEFAULT_STARTING_MODEL = "sonnet"
 SLACK_CONFIG_PATH = ".claude/slack.local.yaml"
 SLACK_QUESTION_PATH = ".claude/slack-pending-question.json"
 SLACK_ANSWER_PATH = ".claude/slack-answer.json"
-SLACK_POLL_INTERVAL_SECONDS = 30
+SLACK_POLL_INTERVAL_MIN_SECONDS = 5
+SLACK_POLL_INTERVAL_MAX_SECONDS = 60
+SLACK_POLL_BACKOFF_FACTOR = 1.5  # Multiply interval after each empty poll
 SLACK_LEVEL_EMOJI = {
     "info": ":large_blue_circle:",
     "success": ":white_check_mark:",
@@ -83,6 +85,84 @@ SLACK_LEVEL_EMOJI = {
 }
 SLACK_LAST_READ_PATH = ".claude/slack-last-read.json"
 SLACK_INBOUND_POLL_LIMIT = 20
+SLACK_CHANNEL_PREFIX = "orchestrator-"
+SLACK_CHANNEL_ROLE_SUFFIXES = {
+    "features": "feature",
+    "defects": "defect",
+    "questions": "question",
+    "notifications": "control",
+}
+SLACK_CHANNEL_CACHE_SECONDS = 300
+
+# Question-answering prompt for LLM-powered responses
+QUESTION_ANSWER_PROMPT = """You are an AI pipeline orchestrator answering a human's question via Slack.
+
+Here is the current pipeline state:
+
+{state_context}
+
+Important context:
+- The human runs you via Claude Code on a Max subscription, NOT the direct API.
+- The "total_cost_usd" in session logs is an API-equivalent estimate reported by
+  Claude CLI. It does NOT represent actual charges for subscription users. If asked
+  about costs, explain this clearly.
+- Keep your answer concise (2-6 lines) and conversational. Use Slack mrkdwn formatting
+  (*bold*, _italic_) sparingly.
+- Only include information relevant to the question. Do not dump all available data.
+- If you genuinely cannot answer from the available state, say so honestly.
+
+Human's question: {question}
+
+Answer:"""
+
+QUESTION_ANSWER_TIMEOUT_SECONDS = 60  # 1 minute for question answering
+
+# Intake analysis configuration
+INTAKE_ANSWER_TIMEOUT_SECONDS = 1800  # 30 minutes
+
+INTAKE_ANALYSIS_PROMPT = """Analyze this {item_type} request using the 5 Whys method.
+
+Request: {text}
+
+Perform a 5 Whys analysis to uncover the root need behind this request.
+Then write a concise backlog item with a clear title and description.
+
+Format your response exactly like this:
+
+Title: <one-line title for the backlog item>
+
+5 Whys:
+1. <why>
+2. <why>
+3. <why>
+4. <why>
+5. <why>
+
+Root Need: <the root need uncovered by the analysis>
+
+Description:
+<2-4 sentence description of the backlog item, incorporating the root need>
+Keep it concise and actionable."""
+
+INTAKE_FOLLOWUP_PROMPT = """Original {item_type} request: {text}
+
+Previous analysis: {analysis}
+
+Clarifying answers from the user:
+{answers}
+
+Now refine the backlog item based on these answers.
+
+Format your response exactly like this:
+
+Title: <one-line title for the backlog item>
+
+Root Need: <the root need, refined with the new information>
+
+Description:
+<2-4 sentence description incorporating the answers and root need>"""
+
+INTAKE_ANALYSIS_TIMEOUT_SECONDS = 120  # 2 minutes for intake LLM call
 
 
 def load_orchestrator_config() -> dict:
@@ -771,6 +851,26 @@ class EscalationConfig:
         steps = max(0, (attempt - 1) // self.escalate_after)
         effective_idx = min(base_idx + steps, max_idx)
         return MODEL_TIERS[effective_idx]
+
+
+@dataclass
+class IntakeState:
+    """Tracks the state of an async 5 Whys intake analysis.
+
+    Each inbound feature/defect request gets one IntakeState that lives
+    for the duration of the analysis thread.
+    """
+    channel_id: str
+    channel_name: str
+    original_text: str
+    user: str
+    ts: str
+    item_type: str  # "feature" or "defect"
+    status: str = "analyzing"  # "analyzing", "waiting_for_answers", "creating", "done", "failed"
+    questions_ts: str = ""  # ts of our question message in Slack
+    answers: list = field(default_factory=list)
+    analysis: str = ""  # LLM 5-Whys output
+    answer_event: threading.Event = field(default_factory=threading.Event)
 
 
 def parse_escalation_config(plan: dict) -> EscalationConfig:
@@ -2561,6 +2661,13 @@ class SlackNotifier:
         self._socket_handler = None
         self._pending_answer = None  # threading.Event set when answer received
         self._last_answer = None     # stores the answer value
+        self._discovered_channels = {}  # name -> channel_id mapping
+        self._channels_discovered_at = 0.0  # timestamp of last discovery
+        self._channel_prefix = SLACK_CHANNEL_PREFIX
+        self._pending_intakes: dict[str, IntakeState] = {}  # key -> IntakeState
+        self._intake_lock = threading.Lock()
+        self._poll_thread: Optional[threading.Thread] = None
+        self._poll_stop_event = threading.Event()
 
         try:
             with open(config_path, "r") as f:
@@ -2582,6 +2689,13 @@ class SlackNotifier:
             self._channel_id = slack_config.get("channel_id", "")
             self._notify_config = slack_config.get("notify", {})
             self._question_config = slack_config.get("questions", {})
+
+            prefix = slack_config.get("channel_prefix", "")
+            if prefix:
+                # Ensure prefix ends with a separator
+                if not prefix.endswith("-"):
+                    prefix += "-"
+                self._channel_prefix = prefix
 
         except (IOError, yaml.YAMLError):
             # Config file missing or invalid - remain disabled
@@ -2634,7 +2748,8 @@ class SlackNotifier:
             print(f"[SLACK] Socket Mode failed to start: {e}")
             return False
 
-    def _post_message(self, payload: dict) -> bool:
+    def _post_message(self, payload: dict,
+                      channel_id: Optional[str] = None) -> bool:
         """POST a message to Slack via chat.postMessage API.
 
         Uses urllib.request with Bearer token auth. Returns True on success.
@@ -2642,14 +2757,16 @@ class SlackNotifier:
 
         Args:
             payload: Slack Block Kit payload dict
+            channel_id: Target channel. Falls back to self._channel_id.
 
         Returns:
             True if API returns ok: true, False otherwise
         """
-        if not self._bot_token or not self._channel_id:
+        target = channel_id or self._channel_id
+        if not self._bot_token or not target:
             return False
 
-        payload["channel"] = self._channel_id
+        payload["channel"] = target
 
         try:
             req = urllib.request.Request(
@@ -2687,18 +2804,21 @@ class SlackNotifier:
             }]
         }
 
-    def send_status(self, message: str, level: str = "info") -> None:
+    def send_status(self, message: str, level: str = "info",
+                    channel_id: Optional[str] = None) -> None:
         """Send a status update to Slack. No-op if disabled.
 
         Args:
             message: Status message text
             level: Message level (info, success, error, warning)
+            channel_id: Target channel override. Falls back to default.
         """
-        if not self._enabled or not self._bot_token or not self._channel_id:
+        target = channel_id or self._channel_id
+        if not self._enabled or not self._bot_token or not target:
             return
 
         payload = self._build_status_block(message, level)
-        self._post_message(payload)
+        self._post_message(payload, channel_id=target)
 
     def send_question(
         self,
@@ -2878,85 +2998,156 @@ class SlackNotifier:
             elif msg_type == "idea":
                 self.send_idea(title, desc)
 
-    def _load_last_read(self) -> str:
-        """Load the last-read message timestamp from disk.
+    def _load_last_read_all(self) -> dict:
+        """Load per-channel last-read timestamps from disk.
 
-        Returns '0' if no prior state exists (will only process messages
-        from this session forward by using current time on first poll).
+        Returns dict of channel_id -> last_ts. Empty dict on first run.
         """
         try:
             with open(SLACK_LAST_READ_PATH, "r") as f:
                 data = json.load(f)
-            return data.get("last_ts", "0")
+            # Handle legacy single-channel format
+            if "channels" in data:
+                return data["channels"]
+            if "channel_id" in data and "last_ts" in data:
+                return {data["channel_id"]: data["last_ts"]}
+            return {}
         except (IOError, json.JSONDecodeError):
-            return "0"
+            return {}
 
-    def _save_last_read(self, ts: str) -> None:
-        """Persist the last-read timestamp to disk."""
+    def _save_last_read_all(self, channels: dict) -> None:
+        """Persist per-channel last-read timestamps to disk."""
         try:
-            data = {"channel_id": self._channel_id, "last_ts": ts}
             with open(SLACK_LAST_READ_PATH, "w") as f:
-                json.dump(data, f)
+                json.dump({"channels": channels}, f)
         except IOError as e:
             print(f"[SLACK] Failed to save last-read state: {e}")
 
-    def poll_messages(self) -> list:
-        """Fetch unread messages since last poll from the Slack channel.
+    def _discover_channels(self) -> dict:
+        """Discover prefix-* channels the bot is a member of.
 
-        Uses conversations.history API with oldest parameter.
-        Filters out bot messages. Updates last-read timestamp.
-        Returns empty list if disabled, no new messages, or on error.
+        Returns dict of channel_name -> channel_id. Caches results for
+        SLACK_CHANNEL_CACHE_SECONDS to avoid excessive API calls.
         """
-        if not self._enabled or not self._bot_token or not self._channel_id:
-            return []
-
-        last_ts = self._load_last_read()
-        # On first run, use current time to avoid processing history
-        if last_ts == "0":
-            import time as _time
-            current_ts = str(_time.time())
-            self._save_last_read(current_ts)
-            return []
+        now = time.time()
+        if (self._discovered_channels
+                and now - self._channels_discovered_at < SLACK_CHANNEL_CACHE_SECONDS):
+            return self._discovered_channels
 
         try:
             params = urllib.parse.urlencode({
-                "channel": self._channel_id,
-                "oldest": last_ts,
-                "limit": SLACK_INBOUND_POLL_LIMIT,
-                "inclusive": "false"
+                "types": "public_channel,private_channel",
+                "limit": "100"
             })
-            url = f"https://slack.com/api/conversations.history?{params}"
             req = urllib.request.Request(
-                url,
+                f"https://slack.com/api/users.conversations?{params}",
                 headers={"Authorization": f"Bearer {self._bot_token}"}
             )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 result = json.loads(resp.read())
 
             if not result.get("ok", False):
-                print(f"[SLACK] conversations.history error: {result.get('error', 'unknown')}")
-                return []
+                print(f"[SLACK] Channel discovery error: {result.get('error', 'unknown')}")
+                return self._discovered_channels
 
-            messages = result.get("messages", [])
-            if not messages:
-                return []
+            channels = {}
+            for ch in result.get("channels", []):
+                name = ch.get("name", "")
+                if name.startswith(self._channel_prefix):
+                    channels[name] = ch["id"]
 
-            # Filter out bot messages (our own posts and other bots)
-            human_messages = [
-                m for m in messages
-                if not m.get("bot_id") and m.get("subtype") is None
-            ]
-
-            # Update last-read to the newest message timestamp
-            # messages are returned newest-first by the API
-            newest_ts = messages[0].get("ts", last_ts)
-            self._save_last_read(newest_ts)
-
-            return human_messages
+            self._discovered_channels = channels
+            self._channels_discovered_at = now
+            if channels:
+                print(f"[SLACK] Discovered channels: {', '.join(f'#{n}' for n in sorted(channels))}")
+            return channels
 
         except Exception as e:
-            print(f"[SLACK] Failed to poll messages: {e}")
+            print(f"[SLACK] Channel discovery failed: {e}")
+            return self._discovered_channels
+
+    def _get_channel_role(self, channel_name: str) -> str:
+        """Get the role for a channel name based on its suffix.
+
+        Strips the configured prefix and looks up the remaining suffix
+        in SLACK_CHANNEL_ROLE_SUFFIXES.
+
+        Returns the role string (e.g. "feature", "defect") or empty
+        string if the suffix is not recognized.
+        """
+        if not channel_name.startswith(self._channel_prefix):
+            return ""
+        suffix = channel_name[len(self._channel_prefix):]
+        return SLACK_CHANNEL_ROLE_SUFFIXES.get(suffix, "")
+
+    def poll_messages(self) -> list:
+        """Fetch unread messages from all prefix-* channels.
+
+        Discovers channels by prefix, polls each for new messages,
+        tags each message with its source channel name for routing.
+        Falls back to the single channel_id if no prefix-* channels found.
+        """
+        if not self._enabled or not self._bot_token:
             return []
+
+        channels = self._discover_channels()
+        # Fall back to legacy single channel if no orchestrator-* channels
+        if not channels and self._channel_id:
+            channels = {"orchestrator": self._channel_id}
+
+        if not channels:
+            return []
+
+        last_read = self._load_last_read_all()
+        all_messages = []
+        updated_last_read = dict(last_read)
+
+        for channel_name, channel_id in channels.items():
+            last_ts = last_read.get(channel_id, "")
+
+            # On first run for this channel, seed with 1 hour ago
+            # to capture recent messages without flooding with old history
+            if not last_ts:
+                last_ts = f"{time.time() - 3600:.6f}"
+                updated_last_read[channel_id] = last_ts
+
+            try:
+                params = urllib.parse.urlencode({
+                    "channel": channel_id,
+                    "oldest": last_ts,
+                    "limit": SLACK_INBOUND_POLL_LIMIT,
+                    "inclusive": "false"
+                })
+                req = urllib.request.Request(
+                    f"https://slack.com/api/conversations.history?{params}",
+                    headers={"Authorization": f"Bearer {self._bot_token}"}
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    result = json.loads(resp.read())
+
+                if not result.get("ok", False):
+                    print(f"[SLACK] Error polling #{channel_name}: {result.get('error', 'unknown')}")
+                    continue
+
+                messages = result.get("messages", [])
+                if not messages:
+                    continue
+
+                # Update last-read for this channel (newest first)
+                updated_last_read[channel_id] = messages[0].get("ts", last_ts)
+
+                # Filter out bot messages, tag with channel name
+                for m in messages:
+                    if not m.get("bot_id") and m.get("subtype") is None:
+                        m["_channel_name"] = channel_name
+                        m["_channel_id"] = channel_id
+                        all_messages.append(m)
+
+            except Exception as e:
+                print(f"[SLACK] Failed to poll #{channel_name}: {e}")
+
+        self._save_last_read_all(updated_last_read)
+        return all_messages
 
     def classify_message(self, text: str) -> tuple:
         """Classify a Slack message by its text content.
@@ -3084,12 +3275,14 @@ class SlackNotifier:
             print(f"[SLACK] Failed to create backlog item: {e}")
             return ""
 
-    def handle_control_command(self, command: str, classification: str) -> None:
+    def handle_control_command(self, command: str, classification: str,
+                              channel_id: Optional[str] = None) -> None:
         """Handle a control command from Slack.
 
         Args:
             command: The original message text
             classification: One of 'control_stop', 'control_skip', 'info_request'
+            channel_id: Reply to this channel. Falls back to default.
         """
         if classification == "control_stop":
             # Write stop semaphore to signal graceful stop
@@ -3098,7 +3291,7 @@ class SlackNotifier:
                     f.write(f"stop requested via Slack: {command}\n")
                 self.send_status(
                     "*Stop requested* via Slack. Pipeline will stop after current task.",
-                    level="warning"
+                    level="warning", channel_id=channel_id
                 )
             except IOError as e:
                 print(f"[SLACK] Failed to write stop semaphore: {e}")
@@ -3107,74 +3300,533 @@ class SlackNotifier:
             self.send_status(
                 "*Skip requested* via Slack. (Note: skip is not yet implemented "
                 "in the orchestrator. Use 'stop' to halt the pipeline.)",
-                level="warning"
+                level="warning", channel_id=channel_id
             )
 
         elif classification == "info_request":
-            # Post a basic status response
-            # Full pipeline state is not available inside SlackNotifier,
-            # so we post what we can determine
-            self.send_status(
-                "*Pipeline Status*\nState: running\n"
-                "_Use the terminal for detailed status._",
-                level="info"
+            self.answer_question("status", channel_id=channel_id)
+
+    def _gather_pipeline_state(self) -> dict:
+        """Read all available pipeline state from disk.
+
+        Returns a dict with keys: active_plan, last_task, backlog,
+        completed, session_cost. Each section is None if the underlying
+        file is missing or malformed.
+        """
+        state: dict = {}
+
+        # Active plan: scan .claude/plans/*.yaml (skip sample-plan.yaml)
+        try:
+            plans_dir = Path(".claude/plans")
+            best_plan = None
+            for yaml_file in sorted(plans_dir.glob("*.yaml")):
+                if yaml_file.name == "sample-plan.yaml":
+                    continue
+                with open(yaml_file, "r") as f:
+                    plan_data = yaml.safe_load(f)
+                if not isinstance(plan_data, dict):
+                    continue
+                meta = plan_data.get("meta", {})
+                sections = plan_data.get("sections", [])
+                total = 0
+                completed_count = 0
+                failed_count = 0
+                in_progress_count = 0
+                for section in sections:
+                    for task in section.get("tasks", []):
+                        total += 1
+                        task_status = task.get("status", "pending")
+                        if task_status == "completed":
+                            completed_count += 1
+                        elif task_status == "failed":
+                            failed_count += 1
+                        elif task_status == "in_progress":
+                            in_progress_count += 1
+                # Pick the plan with in_progress tasks, or the last one with pending
+                if in_progress_count > 0 or (completed_count < total and best_plan is None):
+                    best_plan = {
+                        "name": meta.get("name", yaml_file.stem),
+                        "file": yaml_file.name,
+                        "total": total,
+                        "completed": completed_count,
+                        "failed": failed_count,
+                        "in_progress": in_progress_count,
+                    }
+                    if in_progress_count > 0:
+                        break  # This is the active plan
+            state["active_plan"] = best_plan
+        except Exception:
+            state["active_plan"] = None
+
+        # Last task from task-status.json
+        try:
+            with open(STATUS_FILE_PATH, "r") as f:
+                task_status = json.load(f)
+            state["last_task"] = {
+                "task_id": task_status.get("task_id", ""),
+                "status": task_status.get("status", ""),
+                "message": task_status.get("message", ""),
+                "timestamp": task_status.get("timestamp", ""),
+            }
+        except Exception:
+            state["last_task"] = None
+
+        # Backlog counts
+        try:
+            feature_dir = Path("docs/feature-backlog")
+            defect_dir = Path("docs/defect-backlog")
+            pending_features = len(list(feature_dir.glob("*.md"))) if feature_dir.is_dir() else 0
+            pending_defects = len(list(defect_dir.glob("*.md"))) if defect_dir.is_dir() else 0
+            state["backlog"] = {
+                "pending_features": pending_features,
+                "pending_defects": pending_defects,
+            }
+        except Exception:
+            state["backlog"] = None
+
+        # Completed counts
+        try:
+            completed_features_dir = Path("docs/completed-backlog/features")
+            completed_defects_dir = Path("docs/completed-backlog/defects")
+            completed_features = (
+                len(list(completed_features_dir.glob("*.md")))
+                if completed_features_dir.is_dir() else 0
+            )
+            completed_defects = (
+                len(list(completed_defects_dir.glob("*.md")))
+                if completed_defects_dir.is_dir() else 0
+            )
+            state["completed"] = {
+                "completed_features": completed_features,
+                "completed_defects": completed_defects,
+            }
+        except Exception:
+            state["completed"] = None
+
+        # Session cost from most recent pipeline-session-*.json
+        try:
+            logs_dir = Path(".claude/plans/logs")
+            session_files = sorted(logs_dir.glob("pipeline-session-*.json"))
+            if session_files:
+                with open(session_files[-1], "r") as f:
+                    session_data = json.load(f)
+                state["session_cost"] = {
+                    "total_cost_usd": session_data.get("total_cost_usd", 0),
+                    "work_items": len(session_data.get("work_items", [])),
+                }
+            else:
+                state["session_cost"] = None
+        except Exception:
+            state["session_cost"] = None
+
+        return state
+
+    def _format_state_context(self, state: dict) -> str:
+        """Format pipeline state as plain text for the LLM prompt context.
+
+        Args:
+            state: Dict from _gather_pipeline_state()
+
+        Returns:
+            Multi-line plain text summary of all available state.
+        """
+        lines = []
+
+        plan = state.get("active_plan")
+        if plan:
+            lines.append(
+                f"Active plan: {plan['name']} "
+                f"({plan['completed']}/{plan['total']} tasks completed, "
+                f"{plan['in_progress']} in progress, {plan['failed']} failed)"
+            )
+        else:
+            lines.append("Active plan: none")
+
+        last = state.get("last_task")
+        if last:
+            lines.append(
+                f"Last task: {last['task_id']} {last['status']} - {last['message']}"
+            )
+        else:
+            lines.append("Last task: no data")
+
+        backlog = state.get("backlog")
+        if backlog:
+            lines.append(
+                f"Pending backlog: {backlog['pending_features']} features, "
+                f"{backlog['pending_defects']} defects"
             )
 
-    def answer_question(self, question: str) -> None:
-        """Respond to a question from Slack.
+        done = state.get("completed")
+        if done:
+            lines.append(
+                f"Completed: {done['completed_features']} features, "
+                f"{done['completed_defects']} defects"
+            )
 
-        For now, acknowledges the question and suggests using the terminal
-        for detailed answers. A future enhancement could use an LLM call.
+        cost = state.get("session_cost")
+        if cost:
+            lines.append(
+                f"Last session: {cost['work_items']} work items, "
+                f"API-equivalent cost ${cost['total_cost_usd']:.2f} "
+                f"(from Claude CLI usage reporting, not actual subscription charges)"
+            )
+
+        return "\n".join(lines) if lines else "No pipeline state available."
+
+    def answer_question(self, question: str,
+                        channel_id: Optional[str] = None) -> None:
+        """Respond to a question from Slack using an LLM call with pipeline context.
+
+        Calls Claude CLI directly (bypassing run_claude_task which reads the
+        stale task-status.json from plan execution). Parses the JSON stdout
+        for the actual LLM response.
 
         Args:
             question: The question text
+            channel_id: Reply to this channel. Falls back to default.
         """
-        self.send_status(
-            f"*Question received:* {question}\n"
-            "_Detailed answers are not yet available via Slack. "
-            "Check the terminal session for full pipeline context._",
-            level="info"
+        print(f"[SLACK] Answering question: {question[:80]}")
+
+        state = self._gather_pipeline_state()
+        state_context = self._format_state_context(state)
+        prompt = QUESTION_ANSWER_PROMPT.format(
+            state_context=state_context, question=question
         )
 
-    def process_inbound(self) -> None:
-        """Poll for new Slack messages, classify, and act on each.
+        try:
+            cmd = [
+                *CLAUDE_CMD, "--print", prompt,
+                "--model", "sonnet",
+                "--output-format", "json",
+                "--dangerously-skip-permissions",
+            ]
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True,
+                timeout=QUESTION_ANSWER_TIMEOUT_SECONDS,
+                cwd=os.getcwd(), env=build_child_env(),
+            )
+            if proc.returncode == 0:
+                data = json.loads(proc.stdout)
+                answer = data.get("result", "").strip()
+            else:
+                answer = ""
 
-        This is the main entry point called at pipeline checkpoints.
-        Catches all exceptions to never disrupt the pipeline.
-        No-op if Slack is disabled.
+            if not answer:
+                answer = f"_(LLM returned empty)_\n{state_context}"
+        except Exception as e:
+            print(f"[SLACK] LLM answer failed: {e}")
+            answer = f"_(LLM unavailable)_\n{state_context}"
+
+        print(f"[SLACK] Answer: {answer[:120]}")
+        self.send_status(answer, level="info", channel_id=channel_id)
+
+    def _run_intake_analysis(self, intake: IntakeState) -> None:
+        """Run 5 Whys intake analysis in a background thread.
+
+        Calls Claude CLI to analyze the request, optionally posts clarifying
+        questions to Slack and waits for answers, then creates the backlog item.
+
+        Args:
+            intake: The IntakeState tracking this analysis
+        """
+        intake_key = f"{intake.channel_name}:{intake.ts}"
+        try:
+            # Step 1: Call Claude CLI for 5 Whys analysis
+            prompt = INTAKE_ANALYSIS_PROMPT.format(
+                item_type=intake.item_type, text=intake.original_text
+            )
+            result = run_claude_task(prompt, model="opus")
+
+            if not result.success:
+                print(f"[INTAKE] LLM analysis failed: {result.message}")
+                intake.status = "failed"
+                self.create_backlog_item(
+                    intake.item_type,
+                    intake.original_text.split("\n", 1)[0][:80],
+                    intake.original_text,
+                    intake.user,
+                    intake.ts,
+                )
+                return
+
+            # Step 2: Parse JSON response
+            response_text = result.message.strip()
+            # Extract JSON from possible markdown code fences
+            if "```" in response_text:
+                json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", response_text, re.DOTALL)
+                if json_match:
+                    response_text = json_match.group(1).strip()
+
+            try:
+                analysis = json.loads(response_text)
+            except json.JSONDecodeError:
+                print(f"[INTAKE] Failed to parse LLM response as JSON")
+                intake.status = "failed"
+                # Fall back: create item with raw text
+                self.create_backlog_item(
+                    intake.item_type,
+                    intake.original_text.split("\n", 1)[0][:80],
+                    intake.original_text,
+                    intake.user,
+                    intake.ts,
+                )
+                return
+
+            intake.analysis = response_text
+            five_whys = analysis.get("five_whys", [])
+            root_need = analysis.get("root_need", "")
+
+            # Step 3: If questions needed, post them and wait for answers
+            if not analysis.get("clear", True) and analysis.get("questions"):
+                questions = analysis["questions"]
+                question_text = (
+                    f"*Analyzing your {intake.item_type} request...*\n"
+                    f"I need a few clarifications:\n"
+                )
+                for i, q in enumerate(questions[:3], 1):
+                    question_text += f"{i}. {q}\n"
+                question_text += "\n_Reply here with your answers._"
+
+                intake.status = "waiting_for_answers"
+                self.send_status(
+                    question_text, level="question",
+                    channel_id=intake.channel_id
+                )
+
+                # Wait for answers with timeout
+                answered = intake.answer_event.wait(
+                    timeout=INTAKE_ANSWER_TIMEOUT_SECONDS
+                )
+
+                if answered and intake.answers:
+                    # Re-analyze with answers
+                    followup_prompt = (
+                        f"Original {intake.item_type} request: {intake.original_text}\n\n"
+                        f"5 Whys analysis: {json.dumps(five_whys)}\n"
+                        f"Root need: {root_need}\n\n"
+                        f"Clarifying answers from user:\n"
+                    )
+                    for ans in intake.answers:
+                        followup_prompt += f"- {ans}\n"
+                    followup_prompt += (
+                        "\nNow create the final backlog item.\n"
+                        "Output as JSON: {{\"title\": \"...\", \"description\": \"...\", "
+                        "\"priority\": \"low/medium/high\"}}\n"
+                        "Only output JSON, no other text."
+                    )
+                    followup_result = run_claude_task(followup_prompt, model="opus")
+                    if followup_result.success:
+                        followup_text = followup_result.message.strip()
+                        if "```" in followup_text:
+                            json_match = re.search(
+                                r"```(?:json)?\s*\n?(.*?)\n?```",
+                                followup_text, re.DOTALL
+                            )
+                            if json_match:
+                                followup_text = json_match.group(1).strip()
+                        try:
+                            refined = json.loads(followup_text)
+                            analysis.update(refined)
+                        except json.JSONDecodeError:
+                            pass  # Use original analysis
+
+            # Step 4: Create backlog item
+            intake.status = "creating"
+            title = analysis.get("title", intake.original_text.split("\n", 1)[0][:80])
+            description = analysis.get("description", intake.original_text)
+
+            # Enrich description with 5 Whys summary
+            if five_whys:
+                whys_text = "\n".join(f"  {i+1}. {w}" for i, w in enumerate(five_whys))
+                description += f"\n\n## 5 Whys Analysis\n\n{whys_text}"
+            if root_need:
+                description += f"\n\n**Root Need:** {root_need}"
+
+            self.create_backlog_item(
+                intake.item_type, title, description,
+                intake.user, intake.ts
+            )
+
+            # Step 5: Notify user
+            notify_msg = f"*{intake.item_type.title()} created:* {title}"
+            if root_need:
+                notify_msg += f"\n_Root need: {root_need}_"
+            self.send_status(notify_msg, level="success", channel_id=intake.channel_id)
+            intake.status = "done"
+
+        except Exception as e:
+            print(f"[INTAKE] Error in intake analysis: {e}")
+            intake.status = "failed"
+            # Best-effort: create item with raw text
+            try:
+                self.create_backlog_item(
+                    intake.item_type,
+                    intake.original_text.split("\n", 1)[0][:80],
+                    intake.original_text,
+                    intake.user,
+                    intake.ts,
+                )
+            except Exception:
+                pass
+        finally:
+            with self._intake_lock:
+                self._pending_intakes.pop(intake_key, None)
+
+    def start_background_polling(self) -> None:
+        """Start a background thread that polls Slack for inbound messages.
+
+        Starts at SLACK_POLL_INTERVAL_MIN_SECONDS (5s). When no messages are
+        found, backs off by SLACK_POLL_BACKOFF_FACTOR up to
+        SLACK_POLL_INTERVAL_MAX_SECONDS (60s). Resets to min on any message.
         """
         if not self._enabled:
             return
+        if self._poll_thread is not None and self._poll_thread.is_alive():
+            return
 
+        self._poll_stop_event.clear()
+
+        def _poll_loop():
+            while not self._poll_stop_event.is_set():
+                try:
+                    msgs = self.poll_messages()
+                    if msgs:
+                        print(f"[SLACK] Poll: {len(msgs)} message(s)")
+                        self._handle_polled_messages(msgs)
+                except Exception as e:
+                    print(f"[SLACK] Background poll error: {e}")
+                self._poll_stop_event.wait(timeout=SLACK_POLL_INTERVAL_MIN_SECONDS)
+
+        self._poll_thread = threading.Thread(
+            target=_poll_loop, daemon=True, name="slack-poller"
+        )
+        self._poll_thread.start()
+        print(f"[SLACK] Background polling started "
+              f"({SLACK_POLL_INTERVAL_MIN_SECONDS}s-{SLACK_POLL_INTERVAL_MAX_SECONDS}s adaptive)")
+
+    def stop_background_polling(self) -> None:
+        """Stop the background polling thread."""
+        self._poll_stop_event.set()
+        if self._poll_thread is not None:
+            self._poll_thread.join(timeout=5)
+            self._poll_thread = None
+
+    def process_inbound(self) -> None:
+        """Poll for new Slack messages and route them.
+
+        Convenience wrapper: polls then handles. No-op if disabled.
+        """
+        if not self._enabled:
+            return
         try:
             messages = self.poll_messages()
-            for msg in messages:
-                text = msg.get("text", "").strip()
-                if not text:
-                    continue
+            self._handle_polled_messages(messages)
+        except Exception as e:
+            print(f"[SLACK] Error in process_inbound: {e}")
 
-                user = msg.get("user", "unknown")
-                ts = msg.get("ts", "")
+    def _handle_polled_messages(self, messages: list) -> None:
+        """Route polled Slack messages to the appropriate handlers.
 
+        Uses channel-based routing when messages arrive from dedicated
+        orchestrator-* channels. Falls back to text-based classification
+        for the legacy single-channel setup or the notifications channel.
+        """
+        for msg in messages:
+            text = msg.get("text", "").strip()
+            if not text:
+                continue
+
+            user = msg.get("user", "unknown")
+            ts = msg.get("ts", "")
+            channel_name = msg.get("_channel_name", "")
+            reply_to = msg.get("_channel_id", "")
+            channel_role = self._get_channel_role(channel_name)
+
+            # Channel-based routing: the channel determines the type
+            if channel_role in ("feature", "defect"):
+                intake_key = f"{channel_name}:{ts}"
+                with self._intake_lock:
+                    pending = self._pending_intakes.get(intake_key)
+                if pending and pending.status == "waiting_for_answers":
+                    pending.answers.append(text)
+                    pending.answer_event.set()
+                    print(f"[SLACK] Intake answer received for {intake_key}")
+                else:
+                    routed_to_pending = False
+                    with self._intake_lock:
+                        for key, state in self._pending_intakes.items():
+                            if (state.channel_id == reply_to
+                                    and state.status == "waiting_for_answers"):
+                                state.answers.append(text)
+                                state.answer_event.set()
+                                routed_to_pending = True
+                                print(f"[SLACK] Intake answer routed to {key}")
+                                break
+                    if not routed_to_pending:
+                        print(f"[SLACK] {channel_role.title()} request from "
+                              f"#{channel_name}: {text[:80]}")
+                        intake = IntakeState(
+                            channel_id=reply_to,
+                            channel_name=channel_name,
+                            original_text=text,
+                            user=user,
+                            ts=ts,
+                            item_type=channel_role,
+                        )
+                        with self._intake_lock:
+                            self._pending_intakes[intake_key] = intake
+                        thread = threading.Thread(
+                            target=self._run_intake_analysis,
+                            args=(intake,),
+                            daemon=True,
+                        )
+                        thread.start()
+
+            elif channel_role == "question":
+                print(f"[SLACK] Question from #{channel_name}: {text[:80]}")
+                threading.Thread(
+                    target=self.answer_question,
+                    args=(text,),
+                    kwargs={"channel_id": reply_to},
+                    daemon=True,
+                ).start()
+
+            elif channel_role == "control":
                 classification, title, body = self.classify_message(text)
+                if classification in ("control_stop", "control_skip", "info_request"):
+                    self.handle_control_command(
+                        text, classification, channel_id=reply_to)
+                elif classification == "question":
+                    threading.Thread(
+                        target=self.answer_question,
+                        args=(text,),
+                        kwargs={"channel_id": reply_to},
+                        daemon=True,
+                    ).start()
+                else:
+                    print(f"[SLACK] Notification from #{channel_name}: {text[:80]}")
 
+            else:
+                classification, title, body = self.classify_message(text)
                 if classification == "new_feature":
                     self.create_backlog_item("feature", title, body, user, ts)
                 elif classification == "new_defect":
                     self.create_backlog_item("defect", title, body, user, ts)
                 elif classification in ("control_stop", "control_skip", "info_request"):
-                    self.handle_control_command(text, classification)
+                    self.handle_control_command(
+                        text, classification, channel_id=reply_to)
                 elif classification == "question":
-                    self.answer_question(text)
+                    threading.Thread(
+                        target=self.answer_question,
+                        args=(text,),
+                        kwargs={"channel_id": reply_to},
+                        daemon=True,
+                    ).start()
                 elif classification == "acknowledgement":
-                    # Log but don't spam Slack with receipts
-                    print(f"[SLACK] Acknowledged message from {user}: {text[:80]}")
+                    print(f"[SLACK] Acknowledged from {user}: {text[:80]}")
                 else:
-                    print(f"[SLACK] Unhandled classification: {classification}")
-
-        except Exception as e:
-            # Never let inbound processing disrupt the pipeline
-            print(f"[SLACK] Error in process_inbound: {e}")
+                    print(f"[SLACK] Unhandled: {classification}")
 
 
 def update_section_status(section: dict) -> None:
@@ -3288,6 +3940,10 @@ def run_orchestrator(
         )
     else:
         print("Slack: disabled (no .claude/slack.local.yaml)")
+
+    # Start background Slack polling (independent of task loop)
+    slack.start_background_polling()
+
     print()
 
     # Find starting point
@@ -3315,9 +3971,6 @@ def run_orchestrator(
             print(f"Stopping after current task completes. No new tasks will be started.")
             os.remove(STOP_SEMAPHORE_PATH)
             break
-
-        # Poll for inbound Slack messages between tasks
-        slack.process_inbound()
 
         # Check circuit breaker before proceeding
         verbose_log(f"Circuit breaker state: open={circuit_breaker.is_open}, failures={circuit_breaker.consecutive_failures}", "LOOP")
@@ -3746,8 +4399,6 @@ def run_orchestrator(
                         task["validation_attempts"] = validation_attempts + 1
                         if not dry_run:
                             save_plan(plan_path, plan)
-                        # Poll for inbound Slack messages after validation
-                        slack.process_inbound()
                         continue  # Retry the task
 
                     elif verdict.verdict == "WARN":
@@ -3843,6 +4494,9 @@ def run_orchestrator(
                 backoff = circuit_breaker.get_backoff_delay(current_attempts + 1)
                 print(f"[Backoff] Waiting {backoff:.0f}s before retry...")
                 time.sleep(backoff)
+
+    # Stop background Slack polling before final summary
+    slack.stop_background_polling()
 
     print(usage_tracker.format_final_summary(plan))
 
