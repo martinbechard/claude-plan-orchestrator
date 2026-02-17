@@ -64,12 +64,12 @@ sections:
       fields, added comprehensive Slack App setup instructions'
 - id: phase-2
   name: Phase 2 - SlackNotifier Transport Migration
-  status: pending
+  status: in_progress
   tasks:
   - id: '2.1'
     name: Replace webhook transport with Web API in SlackNotifier
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.1'
     description: "Update SlackNotifier in scripts/plan-orchestrator.py to use chat.postMessage\
@@ -110,6 +110,77 @@ sections:
       \ 'Should have _post_message method'\n    assert not hasattr(notifier, '_post_webhook'),\
       \ 'Should NOT have _post_webhook method'\n    print('SlackNotifier transport\
       \ migration verified OK')\n    \"\n\n Files: scripts/plan-orchestrator.py\n"
+    attempts: 2
+    last_attempt: '2026-02-16T19:54:35.636614'
+    model_used: sonnet
+    validation_findings: '[PASS] `__init__` correctly loads `bot_token`, `app_token`,
+      `channel_id` instead of `webhook_url` — `scripts/plan-orchestrator.py:2566-2568`\n-
+      [PASS] `_post_webhook` method fully removed; no references to `_post_webhook`
+      or `webhook_url` remain in `scripts/plan-orchestrator.py`\n- [PASS] `_post_message`
+      correctly implements `chat.postMessage` with Bearer auth and channel injection
+      — `scripts/plan-orchestrator.py:2595-2628`\n- [PASS] `send_status` uses `_post_message`
+      with correct guard (`not self._bot_token or not self._channel_id`) — `scripts/plan-orchestrator.py:2655-2659`\n-
+      [PASS] `send_defect` calls `_post_message` — `scripts/plan-orchestrator.py:2762`\n-
+      [PASS] `send_idea` calls `_post_message` — `scripts/plan-orchestrator.py:2778`\n-
+      [PASS] Class docstring updated to mention \"Slack Web API\", Bearer token auth,
+      and `bot_token`/`channel_id` — `scripts/plan-orchestrator.py:2528-2535`\n- [PASS]
+      Syntax verification passes (py_compile)\n- [PASS] Smoke test passes: disabled
+      with missing config, has `_post_message`, no `_post_webhook`\n- [FAIL] 3 test
+      failures in `tests/test_slack_notifier.py` — tests still use old `webhook_url`
+      config and monkey-patch `_post_webhook` which no longer exists\n  - `test_post_webhook_called_on_send_status`
+      — line 170 monkey-patches `_post_webhook` but code now calls `_post_message`\n  -
+      `test_process_agent_messages_defect` — line 219 monkey-patches `_post_webhook`\n  -
+      `test_process_agent_messages_idea` — line 263 monkey-patches `_post_webhook`\n-
+      [WARN] Multiple passing tests still use `webhook_url` in config fixtures (lines
+      60, 80, 105, 129, 155, 200, 248, 289, 320) — these happen to pass because the
+      notifier ignores unknown config keys, but fixtures should use `bot_token`/`channel_id`
+      for correctness\n\n**Evidence:**\n\n- Finding 10 (FAIL): pytest output shows
+      3 failures — all in tests that monkey-patch `_post_webhook`. The method was
+      renamed to `_post_message` in the implementation, but `tests/test_slack_notifier.py`
+      was not updated. The design document (Phase 3, Task 3.1) explicitly states:
+      \"Update all config fixtures: replace webhook_url with bot_token + channel_id.
+      Replace test_post_webhook_called_on_send_status with test_post_message_called.\"\n-
+      Finding 11 (WARN): Grep for `webhook_url` in test file shows 9 config fixtures
+      still using the old field. These tests pass coincidentally because the notifier
+      simply ignores the unknown key, but they are not testing the correct config
+      schema."}],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":231,"cache_read_input_tokens":43930,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":231},"output_tokens":1,"service_tier":"standard","inference_geo":"not_available"},"context_management":null},"parent_tool_use_id":null,"session_id":"99bef4da-c3c3-4fe4-aa54-df9b630f1656","uuid":"c57a431f-3623-487d-906d-c3de91b0caf1"}
+
+      [PASS] `__init__` correctly loads `bot_token`, `app_token`, `channel_id` instead
+      of `webhook_url` — `scripts/plan-orchestrator.py:2566-2568`\n- [PASS] `_post_webhook`
+      method fully removed; no references to `_post_webhook` or `webhook_url` remain
+      in `scripts/plan-orchestrator.py`\n- [PASS] `_post_message` correctly implements
+      `chat.postMessage` with Bearer auth and channel injection — `scripts/plan-orchestrator.py:2595-2628`\n-
+      [PASS] `send_status` uses `_post_message` with correct guard (`not self._bot_token
+      or not self._channel_id`) — `scripts/plan-orchestrator.py:2655-2659`\n- [PASS]
+      `send_defect` calls `_post_message` — `scripts/plan-orchestrator.py:2762`\n-
+      [PASS] `send_idea` calls `_post_message` — `scripts/plan-orchestrator.py:2778`\n-
+      [PASS] Class docstring updated to mention \"Slack Web API\", Bearer token auth,
+      and `bot_token`/`channel_id` — `scripts/plan-orchestrator.py:2528-2535`\n- [PASS]
+      Syntax verification passes (py_compile)\n- [PASS] Smoke test passes: disabled
+      with missing config, has `_post_message`, no `_post_webhook`\n- [FAIL] 3 test
+      failures in `tests/test_slack_notifier.py` — tests still use old `webhook_url`
+      config and monkey-patch `_post_webhook` which no longer exists\n  - `test_post_webhook_called_on_send_status`
+      — line 170 monkey-patches `_post_webhook` but code now calls `_post_message`\n  -
+      `test_process_agent_messages_defect` — line 219 monkey-patches `_post_webhook`\n  -
+      `test_process_agent_messages_idea` — line 263 monkey-patches `_post_webhook`\n-
+      [WARN] Multiple passing tests still use `webhook_url` in config fixtures (lines
+      60, 80, 105, 129, 155, 200, 248, 289, 320) — these happen to pass because the
+      notifier ignores unknown config keys, but fixtures should use `bot_token`/`channel_id`
+      for correctness\n\n**Evidence:**\n\n- Finding 10 (FAIL): pytest output shows
+      3 failures — all in tests that monkey-patch `_post_webhook`. The method was
+      renamed to `_post_message` in the implementation, but `tests/test_slack_notifier.py`
+      was not updated. The design document (Phase 3, Task 3.1) explicitly states:
+      \"Update all config fixtures: replace webhook_url with bot_token + channel_id.
+      Replace test_post_webhook_called_on_send_status with test_post_message_called.\"\n-
+      Finding 11 (WARN): Grep for `webhook_url` in test file shows 9 config fixtures
+      still using the old field. These tests pass coincidentally because the notifier
+      simply ignores the unknown key, but they are not testing the correct config
+      schema.","stop_reason":null,"session_id":"99bef4da-c3c3-4fe4-aa54-df9b630f1656","total_cost_usd":0.31948400000000005,"usage":{"input_tokens":7,"cache_creation_input_tokens":23570,"cache_read_input_tokens":211691,"output_tokens":2249,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":23570,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-haiku-4-5-20251001":{"inputTokens":9246,"outputTokens":164,"cacheReadInputTokens":0,"cacheCreationInputTokens":0,"webSearchRequests":0,"costUSD":0.010066000000000002,"contextWindow":200000,"maxOutputTokens":32000},"claude-opus-4-6":{"inputTokens":7,"outputTokens":2249,"cacheReadInputTokens":211691,"cacheCreationInputTokens":23570,"webSearchRequests":0,"costUSD":0.309418,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"uuid":"48a1783f-f2ae-4766-abfc-efcd51cd750a"}'
+    validation_attempts: 1
+    completed_at: '2026-02-16T19:56:21.169030'
+    result_message: Updated SlackNotifier tests to use Web API (bot_token/channel_id)
+      instead of webhooks. Replaced all _post_webhook monkey-patches with _post_message.
+      All 15 tests pass.
   - id: '2.2'
     name: Add Socket Mode support for interactive questions
     agent: coder
