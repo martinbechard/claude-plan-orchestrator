@@ -1593,6 +1593,9 @@ def main_loop(dry_run: bool = False, once: bool = False,
                     # After resuming, re-scan (completed plans may unblock new items)
                     continue
 
+            # Poll for inbound Slack messages at scan checkpoint
+            slack.process_inbound()
+
             # Scan for items (with dependency filtering)
             items = scan_all_backlogs()
 
@@ -1609,6 +1612,9 @@ def main_loop(dry_run: bool = False, once: bool = False,
                     break
                 log(f"No items to process. Watching for new items...")
                 log(f"  (Ctrl+C or 'touch {STOP_SEMAPHORE_PATH}' to stop)")
+
+                # Poll for inbound Slack messages during idle wait
+                slack.process_inbound()
 
                 # Wait for either a filesystem event or the safety scan interval
                 new_item_event.clear()
@@ -1649,6 +1655,9 @@ def main_loop(dry_run: bool = False, once: bool = False,
                 if not success:
                     failed_items.add(item.path)
                     log(f"Item failed - will not retry in this session: {item.slug}")
+
+                # Poll for inbound Slack messages after processing each item
+                slack.process_inbound()
 
             # Brief pause before next scan
             time.sleep(2)
