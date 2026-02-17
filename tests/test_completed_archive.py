@@ -23,6 +23,11 @@ archive_item = mod.archive_item
 scan_all_backlogs = mod.scan_all_backlogs
 parse_dependencies = mod.parse_dependencies
 BacklogItem = mod.BacklogItem
+process_item = mod.process_item
+_mark_as_verification_exhausted = mod._mark_as_verification_exhausted
+VERIFICATION_EXHAUSTED_STATUS = mod.VERIFICATION_EXHAUSTED_STATUS
+count_verification_attempts = mod.count_verification_attempts
+MAX_VERIFICATION_CYCLES = mod.MAX_VERIFICATION_CYCLES
 
 
 # --- completed_slugs tests ---
@@ -196,3 +201,116 @@ def test_scan_all_backlogs_filters_unsatisfied_deps() -> None:
         result = scan_all_backlogs()
 
     assert len(result) == 0
+
+
+# --- _mark_as_verification_exhausted tests ---
+
+
+def test_mark_as_verification_exhausted_updates_status(tmp_path: Path) -> None:
+    """_mark_as_verification_exhausted() replaces Status: Open with VERIFICATION_EXHAUSTED_STATUS."""
+    temp_file = tmp_path / "test-defect.md"
+    temp_file.write_text(
+        "# Test Defect\n\n## Status: Open\n\nSome content here.\n"
+    )
+
+    _mark_as_verification_exhausted(str(temp_file))
+
+    content = temp_file.read_text()
+    assert "## Status: Open" not in content
+    assert f"## Status: {VERIFICATION_EXHAUSTED_STATUS}" in content
+
+
+def test_mark_as_verification_exhausted_handles_missing_file(tmp_path: Path) -> None:
+    """_mark_as_verification_exhausted() handles missing files gracefully (no exception)."""
+    nonexistent = tmp_path / "nonexistent.md"
+    # Should not raise an exception
+    _mark_as_verification_exhausted(str(nonexistent))
+
+
+def test_mark_as_verification_exhausted_no_status_line(tmp_path: Path) -> None:
+    """_mark_as_verification_exhausted() leaves file unchanged if no Status: Open line exists."""
+    temp_file = tmp_path / "test-defect-no-status.md"
+    original_content = "# Test Defect\n\nNo status line here.\n"
+    temp_file.write_text(original_content)
+
+    _mark_as_verification_exhausted(str(temp_file))
+
+    content = temp_file.read_text()
+    assert content == original_content
+
+
+def test_process_item_archives_when_max_cycles_reached(tmp_path: Path) -> None:
+    """process_item() archives defect when max verification cycles already reached."""
+    # Create a defect file with 3 failed verification attempts
+    defect_file = tmp_path / "04-test-defect.md"
+    defect_content = """# Test Defect
+
+## Status: Open
+
+## Verification Log
+
+### Verification #1
+**Date:** 2026-01-01
+**Verdict: FAIL**
+Failed due to X
+
+### Verification #2
+**Date:** 2026-01-02
+**Verdict: FAIL**
+Failed due to Y
+
+### Verification #3
+**Date:** 2026-01-03
+**Verdict: FAIL**
+Failed due to Z
+"""
+    defect_file.write_text(defect_content)
+
+    item = BacklogItem(
+        path=str(defect_file),
+        name="Test Defect",
+        slug="04-test-defect",
+        item_type="defect",
+    )
+
+    # Mock SlackNotifier
+    from unittest.mock import Mock
+    mock_slack = Mock()
+    mock_slack.send_status = Mock()
+
+    # Mock archive_item to return True
+    mock_archive = Mock(return_value=True)
+
+    # Save the original function before patching
+    original_mark_fn = mod._mark_as_verification_exhausted
+
+    # Track calls to _mark_as_verification_exhausted
+    mark_calls = []
+    def track_mark(path: str) -> None:
+        mark_calls.append(path)
+        # Call the original function to actually update the file
+        original_mark_fn(path)
+
+    with patch.object(mod, "SlackNotifier", return_value=mock_slack), \
+         patch.object(mod, "archive_item", mock_archive), \
+         patch.object(mod, "_mark_as_verification_exhausted", side_effect=track_mark), \
+         patch.object(mod, "PLANS_DIR", str(tmp_path / "plans")):
+        result = process_item(item, dry_run=False)
+
+    # Verify _mark_as_verification_exhausted was called
+    assert len(mark_calls) == 1
+    assert mark_calls[0] == str(defect_file)
+
+    # Verify archive_item was called
+    mock_archive.assert_called_once()
+
+    # Verify process_item returned False (verification exhausted)
+    assert result is False
+
+    # Verify Slack notification was sent
+    assert mock_slack.send_status.call_count >= 2  # initial + verification exhausted
+
+    # Verify status was updated in the file
+    content = defect_file.read_text()
+    assert f"## Status: {VERIFICATION_EXHAUSTED_STATUS}" in content
+    assert "## Status: Open" not in content
