@@ -16,6 +16,13 @@ The Plan Orchestrator executes structured YAML plans through Claude Code, provid
 - **Auto-Pipeline**: Daemon that watches backlog folders and drives the orchestrator automatically
 - **Defect Verification Loop**: Independent symptom verification with verify-then-fix retry cycles
 - **Configurable Commands**: Build, test, and dev-server commands configurable per project
+- **Agent Framework**: 10 specialized agents (coder, code-reviewer, systems-designer, ux-designer, ux-reviewer, spec-verifier, qa-auditor, planner, issue-verifier, validator) with YAML frontmatter definitions
+- **Slack Integration**: Real-time notifications, inbound message processing, LLM-powered question answering, and 5 Whys intake analysis via Slack
+- **Budget Management**: Token usage tracking, API-equivalent cost estimates, and quota-aware execution with configurable limits
+- **Model Escalation**: Tiered model selection (haiku -> sonnet -> opus) with automatic escalation after consecutive failures
+- **Per-Task Validation**: Independent validator agent that runs after each task with PASS/WARN/FAIL verdicts and retry logic
+- **Design Competitions**: Phase 0 parallel design generation with AI judge for architecture decisions
+- **Hot-Reload**: Auto-pipeline monitors its own source files and self-restarts when code changes are detected
 
 ```
                      ┌──────────────────────────┐
@@ -62,6 +69,8 @@ See [docs/narrative/](docs/narrative/) for the full development history and desi
 - Claude Code CLI installed and authenticated
 - Git (for version control and parallel worktrees)
 - Optional: `watchdog` (`pip install watchdog`) for auto-pipeline
+- Optional: `slack_sdk` (`pip install slack_sdk`) for Slack integration
+- Optional: `requests` (`pip install requests`) for API calls
 
 ## Installation
 
@@ -445,19 +454,37 @@ your-project/
 │   │   ├── my-feature.yaml         # Your active plan
 │   │   ├── task-status.json        # Auto-generated status
 │   │   └── .stop                   # Graceful stop semaphore
+│   ├── agents/
+│   │   ├── coder.md               # Implementation specialist
+│   │   ├── code-reviewer.md        # Read-only reviewer
+│   │   ├── systems-designer.md    # Architecture designer
+│   │   ├── ux-designer.md          # UI/UX designer
+│   │   ├── ux-reviewer.md           # UX quality reviewer
+│   │   ├── spec-verifier.md        # Spec compliance checker
+│   │   ├── qa-auditor.md           # QA audit specialist
+│   │   ├── planner.md              # Design-to-plan bridge
+│   │   ├── issue-verifier.md       # Defect fix verifier
+│   │   └── validator.md            # Per-task validator
 │   ├── skills/
-│   │   └── implement/
-│   │       └── SKILL.md            # Implementation skill
+│   │   ├── implement/
+│   │   │   └── SKILL.md            # Implementation skill
+│   │   └── coding-rules/
+│   │       └── SKILL.md            # Coding standards skill
 │   ├── commands/
 │   │   └── implement.md            # /implement command
+│   ├── slack.local.yaml             # Slack channel configuration (user-created)
+│   ├── orchestrator-config.yaml     # Project-specific config
 │   ├── subagent-status/            # Parallel task heartbeats
 │   └── agent-claims.json           # File claim coordination
 ├── scripts/
-│   ├── plan-orchestrator.py        # Main orchestrator (~2095 lines)
-│   └── auto-pipeline.py            # Auto-pipeline daemon (~1450 lines)
+│   ├── plan-orchestrator.py        # Main orchestrator (~4773 lines)
+│   └── auto-pipeline.py            # Auto-pipeline daemon (~1949 lines)
 └── docs/
     ├── plans/
     │   └── YYYY-MM-DD-*.md         # Design documents
+    ├── defect-backlog/             # Active defects
+    ├── feature-backlog/            # Active features
+    ├── completed-backlog/          # Archived completed items
     └── narrative/
         └── *.md                    # Development history
 ```
@@ -502,7 +529,7 @@ your-project/
 
 ## Development History
 
-The orchestrator evolved from a 454-line sequential executor to a ~3500-line parallel execution engine (across two scripts) over the course of building a production application. See [docs/narrative/](docs/narrative/) for the complete development history, including:
+The orchestrator evolved from a 454-line sequential executor to a ~6700-line parallel execution engine (across two scripts) over the course of building a production application. See [docs/narrative/](docs/narrative/) for the complete development history, including:
 
 - Genesis and initial design decisions
 - Parallel execution via git worktrees
@@ -515,6 +542,13 @@ The orchestrator evolved from a 454-line sequential executor to a ~3500-line par
 - Fixing the parallel merge strategy
 - Design competitions: parallel design generation with AI judge
 - Verification loop: independent symptom verification for defects
+- Agent definition framework with YAML frontmatter
+- Per-task validation pipeline
+- Design agents (systems-designer, ux-designer)
+- Tiered model escalation
+- Token usage and budget tracking
+- Slack integration with inbound message polling
+- Hot-reload self-restart for auto-pipeline
 
 ## License
 
