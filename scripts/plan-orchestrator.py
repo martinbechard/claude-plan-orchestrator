@@ -3136,6 +3136,46 @@ class SlackNotifier:
             level="info"
         )
 
+    def process_inbound(self) -> None:
+        """Poll for new Slack messages, classify, and act on each.
+
+        This is the main entry point called at pipeline checkpoints.
+        Catches all exceptions to never disrupt the pipeline.
+        No-op if Slack is disabled.
+        """
+        if not self._enabled:
+            return
+
+        try:
+            messages = self.poll_messages()
+            for msg in messages:
+                text = msg.get("text", "").strip()
+                if not text:
+                    continue
+
+                user = msg.get("user", "unknown")
+                ts = msg.get("ts", "")
+
+                classification, title, body = self.classify_message(text)
+
+                if classification == "new_feature":
+                    self.create_backlog_item("feature", title, body, user, ts)
+                elif classification == "new_defect":
+                    self.create_backlog_item("defect", title, body, user, ts)
+                elif classification in ("control_stop", "control_skip", "info_request"):
+                    self.handle_control_command(text, classification)
+                elif classification == "question":
+                    self.answer_question(text)
+                elif classification == "acknowledgement":
+                    # Log but don't spam Slack with receipts
+                    print(f"[SLACK] Acknowledged message from {user}: {text[:80]}")
+                else:
+                    print(f"[SLACK] Unhandled classification: {classification}")
+
+        except Exception as e:
+            # Never let inbound processing disrupt the pipeline
+            print(f"[SLACK] Error in process_inbound: {e}")
+
 
 def update_section_status(section: dict) -> None:
     """Update section status based on task statuses."""
