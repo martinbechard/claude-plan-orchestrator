@@ -117,6 +117,26 @@ Answer:"""
 
 QUESTION_ANSWER_TIMEOUT_SECONDS = 60  # 1 minute for question answering
 
+# Message routing prompt for LLM-based Slack message classification
+MESSAGE_ROUTING_PROMPT = """You are a message router for a CI/CD pipeline orchestrator.
+A user sent this message via Slack: "{text}"
+
+Decide the appropriate action. Respond with ONLY a JSON object:
+
+Available actions:
+- {{"action": "stop_pipeline"}} - User explicitly wants to stop/pause the pipeline
+- {{"action": "skip_item"}} - User wants to skip the current work item
+- {{"action": "get_status"}} - User wants pipeline status information
+- {{"action": "create_feature", "title": "...", "body": "..."}} - User is requesting a new feature
+- {{"action": "create_defect", "title": "...", "body": "..."}} - User is reporting a bug/defect
+- {{"action": "ask_question", "question": "..."}} - User is asking a question
+- {{"action": "none"}} - Message doesn't require any pipeline action
+
+Be conservative: only use stop_pipeline if the user clearly intends to stop.
+A message like "stop doing X" is NOT a stop command."""
+
+MESSAGE_ROUTING_TIMEOUT_SECONDS = 30
+
 # Intake analysis configuration
 REQUIRED_FIVE_WHYS_COUNT = 5
 MAX_INTAKE_RETRIES = 1
@@ -3218,53 +3238,6 @@ class SlackNotifier:
         self._save_last_read_all(updated_last_read)
         return all_messages
 
-    def classify_message(self, text: str) -> tuple:
-        """Classify a Slack message by its text content.
-
-        Returns (classification, title, body) where:
-        - classification: one of 'new_feature', 'new_defect', 'control_stop',
-          'control_skip', 'info_request', 'question', 'acknowledgement'
-        - title: extracted title (first line after prefix removal)
-        - body: remaining text (lines after the first)
-        """
-        if not text or not text.strip():
-            return ("acknowledgement", "", "")
-
-        text = text.strip()
-        lower = text.lower()
-        lines = text.split("\n", 1)
-        first_line = lines[0].strip()
-        body = lines[1].strip() if len(lines) > 1 else ""
-
-        # Feature request
-        for prefix in ("feature:", "enhancement:"):
-            if lower.startswith(prefix):
-                title = first_line[len(prefix):].strip()
-                return ("new_feature", title, body)
-
-        # Defect report
-        for prefix in ("defect:", "bug:"):
-            if lower.startswith(prefix):
-                title = first_line[len(prefix):].strip()
-                return ("new_defect", title, body)
-
-        # Control commands
-        if lower.startswith("stop") or lower.startswith("pause"):
-            return ("control_stop", first_line, "")
-        if lower.startswith("skip"):
-            return ("control_skip", first_line, "")
-
-        # Status request
-        if lower.startswith("status"):
-            return ("info_request", first_line, "")
-
-        # Question detection
-        question_words = ("what", "how", "where", "when", "why", "which", "can", "is", "are", "do", "does", "will", "should")
-        if text.rstrip().endswith("?") or any(lower.startswith(w) for w in question_words):
-            return ("question", first_line, body)
-
-        return ("acknowledgement", first_line, body)
-
     def create_backlog_item(self, item_type: str, title: str, body: str,
                            user: str = "", ts: str = "") -> dict:
         """Create a backlog markdown file from a Slack message.
@@ -3339,6 +3312,126 @@ class SlackNotifier:
             print(f"[SLACK] Failed to create backlog item: {e}")
             return {}
 
+    def _route_message_via_llm(self, text: str) -> dict:
+        """Classify a Slack message using an LLM call.
+
+        Sends the message text to a fast model to determine the appropriate
+        pipeline action instead of using brittle keyword matching.
+
+        Args:
+            text: The Slack message text to classify
+
+        Returns:
+            Dict with at minimum an "action" key. Possible actions:
+            stop_pipeline, skip_item, get_status, create_feature,
+            create_defect, ask_question, none.
+        """
+        fallback = {"action": "none"}
+        if not text or not text.strip():
+            return fallback
+
+        prompt = MESSAGE_ROUTING_PROMPT.format(text=text)
+        try:
+            response = self._call_claude_print(
+                prompt, model="haiku",
+                timeout=MESSAGE_ROUTING_TIMEOUT_SECONDS,
+            )
+            if not response:
+                return fallback
+            result = json.loads(response)
+            if isinstance(result, dict) and "action" in result:
+                return result
+            return fallback
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"[SLACK] LLM routing failed: {e}")
+            return fallback
+
+    def _execute_routed_action(self, routing: dict, user: str, ts: str,
+                               channel_id: str) -> None:
+        """Execute the action determined by LLM message routing.
+
+        Maps LLM routing decisions to existing handler methods.
+
+        Args:
+            routing: Dict from _route_message_via_llm with "action" key
+            user: Slack user ID
+            ts: Message timestamp
+            channel_id: Channel to reply in
+        """
+        action = routing.get("action", "none")
+
+        if action == "stop_pipeline":
+            self.handle_control_command(
+                routing.get("title", "stop"), "control_stop",
+                channel_id=channel_id,
+            )
+
+        elif action == "skip_item":
+            self.handle_control_command(
+                "skip", "control_skip", channel_id=channel_id,
+            )
+
+        elif action == "get_status":
+            threading.Thread(
+                target=self.answer_question,
+                args=("status",),
+                kwargs={"channel_id": channel_id},
+                daemon=True,
+            ).start()
+
+        elif action == "create_feature":
+            title = routing.get("title", "Untitled feature")
+            body = routing.get("body", "")
+            intake = IntakeState(
+                channel_id=channel_id,
+                channel_name="",
+                original_text=f"{title}\n{body}".strip(),
+                user=user,
+                ts=ts,
+                item_type="feature",
+            )
+            intake_key = f"routed:{ts}"
+            with self._intake_lock:
+                self._pending_intakes[intake_key] = intake
+            threading.Thread(
+                target=self._run_intake_analysis,
+                args=(intake,),
+                daemon=True,
+            ).start()
+
+        elif action == "create_defect":
+            title = routing.get("title", "Untitled defect")
+            body = routing.get("body", "")
+            intake = IntakeState(
+                channel_id=channel_id,
+                channel_name="",
+                original_text=f"{title}\n{body}".strip(),
+                user=user,
+                ts=ts,
+                item_type="defect",
+            )
+            intake_key = f"routed:{ts}"
+            with self._intake_lock:
+                self._pending_intakes[intake_key] = intake
+            threading.Thread(
+                target=self._run_intake_analysis,
+                args=(intake,),
+                daemon=True,
+            ).start()
+
+        elif action == "ask_question":
+            question = routing.get("question", "")
+            if question:
+                threading.Thread(
+                    target=self.answer_question,
+                    args=(question,),
+                    kwargs={"channel_id": channel_id},
+                    daemon=True,
+                ).start()
+
+        else:
+            print(f"[SLACK] No action for routed message (action={action})")
+
     def handle_control_command(self, command: str, classification: str,
                               channel_id: Optional[str] = None) -> None:
         """Handle a control command from Slack.
@@ -3350,6 +3443,7 @@ class SlackNotifier:
         """
         if classification == "control_stop":
             # Write stop semaphore to signal graceful stop
+            print(f"[SLACK] STOP command received from channel {channel_id}: {command!r}")
             try:
                 with open(STOP_SEMAPHORE_PATH, "w") as f:
                     f.write(f"stop requested via Slack: {command}\n")
@@ -3692,6 +3786,34 @@ class SlackNotifier:
             five_whys = parsed["five_whys"]
             classification = parsed["classification"]
 
+            # Validate 5 Whys completeness and retry if needed
+            if len(five_whys) < REQUIRED_FIVE_WHYS_COUNT:
+                print(f"[INTAKE] Only {len(five_whys)} Whys returned, retrying...")
+                retry_prompt = INTAKE_RETRY_PROMPT.format(
+                    count=len(five_whys),
+                    item_type=intake.item_type,
+                    text=intake.original_text,
+                    analysis=response_text,
+                )
+                retry_text = self._call_claude_print(
+                    retry_prompt, model="sonnet",
+                    timeout=INTAKE_ANALYSIS_TIMEOUT_SECONDS
+                )
+                if retry_text:
+                    retry_parsed = self._parse_intake_response(retry_text)
+                    if len(retry_parsed["five_whys"]) >= len(five_whys):
+                        # Retry produced equal or better results
+                        parsed = retry_parsed
+                        response_text = retry_text
+                        title = parsed["title"] or fallback_title
+                        root_need = parsed["root_need"]
+                        five_whys = parsed["five_whys"]
+                        classification = parsed["classification"]
+                        intake.analysis = response_text
+
+            if len(five_whys) < REQUIRED_FIVE_WHYS_COUNT:
+                print(f"[INTAKE] WARNING: Only {len(five_whys)}/{REQUIRED_FIVE_WHYS_COUNT} Whys in final analysis")
+
             # Build description: use parsed description, or the full LLM
             # response as-is if no structured description was found
             description = parsed["description"] or response_text
@@ -3844,40 +3966,12 @@ class SlackNotifier:
                 ).start()
 
             elif channel_role == "control":
-                classification, title, body = self.classify_message(text)
-                if classification in ("control_stop", "control_skip", "info_request"):
-                    self.handle_control_command(
-                        text, classification, channel_id=reply_to)
-                elif classification == "question":
-                    threading.Thread(
-                        target=self.answer_question,
-                        args=(text,),
-                        kwargs={"channel_id": reply_to},
-                        daemon=True,
-                    ).start()
-                else:
-                    print(f"[SLACK] Notification from #{channel_name}: {text[:80]}")
+                routing = self._route_message_via_llm(text)
+                self._execute_routed_action(routing, user, ts, reply_to)
 
             else:
-                classification, title, body = self.classify_message(text)
-                if classification == "new_feature":
-                    self.create_backlog_item("feature", title, body, user, ts)
-                elif classification == "new_defect":
-                    self.create_backlog_item("defect", title, body, user, ts)
-                elif classification in ("control_stop", "control_skip", "info_request"):
-                    self.handle_control_command(
-                        text, classification, channel_id=reply_to)
-                elif classification == "question":
-                    threading.Thread(
-                        target=self.answer_question,
-                        args=(text,),
-                        kwargs={"channel_id": reply_to},
-                        daemon=True,
-                    ).start()
-                elif classification == "acknowledgement":
-                    print(f"[SLACK] Acknowledged from {user}: {text[:80]}")
-                else:
-                    print(f"[SLACK] Unhandled: {classification}")
+                routing = self._route_message_via_llm(text)
+                self._execute_routed_action(routing, user, ts, reply_to)
 
 
 def update_section_status(section: dict) -> None:
