@@ -2958,6 +2958,53 @@ class SlackNotifier:
             print(f"[SLACK] Failed to poll messages: {e}")
             return []
 
+    def classify_message(self, text: str) -> tuple:
+        """Classify a Slack message by its text content.
+
+        Returns (classification, title, body) where:
+        - classification: one of 'new_feature', 'new_defect', 'control_stop',
+          'control_skip', 'info_request', 'question', 'acknowledgement'
+        - title: extracted title (first line after prefix removal)
+        - body: remaining text (lines after the first)
+        """
+        if not text or not text.strip():
+            return ("acknowledgement", "", "")
+
+        text = text.strip()
+        lower = text.lower()
+        lines = text.split("\n", 1)
+        first_line = lines[0].strip()
+        body = lines[1].strip() if len(lines) > 1 else ""
+
+        # Feature request
+        for prefix in ("feature:", "enhancement:"):
+            if lower.startswith(prefix):
+                title = first_line[len(prefix):].strip()
+                return ("new_feature", title, body)
+
+        # Defect report
+        for prefix in ("defect:", "bug:"):
+            if lower.startswith(prefix):
+                title = first_line[len(prefix):].strip()
+                return ("new_defect", title, body)
+
+        # Control commands
+        if lower.startswith("stop") or lower.startswith("pause"):
+            return ("control_stop", first_line, "")
+        if lower.startswith("skip"):
+            return ("control_skip", first_line, "")
+
+        # Status request
+        if lower.startswith("status"):
+            return ("info_request", first_line, "")
+
+        # Question detection
+        question_words = ("what", "how", "where", "when", "why", "which", "can", "is", "are", "do", "does", "will", "should")
+        if text.rstrip().endswith("?") or any(lower.startswith(w) for w in question_words):
+            return ("question", first_line, body)
+
+        return ("acknowledgement", first_line, body)
+
 
 def update_section_status(section: dict) -> None:
     """Update section status based on task statuses."""
