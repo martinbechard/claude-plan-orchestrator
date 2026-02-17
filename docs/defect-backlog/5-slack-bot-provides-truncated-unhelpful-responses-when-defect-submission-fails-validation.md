@@ -51,3 +51,34 @@ Created from Slack message by U0AEWQYSLF9 at 1771305584.251029.
 5. **Root cause of test failures:** The create_backlog_item method was refactored to return a dict instead of a string, but the 6 test mocks still return strings. The tests need updating to match the new return type.
 
 **Summary:** The production code correctly addresses the defect (truncation handling + comprehensive notifications with item references), but 6 unit tests are broken due to a return-type mismatch between the updated create_backlog_item (returns dict) and the test mocks (return string). The defect fix is incomplete until the tests are updated.
+
+### Verification #2 - 2026-02-17 01:35
+
+**Verdict: FAIL**
+
+**Checks performed:**
+- [x] Build passes (py_compile on auto-pipeline.py and plan-orchestrator.py)
+- [ ] Unit tests pass (3 failures out of 167 tests)
+- [x] _truncate_for_slack exists and handles message length limits
+- [x] _run_intake_analysis provides comprehensive notifications with item reference
+- [ ] Tests covering the defect's symptoms pass
+
+**Findings:**
+
+1. **Build (py_compile):** Both scripts/auto-pipeline.py and scripts/plan-orchestrator.py compile without syntax errors. PASS.
+
+2. **Unit tests:** 164 passed, 3 failed (improved from 6 failures in Verification #1). The 3 remaining failures are all in tests/test_slack_notifier.py and are caused by mocks returning a string instead of the dict that _run_intake_analysis now expects:
+
+   - test_intake_analysis_clear_request (line 1925): mock_create returns string "docs/feature-backlog/1-test.md" instead of dict. When _run_intake_analysis calls item_info['item_number'] on the string, it gets "string indices must be integers, not 'str'" TypeError, falls to exception handler, intake.status becomes "failed" instead of "done".
+   - test_intake_analysis_unstructured_response (line 1975): Same mock return type mismatch. intake.status == "failed" instead of "done".
+   - test_intake_empty_response_creates_fallback (line 2103): Same mock return type mismatch. intake.status == "failed" instead of "done".
+
+   The 3 create_backlog_item direct-call tests that failed in Verification #1 have been fixed (commit d5fa592).
+
+3. **Truncation handling:** The _truncate_for_slack static method at line 2808 properly truncates to SLACK_BLOCK_TEXT_MAX_LENGTH (2900 chars, line 95) with an omission indicator. It is called via _build_block_payload before every send_status call. PASS.
+
+4. **Comprehensive notifications:** _run_intake_analysis (line 3614) builds notifications that include: item reference with number and filename (e.g., "#1 - filename.md"), classification, and root need. The fallback paths (empty LLM response at line 3637, exception handler at line 3694) also include item references. The original symptom of truncated, unhelpful responses is addressed in production code. PASS.
+
+5. **Root cause of remaining failures:** The 3 _run_intake_analysis test mocks at lines 1890, 1951, and 2080 still return a string path instead of a dict with keys {filepath, filename, item_number}. This causes TypeError when the production code accesses item_info['item_number']. The mocks need to be updated to return e.g. {"filepath": "docs/feature-backlog/1-test.md", "filename": "1-test.md", "item_number": 1}.
+
+**Summary:** Progress from Verification #1: 3 of the 6 broken tests have been fixed (the create_backlog_item direct-call tests). However, 3 _run_intake_analysis tests still fail because their mock_create functions return a string instead of the dict that the production code now expects. The production code itself correctly addresses the defect. The fix remains incomplete until these 3 test mocks are updated.
