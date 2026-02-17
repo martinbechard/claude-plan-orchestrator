@@ -1,11 +1,11 @@
 meta:
   name: 'Defect Fix: Clarify Cost Reporting as API-Equivalent Estimates (plan-orchestrator.py)'
-  description: >
-    Apply API-equivalent cost labeling to plan-orchestrator.py's PlanUsageTracker
-    class. The auto-pipeline.py side was fixed in the prior attempt; this plan
-    addresses the remaining findings from Verification #1 where
-    format_summary_line() and format_final_summary() still show bare "$" amounts
-    without tilde prefix or "API-Equivalent" context.
+  description: 'Apply API-equivalent cost labeling to plan-orchestrator.py''s PlanUsageTracker
+    class. The auto-pipeline.py side was fixed in the prior attempt; this plan addresses
+    the remaining findings from Verification #1 where format_summary_line() and format_final_summary()
+    still show bare "$" amounts without tilde prefix or "API-Equivalent" context.
+
+    '
   plan_doc: docs/plans/2026-02-17-4-when-i-terminante-the-auto-pipeline-i-get-some-random-hallucinated-cost--this-m-design.md
   created: '2026-02-17'
   max_attempts_default: 3
@@ -16,7 +16,6 @@ meta:
     validators:
     - issue-verifier
     max_validation_attempts: 1
-
 sections:
 - id: phase-1
   name: Phase 1 - Implementation
@@ -25,51 +24,31 @@ sections:
   - id: '1.1'
     name: Update PlanUsageTracker cost formatting in plan-orchestrator.py
     agent: coder
-    status: pending
-    description: |
-      Read docs/defect-backlog/4-when-i-terminante-the-auto-pipeline-i-get-some-random-hallucinated-cost--this-m.md
-      to understand the defect and its Verification Log findings.
-
-      Read the design doc at docs/plans/2026-02-17-4-when-i-terminante-the-auto-pipeline-i-get-some-random-hallucinated-cost--this-m-design.md.
-
-      In scripts/plan-orchestrator.py, modify the PlanUsageTracker class:
-
-      1. In format_summary_line() (around line 558):
-         Change line 569 from:
-           f"[Usage] Task {task_id}{model_str}: ${u.total_cost_usd:.4f} | "
-         to:
-           f"[Usage] Task {task_id}{model_str}: ~${u.total_cost_usd:.4f} | "
-
-         Change line 572 from:
-           f"Running: ${total.total_cost_usd:.4f}"
-         to:
-           f"Running: ~${total.total_cost_usd:.4f}"
-
-      2. In format_final_summary() (around line 575):
-         Change the header line (580) from:
-           "\n=== Usage Summary ==="
-         to:
-           "\n=== Usage Summary (API-Equivalent Estimates) ==="
-
-         Insert a new line after the header:
-           "(These are API-equivalent costs reported by Claude CLI, not actual subscription charges)"
-
-         Change line 581 from:
-           f"Total cost: ${total.total_cost_usd:.4f}"
-         to:
-           f"Total API-equivalent cost: ~${total.total_cost_usd:.4f}"
-
-         Change the per-section line (595) from:
-           lines.append(f"  {sname}: ${su.total_cost_usd:.4f} ({task_count} tasks)")
-         to:
-           lines.append(f"  {sname}: ~${su.total_cost_usd:.4f} ({task_count} tasks)")
-
-      After making changes, verify syntax:
-        python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
-
-      Then verify auto-pipeline.py still compiles too:
-        python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)"
-
+    status: in_progress
+    description: "Read docs/defect-backlog/4-when-i-terminante-the-auto-pipeline-i-get-some-random-hallucinated-cost--this-m.md\n\
+      to understand the defect and its Verification Log findings.\n\nRead the design\
+      \ doc at docs/plans/2026-02-17-4-when-i-terminante-the-auto-pipeline-i-get-some-random-hallucinated-cost--this-m-design.md.\n\
+      \nIn scripts/plan-orchestrator.py, modify the PlanUsageTracker class:\n\n1.\
+      \ In format_summary_line() (around line 558):\n   Change line 569 from:\n  \
+      \   f\"[Usage] Task {task_id}{model_str}: ${u.total_cost_usd:.4f} | \"\n   to:\n\
+      \     f\"[Usage] Task {task_id}{model_str}: ~${u.total_cost_usd:.4f} | \"\n\n\
+      \   Change line 572 from:\n     f\"Running: ${total.total_cost_usd:.4f}\"\n\
+      \   to:\n     f\"Running: ~${total.total_cost_usd:.4f}\"\n\n2. In format_final_summary()\
+      \ (around line 575):\n   Change the header line (580) from:\n     \"\\n=== Usage\
+      \ Summary ===\"\n   to:\n     \"\\n=== Usage Summary (API-Equivalent Estimates)\
+      \ ===\"\n\n   Insert a new line after the header:\n     \"(These are API-equivalent\
+      \ costs reported by Claude CLI, not actual subscription charges)\"\n\n   Change\
+      \ line 581 from:\n     f\"Total cost: ${total.total_cost_usd:.4f}\"\n   to:\n\
+      \     f\"Total API-equivalent cost: ~${total.total_cost_usd:.4f}\"\n\n   Change\
+      \ the per-section line (595) from:\n     lines.append(f\"  {sname}: ${su.total_cost_usd:.4f}\
+      \ ({task_count} tasks)\")\n   to:\n     lines.append(f\"  {sname}: ~${su.total_cost_usd:.4f}\
+      \ ({task_count} tasks)\")\n\nAfter making changes, verify syntax:\n  python3\
+      \ -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True)\"\n\nThen verify auto-pipeline.py still compiles too:\n  python3\
+      \ -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)\"\
+      \n"
+    attempts: 1
+    last_attempt: '2026-02-17T00:42:30.872150'
 - id: phase-2
   name: Phase 2 - Tests
   status: pending
@@ -80,56 +59,34 @@ sections:
     depends_on:
     - '1.1'
     status: pending
-    description: |
-      Create tests/test_plan_orchestrator_usage.py with regression tests for the
-      API-equivalent cost formatting in PlanUsageTracker.
-
-      Import the module using importlib (plan-orchestrator.py has a hyphen):
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("plan_orchestrator", "scripts/plan-orchestrator.py")
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        PlanUsageTracker = mod.PlanUsageTracker
-        TaskUsage = mod.TaskUsage
-
-      Write these tests:
-
-      1. test_format_summary_line_has_tilde_prefix:
-         - Create a PlanUsageTracker, record a task usage using record() with a
-           mock usage dict (use the format from parse_task_usage: a dict with
-           "input_tokens", "output_tokens", "cache_creation_tokens",
-           "cache_read_tokens", "total_cost_usd", "duration_api_ms", "num_turns").
-         - Call format_summary_line() for that task.
-         - Assert the result contains "~$" (tilde prefix).
-         - Assert the result does NOT contain a bare "$ " followed by digits
-           without a preceding tilde (use a regex like r'(?<!~)\$\d' to check).
-
-      2. test_format_final_summary_has_api_equivalent_header:
-         - Create a PlanUsageTracker and record at least one task.
-         - Build a minimal plan dict: {"sections": [{"id": "s1", "name": "Section 1", "tasks": [{"id": "t1"}]}]}
-         - Call format_final_summary(plan).
-         - Assert "API-Equivalent Estimates" is in the output.
-         - Assert "not actual subscription charges" is in the output.
-         - Assert "Total API-equivalent cost:" is in the output.
-
-      3. test_format_final_summary_section_costs_have_tilde:
-         - Same setup as test 2.
-         - Assert the per-section line contains "~$".
-
-      4. test_format_summary_line_running_total_has_tilde:
-         - Record two tasks.
-         - Call format_summary_line() for the second task.
-         - Assert "Running: ~$" is in the output.
-
-      To record usage, use the PlanUsageTracker.record() method. Check its
-      signature first by reading the class. It takes (task_id, raw_usage_dict, model).
-      The raw_usage_dict should have the fields that parse_task_usage() expects.
-
-      After writing tests, run them:
-        python3 -m pytest tests/test_plan_orchestrator_usage.py -v
-
-      Fix any failures immediately.
-
+    description: "Create tests/test_plan_orchestrator_usage.py with regression tests\
+      \ for the\nAPI-equivalent cost formatting in PlanUsageTracker.\n\nImport the\
+      \ module using importlib (plan-orchestrator.py has a hyphen):\n  import importlib.util\n\
+      \  spec = importlib.util.spec_from_file_location(\"plan_orchestrator\", \"scripts/plan-orchestrator.py\"\
+      )\n  mod = importlib.util.module_from_spec(spec)\n  spec.loader.exec_module(mod)\n\
+      \  PlanUsageTracker = mod.PlanUsageTracker\n  TaskUsage = mod.TaskUsage\n\n\
+      Write these tests:\n\n1. test_format_summary_line_has_tilde_prefix:\n   - Create\
+      \ a PlanUsageTracker, record a task usage using record() with a\n     mock usage\
+      \ dict (use the format from parse_task_usage: a dict with\n     \"input_tokens\"\
+      , \"output_tokens\", \"cache_creation_tokens\",\n     \"cache_read_tokens\"\
+      , \"total_cost_usd\", \"duration_api_ms\", \"num_turns\").\n   - Call format_summary_line()\
+      \ for that task.\n   - Assert the result contains \"~$\" (tilde prefix).\n \
+      \  - Assert the result does NOT contain a bare \"$ \" followed by digits\n \
+      \    without a preceding tilde (use a regex like r'(?<!~)\\$\\d' to check).\n\
+      \n2. test_format_final_summary_has_api_equivalent_header:\n   - Create a PlanUsageTracker\
+      \ and record at least one task.\n   - Build a minimal plan dict: {\"sections\"\
+      : [{\"id\": \"s1\", \"name\": \"Section 1\", \"tasks\": [{\"id\": \"t1\"}]}]}\n\
+      \   - Call format_final_summary(plan).\n   - Assert \"API-Equivalent Estimates\"\
+      \ is in the output.\n   - Assert \"not actual subscription charges\" is in the\
+      \ output.\n   - Assert \"Total API-equivalent cost:\" is in the output.\n\n\
+      3. test_format_final_summary_section_costs_have_tilde:\n   - Same setup as test\
+      \ 2.\n   - Assert the per-section line contains \"~$\".\n\n4. test_format_summary_line_running_total_has_tilde:\n\
+      \   - Record two tasks.\n   - Call format_summary_line() for the second task.\n\
+      \   - Assert \"Running: ~$\" is in the output.\n\nTo record usage, use the PlanUsageTracker.record()\
+      \ method. Check its\nsignature first by reading the class. It takes (task_id,\
+      \ raw_usage_dict, model).\nThe raw_usage_dict should have the fields that parse_task_usage()\
+      \ expects.\n\nAfter writing tests, run them:\n  python3 -m pytest tests/test_plan_orchestrator_usage.py\
+      \ -v\n\nFix any failures immediately.\n"
 - id: phase-3
   name: Phase 3 - Verification
   status: pending
@@ -140,40 +97,26 @@ sections:
     depends_on:
     - '2.1'
     status: pending
-    description: |
-      Run the following verification steps to confirm the Verification #1 findings
-      are all resolved:
-
-      1. Compile-check both main scripts:
-         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
-
-      2. Run the full test suite:
-         python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
-
-      3. Verify "API-Equivalent Estimates" header in plan-orchestrator.py:
-         grep -n "API-Equivalent Estimates" scripts/plan-orchestrator.py
-         Expected: at least one match in format_final_summary.
-
-      4. Verify "not actual subscription charges" context in plan-orchestrator.py format_final_summary:
-         grep -n "not actual subscription charges" scripts/plan-orchestrator.py
-         Expected: at least one match within the format_final_summary method (not just in Slack context).
-
-      5. Verify tilde prefix on costs in plan-orchestrator.py:
-         grep -n '~\$' scripts/plan-orchestrator.py
-         Expected: matches in format_summary_line (task cost + running total) and
-         format_final_summary (total cost + per-section costs).
-
-      6. Verify old bare "Total cost:" is removed from plan-orchestrator.py:
-         grep -n 'Total cost:' scripts/plan-orchestrator.py
-         Expected: zero matches (should now be "Total API-equivalent cost:").
-
-      7. Verify auto-pipeline.py fixes are still intact:
-         grep -n 'API-Equivalent Estimates' scripts/auto-pipeline.py
-         Expected: at least one match.
-
-      8. Cross-check: no bare "$" cost amounts remain in format_summary_line or
-         format_final_summary. Search for lines matching the pattern:
-         grep -nE '(format_summary|format_final)' scripts/plan-orchestrator.py
-         Then manually review the surrounding cost formatting lines.
-
-      Report findings as PASS/WARN/FAIL with specific evidence for each check.
+    description: "Run the following verification steps to confirm the Verification\
+      \ #1 findings\nare all resolved:\n\n1. Compile-check both main scripts:\n  \
+      \ python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\
+      \n\n2. Run the full test suite:\n   python3 -m pytest tests/ 2>/dev/null ||\
+      \ echo 'No test suite configured'\n\n3. Verify \"API-Equivalent Estimates\"\
+      \ header in plan-orchestrator.py:\n   grep -n \"API-Equivalent Estimates\" scripts/plan-orchestrator.py\n\
+      \   Expected: at least one match in format_final_summary.\n\n4. Verify \"not\
+      \ actual subscription charges\" context in plan-orchestrator.py format_final_summary:\n\
+      \   grep -n \"not actual subscription charges\" scripts/plan-orchestrator.py\n\
+      \   Expected: at least one match within the format_final_summary method (not\
+      \ just in Slack context).\n\n5. Verify tilde prefix on costs in plan-orchestrator.py:\n\
+      \   grep -n '~\\$' scripts/plan-orchestrator.py\n   Expected: matches in format_summary_line\
+      \ (task cost + running total) and\n   format_final_summary (total cost + per-section\
+      \ costs).\n\n6. Verify old bare \"Total cost:\" is removed from plan-orchestrator.py:\n\
+      \   grep -n 'Total cost:' scripts/plan-orchestrator.py\n   Expected: zero matches\
+      \ (should now be \"Total API-equivalent cost:\").\n\n7. Verify auto-pipeline.py\
+      \ fixes are still intact:\n   grep -n 'API-Equivalent Estimates' scripts/auto-pipeline.py\n\
+      \   Expected: at least one match.\n\n8. Cross-check: no bare \"$\" cost amounts\
+      \ remain in format_summary_line or\n   format_final_summary. Search for lines\
+      \ matching the pattern:\n   grep -nE '(format_summary|format_final)' scripts/plan-orchestrator.py\n\
+      \   Then manually review the surrounding cost formatting lines.\n\nReport findings\
+      \ as PASS/WARN/FAIL with specific evidence for each check.\n"
