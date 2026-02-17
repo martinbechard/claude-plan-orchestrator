@@ -1,162 +1,110 @@
 meta:
   name: 'Defect Fix: Remove Unnecessary completed_slugs() Scan on Every Pipeline Cycle'
-  description: >
-    Refactor scan_all_backlogs() in auto-pipeline.py to lazy-evaluate
-    completed_slugs() only when a backlog item declares dependencies, and
-    remove the noisy verbose log line that prints the full completed set on
-    every scan cycle. The completed_slugs() function itself is preserved for
-    dependency resolution.
+  description: 'Refactor scan_all_backlogs() in auto-pipeline.py to lazy-evaluate
+    completed_slugs() only when a backlog item declares dependencies, and remove the
+    noisy verbose log line that prints the full completed set on every scan cycle.
+    The completed_slugs() function itself is preserved for dependency resolution.
+
+    '
   plan_doc: docs/plans/2026-02-16-02-unnecessary-completed-slugs-scan-design.md
   created: '2026-02-16'
   max_attempts_default: 3
   validation:
     enabled: true
     run_after:
-      - coder
+    - coder
     validators:
-      - issue-verifier
+    - issue-verifier
     max_validation_attempts: 1
-
 sections:
-  - id: phase-1
-    name: Phase 1 - Implementation
+- id: phase-1
+  name: Phase 1 - Implementation
+  status: completed
+  tasks:
+  - id: '1.1'
+    name: Refactor scan_all_backlogs() to lazy-evaluate completed_slugs()
+    agent: coder
+    status: completed
+    description: "In scripts/auto-pipeline.py, modify the scan_all_backlogs() function\
+      \ (starts at line 438) with two changes:\n1. REMOVE the verbose_log line at\
+      \ line 450:\n   verbose_log(f\"Completed slugs: {done}\")\n   Delete this line\
+      \ entirely.\n\n2. LAZY-EVALUATE completed_slugs(): Instead of calling completed_slugs()\n\
+      \   unconditionally at line 449, defer the call until the first item with\n\
+      \   dependencies is found. Replace:\n\n     done = completed_slugs()\n     verbose_log(f\"\
+      Completed slugs: {done}\")\n\n   With:\n\n     done: set[str] | None = None\n\
+      \n   Then inside the for loop, after the `if not deps: ready.append(item); continue`\n\
+      \   block, add a lazy initialization check before the unsatisfied check:\n\n\
+      \     if done is None:\n         done = completed_slugs()\n\nThe resulting function\
+      \ should look like:\n\n  def scan_all_backlogs() -> list[BacklogItem]:\n   \
+      \   defects = scan_directory(DEFECT_DIR, \"defect\")\n      features = scan_directory(FEATURE_DIR,\
+      \ \"feature\")\n      all_items = defects + features\n      done: set[str] |\
+      \ None = None\n      ready: list[BacklogItem] = []\n      for item in all_items:\n\
+      \          deps = parse_dependencies(item.path)\n          if not deps:\n  \
+      \            ready.append(item)\n              continue\n          if done is\
+      \ None:\n              done = completed_slugs()\n          unsatisfied = [d\
+      \ for d in deps if d not in done]\n          if unsatisfied:\n             \
+      \ log(f\"Skipped: {item.slug} (waiting on: {', '.join(unsatisfied)})\")\n  \
+      \        else:\n              ready.append(item)\n      return ready\n\nDo NOT\
+      \ remove or modify the completed_slugs() function itself - it is still needed\
+      \ for dependency resolution.\nAfter making changes, verify syntax:\n  python3\
+      \ -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)\"\
+      \n"
+    attempts: 1
+    last_attempt: '2026-02-16T21:54:52.557707'
+    model_used: sonnet
+    completed_at: '2026-02-16T21:56:30.725559'
+    result_message: Refactored scan_all_backlogs() to lazy-evaluate completed_slugs().
+      Removed verbose log line and deferred completed_slugs() call until first item
+      with dependencies is found. Verified syntax and committed changes.
+- id: phase-2
+  name: Phase 2 - Tests
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add regression test for lazy dependency resolution
+    agent: coder
     status: pending
-    tasks:
-      - id: '1.1'
-        name: Refactor scan_all_backlogs() to lazy-evaluate completed_slugs()
-        agent: coder
-        status: pending
-        description: >
-          In scripts/auto-pipeline.py, modify the scan_all_backlogs() function
-          (starts at line 438) with two changes:
-
-          1. REMOVE the verbose_log line at line 450:
-             verbose_log(f"Completed slugs: {done}")
-             Delete this line entirely.
-
-          2. LAZY-EVALUATE completed_slugs(): Instead of calling completed_slugs()
-             unconditionally at line 449, defer the call until the first item with
-             dependencies is found. Replace:
-
-               done = completed_slugs()
-               verbose_log(f"Completed slugs: {done}")
-
-             With:
-
-               done: set[str] | None = None
-
-             Then inside the for loop, after the `if not deps: ready.append(item); continue`
-             block, add a lazy initialization check before the unsatisfied check:
-
-               if done is None:
-                   done = completed_slugs()
-
-          The resulting function should look like:
-
-            def scan_all_backlogs() -> list[BacklogItem]:
-                defects = scan_directory(DEFECT_DIR, "defect")
-                features = scan_directory(FEATURE_DIR, "feature")
-                all_items = defects + features
-                done: set[str] | None = None
-                ready: list[BacklogItem] = []
-                for item in all_items:
-                    deps = parse_dependencies(item.path)
-                    if not deps:
-                        ready.append(item)
-                        continue
-                    if done is None:
-                        done = completed_slugs()
-                    unsatisfied = [d for d in deps if d not in done]
-                    if unsatisfied:
-                        log(f"Skipped: {item.slug} (waiting on: {', '.join(unsatisfied)})")
-                    else:
-                        ready.append(item)
-                return ready
-
-          Do NOT remove or modify the completed_slugs() function itself - it is
-          still needed for dependency resolution.
-
-          After making changes, verify syntax:
-            python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)"
-
-  - id: phase-2
-    name: Phase 2 - Tests
+    depends_on:
+    - '1.1'
+    description: "In tests/test_completed_archive.py, add a regression test that verifies\
+      \ scan_all_backlogs() does NOT call completed_slugs() when no items have dependencies,\
+      \ and DOES call it when at least one item has dependencies.\nImport scan_all_backlogs\
+      \ and parse_dependencies from the module:\n  scan_all_backlogs = mod.scan_all_backlogs\n\
+      \  parse_dependencies = mod.parse_dependencies\n\nTest 1 - test_scan_all_backlogs_skips_completed_slugs_when_no_deps:\n\
+      \  - Patch scan_directory to return a list with one BacklogItem that has\n \
+      \   no dependencies section.\n  - Patch parse_dependencies to return an empty\
+      \ list.\n  - Patch completed_slugs with a Mock.\n  - Call scan_all_backlogs().\n\
+      \  - Assert completed_slugs was NOT called (mock.assert_not_called()).\n  -\
+      \ Assert the item is in the returned list.\n\nTest 2 - test_scan_all_backlogs_calls_completed_slugs_when_deps_exist:\n\
+      \  - Patch scan_directory to return a list with one BacklogItem that has\n \
+      \   dependencies.\n  - Patch parse_dependencies to return [\"01-some-dep\"].\n\
+      \  - Patch completed_slugs to return {\"01-some-dep\"}.\n  - Call scan_all_backlogs().\n\
+      \  - Assert completed_slugs WAS called (mock.assert_called_once()).\n  - Assert\
+      \ the item is in the returned list (dependency satisfied).\n\nTest 3 - test_scan_all_backlogs_filters_unsatisfied_deps:\n\
+      \  - Patch scan_directory to return a list with one BacklogItem.\n  - Patch\
+      \ parse_dependencies to return [\"99-not-done\"].\n  - Patch completed_slugs\
+      \ to return an empty set.\n  - Call scan_all_backlogs().\n  - Assert the returned\
+      \ list is empty (item was filtered out).\n\nAfter writing the tests, run them:\n\
+      \  python3 -m pytest tests/test_completed_archive.py -v\n\nFix any failures\
+      \ immediately.\n"
+- id: phase-3
+  name: Phase 3 - Verification
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Verify syntax and run full test suite
+    agent: code-reviewer
     status: pending
-    tasks:
-      - id: '2.1'
-        name: Add regression test for lazy dependency resolution
-        agent: coder
-        status: pending
-        depends_on:
-          - '1.1'
-        description: >
-          In tests/test_completed_archive.py, add a regression test that verifies
-          scan_all_backlogs() does NOT call completed_slugs() when no items have
-          dependencies, and DOES call it when at least one item has dependencies.
-
-          Import scan_all_backlogs and parse_dependencies from the module:
-            scan_all_backlogs = mod.scan_all_backlogs
-            parse_dependencies = mod.parse_dependencies
-
-          Test 1 - test_scan_all_backlogs_skips_completed_slugs_when_no_deps:
-            - Patch scan_directory to return a list with one BacklogItem that has
-              no dependencies section.
-            - Patch parse_dependencies to return an empty list.
-            - Patch completed_slugs with a Mock.
-            - Call scan_all_backlogs().
-            - Assert completed_slugs was NOT called (mock.assert_not_called()).
-            - Assert the item is in the returned list.
-
-          Test 2 - test_scan_all_backlogs_calls_completed_slugs_when_deps_exist:
-            - Patch scan_directory to return a list with one BacklogItem that has
-              dependencies.
-            - Patch parse_dependencies to return ["01-some-dep"].
-            - Patch completed_slugs to return {"01-some-dep"}.
-            - Call scan_all_backlogs().
-            - Assert completed_slugs WAS called (mock.assert_called_once()).
-            - Assert the item is in the returned list (dependency satisfied).
-
-          Test 3 - test_scan_all_backlogs_filters_unsatisfied_deps:
-            - Patch scan_directory to return a list with one BacklogItem.
-            - Patch parse_dependencies to return ["99-not-done"].
-            - Patch completed_slugs to return an empty set.
-            - Call scan_all_backlogs().
-            - Assert the returned list is empty (item was filtered out).
-
-          After writing the tests, run them:
-            python3 -m pytest tests/test_completed_archive.py -v
-
-          Fix any failures immediately.
-
-  - id: phase-3
-    name: Phase 3 - Verification
-    status: pending
-    tasks:
-      - id: '3.1'
-        name: Verify syntax and run full test suite
-        agent: code-reviewer
-        status: pending
-        depends_on:
-          - '2.1'
-        description: >
-          Run the following verification steps:
-
-          1. Compile-check both main scripts:
-             python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
-
-          2. Run the full test suite:
-             python3 -m pytest tests/ -v 2>/dev/null || echo 'No test suite configured'
-
-          3. Verify the verbose log line was removed:
-             grep -n "Completed slugs" scripts/auto-pipeline.py
-             Expected: zero matches.
-
-          4. Verify completed_slugs() function still exists (not accidentally deleted):
-             grep -n "def completed_slugs" scripts/auto-pipeline.py
-             Expected: exactly one match.
-
-          5. Verify scan_all_backlogs() uses lazy evaluation:
-             grep -n "done: set\[str\] | None = None" scripts/auto-pipeline.py
-             Expected: one match inside scan_all_backlogs().
-
-          Report findings as PASS/WARN/FAIL.
+    depends_on:
+    - '2.1'
+    description: "Run the following verification steps:\n1. Compile-check both main\
+      \ scripts:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\
+      \n\n2. Run the full test suite:\n   python3 -m pytest tests/ -v 2>/dev/null\
+      \ || echo 'No test suite configured'\n\n3. Verify the verbose log line was removed:\n\
+      \   grep -n \"Completed slugs\" scripts/auto-pipeline.py\n   Expected: zero\
+      \ matches.\n\n4. Verify completed_slugs() function still exists (not accidentally\
+      \ deleted):\n   grep -n \"def completed_slugs\" scripts/auto-pipeline.py\n \
+      \  Expected: exactly one match.\n\n5. Verify scan_all_backlogs() uses lazy evaluation:\n\
+      \   grep -n \"done: set\\[str\\] | None = None\" scripts/auto-pipeline.py\n\
+      \   Expected: one match inside scan_all_backlogs().\n\nReport findings as PASS/WARN/FAIL.\n"
