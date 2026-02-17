@@ -3084,6 +3084,58 @@ class SlackNotifier:
             print(f"[SLACK] Failed to create backlog item: {e}")
             return ""
 
+    def handle_control_command(self, command: str, classification: str) -> None:
+        """Handle a control command from Slack.
+
+        Args:
+            command: The original message text
+            classification: One of 'control_stop', 'control_skip', 'info_request'
+        """
+        if classification == "control_stop":
+            # Write stop semaphore to signal graceful stop
+            try:
+                with open(STOP_SEMAPHORE_PATH, "w") as f:
+                    f.write(f"stop requested via Slack: {command}\n")
+                self.send_status(
+                    "*Stop requested* via Slack. Pipeline will stop after current task.",
+                    level="warning"
+                )
+            except IOError as e:
+                print(f"[SLACK] Failed to write stop semaphore: {e}")
+
+        elif classification == "control_skip":
+            self.send_status(
+                "*Skip requested* via Slack. (Note: skip is not yet implemented "
+                "in the orchestrator. Use 'stop' to halt the pipeline.)",
+                level="warning"
+            )
+
+        elif classification == "info_request":
+            # Post a basic status response
+            # Full pipeline state is not available inside SlackNotifier,
+            # so we post what we can determine
+            self.send_status(
+                "*Pipeline Status*\nState: running\n"
+                "_Use the terminal for detailed status._",
+                level="info"
+            )
+
+    def answer_question(self, question: str) -> None:
+        """Respond to a question from Slack.
+
+        For now, acknowledges the question and suggests using the terminal
+        for detailed answers. A future enhancement could use an LLM call.
+
+        Args:
+            question: The question text
+        """
+        self.send_status(
+            f"*Question received:* {question}\n"
+            "_Detailed answers are not yet available via Slack. "
+            "Check the terminal session for full pipeline context._",
+            level="info"
+        )
+
 
 def update_section_status(section: dict) -> None:
     """Update section status based on task statuses."""
