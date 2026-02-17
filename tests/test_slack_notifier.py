@@ -1138,3 +1138,305 @@ def test_classify_case_insensitive(tmp_path):
     classification, title, body = notifier.classify_message("Bug: something")
     assert classification == "new_defect"
     assert title == "something"
+
+
+# --- Test: create_backlog_item creates feature file ---
+
+
+def test_create_backlog_feature(tmp_path, monkeypatch):
+    """create_backlog_item should create a numbered feature file."""
+    import os
+
+    # Create temp working directory structure
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("docs/feature-backlog")
+
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    # Monkey-patch _post_message to capture calls
+    calls = []
+
+    def mock_post_message(payload):
+        calls.append(payload)
+        return True
+
+    notifier._post_message = mock_post_message
+
+    # Create backlog item
+    result = notifier.create_backlog_item(
+        "feature", "Cache TTL", "Add configurable expiry", "U123", "1234.5678"
+    )
+
+    # Verify file was created
+    assert result != ""
+    assert os.path.exists(result)
+
+    # Verify filename starts with "1-"
+    filename = os.path.basename(result)
+    assert filename.startswith("1-")
+    assert filename.endswith(".md")
+
+    # Verify file content
+    with open(result, "r") as f:
+        content = f.read()
+
+    assert "# Cache TTL" in content
+    assert "## Status: Open" in content
+    assert "## Priority: Medium" in content
+    assert "Add configurable expiry" in content
+    assert "Created from Slack message" in content
+    assert "by U123" in content
+    assert "at 1234.5678" in content
+
+    # Verify Slack notification
+    assert len(calls) == 1
+
+
+# --- Test: create_backlog_item creates defect file ---
+
+
+def test_create_backlog_defect(tmp_path, monkeypatch):
+    """create_backlog_item should create a numbered defect file."""
+    import os
+
+    # Create temp working directory structure
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("docs/defect-backlog")
+
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    # Monkey-patch _post_message
+    calls = []
+
+    def mock_post_message(payload):
+        calls.append(payload)
+        return True
+
+    notifier._post_message = mock_post_message
+
+    # Create defect item
+    result = notifier.create_backlog_item(
+        "defect", "Broken import", "Import fails in auth module", "U456", "2345.6789"
+    )
+
+    # Verify file was created in defect-backlog
+    assert result != ""
+    assert "defect-backlog" in result
+    assert os.path.exists(result)
+
+    # Verify content
+    with open(result, "r") as f:
+        content = f.read()
+
+    assert "# Broken import" in content
+    assert "Import fails in auth module" in content
+
+
+# --- Test: create_backlog_item numbering ---
+
+
+def test_create_backlog_numbering(tmp_path, monkeypatch):
+    """create_backlog_item should use next available number."""
+    import os
+
+    # Create temp working directory structure
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("docs/feature-backlog")
+
+    # Create an existing file with number 15
+    existing_file = "docs/feature-backlog/15-existing.md"
+    with open(existing_file, "w") as f:
+        f.write("# Existing\n")
+
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    # Monkey-patch _post_message
+    notifier._post_message = lambda payload: True
+
+    # Create new item
+    result = notifier.create_backlog_item("feature", "New Feature", "", "", "")
+
+    # Verify filename starts with "16-"
+    filename = os.path.basename(result)
+    assert filename.startswith("16-")
+
+
+# --- Test: process_inbound when disabled ---
+
+
+def test_process_inbound_disabled(tmp_path):
+    """process_inbound should be a no-op when disabled."""
+    nonexistent_path = tmp_path / "nonexistent.yaml"
+    notifier = SlackNotifier(config_path=str(nonexistent_path))
+
+    # Should not raise any errors
+    notifier.process_inbound()
+
+
+# --- Test: process_inbound dispatches feature ---
+
+
+def test_process_inbound_dispatches_feature(tmp_path, monkeypatch):
+    """process_inbound should call create_backlog_item for feature messages."""
+    import os
+
+    # Create temp working directory structure
+    monkeypatch.chdir(tmp_path)
+    os.makedirs("docs/feature-backlog")
+
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    # Monkey-patch poll_messages
+    def mock_poll_messages():
+        return [{"text": "feature: New feature", "user": "U1", "ts": "1.0"}]
+
+    notifier.poll_messages = mock_poll_messages
+
+    # Track create_backlog_item calls
+    backlog_calls = []
+
+    original_create_backlog_item = notifier.create_backlog_item
+
+    def mock_create_backlog_item(item_type, title, body, user, ts):
+        backlog_calls.append((item_type, title, body, user, ts))
+        return original_create_backlog_item(item_type, title, body, user, ts)
+
+    notifier.create_backlog_item = mock_create_backlog_item
+
+    # Monkey-patch _post_message
+    notifier._post_message = lambda payload: True
+
+    # Process inbound
+    notifier.process_inbound()
+
+    # Verify create_backlog_item was called
+    assert len(backlog_calls) == 1
+    assert backlog_calls[0][0] == "feature"
+    assert backlog_calls[0][1] == "New feature"
+    assert backlog_calls[0][3] == "U1"
+    assert backlog_calls[0][4] == "1.0"
+
+
+# --- Test: process_inbound dispatches stop command ---
+
+
+def test_process_inbound_dispatches_stop(tmp_path):
+    """process_inbound should call handle_control_command for stop messages."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    # Monkey-patch poll_messages
+    def mock_poll_messages():
+        return [{"text": "stop", "user": "U1", "ts": "1.0"}]
+
+    notifier.poll_messages = mock_poll_messages
+
+    # Track handle_control_command calls
+    control_calls = []
+
+    original_handle_control_command = notifier.handle_control_command
+
+    def mock_handle_control_command(command, classification):
+        control_calls.append((command, classification))
+        original_handle_control_command(command, classification)
+
+    notifier.handle_control_command = mock_handle_control_command
+
+    # Monkey-patch _post_message
+    notifier._post_message = lambda payload: True
+
+    # Process inbound
+    notifier.process_inbound()
+
+    # Verify handle_control_command was called
+    assert len(control_calls) == 1
+    assert control_calls[0][0] == "stop"
+    assert control_calls[0][1] == "control_stop"
+
+
+# --- Test: process_inbound error resilience ---
+
+
+def test_process_inbound_error_resilience(tmp_path):
+    """process_inbound should not propagate exceptions."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    # Monkey-patch poll_messages to raise an exception
+    def mock_poll_messages():
+        raise RuntimeError("Test error")
+
+    notifier.poll_messages = mock_poll_messages
+
+    # Should not raise any errors
+    notifier.process_inbound()
