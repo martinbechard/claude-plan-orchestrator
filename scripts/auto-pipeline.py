@@ -66,6 +66,7 @@ COMPLETED_DIRS = {
 }
 PLANS_DIR = ".claude/plans"
 DESIGN_DIR = "docs/plans"
+VERIFICATION_EXHAUSTED_STATUS = "Archived (verification failed)"
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
 SAFETY_SCAN_INTERVAL_SECONDS = 60
 PLAN_CREATION_TIMEOUT_SECONDS = 600
@@ -1545,6 +1546,25 @@ def _archive_and_report(
     return True
 
 
+def _mark_as_verification_exhausted(item_path: str) -> None:
+    """Update Status line in defect markdown to indicate verification was exhausted."""
+    try:
+        with open(item_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        updated_content = content.replace(
+            "## Status: Open",
+            f"## Status: {VERIFICATION_EXHAUSTED_STATUS}"
+        )
+
+        with open(item_path, "w", encoding="utf-8") as f:
+            f.write(updated_content)
+
+        log(f"Updated status to '{VERIFICATION_EXHAUSTED_STATUS}': {item_path}")
+    except IOError as e:
+        log(f"WARNING: Could not update status in {item_path}: {e}")
+
+
 def process_item(
     item: BacklogItem,
     dry_run: bool = False,
@@ -1595,12 +1615,19 @@ def process_item(
 
     if remaining_cycles == 0:
         log(f"Max verification cycles ({MAX_VERIFICATION_CYCLES}) already reached "
-            f"({prior_verifications} prior attempts). Skipping {item.slug}.")
+            f"({prior_verifications} prior attempts). Archiving {item.slug}.")
         # Clean up leftover plan YAML to prevent re-processing on restart
         plan_path = f"{PLANS_DIR}/{item.slug}.yaml"
         if os.path.exists(plan_path):
             os.remove(plan_path)
             log(f"Cleaned up stale plan: {plan_path}")
+        _mark_as_verification_exhausted(item.path)
+        slack.send_status(
+            f"*Pipeline: verification exhausted* {item.display_name}\n"
+            f"Archived after {MAX_VERIFICATION_CYCLES} failed verification cycles.",
+            level="warning"
+        )
+        _archive_and_report(item, slack, item_start, dry_run)
         return False
 
     plan_path = None
@@ -1662,11 +1689,18 @@ def process_item(
         else:
             log(f"Max verification cycles ({MAX_VERIFICATION_CYCLES}) reached for {item.slug}")
 
-    # Clean up plan YAML after max cycles to prevent re-processing on restart
+    # Clean up plan YAML after max cycles
     if plan_path and os.path.exists(plan_path):
         os.remove(plan_path)
         log(f"Cleaned up plan after max cycles: {plan_path}")
-    log("Defect stays in queue with accumulated verification findings.")
+    _mark_as_verification_exhausted(item.path)
+    slack.send_status(
+        f"*Pipeline: verification exhausted* {item.display_name}\n"
+        f"Archived after {MAX_VERIFICATION_CYCLES} failed verification cycles.",
+        level="warning"
+    )
+    _archive_and_report(item, slack, item_start, dry_run)
+    log("Defect archived with accumulated verification findings.")
 
     return False
 
