@@ -28,6 +28,14 @@ from zoneinfo import ZoneInfo
 
 import yaml
 
+# Optional Socket Mode support for interactive Slack questions
+try:
+    from slack_bolt import App
+    from slack_bolt.adapter.socket_mode import SocketModeHandler
+    SOCKET_MODE_AVAILABLE = True
+except ImportError:
+    SOCKET_MODE_AVAILABLE = False
+
 # Worktree configuration
 WORKTREE_BASE_DIR = ".worktrees"
 
@@ -2547,6 +2555,9 @@ class SlackNotifier:
         self._channel_id = ""
         self._notify_config = {}
         self._question_config = {}
+        self._socket_handler = None
+        self._pending_answer = None  # threading.Event set when answer received
+        self._last_answer = None     # stores the answer value
 
         try:
             with open(config_path, "r") as f:
@@ -2591,6 +2602,34 @@ class SlackNotifier:
             True if enabled and event is configured for notification
         """
         return self._enabled and self._notify_config.get(event, False)
+
+    def _ensure_socket_mode(self) -> bool:
+        """Start Socket Mode handler if available and not already running.
+
+        Returns:
+            True if Socket Mode is available and started, False otherwise
+        """
+        if not SOCKET_MODE_AVAILABLE:
+            return False
+        if self._socket_handler is not None:
+            return True
+        if not self._app_token:
+            return False
+        try:
+            app = App(token=self._bot_token)
+            @app.action(re.compile(r"orchestrator_answer_.*"))
+            def handle_answer(ack, action, body):
+                ack()
+                self._last_answer = action.get("value", "")
+                if self._pending_answer:
+                    self._pending_answer.set()
+            handler = SocketModeHandler(app, self._app_token)
+            handler.connect()  # non-blocking WebSocket connect
+            self._socket_handler = handler
+            return True
+        except Exception as e:
+            print(f"[SLACK] Socket Mode failed to start: {e}")
+            return False
 
     def _post_message(self, payload: dict) -> bool:
         """POST a message to Slack via chat.postMessage API.
@@ -2664,10 +2703,11 @@ class SlackNotifier:
         options: list[str],
         timeout_minutes: int = 0
     ) -> str | None:
-        """Send a question to Slack and poll for answer via file.
+        """Send a question to Slack and wait for answer.
 
-        Posts question to Slack, then polls for .claude/slack-answer.json.
-        Returns the answer string, or None on timeout.
+        Uses Socket Mode for interactive buttons if available, otherwise falls
+        back to file-based polling. Posts question to Slack with Block Kit action
+        buttons (Socket Mode) or text instructions (file-based).
 
         Args:
             question: Question text
@@ -2685,62 +2725,103 @@ class SlackNotifier:
         effective_timeout = timeout_minutes or self._question_config.get("timeout_minutes", 60)
         fallback = self._question_config.get("fallback", "skip")
 
-        # Post question to Slack
-        options_text = " | ".join(f"`{opt}`" for opt in options)
-        msg = f":question: *{question}*\nOptions: {options_text}\n_Reply by creating `.claude/slack-answer.json` with `{{\"answer\": \"your_choice\"}}`_"
-        self._post_message(self._build_status_block(msg, "question"))
+        # Try to use Socket Mode if available
+        use_socket = self._ensure_socket_mode()
 
-        # Write pending question file
-        question_data = {
-            "question": question,
-            "options": options,
-            "asked_at": datetime.now(ZoneInfo("UTC")).isoformat(),
-            "timeout_minutes": effective_timeout
-        }
+        # Build question payload
+        if use_socket:
+            # Block Kit action buttons for interactive response
+            actions = [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": opt},
+                    "action_id": f"orchestrator_answer_{i}",
+                    "value": opt
+                }
+                for i, opt in enumerate(options)
+            ]
+            payload = {
+                "blocks": [
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": f":question: *{question}*"}
+                    },
+                    {
+                        "type": "actions",
+                        "elements": actions
+                    }
+                ]
+            }
+        else:
+            # Text-based question with file polling instructions
+            options_text = " | ".join(f"`{opt}`" for opt in options)
+            msg = f":question: *{question}*\nOptions: {options_text}\n_Reply by creating `.claude/slack-answer.json` with `{{\"answer\": \"your_choice\"}}`_"
+            payload = self._build_status_block(msg, "question")
 
-        try:
-            with open(SLACK_QUESTION_PATH, "w") as f:
-                json.dump(question_data, f, indent=2)
-        except IOError as e:
-            print(f"[SLACK] Failed to write question file: {e}")
-            return None
+        # Post the question
+        self._post_message(payload)
 
-        # Poll for answer
-        start_time = time.time()
-        timeout_seconds = effective_timeout * 60
+        # Wait for answer via Socket Mode or file polling
+        if use_socket:
+            # Socket Mode: wait for button click via threading.Event
+            self._pending_answer = threading.Event()
+            self._last_answer = None
+            answered = self._pending_answer.wait(timeout=effective_timeout * 60)
+            if answered and self._last_answer:
+                return self._last_answer
+            return fallback
+        else:
+            # File-based polling: write pending question file and poll for answer
+            question_data = {
+                "question": question,
+                "options": options,
+                "asked_at": datetime.now(ZoneInfo("UTC")).isoformat(),
+                "timeout_minutes": effective_timeout
+            }
 
-        while time.time() - start_time < timeout_seconds:
             try:
-                if os.path.exists(SLACK_ANSWER_PATH):
-                    with open(SLACK_ANSWER_PATH, "r") as f:
-                        answer_data = json.load(f)
+                with open(SLACK_QUESTION_PATH, "w") as f:
+                    json.dump(question_data, f, indent=2)
+            except IOError as e:
+                print(f"[SLACK] Failed to write question file: {e}")
+                return None
 
-                    answer = answer_data.get("answer", "")
+            # Poll for answer
+            start_time = time.time()
+            timeout_seconds = effective_timeout * 60
 
-                    # Clean up files
-                    try:
-                        os.remove(SLACK_ANSWER_PATH)
-                    except OSError:
-                        pass
-                    try:
-                        os.remove(SLACK_QUESTION_PATH)
-                    except OSError:
-                        pass
+            while time.time() - start_time < timeout_seconds:
+                try:
+                    if os.path.exists(SLACK_ANSWER_PATH):
+                        with open(SLACK_ANSWER_PATH, "r") as f:
+                            answer_data = json.load(f)
 
-                    return answer
+                        answer = answer_data.get("answer", "")
 
-            except (IOError, json.JSONDecodeError) as e:
-                print(f"[SLACK] Error reading answer file: {e}")
+                        # Clean up files
+                        try:
+                            os.remove(SLACK_ANSWER_PATH)
+                        except OSError:
+                            pass
+                        try:
+                            os.remove(SLACK_QUESTION_PATH)
+                        except OSError:
+                            pass
 
-            time.sleep(SLACK_POLL_INTERVAL_SECONDS)
+                        return answer
 
-        # Timeout - clean up and return fallback
-        try:
-            os.remove(SLACK_QUESTION_PATH)
-        except OSError:
-            pass
+                except (IOError, json.JSONDecodeError) as e:
+                    print(f"[SLACK] Error reading answer file: {e}")
 
-        return fallback
+                time.sleep(SLACK_POLL_INTERVAL_SECONDS)
+
+            # Timeout - clean up and return fallback
+            try:
+                os.remove(SLACK_QUESTION_PATH)
+            except OSError:
+                pass
+
+            return fallback
 
     def send_defect(self, title: str, description: str, file_path: str = "") -> None:
         """Send a defect report to Slack.
