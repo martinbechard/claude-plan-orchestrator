@@ -1,0 +1,413 @@
+meta:
+  name: Auto-Restart Pipeline on Code Change
+  description: >
+    Enhance the auto-pipeline hot-reload mechanism with a background thread
+    that periodically checks source file hashes, detects code changes promptly
+    (even during long orchestrator runs), and triggers a graceful restart.
+    Extracts the restart sequence into a reusable helper to eliminate code
+    duplication across restart call sites.
+  plan_doc: docs/plans/2026-02-17-1-auto-restart-pipeline-process-when-pipeline-code-is-modified-design.md
+  created: '2026-02-17'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+      - coder
+    validators:
+      - validator
+    max_validation_attempts: 1
+
+sections:
+- id: phase-1
+  name: Phase 1 - CodeChangeMonitor Background Thread
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add CodeChangeMonitor class and CODE_CHANGE_POLL_INTERVAL_SECONDS constant
+    agent: coder
+    status: pending
+    description: |
+      In scripts/auto-pipeline.py, add a CodeChangeMonitor class that runs a
+      background daemon thread to periodically check for source code changes.
+
+      Reference: docs/plans/2026-02-17-1-auto-restart-pipeline-process-when-pipeline-code-is-modified-design.md
+
+      Steps:
+      1. Add a new constant near the other timing constants (around line 71-76):
+         CODE_CHANGE_POLL_INTERVAL_SECONDS = 10
+
+      2. Add the CodeChangeMonitor class after the hot-reload detection section
+         (after the check_code_changed() function, around line 381):
+
+         class CodeChangeMonitor:
+             """Background thread that periodically checks for source code changes.
+
+             Uses the existing check_code_changed() function which compares current
+             file hashes against _startup_file_hashes. When a change is detected,
+             sets the restart_pending event so the main loop can initiate a restart.
+             """
+
+             def __init__(self, poll_interval: float = CODE_CHANGE_POLL_INTERVAL_SECONDS):
+                 self.poll_interval = poll_interval
+                 self.restart_pending = threading.Event()
+                 self._stop_event = threading.Event()
+                 self._thread: Optional[threading.Thread] = None
+
+             def start(self) -> None:
+                 """Start the background monitoring thread."""
+                 self._thread = threading.Thread(
+                     target=self._monitor_loop, daemon=True, name="code-change-monitor"
+                 )
+                 self._thread.start()
+                 verbose_log(f"CodeChangeMonitor started (polling every {self.poll_interval}s)")
+
+             def stop(self) -> None:
+                 """Signal the monitoring thread to stop."""
+                 self._stop_event.set()
+                 if self._thread and self._thread.is_alive():
+                     self._thread.join(timeout=2)
+
+             def _monitor_loop(self) -> None:
+                 """Periodically check for source code changes."""
+                 while not self._stop_event.is_set():
+                     try:
+                         if check_code_changed():
+                             log("CodeChangeMonitor: source code change detected")
+                             self.restart_pending.set()
+                             return  # Stop monitoring once change detected
+                     except Exception as e:
+                         verbose_log(f"CodeChangeMonitor error: {e}")
+                     self._stop_event.wait(timeout=self.poll_interval)
+
+      3. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
+
+      Files: scripts/auto-pipeline.py
+
+- id: phase-2
+  name: Phase 2 - Extract Restart Helper
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Extract _perform_restart() helper function
+    agent: coder
+    status: pending
+    depends_on:
+      - '1.1'
+    description: |
+      In scripts/auto-pipeline.py, extract the restart logic that currently
+      exists in two places (after in-progress plan resumption around line 1784,
+      and after process_item around line 1859) into a single helper function.
+
+      Reference: docs/plans/2026-02-17-1-auto-restart-pipeline-process-when-pipeline-code-is-modified-design.md
+
+      Steps:
+      1. Add a _perform_restart() function in the "Main Pipeline" section,
+         before the main_loop() function:
+
+         def _perform_restart(
+             reason: str,
+             slack: "SlackNotifier",
+             session_tracker: SessionUsageTracker,
+             observer: Optional["Observer"] = None,
+             code_monitor: Optional["CodeChangeMonitor"] = None,
+         ) -> None:
+             """Perform a graceful pipeline restart via os.execv().
+
+             Handles cleanup: Slack notification, session summary, stopping
+             background threads, and restoring terminal settings.
+
+             Args:
+                 reason: Human-readable reason for the restart (for logs/Slack).
+                 slack: SlackNotifier instance for sending notifications.
+                 session_tracker: Session usage tracker for summary output.
+                 observer: Watchdog observer to stop (None in --once mode).
+                 code_monitor: CodeChangeMonitor to stop before restart.
+             """
+             log(f"Restarting pipeline: {reason}")
+             slack.send_status(
+                 f"*Pipeline: restarting* {reason}",
+                 level="info"
+             )
+             if session_tracker.work_item_costs:
+                 print(session_tracker.format_session_summary())
+                 session_tracker.write_session_report()
+             if code_monitor:
+                 code_monitor.stop()
+             slack.stop_background_polling()
+             if observer:
+                 observer.stop()
+                 observer.join(timeout=5)
+             restore_terminal_settings()
+             os.execv(sys.executable, [sys.executable] + sys.argv)
+
+      2. Replace the two existing inline restart blocks in main_loop() with
+         calls to _perform_restart():
+
+         a. The block around line 1784-1798 (after in-progress plan resumption):
+            Replace the entire if check_code_changed(): block with:
+              if code_monitor.restart_pending.is_set():
+                  _perform_restart(
+                      "Code change detected after resuming plans",
+                      slack, session_tracker, observer, code_monitor
+                  )
+
+         b. The block around line 1859-1875 (after process_item in the item loop):
+            Replace the entire if check_code_changed(): block with:
+              if code_monitor.restart_pending.is_set():
+                  _perform_restart(
+                      "Code change detected between work items",
+                      slack, session_tracker,
+                      observer if not once else None,
+                      code_monitor
+                  )
+
+      3. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
+
+      Files: scripts/auto-pipeline.py
+
+- id: phase-3
+  name: Phase 3 - Integrate Monitor into Main Loop
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Wire CodeChangeMonitor into main_loop
+    agent: coder
+    status: pending
+    depends_on:
+      - '2.1'
+    description: |
+      In scripts/auto-pipeline.py, integrate the CodeChangeMonitor into the
+      main_loop() function so it runs alongside the filesystem watcher.
+
+      Reference: docs/plans/2026-02-17-1-auto-restart-pipeline-process-when-pipeline-code-is-modified-design.md
+
+      Steps:
+      1. In main_loop(), after the line that starts the filesystem observer
+         (around "observer.start()" / "log('Filesystem watcher started')"),
+         create and start the CodeChangeMonitor:
+
+         code_monitor = CodeChangeMonitor()
+         code_monitor.start()
+
+         Also create it for --once mode (before the if not once: block), but
+         still start it unconditionally since even single-item mode benefits
+         from knowing if code changed during execution.
+
+      2. Add a restart check in the idle wait section. Currently the idle
+         wait is:
+           new_item_event.clear()
+           new_item_event.wait(timeout=SAFETY_SCAN_INTERVAL_SECONDS)
+           continue
+
+         Change it to check for restart after the wait returns:
+           new_item_event.clear()
+           new_item_event.wait(timeout=SAFETY_SCAN_INTERVAL_SECONDS)
+           if code_monitor.restart_pending.is_set():
+               _perform_restart(
+                   "Code change detected while idle",
+                   slack, session_tracker, observer, code_monitor
+               )
+           continue
+
+      3. In the finally block at the end of main_loop(), add code_monitor.stop()
+         before the existing cleanup:
+           code_monitor.stop()
+
+      4. Remove the two old direct calls to check_code_changed() in main_loop()
+         that were replaced in task 2.1. If any lingering references remain to
+         the inline restart blocks, remove them. The only check_code_changed()
+         calls should now be inside CodeChangeMonitor._monitor_loop().
+
+      5. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
+
+      Files: scripts/auto-pipeline.py
+
+- id: phase-4
+  name: Phase 4 - Unit Tests
+  status: pending
+  tasks:
+  - id: '4.1'
+    name: Add unit tests for CodeChangeMonitor
+    agent: coder
+    status: pending
+    depends_on:
+      - '3.1'
+    description: |
+      In tests/test_auto_pipeline.py, add unit tests for the CodeChangeMonitor class.
+
+      Steps:
+      1. Import CodeChangeMonitor and CODE_CHANGE_POLL_INTERVAL_SECONDS from
+         the module (using the existing importlib pattern):
+           CodeChangeMonitor = mod.CodeChangeMonitor
+           CODE_CHANGE_POLL_INTERVAL_SECONDS = mod.CODE_CHANGE_POLL_INTERVAL_SECONDS
+
+      2. Add the following test cases:
+
+         a. test_code_change_monitor_starts_and_stops():
+            - Create a CodeChangeMonitor with poll_interval=0.1
+            - Call start()
+            - Assert _thread is not None and is alive
+            - Call stop()
+            - Assert _thread is no longer alive (or joined)
+
+         b. test_code_change_monitor_detects_change():
+            - Create a temp file with initial content
+            - Compute its hash
+            - Set mod._startup_file_hashes to {temp_file: hash}
+            - Save and replace mod.HOT_RELOAD_WATCHED_FILES with [temp_file]
+            - Create CodeChangeMonitor with poll_interval=0.1
+            - Start the monitor
+            - Modify the temp file content
+            - Wait up to 2 seconds for restart_pending to be set
+            - Assert restart_pending.is_set() is True
+            - Stop the monitor
+            - Restore mod._startup_file_hashes and mod.HOT_RELOAD_WATCHED_FILES
+            - Clean up temp file
+
+         c. test_code_change_monitor_no_change():
+            - Create a temp file, compute its hash
+            - Set mod._startup_file_hashes to {temp_file: hash}
+            - Save and replace mod.HOT_RELOAD_WATCHED_FILES
+            - Create CodeChangeMonitor with poll_interval=0.1
+            - Start the monitor
+            - Wait 0.5 seconds (several poll cycles)
+            - Assert restart_pending.is_set() is False
+            - Stop the monitor
+            - Restore globals, clean up temp file
+
+         d. test_code_change_monitor_default_interval():
+            - Create a CodeChangeMonitor with no arguments
+            - Assert poll_interval == CODE_CHANGE_POLL_INTERVAL_SECONDS
+
+      3. Run all tests:
+         python3 -m pytest tests/test_auto_pipeline.py -v
+         Fix any failures.
+
+      Files: tests/test_auto_pipeline.py
+
+  - id: '4.2'
+    name: Add unit test for _perform_restart helper
+    agent: coder
+    status: pending
+    depends_on:
+      - '3.1'
+    description: |
+      In tests/test_auto_pipeline.py, add a test for the _perform_restart()
+      function using mocking to verify the cleanup sequence.
+
+      Steps:
+      1. Import _perform_restart from the module:
+           _perform_restart = mod._perform_restart
+
+      2. Add the test:
+
+         def test_perform_restart_calls_cleanup_sequence(monkeypatch):
+             """Verify _perform_restart performs cleanup before os.execv."""
+             from unittest.mock import MagicMock, patch
+
+             # Create mock dependencies
+             mock_slack = MagicMock()
+             mock_tracker = MagicMock()
+             mock_tracker.work_item_costs = []
+             mock_observer = MagicMock()
+             mock_monitor = MagicMock()
+
+             # Patch os.execv to prevent actual restart
+             with patch.object(mod.os, 'execv', side_effect=SystemExit(0)) as mock_execv:
+                 try:
+                     _perform_restart(
+                         "test reason",
+                         mock_slack,
+                         mock_tracker,
+                         mock_observer,
+                         mock_monitor,
+                     )
+                 except SystemExit:
+                     pass
+
+             # Verify cleanup was called
+             mock_slack.send_status.assert_called_once()
+             assert "test reason" in mock_slack.send_status.call_args[0][0]
+             mock_monitor.stop.assert_called_once()
+             mock_slack.stop_background_polling.assert_called_once()
+             mock_observer.stop.assert_called_once()
+             mock_observer.join.assert_called_once()
+             mock_execv.assert_called_once()
+
+      3. Run tests:
+         python3 -m pytest tests/test_auto_pipeline.py -v
+         Fix any failures.
+
+      Files: tests/test_auto_pipeline.py
+
+- id: phase-5
+  name: Phase 5 - Verification
+  status: pending
+  tasks:
+  - id: '5.1'
+    name: Verify syntax, tests, and integration
+    agent: code-reviewer
+    status: pending
+    depends_on:
+      - '4.1'
+      - '4.2'
+    description: |
+      Run verification checks to confirm the auto-restart feature works correctly.
+
+      Steps:
+      1. Check Python syntax for both scripts:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+      2. Run unit tests:
+         python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
+
+      3. Verify the CodeChangeMonitor class exists and has expected methods:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert hasattr(mod, 'CodeChangeMonitor'), 'CodeChangeMonitor not found'
+         m = mod.CodeChangeMonitor()
+         assert hasattr(m, 'start'), 'Missing start method'
+         assert hasattr(m, 'stop'), 'Missing stop method'
+         assert hasattr(m, 'restart_pending'), 'Missing restart_pending event'
+         assert hasattr(m, '_monitor_loop'), 'Missing _monitor_loop method'
+         print('CodeChangeMonitor class verified')
+         "
+
+      4. Verify _perform_restart function exists:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert hasattr(mod, '_perform_restart'), '_perform_restart not found'
+         assert callable(mod._perform_restart), '_perform_restart not callable'
+         print('_perform_restart function verified')
+         "
+
+      5. Verify CODE_CHANGE_POLL_INTERVAL_SECONDS constant exists:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert hasattr(mod, 'CODE_CHANGE_POLL_INTERVAL_SECONDS')
+         assert isinstance(mod.CODE_CHANGE_POLL_INTERVAL_SECONDS, (int, float))
+         assert mod.CODE_CHANGE_POLL_INTERVAL_SECONDS > 0
+         print(f'CODE_CHANGE_POLL_INTERVAL_SECONDS = {mod.CODE_CHANGE_POLL_INTERVAL_SECONDS}')
+         "
+
+      6. Verify the old inline check_code_changed() calls in main_loop have
+         been replaced (should NOT appear directly in main_loop body anymore,
+         only inside CodeChangeMonitor._monitor_loop):
+         Count occurrences of check_code_changed() in the file - expect exactly
+         2: the function definition and the call inside _monitor_loop.
+
+      If any check fails, report the failure with specific details.
+
+      Files: scripts/auto-pipeline.py, tests/test_auto_pipeline.py
