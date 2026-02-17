@@ -1,10 +1,20 @@
 # Slack notifications for the plan orchestrator.
-# Copy this file to .claude/slack.local.yaml and fill in your webhook URL.
+# Copy this file to .claude/slack.local.yaml and fill in your tokens.
 # The .local.yaml file is gitignored and must never be committed.
+#
+# Setup: Create a Slack App at https://api.slack.com/apps
+#   1. Create new app from scratch
+#   2. Enable Socket Mode (Settings > Socket Mode) - generates app_token (xapp-...)
+#   3. Add Bot Token Scopes (OAuth & Permissions): chat:write, channels:read
+#   4. Enable Interactivity (Interactivity & Shortcuts) - required for button responses
+#   5. Install to workspace - generates bot_token (xoxb-...)
+#   6. Invite bot to your channel, note the channel_id (right-click channel > View channel details)
+#   7. For interactive questions: pip install slack-bolt (optional, falls back to file polling)
 slack:
   enabled: true
-  webhook_url: "https://hooks.slack.com/services/T.../B.../xxx"
-  channel: "#orchestrator-updates"
+  bot_token: "xoxb-your-bot-token-here"
+  app_token: "xapp-your-app-token-here"
+  channel_id: "C0123456789"
   notify:
     on_plan_start: true
     on_task_complete: true
