@@ -1,11 +1,12 @@
 meta:
   name: 'Defect Fix: Slack Bot Truncated Responses - Test Alignment'
-  description: >
-    The production code fix for truncated Slack responses is already in place
-    (create_backlog_item returns dict, _truncate_for_slack helper, comprehensive
-    notifications). Six unit tests in tests/test_slack_notifier.py are broken
-    because their mocks/assertions still use the old string return type.
-    This plan updates those tests to match the new API contract.
+  description: 'The production code fix for truncated Slack responses is already in
+    place (create_backlog_item returns dict, _truncate_for_slack helper, comprehensive
+    notifications). Six unit tests in tests/test_slack_notifier.py are broken because
+    their mocks/assertions still use the old string return type. This plan updates
+    those tests to match the new API contract.
+
+    '
   plan_doc: docs/plans/2026-02-17-5-slack-bot-provides-truncated-unhelpful-responses-when-defect-submission-fails-validation-design.md
   created: '2026-02-17'
   max_attempts_default: 3
@@ -16,7 +17,6 @@ meta:
     validators:
     - issue-verifier
     max_validation_attempts: 1
-
 sections:
 - id: phase-1
   name: Phase 1 - Fix Unit Tests
@@ -26,64 +26,47 @@ sections:
     name: Update create_backlog_item direct-call tests to use dict return type
     agent: coder
     status: pending
-    description: >
-      In tests/test_slack_notifier.py, update 3 tests that call create_backlog_item()
-      directly and assert on the string return value. The method now returns a dict
-      with keys: filepath, filename, item_number (or empty dict on error).
-
-
-      1. test_create_backlog_feature (around line 1178):
-         - Line "assert result != ''" -> assert result (truthy dict check)
-         - Line "assert os.path.exists(result)" -> assert os.path.exists(result['filepath'])
-         - Line "filename = os.path.basename(result)" -> filename = os.path.basename(result['filepath'])
-         - Add: assert result['item_number'] == 1
-         - Add: assert result['filename'].startswith("1-")
-         - Lines that read the file: change "open(result" to "open(result['filepath']"
-
-      2. test_create_backlog_defect (around line 1242):
-         - Line "assert result != ''" -> assert result (truthy dict check)
-         - Line "assert 'defect-backlog' in result" -> assert 'defect-backlog' in result['filepath']
-         - Line "assert os.path.exists(result)" -> assert os.path.exists(result['filepath'])
-         - Lines that read the file: change "open(result" to "open(result['filepath']"
-
-      3. test_create_backlog_numbering (around line 1294):
-         - Line "filename = os.path.basename(result)" -> filename = os.path.basename(result['filepath'])
-         - Keep the filename.startswith("16-") assertion unchanged since it uses basename
-
-
-      After making changes, run only these 3 tests to verify:
-        ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_slack_notifier.py::test_create_backlog_feature tests/test_slack_notifier.py::test_create_backlog_defect tests/test_slack_notifier.py::test_create_backlog_numbering -v
-
+    description: "In tests/test_slack_notifier.py, update 3 tests that call create_backlog_item()\
+      \ directly and assert on the string return value. The method now returns a dict\
+      \ with keys: filepath, filename, item_number (or empty dict on error).\n\n1.\
+      \ test_create_backlog_feature (around line 1178):\n   - Line \"assert result\
+      \ != ''\" -> assert result (truthy dict check)\n   - Line \"assert os.path.exists(result)\"\
+      \ -> assert os.path.exists(result['filepath'])\n   - Line \"filename = os.path.basename(result)\"\
+      \ -> filename = os.path.basename(result['filepath'])\n   - Add: assert result['item_number']\
+      \ == 1\n   - Add: assert result['filename'].startswith(\"1-\")\n   - Lines that\
+      \ read the file: change \"open(result\" to \"open(result['filepath']\"\n\n2.\
+      \ test_create_backlog_defect (around line 1242):\n   - Line \"assert result\
+      \ != ''\" -> assert result (truthy dict check)\n   - Line \"assert 'defect-backlog'\
+      \ in result\" -> assert 'defect-backlog' in result['filepath']\n   - Line \"\
+      assert os.path.exists(result)\" -> assert os.path.exists(result['filepath'])\n\
+      \   - Lines that read the file: change \"open(result\" to \"open(result['filepath']\"\
+      \n\n3. test_create_backlog_numbering (around line 1294):\n   - Line \"filename\
+      \ = os.path.basename(result)\" -> filename = os.path.basename(result['filepath'])\n\
+      \   - Keep the filename.startswith(\"16-\") assertion unchanged since it uses\
+      \ basename\n\n\nAfter making changes, run only these 3 tests to verify:\n  ~/.pyenv/versions/3.11.*/bin/python\
+      \ -m pytest tests/test_slack_notifier.py::test_create_backlog_feature tests/test_slack_notifier.py::test_create_backlog_defect\
+      \ tests/test_slack_notifier.py::test_create_backlog_numbering -v\n"
   - id: '1.2'
     name: Update intake analysis mock tests to return dict from create_backlog_item
     agent: coder
     status: pending
-    description: >
-      In tests/test_slack_notifier.py, update 3 tests that mock create_backlog_item()
-      for intake analysis. The mocks currently return a string but must return a dict
-      because _run_intake_analysis() now accesses item_info['item_number'] and
-      item_info['filename'] on the result.
-
-
-      1. test_intake_analysis_clear_request (around line 1892):
-         Find the mock_create function that returns "docs/feature-backlog/1-test.md"
-         and change the return to:
-           return {"filepath": "docs/feature-backlog/1-test.md", "filename": "1-test.md", "item_number": 1}
-
-      2. test_intake_analysis_unstructured_response (around line 1954):
-         Find the mock_create function that returns "docs/defect-backlog/1-test.md"
-         and change the return to:
-           return {"filepath": "docs/defect-backlog/1-test.md", "filename": "1-test.md", "item_number": 1}
-
-      3. test_intake_empty_response_creates_fallback (around line 2083):
-         Find the mock_create function that returns "docs/feature-backlog/1-test.md"
-         and change the return to:
-           return {"filepath": "docs/feature-backlog/1-test.md", "filename": "1-test.md", "item_number": 1}
-
-
-      After making changes, run only these 3 tests to verify:
-        python3 -m pytest tests/test_slack_notifier.py::test_intake_analysis_clear_request tests/test_slack_notifier.py::test_intake_analysis_unstructured_response tests/test_slack_notifier.py::test_intake_empty_response_creates_fallback -v
-
+    description: "In tests/test_slack_notifier.py, update 3 tests that mock create_backlog_item()\
+      \ for intake analysis. The mocks currently return a string but must return a\
+      \ dict because _run_intake_analysis() now accesses item_info['item_number']\
+      \ and item_info['filename'] on the result.\n\n1. test_intake_analysis_clear_request\
+      \ (around line 1892):\n   Find the mock_create function that returns \"docs/feature-backlog/1-test.md\"\
+      \n   and change the return to:\n     return {\"filepath\": \"docs/feature-backlog/1-test.md\"\
+      , \"filename\": \"1-test.md\", \"item_number\": 1}\n\n2. test_intake_analysis_unstructured_response\
+      \ (around line 1954):\n   Find the mock_create function that returns \"docs/defect-backlog/1-test.md\"\
+      \n   and change the return to:\n     return {\"filepath\": \"docs/defect-backlog/1-test.md\"\
+      , \"filename\": \"1-test.md\", \"item_number\": 1}\n\n3. test_intake_empty_response_creates_fallback\
+      \ (around line 2083):\n   Find the mock_create function that returns \"docs/feature-backlog/1-test.md\"\
+      \n   and change the return to:\n     return {\"filepath\": \"docs/feature-backlog/1-test.md\"\
+      , \"filename\": \"1-test.md\", \"item_number\": 1}\n\n\nAfter making changes,\
+      \ run only these 3 tests to verify:\n  ~/.pyenv/versions/3.11.*/bin/python -m\
+      \ pytest tests/test_slack_notifier.py::test_intake_analysis_clear_request tests/test_slack_notifier.py::test_intake_analysis_unstructured_response\
+      \ tests/test_slack_notifier.py::test_intake_empty_response_creates_fallback\
+      \ -v\n"
 - id: phase-2
   name: Phase 2 - Verification
   status: pending
@@ -95,29 +78,18 @@ sections:
     - '1.1'
     - '1.2'
     status: pending
-    description: >
-      Run the following verification steps:
-
-
-      1. Compile-check both main scripts:
-         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
-
-      2. Run the full test suite:
-         python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
-
-      3. Verify the 6 previously-failing tests now pass by checking the test output
-         for these specific test names:
-         - test_create_backlog_feature
-         - test_create_backlog_defect
-         - test_create_backlog_numbering
-         - test_intake_analysis_clear_request
-         - test_intake_analysis_unstructured_response
-         - test_intake_empty_response_creates_fallback
-
-      4. Verify the production fix is intact:
-         - grep for _truncate_for_slack in scripts/plan-orchestrator.py (should exist)
-         - grep for SLACK_BLOCK_TEXT_MAX_LENGTH in scripts/plan-orchestrator.py (should be 2900)
-         - grep for "item_info\['item_number'\]" in scripts/plan-orchestrator.py (should have matches in _run_intake_analysis)
-
-
-      Report findings as PASS/WARN/FAIL with specific evidence.
+    description: "Run the following verification steps:\n\n1. Compile-check both main\
+      \ scripts:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\
+      \n\n2. Run the full test suite:\n   ~/.pyenv/versions/3.11.*/bin/python -m pytest\
+      \ tests/ -v 2>/dev/null || echo 'No test suite configured'\n\n3. Verify the\
+      \ 6 previously-failing tests now pass by checking the test output\n   for these\
+      \ specific test names:\n   - test_create_backlog_feature\n   - test_create_backlog_defect\n\
+      \   - test_create_backlog_numbering\n   - test_intake_analysis_clear_request\n\
+      \   - test_intake_analysis_unstructured_response\n   - test_intake_empty_response_creates_fallback\n\
+      \n4. Verify the production fix is intact:\n   - grep for _truncate_for_slack\
+      \ in scripts/plan-orchestrator.py (should exist)\n   - grep for SLACK_BLOCK_TEXT_MAX_LENGTH\
+      \ in scripts/plan-orchestrator.py (should be 2900)\n   - grep for \"item_info\\\
+      ['item_number'\\]\" in scripts/plan-orchestrator.py (should have matches in\
+      \ _run_intake_analysis)\n\n\nReport findings as PASS/WARN/FAIL with specific\
+      \ evidence.\n"
