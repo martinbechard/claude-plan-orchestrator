@@ -237,7 +237,7 @@ sections:
   - id: '2.4'
     name: Add handle_control_command and answer_question methods
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.3'
     description: "Add control command handling and question answering to SlackNotifier.\n\
@@ -281,6 +281,13 @@ sections:
       \ 'handle_control_command'), 'Missing handle_control_command'\n   assert hasattr(notifier,\
       \ 'answer_question'), 'Missing answer_question'\n   print('handle_control_command\
       \ and answer_question verified OK')\n   \"\n\nFiles: scripts/plan-orchestrator.py"
+    attempts: 1
+    last_attempt: '2026-02-16T20:55:31.356824'
+    model_used: sonnet
+    completed_at: '2026-02-16T20:57:50.567349'
+    result_message: Added handle_control_command and answer_question methods to SlackNotifier.
+      Control commands write stop semaphore or post status. Questions are acknowledged
+      with guidance to use terminal.
   - id: '2.5'
     name: Add process_inbound orchestration method
     agent: coder
