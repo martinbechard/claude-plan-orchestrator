@@ -192,14 +192,14 @@ sections:
       / Streaming Output'' section.'
 - id: phase-2
   name: Phase 2 - Narrative Documentation Update
-  status: pending
+  status: in_progress
   tasks:
   - id: '2.1'
     name: Update narrative README.md timeline and line counts
     agent: coder
     depends_on:
     - '1.2'
-    status: pending
+    status: completed
     description: "Update docs/narrative/README.md to reflect the current state.\n\n\
       First, read docs/narrative/README.md.\n\nMake these specific changes:\n\n1.\
       \ UPDATE the intro paragraph (line 10-11). Change 'three-and-a-half thousand\
@@ -216,6 +216,13 @@ sections:
       \ after the Chapter 12 row:\n   | [13-self-improvement.md](13-self-improvement.md)\
       \ | Self-improvement: multi-project channels, intake acknowledgment, hot-reload,\
       \ cost standardization |\n"
+    attempts: 1
+    last_attempt: '2026-02-17T12:32:06.599299'
+    model_used: sonnet
+    completed_at: '2026-02-17T12:33:46.242558'
+    result_message: 'Updated narrative README.md: line counts (~4773+1949), timeline
+      entries for 2026-02-17, plans count (23+ YAML, 20+ completed), and Chapter 13
+      reference'
   - id: '2.2'
     name: Write Chapter 13 narrative
     agent: coder
