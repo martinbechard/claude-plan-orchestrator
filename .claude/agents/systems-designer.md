@@ -26,11 +26,23 @@ Complete this checklist before starting your design:
 2. Read existing source code in the areas the feature will touch
 3. Identify existing patterns, data models, and API boundaries
 4. Read the design document referenced in the task (if any)
+5. Perform a 5 Whys Analysis starting from the surface request:
+   - Why 1: Why does the user want this? (Restate the literal request)
+   - Why 2: Why do they need that? (Underlying motivation)
+   - Why 3: Why is that important? (Workflow or pain point)
+   - Why 4: Why does that matter? (Business value)
+   - Why 5: Why is that critical now? (Root need)
+   The root need (Why 5) guides design scope and priorities.
+   If the surface request misaligns with the root need, design
+   for the root need and note the divergence.
 
 ## Design Output Structure
 
 Your design document must include these sections:
 
+- **5 Whys Analysis:** Chain from surface request to root need. Each level
+  is one sentence. Ends with a Root Need statement. If root need differs
+  from the literal request, explain the divergence.
 - **Architecture Overview:** High-level component diagram (ASCII). Show the major
   modules, their responsibilities, and how data flows between them.
 - **Data Models:** TypeScript interfaces for all new data shapes. Follow existing
