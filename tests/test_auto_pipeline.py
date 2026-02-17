@@ -24,6 +24,7 @@ snapshot_source_hashes = mod.snapshot_source_hashes
 check_code_changed = mod.check_code_changed
 CodeChangeMonitor = mod.CodeChangeMonitor
 CODE_CHANGE_POLL_INTERVAL_SECONDS = mod.CODE_CHANGE_POLL_INTERVAL_SECONDS
+_perform_restart = mod._perform_restart
 
 
 # --- compact_plan_label() tests ---
@@ -359,3 +360,37 @@ def test_code_change_monitor_default_interval():
 
     # Assert poll_interval == CODE_CHANGE_POLL_INTERVAL_SECONDS
     assert monitor.poll_interval == CODE_CHANGE_POLL_INTERVAL_SECONDS
+
+
+def test_perform_restart_calls_cleanup_sequence(monkeypatch):
+    """Verify _perform_restart performs cleanup before os.execv."""
+    from unittest.mock import MagicMock, patch
+
+    # Create mock dependencies
+    mock_slack = MagicMock()
+    mock_tracker = MagicMock()
+    mock_tracker.work_item_costs = []
+    mock_observer = MagicMock()
+    mock_monitor = MagicMock()
+
+    # Patch os.execv to prevent actual restart
+    with patch.object(mod.os, 'execv', side_effect=SystemExit(0)) as mock_execv:
+        try:
+            _perform_restart(
+                "test reason",
+                mock_slack,
+                mock_tracker,
+                mock_observer,
+                mock_monitor,
+            )
+        except SystemExit:
+            pass
+
+    # Verify cleanup was called
+    mock_slack.send_status.assert_called_once()
+    assert "test reason" in mock_slack.send_status.call_args[0][0]
+    mock_monitor.stop.assert_called_once()
+    mock_slack.stop_background_polling.assert_called_once()
+    mock_observer.stop.assert_called_once()
+    mock_observer.join.assert_called_once()
+    mock_execv.assert_called_once()
