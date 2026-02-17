@@ -52,12 +52,13 @@ def test_disabled_when_slack_not_enabled(tmp_path):
 
 
 def test_enabled_when_config_valid(tmp_path):
-    """SlackNotifier should be enabled when config has enabled: true and webhook_url."""
+    """SlackNotifier should be enabled when config has enabled: true and bot_token/channel_id."""
     config_file = tmp_path / "slack.yaml"
     config_data = {
         "slack": {
             "enabled": True,
-            "webhook_url": "https://hooks.slack.com/services/TEST",
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C123456",
         }
     }
 
@@ -77,7 +78,8 @@ def test_should_notify_respects_config(tmp_path):
     config_data = {
         "slack": {
             "enabled": True,
-            "webhook_url": "https://hooks.slack.com/services/TEST",
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C123456",
             "notify": {
                 "on_plan_start": True,
                 "on_task_complete": False,
@@ -102,7 +104,8 @@ def test_build_status_block_format(tmp_path):
     config_data = {
         "slack": {
             "enabled": True,
-            "webhook_url": "https://hooks.slack.com/services/TEST",
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C123456",
         }
     }
 
@@ -128,7 +131,8 @@ def test_build_status_block_default_emoji(tmp_path):
     config_data = {
         "slack": {
             "enabled": True,
-            "webhook_url": "https://hooks.slack.com/services/TEST",
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C123456",
         }
     }
 
@@ -142,16 +146,17 @@ def test_build_status_block_default_emoji(tmp_path):
     assert ":large_blue_circle:" in result["blocks"][0]["text"]["text"]
 
 
-# --- Test: _post_webhook called on send_status ---
+# --- Test: _post_message called on send_status ---
 
 
-def test_post_webhook_called_on_send_status(tmp_path):
-    """send_status should call _post_webhook with correct payload."""
+def test_post_message_called_on_send_status(tmp_path):
+    """send_status should call _post_message with correct payload."""
     config_file = tmp_path / "slack.yaml"
     config_data = {
         "slack": {
             "enabled": True,
-            "webhook_url": "https://hooks.slack.com/services/TEST",
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C123456",
         }
     }
 
@@ -160,14 +165,14 @@ def test_post_webhook_called_on_send_status(tmp_path):
 
     notifier = SlackNotifier(config_path=str(config_file))
 
-    # Monkey-patch _post_webhook to record calls
+    # Monkey-patch _post_message to record calls
     calls = []
 
-    def mock_post_webhook(payload):
+    def mock_post_message(payload):
         calls.append(payload)
         return True
 
-    notifier._post_webhook = mock_post_webhook
+    notifier._post_message = mock_post_message
 
     notifier.send_status("Plan started", level="info")
 
@@ -192,12 +197,13 @@ def test_send_status_noop_when_disabled(tmp_path):
 
 
 def test_process_agent_messages_defect(tmp_path):
-    """process_agent_messages should send defect messages via _post_webhook."""
+    """process_agent_messages should send defect messages via _post_message."""
     config_file = tmp_path / "slack.yaml"
     config_data = {
         "slack": {
             "enabled": True,
-            "webhook_url": "https://hooks.slack.com/services/TEST",
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C123456",
             "notify": {
                 "on_defect_found": True,
             },
@@ -209,14 +215,14 @@ def test_process_agent_messages_defect(tmp_path):
 
     notifier = SlackNotifier(config_path=str(config_file))
 
-    # Monkey-patch _post_webhook
+    # Monkey-patch _post_message
     calls = []
 
-    def mock_post_webhook(payload):
+    def mock_post_message(payload):
         calls.append(payload)
         return True
 
-    notifier._post_webhook = mock_post_webhook
+    notifier._post_message = mock_post_message
 
     status = {
         "slack_messages": [
@@ -236,12 +242,13 @@ def test_process_agent_messages_defect(tmp_path):
 
 
 def test_process_agent_messages_idea(tmp_path):
-    """process_agent_messages should send idea messages via _post_webhook."""
+    """process_agent_messages should send idea messages via _post_message."""
     config_file = tmp_path / "slack.yaml"
     config_data = {
         "slack": {
             "enabled": True,
-            "webhook_url": "https://hooks.slack.com/services/TEST",
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C123456",
             "notify": {
                 "on_idea_found": True,
             },
@@ -253,14 +260,14 @@ def test_process_agent_messages_idea(tmp_path):
 
     notifier = SlackNotifier(config_path=str(config_file))
 
-    # Monkey-patch _post_webhook
+    # Monkey-patch _post_message
     calls = []
 
-    def mock_post_webhook(payload):
+    def mock_post_message(payload):
         calls.append(payload)
         return True
 
-    notifier._post_webhook = mock_post_webhook
+    notifier._post_message = mock_post_message
 
     status = {
         "slack_messages": [
@@ -285,7 +292,8 @@ def test_process_agent_messages_empty(tmp_path):
     config_data = {
         "slack": {
             "enabled": True,
-            "webhook_url": "https://hooks.slack.com/services/TEST",
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C123456",
         }
     }
 
@@ -294,14 +302,14 @@ def test_process_agent_messages_empty(tmp_path):
 
     notifier = SlackNotifier(config_path=str(config_file))
 
-    # Monkey-patch _post_webhook
+    # Monkey-patch _post_message
     calls = []
 
-    def mock_post_webhook(payload):
+    def mock_post_message(payload):
         calls.append(payload)
         return True
 
-    notifier._post_webhook = mock_post_webhook
+    notifier._post_message = mock_post_message
 
     status = {"slack_messages": []}
     notifier.process_agent_messages(status)
@@ -318,7 +326,8 @@ def test_process_agent_messages_no_field(tmp_path):
     config_data = {
         "slack": {
             "enabled": True,
-            "webhook_url": "https://hooks.slack.com/services/TEST",
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C123456",
         }
     }
 
@@ -327,14 +336,14 @@ def test_process_agent_messages_no_field(tmp_path):
 
     notifier = SlackNotifier(config_path=str(config_file))
 
-    # Monkey-patch _post_webhook
+    # Monkey-patch _post_message
     calls = []
 
-    def mock_post_webhook(payload):
+    def mock_post_message(payload):
         calls.append(payload)
         return True
 
-    notifier._post_webhook = mock_post_webhook
+    notifier._post_message = mock_post_message
 
     status = {}
     notifier.process_agent_messages(status)
