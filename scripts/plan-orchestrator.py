@@ -2856,6 +2856,9 @@ def run_orchestrator(
     budget_config = parse_budget_config(plan, cli_args) if cli_args else BudgetConfig()
     budget_guard = BudgetGuard(budget_config, usage_tracker)
 
+    # Initialize Slack notifier
+    slack = SlackNotifier()
+
     print(f"=== Plan Orchestrator (PID {os.getpid()}) ===")
     print(f"Plan: {meta.get('name', 'Unknown')}")
     print(f"Claude binary: {' '.join(CLAUDE_CMD)}")
@@ -2878,6 +2881,20 @@ def run_orchestrator(
               f"validation_model={escalation_config.validation_model})")
     else:
         print("Model escalation: disabled (using agent default models)")
+
+    # Slack notification setup
+    if slack.is_enabled():
+        print(f"Slack: enabled (webhook configured)")
+        # Count total tasks across all sections
+        total_tasks = sum(len(s.get("tasks", [])) for s in plan.get("sections", []))
+        total_sections = len(plan.get("sections", []))
+        slack.send_status(
+            f"*Plan started:* {meta.get('name', 'Unknown')}\n"
+            f"{total_tasks} tasks across {total_sections} phases",
+            level="info"
+        )
+    else:
+        print("Slack: disabled (no .claude/slack.local.yaml)")
     print()
 
     # Find starting point
@@ -2920,6 +2937,13 @@ def run_orchestrator(
             print(f"\n=== Budget limit reached ===")
             print(f"{budget_reason}")
             print(f"Plan paused. Resume with --resume-from when more budget is available.")
+
+            # Send Slack notification for budget threshold
+            slack.send_status(
+                f"*Budget threshold reached*\n{budget_reason}",
+                level="warning"
+            )
+
             # Mark plan as paused
             plan.setdefault("meta", {})["status"] = "paused_quota"
             plan["meta"]["pause_reason"] = budget_reason
@@ -3161,6 +3185,13 @@ def run_orchestrator(
         if not result:
             print("\n=== All tasks completed! ===")
 
+            # Send Slack notification before smoke tests
+            slack.send_status(
+                f"*Plan completed:* {meta.get('name', 'Unknown')}\n"
+                f"Completed: {tasks_completed}, Failed: {tasks_failed}",
+                level="success" if tasks_failed == 0 else "warning"
+            )
+
             # Run smoke tests as post-plan verification
             if not dry_run and not skip_smoke:
                 smoke_ok = run_smoke_tests()
@@ -3214,6 +3245,13 @@ def run_orchestrator(
                 f"Task Failed: {task_id}",
                 f"Task '{task.get('name')}' failed after {max_attempts} attempts. "
                 f"Manual intervention required."
+            )
+
+            # Send Slack notification for task failure
+            slack.send_status(
+                f"*Task {task_id} failed* ({task.get('name', '')})\n"
+                f"Failed after {max_attempts} attempts. Manual intervention required.",
+                level="error"
             )
 
             if not dry_run:
@@ -3278,6 +3316,11 @@ def run_orchestrator(
         if budget_config.is_enabled:
             print(budget_guard.format_status())
 
+        # Process agent-initiated Slack messages from status file
+        status = read_status_file()
+        if status:
+            slack.process_agent_messages(status)
+
         # Check if Claude modified the plan
         if task_result.plan_modified:
             print("[Plan was modified by Claude - reloading]")
@@ -3324,6 +3367,14 @@ def run_orchestrator(
             task["result_message"] = task_result.message
             tasks_completed += 1
             circuit_breaker.record_success()
+
+            # Send Slack notification for task success
+            slack.send_status(
+                f"*Task {task_id} completed* ({task.get('name', '')})\n"
+                f"Attempt {task.get('attempts', 1)}, "
+                f"{task_result.duration_seconds:.0f}s",
+                level="success"
+            )
 
             # Check if section is complete
             update_section_status(section)
