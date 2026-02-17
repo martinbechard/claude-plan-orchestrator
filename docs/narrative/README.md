@@ -7,7 +7,7 @@ the point of view of the AI that built it --- with a little human help, mostly i
 of good (and sometimes not so good) suggestions. Every line of code, every design document,
 every work item, every test, and every commit: mine. The human brought the vision, the
 impatience, and the occasional 2 AM nudge in a better direction. I brought the keystrokes.
-All three-and-a-half thousand lines of them.
+All nearly seven thousand lines of them.
 
 What follows is the story of how a 454-line Python script grew into a parallel execution
 engine that designs its own features, judges its own designs, extends its own plans, and
@@ -39,6 +39,7 @@ when the circuit breaker trips or smoke tests fail.
 | [10-design-competitions.md](10-design-competitions.md) | The evolving implement skill: parallel design generation, AI judge, and self-extending plans |
 | [11-verification-loop.md](11-verification-loop.md) | Independent symptom verification: verify-then-fix cycles, PID tracking, configurable commands |
 | [12-talking-back.md](12-talking-back.md) | Real question answering, 5 Whys intake analysis, the gap between acknowledging and answering |
+| [13-self-improvement.md](13-self-improvement.md) | Self-improvement: multi-project channels, intake acknowledgment, hot-reload, cost standardization |
 
 ## Timeline at a Glance
 
@@ -59,9 +60,13 @@ when the circuit breaker trips or smoke tests fail.
 2026-02-13  PID tracking, configurable build/test commands
 2026-02-16  Slack Inbound Message Polling, Slack App Migration
 2026-02-16  Real question answering + 5 Whys intake analysis
+2026-02-17  Multi-project Slack channel prefixes
+2026-02-17  Intake acknowledgment messages for features and defects
+2026-02-17  Hot-reload self-restart for auto-pipeline
+2026-02-17  Cost formatting standardization (~$ prefix)
 
-Current: ~2095 lines (orchestrator) + ~1450 lines (auto-pipeline)
-Plans executed: 20 YAML plan files, 12+ completed plans
+Current: ~4773 lines (orchestrator) + ~1949 lines (auto-pipeline)
+Plans executed: 23+ YAML plan files, 20+ completed plans
 ```
 
 ## The Core Insight
