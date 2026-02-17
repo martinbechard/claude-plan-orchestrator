@@ -6,6 +6,7 @@
 import importlib.util
 import tempfile
 import os
+import time
 from pathlib import Path
 
 # auto-pipeline.py has a hyphen in the filename, so we must use importlib
@@ -21,6 +22,8 @@ MAX_LOG_PREFIX_LENGTH = mod.MAX_LOG_PREFIX_LENGTH
 _compute_file_hash = mod._compute_file_hash
 snapshot_source_hashes = mod.snapshot_source_hashes
 check_code_changed = mod.check_code_changed
+CodeChangeMonitor = mod.CodeChangeMonitor
+CODE_CHANGE_POLL_INTERVAL_SECONDS = mod.CODE_CHANGE_POLL_INTERVAL_SECONDS
 
 
 # --- compact_plan_label() tests ---
@@ -227,3 +230,132 @@ def test_check_code_changed_ignores_missing_startup_hash():
         assert result is False
     finally:
         mod._startup_file_hashes = original_hashes
+
+
+# --- CodeChangeMonitor tests ---
+
+
+def test_code_change_monitor_starts_and_stops():
+    """Verify CodeChangeMonitor can start and stop cleanly."""
+    # Create a CodeChangeMonitor with short poll interval
+    monitor = CodeChangeMonitor(poll_interval=0.1)
+
+    # Start the monitor
+    monitor.start()
+
+    # Assert thread is not None and is alive
+    assert monitor._thread is not None
+    assert monitor._thread.is_alive()
+
+    # Stop the monitor
+    monitor.stop()
+
+    # Assert thread is no longer alive (or joined)
+    # Give it a moment to finish
+    time.sleep(0.3)
+    assert not monitor._thread.is_alive()
+
+
+def test_code_change_monitor_detects_change():
+    """Verify CodeChangeMonitor detects file modifications."""
+    # Create a temp file with initial content
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.py') as f:
+        temp_file = f.name
+        f.write("# Initial content\n")
+
+    try:
+        # Compute its hash
+        file_hash = _compute_file_hash(temp_file)
+
+        # Save original state
+        original_hashes = mod._startup_file_hashes
+        original_watched = mod.HOT_RELOAD_WATCHED_FILES
+
+        # Set mod._startup_file_hashes to {temp_file: hash}
+        mod._startup_file_hashes = {temp_file: file_hash}
+
+        # Set HOT_RELOAD_WATCHED_FILES to [temp_file]
+        mod.HOT_RELOAD_WATCHED_FILES = [temp_file]
+
+        try:
+            # Create CodeChangeMonitor with short poll interval
+            monitor = CodeChangeMonitor(poll_interval=0.1)
+
+            # Start the monitor
+            monitor.start()
+
+            # Modify the temp file content
+            time.sleep(0.2)  # Let monitor run at least one cycle first
+            with open(temp_file, 'w') as f:
+                f.write("# Modified content\n")
+
+            # Wait up to 2 seconds for restart_pending to be set
+            detected = monitor.restart_pending.wait(timeout=2.0)
+
+            # Assert restart_pending was set
+            assert detected is True
+            assert monitor.restart_pending.is_set()
+
+            # Stop the monitor
+            monitor.stop()
+        finally:
+            # Restore mod._startup_file_hashes and mod.HOT_RELOAD_WATCHED_FILES
+            mod._startup_file_hashes = original_hashes
+            mod.HOT_RELOAD_WATCHED_FILES = original_watched
+    finally:
+        # Clean up temp file
+        os.unlink(temp_file)
+
+
+def test_code_change_monitor_no_change():
+    """Verify CodeChangeMonitor does not flag restart when file is unchanged."""
+    # Create a temp file
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.py') as f:
+        temp_file = f.name
+        f.write("# Unchanged content\n")
+
+    try:
+        # Compute its hash
+        file_hash = _compute_file_hash(temp_file)
+
+        # Save original state
+        original_hashes = mod._startup_file_hashes
+        original_watched = mod.HOT_RELOAD_WATCHED_FILES
+
+        # Set mod._startup_file_hashes to {temp_file: hash}
+        mod._startup_file_hashes = {temp_file: file_hash}
+
+        # Set HOT_RELOAD_WATCHED_FILES
+        mod.HOT_RELOAD_WATCHED_FILES = [temp_file]
+
+        try:
+            # Create CodeChangeMonitor with short poll interval
+            monitor = CodeChangeMonitor(poll_interval=0.1)
+
+            # Start the monitor
+            monitor.start()
+
+            # Wait 0.5 seconds (several poll cycles)
+            time.sleep(0.5)
+
+            # Assert restart_pending is NOT set
+            assert monitor.restart_pending.is_set() is False
+
+            # Stop the monitor
+            monitor.stop()
+        finally:
+            # Restore globals
+            mod._startup_file_hashes = original_hashes
+            mod.HOT_RELOAD_WATCHED_FILES = original_watched
+    finally:
+        # Clean up temp file
+        os.unlink(temp_file)
+
+
+def test_code_change_monitor_default_interval():
+    """Verify CodeChangeMonitor uses default poll interval when none specified."""
+    # Create a CodeChangeMonitor with no arguments
+    monitor = CodeChangeMonitor()
+
+    # Assert poll_interval == CODE_CHANGE_POLL_INTERVAL_SECONDS
+    assert monitor.poll_interval == CODE_CHANGE_POLL_INTERVAL_SECONDS
