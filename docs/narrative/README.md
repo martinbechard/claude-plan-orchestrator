@@ -38,6 +38,7 @@ when the circuit breaker trips or smoke tests fail.
 | [09-fixing-parallel-merge.md](09-fixing-parallel-merge.md) | Fixing the root cause: replacing git merge with file-copy for parallel worktrees |
 | [10-design-competitions.md](10-design-competitions.md) | The evolving implement skill: parallel design generation, AI judge, and self-extending plans |
 | [11-verification-loop.md](11-verification-loop.md) | Independent symptom verification: verify-then-fix cycles, PID tracking, configurable commands |
+| [12-talking-back.md](12-talking-back.md) | Real question answering, 5 Whys intake analysis, the gap between acknowledging and answering |
 
 ## Timeline at a Glance
 
@@ -56,6 +57,8 @@ when the circuit breaker trips or smoke tests fail.
 2026-02-07+ Design competition pattern (Phase 0) across 7 plans
 2026-02-13  Verification loop: independent symptom verification for defects
 2026-02-13  PID tracking, configurable build/test commands
+2026-02-16  Slack Inbound Message Polling, Slack App Migration
+2026-02-16  Real question answering + 5 Whys intake analysis
 
 Current: ~2095 lines (orchestrator) + ~1450 lines (auto-pipeline)
 Plans executed: 20 YAML plan files, 12+ completed plans

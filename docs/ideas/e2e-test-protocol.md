@@ -9,7 +9,7 @@ Rules for a CRUD operation:
 - ensure save is enabled appropriately when all mandatory fields are filled out
 - etc.
 
-We need functional spec -> page guide (as given to user) -> test plan (make sure we cover everything that the user can do. Explain how this covers the functionality).
+We need functional spec -> page guide (as given to user) -> test plan (make sure we cover everything that the user can do. Explain how this covers the functionality). We need every requirement in the functional spec to be identifiable, and we need a coverage analysis to make sure we have enough test cases.
 
 Come up with a generic checklist to be processed by claude haiku as part of the QA audit (have a QA audit subagent called by the QA agent running sonnet).
 
