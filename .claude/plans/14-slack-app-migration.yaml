@@ -2,11 +2,11 @@ meta:
   name: Slack App Migration
   description: 'Replace the Incoming Webhook transport in SlackNotifier with a Slack
     App using the Web API (chat.postMessage) for sending and Socket Mode (slack-bolt)
-    for receiving interactive responses. Config changes from webhook_url to
-    bot_token + app_token + channel_id. Sending remains stdlib-only. Socket Mode
-    is optional - falls back to file-based polling if slack-bolt is not installed.
-    The public API (send_status, send_defect, send_idea, send_question,
-    process_agent_messages) and all lifecycle hooks are preserved unchanged.
+    for receiving interactive responses. Config changes from webhook_url to bot_token
+    + app_token + channel_id. Sending remains stdlib-only. Socket Mode is optional
+    - falls back to file-based polling if slack-bolt is not installed. The public
+    API (send_status, send_defect, send_idea, send_question, process_agent_messages)
+    and all lifecycle hooks are preserved unchanged.
 
     '
   plan_doc: docs/plans/2026-02-16-14-slack-app-migration-design.md
@@ -22,60 +22,46 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Config Template Update
-  status: pending
+  status: completed
   tasks:
   - id: '1.1'
     name: Update Slack config template for Slack App
     agent: coder
-    status: pending
-    description: "Update the Slack configuration template to use Slack App credentials
-      instead of webhook URL.\nReference: docs/plans/2026-02-16-14-slack-app-migration-design.md\n
-      Steps:\n1. Read .claude/slack.local.yaml.template (current content uses webhook_url).\n
-      2. Replace the file contents with the new Slack App configuration:\n\n
-      \   # Slack notifications for the plan orchestrator.\n
-      \   # Copy this file to .claude/slack.local.yaml and fill in your tokens.\n
-      \   # The .local.yaml file is gitignored and must never be committed.\n
-      \   #\n
-      \   # Setup: Create a Slack App at https://api.slack.com/apps\n
-      \   #   1. Create new app from scratch\n
-      \   #   2. Enable Socket Mode (Settings > Socket Mode) - generates app_token (xapp-...)\n
-      \   #   3. Add Bot Token Scopes (OAuth & Permissions): chat:write, channels:read\n
-      \   #   4. Enable Interactivity (Interactivity & Shortcuts) - required for button responses\n
-      \   #   5. Install to workspace - generates bot_token (xoxb-...)\n
-      \   #   6. Invite bot to your channel, note the channel_id (right-click channel > View channel details)\n
-      \   #   7. For interactive questions: pip install slack-bolt (optional, falls back to file polling)\n
-      \   slack:\n
-      \     enabled: true\n
-      \     bot_token: \"xoxb-your-bot-token-here\"\n
-      \     app_token: \"xapp-your-app-token-here\"\n
-      \     channel_id: \"C0123456789\"\n
-      \     notify:\n
-      \       on_plan_start: true\n
-      \       on_task_complete: true\n
-      \       on_plan_complete: true\n
-      \       on_validation_fail: true\n
-      \       on_budget_threshold: true\n
-      \       on_question: true\n
-      \       on_defect_found: true\n
-      \       on_idea_found: true\n
-      \     questions:\n
-      \       enabled: true\n
-      \       timeout_minutes: 60\n
-      \       fallback: \"skip\"\n\n
-      3. Verify the template is valid YAML:\n
-      \   python3 -c \"\n
-      \   import yaml\n
-      \   with open('.claude/slack.local.yaml.template') as f:\n
-      \       config = yaml.safe_load(f)\n
-      \   assert config['slack']['enabled'] is True\n
-      \   assert 'bot_token' in config['slack']\n
-      \   assert 'app_token' in config['slack']\n
-      \   assert 'channel_id' in config['slack']\n
-      \   assert 'webhook_url' not in config['slack']\n
-      \   print('Template validated OK')\n
-      \   \"\n\n
-      Files: .claude/slack.local.yaml.template\n"
-
+    status: completed
+    description: "Update the Slack configuration template to use Slack App credentials\
+      \ instead of webhook URL.\nReference: docs/plans/2026-02-16-14-slack-app-migration-design.md\n\
+      \ Steps:\n1. Read .claude/slack.local.yaml.template (current content uses webhook_url).\n\
+      \ 2. Replace the file contents with the new Slack App configuration:\n\n   \
+      \ # Slack notifications for the plan orchestrator.\n    # Copy this file to\
+      \ .claude/slack.local.yaml and fill in your tokens.\n    # The .local.yaml file\
+      \ is gitignored and must never be committed.\n    #\n    # Setup: Create a Slack\
+      \ App at https://api.slack.com/apps\n    #   1. Create new app from scratch\n\
+      \    #   2. Enable Socket Mode (Settings > Socket Mode) - generates app_token\
+      \ (xapp-...)\n    #   3. Add Bot Token Scopes (OAuth & Permissions): chat:write,\
+      \ channels:read\n    #   4. Enable Interactivity (Interactivity & Shortcuts)\
+      \ - required for button responses\n    #   5. Install to workspace - generates\
+      \ bot_token (xoxb-...)\n    #   6. Invite bot to your channel, note the channel_id\
+      \ (right-click channel > View channel details)\n    #   7. For interactive questions:\
+      \ pip install slack-bolt (optional, falls back to file polling)\n    slack:\n\
+      \      enabled: true\n      bot_token: \"xoxb-your-bot-token-here\"\n      app_token:\
+      \ \"xapp-your-app-token-here\"\n      channel_id: \"C0123456789\"\n      notify:\n\
+      \        on_plan_start: true\n        on_task_complete: true\n        on_plan_complete:\
+      \ true\n        on_validation_fail: true\n        on_budget_threshold: true\n\
+      \        on_question: true\n        on_defect_found: true\n        on_idea_found:\
+      \ true\n      questions:\n        enabled: true\n        timeout_minutes: 60\n\
+      \        fallback: \"skip\"\n\n 3. Verify the template is valid YAML:\n    python3\
+      \ -c \"\n    import yaml\n    with open('.claude/slack.local.yaml.template')\
+      \ as f:\n        config = yaml.safe_load(f)\n    assert config['slack']['enabled']\
+      \ is True\n    assert 'bot_token' in config['slack']\n    assert 'app_token'\
+      \ in config['slack']\n    assert 'channel_id' in config['slack']\n    assert\
+      \ 'webhook_url' not in config['slack']\n    print('Template validated OK')\n\
+      \    \"\n\n Files: .claude/slack.local.yaml.template\n"
+    attempts: 1
+    last_attempt: '2026-02-16T19:49:44.215702'
+    model_used: sonnet
+    completed_at: '2026-02-16T19:51:36.108560'
+    result_message: 'Updated Slack config template: replaced webhook_url with bot_token/app_token/channel_id
+      fields, added comprehensive Slack App setup instructions'
 - id: phase-2
   name: Phase 2 - SlackNotifier Transport Migration
   status: pending
@@ -86,146 +72,97 @@ sections:
     status: pending
     depends_on:
     - '1.1'
-    description: "Update SlackNotifier in scripts/plan-orchestrator.py to use
-      chat.postMessage instead of webhooks.\n
-      Reference: docs/plans/2026-02-16-14-slack-app-migration-design.md\n
-      Steps:\n
-      1. Read scripts/plan-orchestrator.py. Find the SlackNotifier class (around line 2527).\n\n
-      2. In __init__, replace the config loading:\n
-      \   - Remove: self._webhook_url = slack_config.get(\"webhook_url\", \"\")\n
-      \   - Add: self._bot_token = slack_config.get(\"bot_token\", \"\")\n
-      \   - Add: self._app_token = slack_config.get(\"app_token\", \"\")\n
-      \   - Add: self._channel_id = slack_config.get(\"channel_id\", \"\")\n\n
-      3. Replace the _post_webhook method with _post_message:\n
-      \   def _post_message(self, payload: dict) -> bool:\n
-      \       \"\"\"POST a message to Slack via chat.postMessage API.\n
-      \       Uses urllib.request with Bearer token auth. Returns True on success.\n
-      \       Catches all exceptions and logs errors without raising.\"\"\"\n
-      \       if not self._bot_token or not self._channel_id:\n
-      \           return False\n
-      \       payload[\"channel\"] = self._channel_id\n
-      \       try:\n
-      \           req = urllib.request.Request(\n
-      \               \"https://slack.com/api/chat.postMessage\",\n
-      \               data=json.dumps(payload).encode(\"utf-8\"),\n
-      \               headers={\n
-      \                   \"Content-Type\": \"application/json; charset=utf-8\",\n
-      \                   \"Authorization\": f\"Bearer {self._bot_token}\"\n
-      \               }\n
-      \           )\n
-      \           with urllib.request.urlopen(req, timeout=10) as resp:\n
-      \               result = json.loads(resp.read())\n
-      \               return result.get(\"ok\", False)\n
-      \       except Exception as e:\n
-      \           print(f\"[SLACK] Failed to post message: {e}\")\n
-      \           return False\n\n
-      4. Update send_status: replace self._post_webhook with self._post_message.\n
-      \   Also update the guard: change 'not self._webhook_url' to\n
-      \   'not self._bot_token or not self._channel_id'.\n\n
-      5. Update send_defect: replace self._post_webhook with self._post_message.\n\n
-      6. Update send_idea: replace self._post_webhook with self._post_message.\n\n
-      7. Update the class docstring to say 'Slack Web API' instead of 'Incoming Webhooks',\n
-      \   and mention bot_token + channel_id instead of webhook URL.\n\n
-      8. Verify syntax:\n
-      \   python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',
-      doraise=True); print('syntax OK')\"\n\n
-      9. Quick smoke test - verify class can be instantiated without a config file:\n
-      \   python3 -c \"\n
-      \   import importlib.util\n
-      \   spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')\n
-      \   mod = importlib.util.module_from_spec(spec)\n
-      \   spec.loader.exec_module(mod)\n
-      \   notifier = mod.SlackNotifier('/nonexistent/path')\n
-      \   assert not notifier.is_enabled(), 'Should be disabled with missing config'\n
-      \   assert hasattr(notifier, '_post_message'), 'Should have _post_message method'\n
-      \   assert not hasattr(notifier, '_post_webhook'), 'Should NOT have _post_webhook method'\n
-      \   print('SlackNotifier transport migration verified OK')\n
-      \   \"\n\n
-      Files: scripts/plan-orchestrator.py\n"
+    description: "Update SlackNotifier in scripts/plan-orchestrator.py to use chat.postMessage\
+      \ instead of webhooks.\n Reference: docs/plans/2026-02-16-14-slack-app-migration-design.md\n\
+      \ Steps:\n 1. Read scripts/plan-orchestrator.py. Find the SlackNotifier class\
+      \ (around line 2527).\n\n 2. In __init__, replace the config loading:\n    -\
+      \ Remove: self._webhook_url = slack_config.get(\"webhook_url\", \"\")\n    -\
+      \ Add: self._bot_token = slack_config.get(\"bot_token\", \"\")\n    - Add: self._app_token\
+      \ = slack_config.get(\"app_token\", \"\")\n    - Add: self._channel_id = slack_config.get(\"\
+      channel_id\", \"\")\n\n 3. Replace the _post_webhook method with _post_message:\n\
+      \    def _post_message(self, payload: dict) -> bool:\n        \"\"\"POST a message\
+      \ to Slack via chat.postMessage API.\n        Uses urllib.request with Bearer\
+      \ token auth. Returns True on success.\n        Catches all exceptions and logs\
+      \ errors without raising.\"\"\"\n        if not self._bot_token or not self._channel_id:\n\
+      \            return False\n        payload[\"channel\"] = self._channel_id\n\
+      \        try:\n            req = urllib.request.Request(\n                \"\
+      https://slack.com/api/chat.postMessage\",\n                data=json.dumps(payload).encode(\"\
+      utf-8\"),\n                headers={\n                    \"Content-Type\":\
+      \ \"application/json; charset=utf-8\",\n                    \"Authorization\"\
+      : f\"Bearer {self._bot_token}\"\n                }\n            )\n        \
+      \    with urllib.request.urlopen(req, timeout=10) as resp:\n               \
+      \ result = json.loads(resp.read())\n                return result.get(\"ok\"\
+      , False)\n        except Exception as e:\n            print(f\"[SLACK] Failed\
+      \ to post message: {e}\")\n            return False\n\n 4. Update send_status:\
+      \ replace self._post_webhook with self._post_message.\n    Also update the guard:\
+      \ change 'not self._webhook_url' to\n    'not self._bot_token or not self._channel_id'.\n\
+      \n 5. Update send_defect: replace self._post_webhook with self._post_message.\n\
+      \n 6. Update send_idea: replace self._post_webhook with self._post_message.\n\
+      \n 7. Update the class docstring to say 'Slack Web API' instead of 'Incoming\
+      \ Webhooks',\n    and mention bot_token + channel_id instead of webhook URL.\n\
+      \n 8. Verify syntax:\n    python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('syntax OK')\"\n\n 9. Quick smoke test - verify class\
+      \ can be instantiated without a config file:\n    python3 -c \"\n    import\
+      \ importlib.util\n    spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')\n\
+      \    mod = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(mod)\n\
+      \    notifier = mod.SlackNotifier('/nonexistent/path')\n    assert not notifier.is_enabled(),\
+      \ 'Should be disabled with missing config'\n    assert hasattr(notifier, '_post_message'),\
+      \ 'Should have _post_message method'\n    assert not hasattr(notifier, '_post_webhook'),\
+      \ 'Should NOT have _post_webhook method'\n    print('SlackNotifier transport\
+      \ migration verified OK')\n    \"\n\n Files: scripts/plan-orchestrator.py\n"
   - id: '2.2'
     name: Add Socket Mode support for interactive questions
     agent: coder
     status: pending
     depends_on:
     - '2.1'
-    description: "Add optional Socket Mode support to SlackNotifier for receiving
-      interactive button responses on questions.\n
-      Reference: docs/plans/2026-02-16-14-slack-app-migration-design.md\n
-      Steps:\n
-      1. Read scripts/plan-orchestrator.py. Find the SlackNotifier class.\n\n
-      2. Near the top of the file (after the existing imports, around line 22),
-      add an optional import block:\n
-      \   try:\n
-      \       from slack_bolt import App\n
-      \       from slack_bolt.adapter.socket_mode import SocketModeHandler\n
-      \       SOCKET_MODE_AVAILABLE = True\n
-      \   except ImportError:\n
-      \       SOCKET_MODE_AVAILABLE = False\n\n
-      3. In SlackNotifier.__init__, after loading config fields, add:\n
-      \   self._socket_handler = None\n
-      \   self._pending_answer = None  # threading.Event set when answer received\n
-      \   self._last_answer = None     # stores the answer value\n\n
-      4. Add a new method _ensure_socket_mode to start the Socket Mode handler:\n
-      \   def _ensure_socket_mode(self) -> bool:\n
-      \       \"\"\"Start Socket Mode handler if available and not already running.\"\"\"\n
-      \       if not SOCKET_MODE_AVAILABLE:\n
-      \           return False\n
-      \       if self._socket_handler is not None:\n
-      \           return True\n
-      \       if not self._app_token:\n
-      \           return False\n
-      \       try:\n
-      \           app = App(token=self._bot_token)\n
-      \           @app.action(re.compile(r\"orchestrator_answer_.*\"))\n
-      \           def handle_answer(ack, action, body):\n
-      \               ack()\n
-      \               self._last_answer = action.get(\"value\", \"\")\n
-      \               if self._pending_answer:\n
-      \                   self._pending_answer.set()\n
-      \           handler = SocketModeHandler(app, self._app_token)\n
-      \           handler.connect()  # non-blocking WebSocket connect\n
-      \           self._socket_handler = handler\n
-      \           return True\n
-      \       except Exception as e:\n
-      \           print(f\"[SLACK] Socket Mode failed to start: {e}\")\n
-      \           return False\n\n
-      5. Update send_question to use Socket Mode when available:\n
-      \   - After the existing guard checks, try Socket Mode first:\n
-      \     use_socket = self._ensure_socket_mode()\n
-      \   - Build question payload with Block Kit action buttons:\n
-      \     actions = [{\"type\": \"button\", \"text\": {\"type\": \"plain_text\",\n
-      \       \"text\": opt}, \"action_id\": f\"orchestrator_answer_{i}\",\n
-      \       \"value\": opt} for i, opt in enumerate(options)]\n
-      \     payload = {\"blocks\": [{\"type\": \"section\", \"text\":\n
-      \       {\"type\": \"mrkdwn\", \"text\": f\":question: *{question}*\"}},\n
-      \       {\"type\": \"actions\", \"elements\": actions}]}\n
-      \   - Post the question via _post_message.\n
-      \   - If use_socket is True:\n
-      \     self._pending_answer = threading.Event()\n
-      \     self._last_answer = None\n
-      \     answered = self._pending_answer.wait(timeout=effective_timeout * 60)\n
-      \     if answered and self._last_answer:\n
-      \         return self._last_answer\n
-      \     return fallback\n
-      \   - If use_socket is False: fall back to the existing file-based polling
-      (keep the current file polling code as the else branch).\n\n
-      6. Verify syntax:\n
-      \   python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',
-      doraise=True); print('syntax OK')\"\n\n
-      7. Verify the SOCKET_MODE_AVAILABLE constant exists:\n
-      \   python3 -c \"\n
-      \   import importlib.util\n
-      \   spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')\n
-      \   mod = importlib.util.module_from_spec(spec)\n
-      \   spec.loader.exec_module(mod)\n
-      \   assert hasattr(mod, 'SOCKET_MODE_AVAILABLE')\n
-      \   print(f'SOCKET_MODE_AVAILABLE = {mod.SOCKET_MODE_AVAILABLE}')\n
-      \   notifier = mod.SlackNotifier('/nonexistent/path')\n
-      \   assert hasattr(notifier, '_ensure_socket_mode')\n
-      \   print('Socket Mode support verified')\n
-      \   \"\n\n
-      Files: scripts/plan-orchestrator.py\n"
-
+    description: "Add optional Socket Mode support to SlackNotifier for receiving\
+      \ interactive button responses on questions.\n Reference: docs/plans/2026-02-16-14-slack-app-migration-design.md\n\
+      \ Steps:\n 1. Read scripts/plan-orchestrator.py. Find the SlackNotifier class.\n\
+      \n 2. Near the top of the file (after the existing imports, around line 22),\
+      \ add an optional import block:\n    try:\n        from slack_bolt import App\n\
+      \        from slack_bolt.adapter.socket_mode import SocketModeHandler\n    \
+      \    SOCKET_MODE_AVAILABLE = True\n    except ImportError:\n        SOCKET_MODE_AVAILABLE\
+      \ = False\n\n 3. In SlackNotifier.__init__, after loading config fields, add:\n\
+      \    self._socket_handler = None\n    self._pending_answer = None  # threading.Event\
+      \ set when answer received\n    self._last_answer = None     # stores the answer\
+      \ value\n\n 4. Add a new method _ensure_socket_mode to start the Socket Mode\
+      \ handler:\n    def _ensure_socket_mode(self) -> bool:\n        \"\"\"Start\
+      \ Socket Mode handler if available and not already running.\"\"\"\n        if\
+      \ not SOCKET_MODE_AVAILABLE:\n            return False\n        if self._socket_handler\
+      \ is not None:\n            return True\n        if not self._app_token:\n \
+      \           return False\n        try:\n            app = App(token=self._bot_token)\n\
+      \            @app.action(re.compile(r\"orchestrator_answer_.*\"))\n        \
+      \    def handle_answer(ack, action, body):\n                ack()\n        \
+      \        self._last_answer = action.get(\"value\", \"\")\n                if\
+      \ self._pending_answer:\n                    self._pending_answer.set()\n  \
+      \          handler = SocketModeHandler(app, self._app_token)\n            handler.connect()\
+      \  # non-blocking WebSocket connect\n            self._socket_handler = handler\n\
+      \            return True\n        except Exception as e:\n            print(f\"\
+      [SLACK] Socket Mode failed to start: {e}\")\n            return False\n\n 5.\
+      \ Update send_question to use Socket Mode when available:\n    - After the existing\
+      \ guard checks, try Socket Mode first:\n      use_socket = self._ensure_socket_mode()\n\
+      \    - Build question payload with Block Kit action buttons:\n      actions\
+      \ = [{\"type\": \"button\", \"text\": {\"type\": \"plain_text\",\n        \"\
+      text\": opt}, \"action_id\": f\"orchestrator_answer_{i}\",\n        \"value\"\
+      : opt} for i, opt in enumerate(options)]\n      payload = {\"blocks\": [{\"\
+      type\": \"section\", \"text\":\n        {\"type\": \"mrkdwn\", \"text\": f\"\
+      :question: *{question}*\"}},\n        {\"type\": \"actions\", \"elements\":\
+      \ actions}]}\n    - Post the question via _post_message.\n    - If use_socket\
+      \ is True:\n      self._pending_answer = threading.Event()\n      self._last_answer\
+      \ = None\n      answered = self._pending_answer.wait(timeout=effective_timeout\
+      \ * 60)\n      if answered and self._last_answer:\n          return self._last_answer\n\
+      \      return fallback\n    - If use_socket is False: fall back to the existing\
+      \ file-based polling (keep the current file polling code as the else branch).\n\
+      \n 6. Verify syntax:\n    python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('syntax OK')\"\n\n 7. Verify the SOCKET_MODE_AVAILABLE\
+      \ constant exists:\n    python3 -c \"\n    import importlib.util\n    spec =\
+      \ importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')\n\
+      \    mod = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(mod)\n\
+      \    assert hasattr(mod, 'SOCKET_MODE_AVAILABLE')\n    print(f'SOCKET_MODE_AVAILABLE\
+      \ = {mod.SOCKET_MODE_AVAILABLE}')\n    notifier = mod.SlackNotifier('/nonexistent/path')\n\
+      \    assert hasattr(notifier, '_ensure_socket_mode')\n    print('Socket Mode\
+      \ support verified')\n    \"\n\n Files: scripts/plan-orchestrator.py\n"
 - id: phase-3
   name: Phase 3 - Unit Tests
   status: pending
@@ -236,59 +173,44 @@ sections:
     status: pending
     depends_on:
     - '2.2'
-    description: "Update tests/test_slack_notifier.py for the new Slack App transport.\n
-      Reference: docs/plans/2026-02-16-14-slack-app-migration-design.md\n
-      Steps:\n
-      1. Read tests/test_slack_notifier.py and scripts/plan-orchestrator.py
-      to understand the current test structure and new SlackNotifier API.\n\n
-      2. Update ALL config fixture dicts throughout the file:\n
-      \   - Replace every instance of:\n
-      \     \"webhook_url\": \"https://hooks.slack.com/services/TEST\"\n
-      \     with:\n
-      \     \"bot_token\": \"xoxb-test-token\",\n
-      \     \"channel_id\": \"C0123456789\"\n
-      \   - This affects: test_enabled_when_config_valid, test_should_notify_respects_config,\n
-      \     test_build_status_block_format, test_build_status_block_default_emoji,\n
-      \     test_post_webhook_called_on_send_status, test_process_agent_messages_defect,\n
-      \     test_process_agent_messages_idea, test_process_agent_messages_empty,\n
-      \     test_process_agent_messages_no_field.\n\n
-      3. Rename and update test_post_webhook_called_on_send_status:\n
-      \   - Rename to test_post_message_called_on_send_status\n
-      \   - Monkey-patch _post_message instead of _post_webhook\n
-      \   - Assert _post_message was called with payload containing blocks\n\n
-      4. Update all other tests that monkey-patch _post_webhook:\n
-      \   - test_process_agent_messages_defect: patch _post_message\n
-      \   - test_process_agent_messages_idea: patch _post_message\n
-      \   - test_process_agent_messages_empty: patch _post_message\n
-      \   - test_process_agent_messages_no_field: patch _post_message\n\n
-      5. Add new test: test_post_message_includes_channel:\n
-      \   Create an enabled SlackNotifier with channel_id \"C999\".\n
-      \   Capture the payload passed to urllib.request.Request by monkey-patching\n
-      \   urllib.request.urlopen (or patch _post_message at a lower level).\n
-      \   Call send_status(\"test\").\n
-      \   Verify that the payload includes channel: \"C999\".\n\n
-      6. Add new test: test_socket_mode_available_constant:\n
-      \   Assert that mod.SOCKET_MODE_AVAILABLE is a bool.\n
-      \   (It will be True or False depending on whether slack-bolt is installed.)\n\n
-      7. Add new test: test_send_question_falls_back_to_file_polling:\n
-      \   Create an enabled SlackNotifier with questions enabled.\n
-      \   Patch _post_message to return True.\n
-      \   Patch _ensure_socket_mode to return False.\n
-      \   Set a short timeout (e.g., 1 second by setting timeout_minutes=0\n
-      \   and question config timeout to a tiny value, or mock time.sleep\n
-      \   and time.time to simulate timeout).\n
-      \   Call send_question - it should return the fallback value.\n\n
-      8. Add new test: test_enabled_requires_bot_token_and_channel_id:\n
-      \   Create a config with enabled: true but no bot_token.\n
-      \   Verify send_status is a no-op (does not call _post_message).\n
-      \   Create a config with bot_token but no channel_id.\n
-      \   Verify send_status is a no-op.\n\n
-      9. Update test_slack_config_constants_exist: add assertion for\n
-      \   SOCKET_MODE_AVAILABLE existing in the module.\n\n
-      10. Run tests and fix any failures:\n
-      \    python3 -m pytest tests/test_slack_notifier.py -v\n\n
-      Files: tests/test_slack_notifier.py\n"
-
+    description: "Update tests/test_slack_notifier.py for the new Slack App transport.\n\
+      \ Reference: docs/plans/2026-02-16-14-slack-app-migration-design.md\n Steps:\n\
+      \ 1. Read tests/test_slack_notifier.py and scripts/plan-orchestrator.py to understand\
+      \ the current test structure and new SlackNotifier API.\n\n 2. Update ALL config\
+      \ fixture dicts throughout the file:\n    - Replace every instance of:\n   \
+      \   \"webhook_url\": \"https://hooks.slack.com/services/TEST\"\n      with:\n\
+      \      \"bot_token\": \"xoxb-test-token\",\n      \"channel_id\": \"C0123456789\"\
+      \n    - This affects: test_enabled_when_config_valid, test_should_notify_respects_config,\n\
+      \      test_build_status_block_format, test_build_status_block_default_emoji,\n\
+      \      test_post_webhook_called_on_send_status, test_process_agent_messages_defect,\n\
+      \      test_process_agent_messages_idea, test_process_agent_messages_empty,\n\
+      \      test_process_agent_messages_no_field.\n\n 3. Rename and update test_post_webhook_called_on_send_status:\n\
+      \    - Rename to test_post_message_called_on_send_status\n    - Monkey-patch\
+      \ _post_message instead of _post_webhook\n    - Assert _post_message was called\
+      \ with payload containing blocks\n\n 4. Update all other tests that monkey-patch\
+      \ _post_webhook:\n    - test_process_agent_messages_defect: patch _post_message\n\
+      \    - test_process_agent_messages_idea: patch _post_message\n    - test_process_agent_messages_empty:\
+      \ patch _post_message\n    - test_process_agent_messages_no_field: patch _post_message\n\
+      \n 5. Add new test: test_post_message_includes_channel:\n    Create an enabled\
+      \ SlackNotifier with channel_id \"C999\".\n    Capture the payload passed to\
+      \ urllib.request.Request by monkey-patching\n    urllib.request.urlopen (or\
+      \ patch _post_message at a lower level).\n    Call send_status(\"test\").\n\
+      \    Verify that the payload includes channel: \"C999\".\n\n 6. Add new test:\
+      \ test_socket_mode_available_constant:\n    Assert that mod.SOCKET_MODE_AVAILABLE\
+      \ is a bool.\n    (It will be True or False depending on whether slack-bolt\
+      \ is installed.)\n\n 7. Add new test: test_send_question_falls_back_to_file_polling:\n\
+      \    Create an enabled SlackNotifier with questions enabled.\n    Patch _post_message\
+      \ to return True.\n    Patch _ensure_socket_mode to return False.\n    Set a\
+      \ short timeout (e.g., 1 second by setting timeout_minutes=0\n    and question\
+      \ config timeout to a tiny value, or mock time.sleep\n    and time.time to simulate\
+      \ timeout).\n    Call send_question - it should return the fallback value.\n\
+      \n 8. Add new test: test_enabled_requires_bot_token_and_channel_id:\n    Create\
+      \ a config with enabled: true but no bot_token.\n    Verify send_status is a\
+      \ no-op (does not call _post_message).\n    Create a config with bot_token but\
+      \ no channel_id.\n    Verify send_status is a no-op.\n\n 9. Update test_slack_config_constants_exist:\
+      \ add assertion for\n    SOCKET_MODE_AVAILABLE existing in the module.\n\n 10.\
+      \ Run tests and fix any failures:\n     python3 -m pytest tests/test_slack_notifier.py\
+      \ -v\n\n Files: tests/test_slack_notifier.py\n"
 - id: phase-4
   name: Phase 4 - Verification
   status: pending
@@ -299,54 +221,34 @@ sections:
     status: pending
     depends_on:
     - '3.1'
-    description: "Run verification checks to confirm the Slack App migration works
-      correctly.\n
-      Steps:\n
-      1. Check Python syntax for both scripts:\n
-      \   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',
-      doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\n\n
-      2. Run all unit tests:\n
-      \   python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'\n\n
-      3. Verify SlackNotifier class has new transport methods:\n
-      \   python3 -c \"\n
-      \   import importlib.util\n
-      \   spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')\n
-      \   mod = importlib.util.module_from_spec(spec)\n
-      \   spec.loader.exec_module(mod)\n
-      \   notifier = mod.SlackNotifier('/nonexistent')\n
-      \   assert not notifier.is_enabled()\n
-      \   assert hasattr(notifier, '_post_message'), 'Missing _post_message'\n
-      \   assert not hasattr(notifier, '_post_webhook'), 'Should not have _post_webhook'\n
-      \   assert hasattr(notifier, '_ensure_socket_mode'), 'Missing _ensure_socket_mode'\n
-      \   assert hasattr(notifier, 'send_status')\n
-      \   assert hasattr(notifier, 'send_question')\n
-      \   assert hasattr(notifier, 'send_defect')\n
-      \   assert hasattr(notifier, 'send_idea')\n
-      \   assert hasattr(notifier, 'process_agent_messages')\n
-      \   print('SlackNotifier class verified: all new methods present, webhook removed')\n
-      \   \"\n\n
-      4. Verify config template has new fields:\n
-      \   python3 -c \"\n
-      \   import yaml\n
-      \   with open('.claude/slack.local.yaml.template') as f:\n
-      \       config = yaml.safe_load(f)\n
-      \   assert 'bot_token' in config['slack'], 'Missing bot_token'\n
-      \   assert 'app_token' in config['slack'], 'Missing app_token'\n
-      \   assert 'channel_id' in config['slack'], 'Missing channel_id'\n
-      \   assert 'webhook_url' not in config['slack'], 'webhook_url should be removed'\n
-      \   print('Config template validated OK')\n
-      \   \"\n\n
-      5. Verify .gitignore still has Slack patterns:\n
-      \   python3 -c \"\n
-      \   with open('.gitignore') as f:\n
-      \       content = f.read()\n
-      \   assert 'slack.local.yaml' in content, '.gitignore missing slack.local.yaml'\n
-      \   assert 'slack-*.json' in content, '.gitignore missing slack-*.json'\n
-      \   print('.gitignore patterns verified')\n
-      \   \"\n\n
-      6. Run orchestrator dry-run to verify no startup errors:\n
-      \   python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run\n\n
-      If any check fails, report the failure with specific details.\n
-      Files: scripts/plan-orchestrator.py, scripts/auto-pipeline.py,
-      .claude/slack.local.yaml.template, .gitignore,
-      tests/test_slack_notifier.py\n"
+    description: "Run verification checks to confirm the Slack App migration works\
+      \ correctly.\n Steps:\n 1. Check Python syntax for both scripts:\n    python3\
+      \ -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
+      \ py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\n\n 2.\
+      \ Run all unit tests:\n    python3 -m pytest tests/ 2>/dev/null || echo 'No\
+      \ test suite configured'\n\n 3. Verify SlackNotifier class has new transport\
+      \ methods:\n    python3 -c \"\n    import importlib.util\n    spec = importlib.util.spec_from_file_location('po',\
+      \ 'scripts/plan-orchestrator.py')\n    mod = importlib.util.module_from_spec(spec)\n\
+      \    spec.loader.exec_module(mod)\n    notifier = mod.SlackNotifier('/nonexistent')\n\
+      \    assert not notifier.is_enabled()\n    assert hasattr(notifier, '_post_message'),\
+      \ 'Missing _post_message'\n    assert not hasattr(notifier, '_post_webhook'),\
+      \ 'Should not have _post_webhook'\n    assert hasattr(notifier, '_ensure_socket_mode'),\
+      \ 'Missing _ensure_socket_mode'\n    assert hasattr(notifier, 'send_status')\n\
+      \    assert hasattr(notifier, 'send_question')\n    assert hasattr(notifier,\
+      \ 'send_defect')\n    assert hasattr(notifier, 'send_idea')\n    assert hasattr(notifier,\
+      \ 'process_agent_messages')\n    print('SlackNotifier class verified: all new\
+      \ methods present, webhook removed')\n    \"\n\n 4. Verify config template has\
+      \ new fields:\n    python3 -c \"\n    import yaml\n    with open('.claude/slack.local.yaml.template')\
+      \ as f:\n        config = yaml.safe_load(f)\n    assert 'bot_token' in config['slack'],\
+      \ 'Missing bot_token'\n    assert 'app_token' in config['slack'], 'Missing app_token'\n\
+      \    assert 'channel_id' in config['slack'], 'Missing channel_id'\n    assert\
+      \ 'webhook_url' not in config['slack'], 'webhook_url should be removed'\n  \
+      \  print('Config template validated OK')\n    \"\n\n 5. Verify .gitignore still\
+      \ has Slack patterns:\n    python3 -c \"\n    with open('.gitignore') as f:\n\
+      \        content = f.read()\n    assert 'slack.local.yaml' in content, '.gitignore\
+      \ missing slack.local.yaml'\n    assert 'slack-*.json' in content, '.gitignore\
+      \ missing slack-*.json'\n    print('.gitignore patterns verified')\n    \"\n\
+      \n 6. Run orchestrator dry-run to verify no startup errors:\n    python3 scripts/plan-orchestrator.py\
+      \ --plan .claude/plans/sample-plan.yaml --dry-run\n\n If any check fails, report\
+      \ the failure with specific details.\n Files: scripts/plan-orchestrator.py,\
+      \ scripts/auto-pipeline.py, .claude/slack.local.yaml.template, .gitignore, tests/test_slack_notifier.py\n"
