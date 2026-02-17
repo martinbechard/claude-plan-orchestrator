@@ -18,6 +18,7 @@ import subprocess
 import sys
 import time
 import threading
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -80,6 +81,8 @@ SLACK_LEVEL_EMOJI = {
     "warning": ":warning:",
     "question": ":question:",
 }
+SLACK_LAST_READ_PATH = ".claude/slack-last-read.json"
+SLACK_INBOUND_POLL_LIMIT = 20
 
 
 def load_orchestrator_config() -> dict:
@@ -2874,6 +2877,86 @@ class SlackNotifier:
                 self.send_defect(title, desc, msg.get("file_path", ""))
             elif msg_type == "idea":
                 self.send_idea(title, desc)
+
+    def _load_last_read(self) -> str:
+        """Load the last-read message timestamp from disk.
+
+        Returns '0' if no prior state exists (will only process messages
+        from this session forward by using current time on first poll).
+        """
+        try:
+            with open(SLACK_LAST_READ_PATH, "r") as f:
+                data = json.load(f)
+            return data.get("last_ts", "0")
+        except (IOError, json.JSONDecodeError):
+            return "0"
+
+    def _save_last_read(self, ts: str) -> None:
+        """Persist the last-read timestamp to disk."""
+        try:
+            data = {"channel_id": self._channel_id, "last_ts": ts}
+            with open(SLACK_LAST_READ_PATH, "w") as f:
+                json.dump(data, f)
+        except IOError as e:
+            print(f"[SLACK] Failed to save last-read state: {e}")
+
+    def poll_messages(self) -> list:
+        """Fetch unread messages since last poll from the Slack channel.
+
+        Uses conversations.history API with oldest parameter.
+        Filters out bot messages. Updates last-read timestamp.
+        Returns empty list if disabled, no new messages, or on error.
+        """
+        if not self._enabled or not self._bot_token or not self._channel_id:
+            return []
+
+        last_ts = self._load_last_read()
+        # On first run, use current time to avoid processing history
+        if last_ts == "0":
+            import time as _time
+            current_ts = str(_time.time())
+            self._save_last_read(current_ts)
+            return []
+
+        try:
+            params = urllib.parse.urlencode({
+                "channel": self._channel_id,
+                "oldest": last_ts,
+                "limit": SLACK_INBOUND_POLL_LIMIT,
+                "inclusive": "false"
+            })
+            url = f"https://slack.com/api/conversations.history?{params}"
+            req = urllib.request.Request(
+                url,
+                headers={"Authorization": f"Bearer {self._bot_token}"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read())
+
+            if not result.get("ok", False):
+                print(f"[SLACK] conversations.history error: {result.get('error', 'unknown')}")
+                return []
+
+            messages = result.get("messages", [])
+            if not messages:
+                return []
+
+            # Filter out bot messages (our own posts and other bots)
+            human_messages = [
+                m for m in messages
+                if not m.get("bot_id") and m.get("subtype") is None
+            ]
+
+            # Update last-read to the newest message timestamp
+            # messages are returned newest-first by the API
+            newest_ts = messages[0].get("ts", last_ts)
+            self._save_last_read(newest_ts)
+
+            return human_messages
+
+        except Exception as e:
+            print(f"[SLACK] Failed to poll messages: {e}")
+            return []
 
 
 def update_section_status(section: dict) -> None:
