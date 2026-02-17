@@ -3,8 +3,7 @@ meta:
   description: 'Audit all plugin documentation (README, narrative history, skills)
     against the current codebase to identify discrepancies. Update outdated explanations
     of workflows, agent responsibilities, file structures, and integration patterns.
-    The codebase has grown from ~3,500 to ~6,722 lines and 8 major features are
-    undocumented.
+    The codebase has grown from ~3,500 to ~6,722 lines and 8 major features are undocumented.
 
     '
   plan_doc: docs/plans/2026-02-17-7-weve-done-a-lot-of-changes-to-the-code---make-sure-to-update-the-documentation-design.md
@@ -20,67 +19,76 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - README.md Major Update
-  status: pending
+  status: in_progress
   tasks:
   - id: '1.1'
     name: Update README.md feature overview and line counts
     agent: coder
-    status: pending
+    status: completed
     description: "Update README.md to reflect the current state of the codebase.\n\
       \nFirst, read the full README.md and scripts/auto-pipeline.py and scripts/plan-orchestrator.py\n\
       to understand the current feature set.\n\nThen make these specific changes to\
       \ README.md:\n\n1. UPDATE the Overview bullet list (lines 8-19). Add these missing\
-      \ bullets after the existing ones:\n   - **Agent Framework**: 10 specialized agents\
-      \ (coder, code-reviewer, systems-designer, ux-designer, ux-reviewer, spec-verifier,\
-      \ qa-auditor, planner, issue-verifier, validator) with YAML frontmatter definitions\n\
-      \   - **Slack Integration**: Real-time notifications, inbound message processing,\
-      \ LLM-powered question answering, and 5 Whys intake analysis via Slack\n   - **Budget\
-      \ Management**: Token usage tracking, API-equivalent cost estimates, and quota-aware\
-      \ execution with configurable limits\n   - **Model Escalation**: Tiered model selection\
-      \ (haiku -> sonnet -> opus) with automatic escalation after consecutive failures\n\
-      \   - **Per-Task Validation**: Independent validator agent that runs after each\
-      \ task with PASS/WARN/FAIL verdicts and retry logic\n   - **Design Competitions**:\
-      \ Phase 0 parallel design generation with AI judge for architecture decisions\n\
-      \   - **Hot-Reload**: Auto-pipeline monitors its own source files and self-restarts\
-      \ when code changes are detected\n\n2. UPDATE the Requirements section (around\
-      \ line 60). Add after PyYAML line:\n   - `slack_sdk` (`pip install slack_sdk`) for\
-      \ Slack integration (optional)\n   - `requests` (`pip install requests`) for API\
-      \ calls (optional)\n\n3. UPDATE the Directory Structure section (around line 439).\
-      \ Replace the entire directory tree with:\n   ```\n   your-project/\n   +-- CODING-RULES.md\
-      \                   # Coding standards (adapt for your project)\n   +-- .claude/\n\
-      \   |   +-- plans/\n   |   |   +-- sample-plan.yaml        # Template plan\n   |\
-      \   |   +-- my-feature.yaml         # Your active plan\n   |   |   +-- task-status.json\
+      \ bullets after the existing ones:\n   - **Agent Framework**: 10 specialized\
+      \ agents (coder, code-reviewer, systems-designer, ux-designer, ux-reviewer,\
+      \ spec-verifier, qa-auditor, planner, issue-verifier, validator) with YAML frontmatter\
+      \ definitions\n   - **Slack Integration**: Real-time notifications, inbound\
+      \ message processing, LLM-powered question answering, and 5 Whys intake analysis\
+      \ via Slack\n   - **Budget Management**: Token usage tracking, API-equivalent\
+      \ cost estimates, and quota-aware execution with configurable limits\n   - **Model\
+      \ Escalation**: Tiered model selection (haiku -> sonnet -> opus) with automatic\
+      \ escalation after consecutive failures\n   - **Per-Task Validation**: Independent\
+      \ validator agent that runs after each task with PASS/WARN/FAIL verdicts and\
+      \ retry logic\n   - **Design Competitions**: Phase 0 parallel design generation\
+      \ with AI judge for architecture decisions\n   - **Hot-Reload**: Auto-pipeline\
+      \ monitors its own source files and self-restarts when code changes are detected\n\
+      \n2. UPDATE the Requirements section (around line 60). Add after PyYAML line:\n\
+      \   - `slack_sdk` (`pip install slack_sdk`) for Slack integration (optional)\n\
+      \   - `requests` (`pip install requests`) for API calls (optional)\n\n3. UPDATE\
+      \ the Directory Structure section (around line 439). Replace the entire directory\
+      \ tree with:\n   ```\n   your-project/\n   +-- CODING-RULES.md             \
+      \      # Coding standards (adapt for your project)\n   +-- .claude/\n   |  \
+      \ +-- plans/\n   |   |   +-- sample-plan.yaml        # Template plan\n   | \
+      \  |   +-- my-feature.yaml         # Your active plan\n   |   |   +-- task-status.json\
       \        # Auto-generated status\n   |   |   +-- .stop                   # Graceful\
-      \ stop semaphore\n   |   +-- agents/\n   |   |   +-- coder.md               #\
-      \ Implementation specialist\n   |   |   +-- code-reviewer.md        # Read-only\
-      \ reviewer\n   |   |   +-- systems-designer.md    # Architecture designer\n   |\
-      \   |   +-- ux-designer.md          # UI/UX designer\n   |   |   +-- ux-reviewer.md\
-      \           # UX quality reviewer\n   |   |   +-- spec-verifier.md        # Spec\
-      \ compliance checker\n   |   |   +-- qa-auditor.md           # QA audit specialist\n\
-      \   |   |   +-- planner.md              # Design-to-plan bridge\n   |   |   +--\
-      \ issue-verifier.md       # Defect fix verifier\n   |   |   +-- validator.md  \
-      \          # Per-task validator\n   |   +-- skills/\n   |   |   +-- implement/\n\
-      \   |   |   |   +-- SKILL.md            # Implementation skill\n   |   |   +--\
-      \ coding-rules/\n   |   |       +-- SKILL.md            # Coding standards skill\n\
-      \   |   +-- commands/\n   |   |   +-- implement.md            # /implement command\n\
-      \   |   +-- slack.local.yaml             # Slack channel configuration (user-created)\n\
-      \   |   +-- orchestrator-config.yaml     # Project-specific config\n   |   +--\
-      \ subagent-status/            # Parallel task heartbeats\n   |   +-- agent-claims.json\
-      \           # File claim coordination\n   +-- scripts/\n   |   +-- plan-orchestrator.py\
-      \        # Main orchestrator (~4773 lines)\n   |   +-- auto-pipeline.py           \
-      \ # Auto-pipeline daemon (~1949 lines)\n   +-- docs/\n       +-- plans/\n      \
-      \ |   +-- YYYY-MM-DD-*.md         # Design documents\n       +-- defect-backlog/\
-      \             # Active defects\n       +-- feature-backlog/            # Active\
-      \ features\n       +-- completed-backlog/          # Archived completed items\n\
-      \       +-- narrative/\n           +-- *.md                    # Development history\n\
-      \   ```\n\n4. UPDATE the line count references:\n   - Line 456: change '~2095 lines'\
-      \ to '~4773 lines'\n   - Line 457: change '~1450 lines' to '~1949 lines'\n   -\
-      \ Line 505: change '~3500-line' to '~6700-line'\n\n5. UPDATE the Development History\
-      \ section (around line 503). Add these bullets to the list:\n   - Agent definition\
-      \ framework with YAML frontmatter\n   - Per-task validation pipeline\n   - Design\
-      \ agents (systems-designer, ux-designer)\n   - Tiered model escalation\n   - Token\
-      \ usage and budget tracking\n   - Slack integration with inbound message polling\n\
-      \   - Hot-reload self-restart for auto-pipeline\n"
+      \ stop semaphore\n   |   +-- agents/\n   |   |   +-- coder.md              \
+      \ # Implementation specialist\n   |   |   +-- code-reviewer.md        # Read-only\
+      \ reviewer\n   |   |   +-- systems-designer.md    # Architecture designer\n\
+      \   |   |   +-- ux-designer.md          # UI/UX designer\n   |   |   +-- ux-reviewer.md\
+      \           # UX quality reviewer\n   |   |   +-- spec-verifier.md        #\
+      \ Spec compliance checker\n   |   |   +-- qa-auditor.md           # QA audit\
+      \ specialist\n   |   |   +-- planner.md              # Design-to-plan bridge\n\
+      \   |   |   +-- issue-verifier.md       # Defect fix verifier\n   |   |   +--\
+      \ validator.md            # Per-task validator\n   |   +-- skills/\n   |   |\
+      \   +-- implement/\n   |   |   |   +-- SKILL.md            # Implementation\
+      \ skill\n   |   |   +-- coding-rules/\n   |   |       +-- SKILL.md         \
+      \   # Coding standards skill\n   |   +-- commands/\n   |   |   +-- implement.md\
+      \            # /implement command\n   |   +-- slack.local.yaml             #\
+      \ Slack channel configuration (user-created)\n   |   +-- orchestrator-config.yaml\
+      \     # Project-specific config\n   |   +-- subagent-status/            # Parallel\
+      \ task heartbeats\n   |   +-- agent-claims.json           # File claim coordination\n\
+      \   +-- scripts/\n   |   +-- plan-orchestrator.py        # Main orchestrator\
+      \ (~4773 lines)\n   |   +-- auto-pipeline.py            # Auto-pipeline daemon\
+      \ (~1949 lines)\n   +-- docs/\n       +-- plans/\n       |   +-- YYYY-MM-DD-*.md\
+      \         # Design documents\n       +-- defect-backlog/             # Active\
+      \ defects\n       +-- feature-backlog/            # Active features\n      \
+      \ +-- completed-backlog/          # Archived completed items\n       +-- narrative/\n\
+      \           +-- *.md                    # Development history\n   ```\n\n4.\
+      \ UPDATE the line count references:\n   - Line 456: change '~2095 lines' to\
+      \ '~4773 lines'\n   - Line 457: change '~1450 lines' to '~1949 lines'\n   -\
+      \ Line 505: change '~3500-line' to '~6700-line'\n\n5. UPDATE the Development\
+      \ History section (around line 503). Add these bullets to the list:\n   - Agent\
+      \ definition framework with YAML frontmatter\n   - Per-task validation pipeline\n\
+      \   - Design agents (systems-designer, ux-designer)\n   - Tiered model escalation\n\
+      \   - Token usage and budget tracking\n   - Slack integration with inbound message\
+      \ polling\n   - Hot-reload self-restart for auto-pipeline\n"
+    attempts: 1
+    last_attempt: '2026-02-17T12:25:29.030183'
+    model_used: sonnet
+    completed_at: '2026-02-17T12:28:05.876540'
+    result_message: Updated README.md with 7 missing features, corrected line counts
+      (~4773 + ~1949 = ~6722 total), expanded directory structure to show all 10 agents
+      and backlog dirs, and added slack_sdk/requests dependencies
   - id: '1.2'
     name: Add new feature sections to README.md
     agent: coder
@@ -88,87 +96,91 @@ sections:
     - '1.1'
     status: pending
     description: "Add new feature sections to README.md to document the 8 major features\n\
-      that are currently undocumented.\n\nFirst, read README.md to see the current state\
-      \ after task 1.1.\n\nThen add the following NEW sections after the existing 'Post-Plan\
-      \ Smoke Tests' section\n(before '## Auto-Pipeline'):\n\n### Agent Framework\n\n\
-      The orchestrator uses specialized agents defined in `.claude/agents/`. Each agent\n\
-      has a YAML frontmatter header specifying its name, tools, model, and capabilities.\n\
-      \nAvailable agents:\n\n| Agent | Role | Model |\n|-------|------|-------|\n| coder\
-      \ | Implementation specialist - writes code, runs tests | sonnet (default) |\n|\
-      \ code-reviewer | Read-only reviewer - checks compliance, no code changes | sonnet\
-      \ |\n| systems-designer | Architecture and data model designer | sonnet |\n| ux-designer\
-      \ | Visual and interaction design specialist | sonnet |\n| ux-reviewer | UX/UI quality\
-      \ reviewer | sonnet |\n| spec-verifier | Functional specification compliance checker\
-      \ | sonnet |\n| qa-auditor | QA audit specialist with coverage matrices | sonnet\
-      \ |\n| planner | Design-to-implementation bridge - creates YAML phases | sonnet |\n\
-      | issue-verifier | Defect fix verification with symptom checking | sonnet |\n| validator\
-      \ | Per-task validation with PASS/WARN/FAIL verdicts | sonnet |\n\nTasks can specify\
-      \ their agent in the YAML plan:\n\n```yaml\n- id: '2.1'\n  name: Implement the\
-      \ feature\n  agent: coder\n  status: pending\n  description: ...\n\n- id: '3.1'\n\
-      \  name: Review code quality\n  agent: code-reviewer\n  status: pending\n  description:\
-      \ ...\n```\n\nIf no agent is specified, the orchestrator infers it from the task\
-      \ name and description\n(review/verification -> code-reviewer, design -> systems-designer,\
-      \ everything else -> coder).\n\n### Per-Task Validation\n\nEnable automatic validation\
-      \ after each coder task by adding a `validation` block to the plan meta:\n\n```yaml\n\
-      meta:\n  validation:\n    enabled: true\n    run_after:\n    - coder\n    validators:\n\
-      \    - validator\n    max_validation_attempts: 1\n```\n\nThe validator agent runs\
-      \ independently after each task and produces:\n- **PASS**: Task proceeds normally\n\
-      - **WARN**: Task completes but warnings are logged\n- **FAIL**: Task is retried\
-      \ with validation findings prepended to the prompt\n\nFor defect verification, use\
-      \ the `issue-verifier` validator which reads the original defect\nfile and checks\
-      \ whether reported symptoms are resolved.\n\n### Design Competitions\n\nFor significant\
-      \ architectural decisions, the orchestrator supports a Phase 0 design competition\n\
-      pattern where multiple design agents generate competing proposals and an AI judge\
-      \ selects the winner:\n\n```yaml\n- id: '0.1'\n  name: Generate Design 1\n  agent:\
-      \ systems-designer\n  parallel_group: phase-0-designs\n  status: pending\n  description:\
-      \ ...\n\n- id: '0.2'\n  name: Generate Design 2\n  agent: ux-designer\n  parallel_group:\
-      \ phase-0-designs\n  status: pending\n  description: ...\n\n- id: '0.7'\n  name:\
-      \ Extend plan with implementation tasks\n  agent: planner\n  depends_on: ['0.1',\
-      \ '0.2']\n  status: pending\n  description: ...\n```\n\nThe planner agent reads\
-      \ the winning design and creates implementation phases,\nsetting `plan_modified:\
-      \ true` to trigger a plan reload.\n\n### Model Escalation\n\nThe orchestrator supports\
-      \ tiered model selection that automatically escalates to more\ncapable (and expensive)\
-      \ models after consecutive task failures:\n\n```bash\n# Use default escalation (haiku\
-      \ -> sonnet -> opus after 2 failures each)\npython scripts/plan-orchestrator.py\
-      \ --plan .claude/plans/my-feature.yaml\n\n# Start with sonnet, escalate after 1\
-      \ failure\npython scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml\
+      that are currently undocumented.\n\nFirst, read README.md to see the current\
+      \ state after task 1.1.\n\nThen add the following NEW sections after the existing\
+      \ 'Post-Plan Smoke Tests' section\n(before '## Auto-Pipeline'):\n\n### Agent\
+      \ Framework\n\nThe orchestrator uses specialized agents defined in `.claude/agents/`.\
+      \ Each agent\nhas a YAML frontmatter header specifying its name, tools, model,\
+      \ and capabilities.\n\nAvailable agents:\n\n| Agent | Role | Model |\n|-------|------|-------|\n\
+      | coder | Implementation specialist - writes code, runs tests | sonnet (default)\
+      \ |\n| code-reviewer | Read-only reviewer - checks compliance, no code changes\
+      \ | sonnet |\n| systems-designer | Architecture and data model designer | sonnet\
+      \ |\n| ux-designer | Visual and interaction design specialist | sonnet |\n|\
+      \ ux-reviewer | UX/UI quality reviewer | sonnet |\n| spec-verifier | Functional\
+      \ specification compliance checker | sonnet |\n| qa-auditor | QA audit specialist\
+      \ with coverage matrices | sonnet |\n| planner | Design-to-implementation bridge\
+      \ - creates YAML phases | sonnet |\n| issue-verifier | Defect fix verification\
+      \ with symptom checking | sonnet |\n| validator | Per-task validation with PASS/WARN/FAIL\
+      \ verdicts | sonnet |\n\nTasks can specify their agent in the YAML plan:\n\n\
+      ```yaml\n- id: '2.1'\n  name: Implement the feature\n  agent: coder\n  status:\
+      \ pending\n  description: ...\n\n- id: '3.1'\n  name: Review code quality\n\
+      \  agent: code-reviewer\n  status: pending\n  description: ...\n```\n\nIf no\
+      \ agent is specified, the orchestrator infers it from the task name and description\n\
+      (review/verification -> code-reviewer, design -> systems-designer, everything\
+      \ else -> coder).\n\n### Per-Task Validation\n\nEnable automatic validation\
+      \ after each coder task by adding a `validation` block to the plan meta:\n\n\
+      ```yaml\nmeta:\n  validation:\n    enabled: true\n    run_after:\n    - coder\n\
+      \    validators:\n    - validator\n    max_validation_attempts: 1\n```\n\nThe\
+      \ validator agent runs independently after each task and produces:\n- **PASS**:\
+      \ Task proceeds normally\n- **WARN**: Task completes but warnings are logged\n\
+      - **FAIL**: Task is retried with validation findings prepended to the prompt\n\
+      \nFor defect verification, use the `issue-verifier` validator which reads the\
+      \ original defect\nfile and checks whether reported symptoms are resolved.\n\
+      \n### Design Competitions\n\nFor significant architectural decisions, the orchestrator\
+      \ supports a Phase 0 design competition\npattern where multiple design agents\
+      \ generate competing proposals and an AI judge selects the winner:\n\n```yaml\n\
+      - id: '0.1'\n  name: Generate Design 1\n  agent: systems-designer\n  parallel_group:\
+      \ phase-0-designs\n  status: pending\n  description: ...\n\n- id: '0.2'\n  name:\
+      \ Generate Design 2\n  agent: ux-designer\n  parallel_group: phase-0-designs\n\
+      \  status: pending\n  description: ...\n\n- id: '0.7'\n  name: Extend plan with\
+      \ implementation tasks\n  agent: planner\n  depends_on: ['0.1', '0.2']\n  status:\
+      \ pending\n  description: ...\n```\n\nThe planner agent reads the winning design\
+      \ and creates implementation phases,\nsetting `plan_modified: true` to trigger\
+      \ a plan reload.\n\n### Model Escalation\n\nThe orchestrator supports tiered\
+      \ model selection that automatically escalates to more\ncapable (and expensive)\
+      \ models after consecutive task failures:\n\n```bash\n# Use default escalation\
+      \ (haiku -> sonnet -> opus after 2 failures each)\npython scripts/plan-orchestrator.py\
+      \ --plan .claude/plans/my-feature.yaml\n\n# Start with sonnet, escalate after\
+      \ 1 failure\npython scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml\
       \ \\\\\n  --starting-model sonnet --escalate-after-failures 1\n\n# Cap at sonnet\
       \ (never use opus)\npython scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml\
-      \ \\\\\n  --max-model sonnet\n```\n\nModel tiers: haiku (fastest/cheapest) -> sonnet\
-      \ (balanced) -> opus (most capable).\n\n### Budget and Quota Management\n\nTrack\
-      \ token usage and enforce budget limits during plan execution:\n\n```bash\n# Set\
-      \ maximum quota percentage (stop if usage exceeds this % of daily quota)\npython\
-      \ scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml \\\\\n  --max-quota-percent\
-      \ 80\n\n# Set quota ceiling in USD (API-equivalent estimate)\npython scripts/plan-orchestrator.py\
-      \ --plan .claude/plans/my-feature.yaml \\\\\n  --quota-ceiling-usd 50.00\n\n# Set\
-      \ reserved budget (stop when remaining budget drops below this)\npython scripts/plan-orchestrator.py\
-      \ --plan .claude/plans/my-feature.yaml \\\\\n  --reserved-budget-usd 10.00\n```\n\
-      \nCost displays use `~$` prefix to indicate API-equivalent estimates.\nNote: Claude\
-      \ Max subscription users are not billed per-token; these are estimates\nfor planning\
-      \ purposes.\n\n### Slack Integration\n\nThe auto-pipeline integrates with Slack for\
-      \ real-time notifications and inbound work items:\n\n**Outbound notifications** are\
-      \ sent to dedicated channels:\n- `orchestrator-notifications` - Status updates, progress\
+      \ \\\\\n  --max-model sonnet\n```\n\nModel tiers: haiku (fastest/cheapest) ->\
+      \ sonnet (balanced) -> opus (most capable).\n\n### Budget and Quota Management\n\
+      \nTrack token usage and enforce budget limits during plan execution:\n\n```bash\n\
+      # Set maximum quota percentage (stop if usage exceeds this % of daily quota)\n\
+      python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml \\\\\
+      \n  --max-quota-percent 80\n\n# Set quota ceiling in USD (API-equivalent estimate)\n\
+      python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml \\\\\
+      \n  --quota-ceiling-usd 50.00\n\n# Set reserved budget (stop when remaining\
+      \ budget drops below this)\npython scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml\
+      \ \\\\\n  --reserved-budget-usd 10.00\n```\n\nCost displays use `~$` prefix\
+      \ to indicate API-equivalent estimates.\nNote: Claude Max subscription users\
+      \ are not billed per-token; these are estimates\nfor planning purposes.\n\n\
+      ### Slack Integration\n\nThe auto-pipeline integrates with Slack for real-time\
+      \ notifications and inbound work items:\n\n**Outbound notifications** are sent\
+      \ to dedicated channels:\n- `orchestrator-notifications` - Status updates, progress\
       \ reports\n- `orchestrator-defects` - Defect intake and status\n- `orchestrator-features`\
-      \ - Feature intake and status\n- `orchestrator-questions` - Questions from the orchestrator\
-      \ to the team\n\n**Inbound message processing** supports:\n- Submitting new features\
-      \ and defects via Slack messages\n- Asking questions about the pipeline state (answered\
-      \ by LLM with full context)\n- Control commands (stop, status, etc.)\n- 5 Whys analysis\
-      \ for intake - the system automatically structures incoming\n  feature/defect requests\
-      \ using the 5 Whys methodology\n\nConfigure Slack in `.claude/slack.local.yaml`:\n\
-      \n```yaml\nbot_token: xoxb-your-bot-token\nchannel_prefix: orchestrator\n```\n\n\
-      The background polling thread checks for new messages every 15 seconds,\nindependent\
-      \ of task execution.\n\n### Hot-Reload\n\nThe auto-pipeline monitors its own source\
-      \ files for changes. When a modification\nis detected between work items, it performs\
-      \ a graceful self-restart using `os.execv()`\nto pick up the new code without disrupting\
-      \ the Slack polling thread:\n\n```\nWork item completes -> Check source file hashes\
-      \ -> Changed? -> Graceful restart\n                                              \
-      \         -> No change? -> Continue\n```\n\nMonitored files are defined in `HOT_RELOAD_WATCHED_FILES`\
-      \ in auto-pipeline.py.\n\nNow also add a new section in the Auto-Pipeline section\
-      \ (after line ~316),\nfor the Project Configuration subsection. Update the existing\
-      \ config example to include:\n\n```yaml\n# Build/test commands used during verification\
-      \ (defaults shown)\n# build_command: \"pnpm run build\"\n# test_command: \"pnpm test\"\
-      \n# dev_server_command: \"pnpm dev\"\n# dev_server_port: 3000\n# agents_dir: \".claude/agents\"\
-      \n```\n"
+      \ - Feature intake and status\n- `orchestrator-questions` - Questions from the\
+      \ orchestrator to the team\n\n**Inbound message processing** supports:\n- Submitting\
+      \ new features and defects via Slack messages\n- Asking questions about the\
+      \ pipeline state (answered by LLM with full context)\n- Control commands (stop,\
+      \ status, etc.)\n- 5 Whys analysis for intake - the system automatically structures\
+      \ incoming\n  feature/defect requests using the 5 Whys methodology\n\nConfigure\
+      \ Slack in `.claude/slack.local.yaml`:\n\n```yaml\nbot_token: xoxb-your-bot-token\n\
+      channel_prefix: orchestrator\n```\n\nThe background polling thread checks for\
+      \ new messages every 15 seconds,\nindependent of task execution.\n\n### Hot-Reload\n\
+      \nThe auto-pipeline monitors its own source files for changes. When a modification\n\
+      is detected between work items, it performs a graceful self-restart using `os.execv()`\n\
+      to pick up the new code without disrupting the Slack polling thread:\n\n```\n\
+      Work item completes -> Check source file hashes -> Changed? -> Graceful restart\n\
+      \                                                       -> No change? -> Continue\n\
+      ```\n\nMonitored files are defined in `HOT_RELOAD_WATCHED_FILES` in auto-pipeline.py.\n\
+      \nNow also add a new section in the Auto-Pipeline section (after line ~316),\n\
+      for the Project Configuration subsection. Update the existing config example\
+      \ to include:\n\n```yaml\n# Build/test commands used during verification (defaults\
+      \ shown)\n# build_command: \"pnpm run build\"\n# test_command: \"pnpm test\"\
+      \n# dev_server_command: \"pnpm dev\"\n# dev_server_port: 3000\n# agents_dir:\
+      \ \".claude/agents\"\n```\n"
 - id: phase-2
   name: Phase 2 - Narrative Documentation Update
   status: pending
@@ -180,21 +192,21 @@ sections:
     - '1.2'
     status: pending
     description: "Update docs/narrative/README.md to reflect the current state.\n\n\
-      First, read docs/narrative/README.md.\n\nMake these specific changes:\n\n1. UPDATE\
-      \ the intro paragraph (line 10-11). Change 'three-and-a-half thousand lines'\
-      \ to 'nearly seven thousand lines'.\n\n2. UPDATE the timeline section. Add these\
-      \ entries after the last entry (2026-02-16 line):\n   Add:\n   ```\n   2026-02-17\
-      \  Multi-project Slack channel prefixes\n   2026-02-17  Intake acknowledgment\
-      \ messages for features and defects\n   2026-02-17  Hot-reload self-restart for\
-      \ auto-pipeline\n   2026-02-17  Cost formatting standardization (~$ prefix)\n\
-      \   ```\n\n3. UPDATE the line count line (line 63). Change to:\n   ```\n   Current:\
-      \ ~4773 lines (orchestrator) + ~1949 lines (auto-pipeline)\n   ```\n\n4. UPDATE\
-      \ the plans count. Change '20 YAML plan files, 12+ completed plans' to:\n   ```\n\
-      \   Plans executed: 23+ YAML plan files, 20+ completed plans\n   ```\n\n5. ADD\
-      \ a reference to Chapter 13 in the Document Index table, after the Chapter 12\
-      \ row:\n   | [13-self-improvement.md](13-self-improvement.md) | Self-improvement:\
-      \ multi-project channels, intake acknowledgment, hot-reload, cost standardization\
-      \ |\n"
+      First, read docs/narrative/README.md.\n\nMake these specific changes:\n\n1.\
+      \ UPDATE the intro paragraph (line 10-11). Change 'three-and-a-half thousand\
+      \ lines' to 'nearly seven thousand lines'.\n\n2. UPDATE the timeline section.\
+      \ Add these entries after the last entry (2026-02-16 line):\n   Add:\n   ```\n\
+      \   2026-02-17  Multi-project Slack channel prefixes\n   2026-02-17  Intake\
+      \ acknowledgment messages for features and defects\n   2026-02-17  Hot-reload\
+      \ self-restart for auto-pipeline\n   2026-02-17  Cost formatting standardization\
+      \ (~$ prefix)\n   ```\n\n3. UPDATE the line count line (line 63). Change to:\n\
+      \   ```\n   Current: ~4773 lines (orchestrator) + ~1949 lines (auto-pipeline)\n\
+      \   ```\n\n4. UPDATE the plans count. Change '20 YAML plan files, 12+ completed\
+      \ plans' to:\n   ```\n   Plans executed: 23+ YAML plan files, 20+ completed\
+      \ plans\n   ```\n\n5. ADD a reference to Chapter 13 in the Document Index table,\
+      \ after the Chapter 12 row:\n   | [13-self-improvement.md](13-self-improvement.md)\
+      \ | Self-improvement: multi-project channels, intake acknowledgment, hot-reload,\
+      \ cost standardization |\n"
   - id: '2.2'
     name: Write Chapter 13 narrative
     agent: coder
@@ -206,25 +218,25 @@ sections:
       \ and voice.\nAlso read scripts/auto-pipeline.py (focus on the hot-reload functions\
       \ around lines 330-380,\nthe multi-project Slack channel logic, and the intake\
       \ acknowledgment code).\n\nWrite Chapter 13 in the same first-person AI narrator\
-      \ voice. The chapter should cover\nthese features that were added on Feb 17, 2026:\n\
-      \n1. **Multi-Project Slack Channels** (Features #1-4): The system can now use\
-      \ different Slack channel prefixes per project, configured via slack.local.yaml.\n\
+      \ voice. The chapter should cover\nthese features that were added on Feb 17,\
+      \ 2026:\n\n1. **Multi-Project Slack Channels** (Features #1-4): The system can\
+      \ now use different Slack channel prefixes per project, configured via slack.local.yaml.\n\
       \   This allows multiple orchestrator instances to coexist without message collision.\n\
       \n2. **Intake Acknowledgment** (Feature #5): When a feature or defect is submitted\
       \ via Slack,\n   the system immediately acknowledges receipt with a structured\
-      \ message before starting\n   the 5 Whys analysis. This closes the feedback gap\
-      \ where users didn't know if their\n   message was received.\n\n3. **Hot-Reload\
+      \ message before starting\n   the 5 Whys analysis. This closes the feedback\
+      \ gap where users didn't know if their\n   message was received.\n\n3. **Hot-Reload\
       \ Self-Restart** (Feature #6): The auto-pipeline now monitors its own\n   source\
       \ files (auto-pipeline.py, plan-orchestrator.py) using SHA-256 hashes captured\n\
       \   at startup. Between work items, it compares current hashes against the snapshot.\n\
       \   If any file changed, it performs os.execv() to replace the current process\n\
-      \   with a fresh copy. The plan-orchestrator always gets fresh code since it runs\n\
-      \   as a subprocess, so only auto-pipeline.py needed the hot-reload mechanism.\n\
+      \   with a fresh copy. The plan-orchestrator always gets fresh code since it\
+      \ runs\n   as a subprocess, so only auto-pipeline.py needed the hot-reload mechanism.\n\
       \n4. **Cost Formatting Standardization**: All cost displays now use the ~$ prefix\n\
       \   to indicate API-equivalent estimates, with headers saying 'API-Equivalent\
-      \ Estimates'\n   and a disclaimer about subscription charges.\n\nThe chapter should\
-      \ be 150-300 lines, maintaining the narrative voice of 'I, the AI'\n telling\
-      \ the story. Include a section about the meta-aspect of the system improving\n\
+      \ Estimates'\n   and a disclaimer about subscription charges.\n\nThe chapter\
+      \ should be 150-300 lines, maintaining the narrative voice of 'I, the AI'\n\
+      \ telling the story. Include a section about the meta-aspect of the system improving\n\
       itself (the orchestrator is now capable of modifying its own code and restarting\n\
       itself, a form of self-improvement).\n\nTitle the chapter: '# Chapter 13: Self-Improvement'\n\
       \nEnd with a reflection on how the system is getting closer to fully autonomous\n\
@@ -242,13 +254,14 @@ sections:
     status: pending
     description: "Run the following verification steps:\n\n1. Compile-check both main\
       \ scripts to ensure no code was accidentally modified:\n   python3 -c \"import\
-      \ py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py',\
-      \ doraise=True)\"\n\n2. Run the full test suite:\n   python3 -m pytest tests/\
-      \ 2>/dev/null || echo 'No test suite configured'\n\n3. Verify README.md now mentions\
-      \ all 10 agents:\n   grep -c 'coder\\|code-reviewer\\|systems-designer\\|ux-designer\\\
-      |ux-reviewer\\|spec-verifier\\|qa-auditor\\|planner\\|issue-verifier\\|validator'\
-      \ README.md\n   Expected: at least 30 matches (agents appear in multiple sections).\n\
-      \n4. Verify README.md mentions Slack integration:\n   grep -c -i 'slack' README.md\n\
+      \ py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
+      \ py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\n\n2. Run\
+      \ the full test suite:\n   python3 -m pytest tests/ 2>/dev/null || echo 'No\
+      \ test suite configured'\n\n3. Verify README.md now mentions all 10 agents:\n\
+      \   grep -c 'coder\\|code-reviewer\\|systems-designer\\|ux-designer\\|ux-reviewer\\\
+      |spec-verifier\\|qa-auditor\\|planner\\|issue-verifier\\|validator' README.md\n\
+      \   Expected: at least 30 matches (agents appear in multiple sections).\n\n\
+      4. Verify README.md mentions Slack integration:\n   grep -c -i 'slack' README.md\n\
       \   Expected: at least 10 matches.\n\n5. Verify README.md mentions budget/quota:\n\
       \   grep -c 'budget\\|quota' README.md\n   Expected: at least 5 matches.\n\n\
       6. Verify README.md mentions model escalation:\n   grep -c 'escalat' README.md\n\
@@ -258,9 +271,9 @@ sections:
       \ '4773\\|1949\\|6700' README.md\n   Expected: at least 2 matches.\n\n9. Verify\
       \ narrative README.md line counts are updated:\n   grep '4773\\|1949' docs/narrative/README.md\n\
       \   Expected: at least 1 match.\n\n10. Verify Chapter 13 exists and has content:\n\
-      \    wc -l docs/narrative/13-self-improvement.md\n    Expected: at least 100 lines.\n\
-      \n11. Verify narrative README.md references Chapter 13:\n    grep '13-self-improvement'\
-      \ docs/narrative/README.md\n    Expected: at least 1 match.\n\n12. Verify no\
-      \ code files were modified (only .md files should change):\n    git diff --name-only\
-      \ | grep -v '\\.md$'\n    Expected: no output (only .md files modified).\n\nReport\
-      \ findings as PASS/WARN/FAIL for each check.\n"
+      \    wc -l docs/narrative/13-self-improvement.md\n    Expected: at least 100\
+      \ lines.\n\n11. Verify narrative README.md references Chapter 13:\n    grep\
+      \ '13-self-improvement' docs/narrative/README.md\n    Expected: at least 1 match.\n\
+      \n12. Verify no code files were modified (only .md files should change):\n \
+      \   git diff --name-only | grep -v '\\.md$'\n    Expected: no output (only .md\
+      \ files modified).\n\nReport findings as PASS/WARN/FAIL for each check.\n"
