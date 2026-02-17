@@ -20,6 +20,8 @@ spec.loader.exec_module(mod)
 
 completed_slugs = mod.completed_slugs
 archive_item = mod.archive_item
+scan_all_backlogs = mod.scan_all_backlogs
+parse_dependencies = mod.parse_dependencies
 BacklogItem = mod.BacklogItem
 
 
@@ -124,3 +126,73 @@ def test_archive_item_feature_goes_to_features_dir(tmp_path: Path) -> None:
     assert (dest_features / "06-search-bar.md").exists(), (
         "File should be in features archive"
     )
+
+
+# --- scan_all_backlogs lazy dependency resolution tests ---
+
+
+def test_scan_all_backlogs_skips_completed_slugs_when_no_deps() -> None:
+    """scan_all_backlogs() does NOT call completed_slugs() when no items have dependencies."""
+    item = BacklogItem(
+        path="/fake/path/01-test-item.md",
+        name="Test Item",
+        slug="01-test-item",
+        item_type="defect",
+    )
+
+    from unittest.mock import Mock
+    mock_completed_slugs = Mock()
+
+    # scan_directory is called twice (defects and features)
+    # Return [item] for defects, [] for features
+    with patch.object(mod, "scan_directory", side_effect=[[item], []]), \
+         patch.object(mod, "parse_dependencies", return_value=[]), \
+         patch.object(mod, "completed_slugs", mock_completed_slugs):
+        result = scan_all_backlogs()
+
+    mock_completed_slugs.assert_not_called()
+    assert len(result) == 1
+    assert result[0].slug == "01-test-item"
+
+
+def test_scan_all_backlogs_calls_completed_slugs_when_deps_exist() -> None:
+    """scan_all_backlogs() DOES call completed_slugs() when at least one item has dependencies."""
+    item = BacklogItem(
+        path="/fake/path/02-test-item.md",
+        name="Test Item With Dep",
+        slug="02-test-item",
+        item_type="defect",
+    )
+
+    from unittest.mock import Mock
+    mock_completed_slugs = Mock(return_value={"01-some-dep"})
+
+    # scan_directory is called twice (defects and features)
+    # Return [item] for defects, [] for features
+    with patch.object(mod, "scan_directory", side_effect=[[item], []]), \
+         patch.object(mod, "parse_dependencies", return_value=["01-some-dep"]), \
+         patch.object(mod, "completed_slugs", mock_completed_slugs):
+        result = scan_all_backlogs()
+
+    mock_completed_slugs.assert_called_once()
+    assert len(result) == 1
+    assert result[0].slug == "02-test-item"
+
+
+def test_scan_all_backlogs_filters_unsatisfied_deps() -> None:
+    """scan_all_backlogs() filters out items with unsatisfied dependencies."""
+    item = BacklogItem(
+        path="/fake/path/03-test-item.md",
+        name="Test Item Blocked",
+        slug="03-test-item",
+        item_type="defect",
+    )
+
+    # scan_directory is called twice (defects and features)
+    # Return [item] for defects, [] for features
+    with patch.object(mod, "scan_directory", side_effect=[[item], []]), \
+         patch.object(mod, "parse_dependencies", return_value=["99-not-done"]), \
+         patch.object(mod, "completed_slugs", return_value=set()):
+        result = scan_all_backlogs()
+
+    assert len(result) == 0
