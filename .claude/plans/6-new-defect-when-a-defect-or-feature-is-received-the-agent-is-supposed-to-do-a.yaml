@@ -1,0 +1,164 @@
+meta:
+  name: 'Defect Fix: Enforce Complete 5 Whys Analysis in Intake Pipeline'
+  description: 'The agent inconsistently performs 5 Whys analysis when processing
+    defects/features via Slack, sometimes stopping at 1-2 Whys instead of the
+    required 5. Fix by strengthening the INTAKE_ANALYSIS_PROMPT with explicit
+    enforcement, adding a REQUIRED_FIVE_WHYS_COUNT constant, and implementing
+    retry logic in _run_intake_analysis that re-prompts the LLM when fewer than
+    5 Whys are returned. Graceful degradation ensures items are always created
+    even if retries fail.'
+  plan_doc: docs/plans/2026-02-17-6-new-defect-when-a-defect-or-feature-is-received-the-agent-is-supposed-to-do-a-design.md
+  created: '2026-02-17'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - issue-verifier
+    max_validation_attempts: 1
+sections:
+- id: phase-1
+  name: Phase 1 - Implementation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add 5 Whys validation constants and strengthen prompt
+    agent: coder
+    status: pending
+    description: "In scripts/plan-orchestrator.py, make the following changes:\n\n\
+      1. Add two new constants near INTAKE_ANALYSIS_PROMPT (around line 120):\n\n\
+      \   REQUIRED_FIVE_WHYS_COUNT = 5\n   MAX_INTAKE_RETRIES = 1\n\n2. Modify\
+      \ INTAKE_ANALYSIS_PROMPT (line 121) to add an explicit enforcement line.\
+      \ Change:\n\n   Perform a 5 Whys analysis to uncover the root need behind\
+      \ this request.\n\n   To:\n\n   Perform a 5 Whys analysis to uncover the\
+      \ root need behind this request.\n   IMPORTANT: You MUST provide exactly\
+      \ 5 numbered \"Why\" questions and answers. Do not stop at fewer than 5.\
+      \ Each Why should dig deeper into the root cause of the previous answer.\n\
+      \n3. Add a new constant INTAKE_RETRY_PROMPT after INTAKE_FOLLOWUP_PROMPT\
+      \ (after line 164). This prompt is used when the LLM returns fewer than\
+      \ 5 Whys:\n\n   INTAKE_RETRY_PROMPT = \"\"\"Your previous 5 Whys analysis\
+      \ was incomplete - you only provided {count} out of 5 required Whys.\n\n\
+      \   Original {item_type} request: {text}\n\n   Your previous analysis:\n\
+      \   {analysis}\n\n   Please redo the analysis with EXACTLY 5 numbered Whys.\
+      \ Each Why must dig deeper into the previous answer to uncover the true\
+      \ root cause.\n\n   Format your response exactly like this:\n\n   Title:\
+      \ <one-line title for the backlog item>\n\n   Classification: <defect|feature|question>\
+      \ - <one sentence explaining why>\n\n   5 Whys:\n   1. <why>\n   2. <why>\n\
+      \   3. <why>\n   4. <why>\n   5. <why>\n\n   Root Need: <the root need uncovered\
+      \ by the analysis>\n\n   Description:\n   <2-4 sentence description of\
+      \ the backlog item, incorporating the root need>\n   Keep it concise and\
+      \ actionable.\"\"\"\n\nAfter making changes, verify syntax:\n  python3 -c\
+      \ \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True)\"\n"
+  - id: '1.2'
+    name: Add retry logic in _run_intake_analysis for incomplete 5 Whys
+    agent: coder
+    depends_on:
+    - '1.1'
+    status: pending
+    description: "In scripts/plan-orchestrator.py, modify _run_intake_analysis()\
+      \ (around line 3614) to validate and retry when fewer than 5 Whys are returned.\n\
+      \nAfter the existing line that extracts five_whys (around line 3660):\n\n\
+      \   five_whys = parsed[\"five_whys\"]\n\nAdd the following validation and\
+      \ retry block BEFORE the line that builds the description (around line 3665):\n\
+      \n   # Validate 5 Whys completeness - retry once if incomplete\n   if len(five_whys)\
+      \ < REQUIRED_FIVE_WHYS_COUNT:\n       print(f\"[INTAKE] Only {len(five_whys)}\
+      \ Whys returned, retrying for complete analysis...\")\n       retry_prompt\
+      \ = INTAKE_RETRY_PROMPT.format(\n           count=len(five_whys),\n     \
+      \      item_type=intake.item_type,\n           text=intake.original_text,\n\
+      \           analysis=response_text,\n       )\n       retry_text = self._call_claude_print(\n\
+      \           retry_prompt, model=\"sonnet\",\n           timeout=INTAKE_ANALYSIS_TIMEOUT_SECONDS\n\
+      \       )\n       if retry_text:\n           retry_parsed = self._parse_intake_response(retry_text)\n\
+      \           if len(retry_parsed[\"five_whys\"]) > len(five_whys):\n    \
+      \           # Retry produced a better result, use it\n               parsed\
+      \ = retry_parsed\n               response_text = retry_text\n          \
+      \     intake.analysis = response_text\n               title = parsed[\"\
+      title\"] or fallback_title\n               root_need = parsed[\"root_need\"\
+      ]\n               five_whys = parsed[\"five_whys\"]\n               classification\
+      \ = parsed[\"classification\"]\n               description = parsed[\"description\"\
+      ] or response_text\n               print(f\"[INTAKE] Retry produced {len(five_whys)}\
+      \ Whys\")\n           else:\n               print(f\"[INTAKE] Retry did\
+      \ not improve Whys count, keeping original\")\n       else:\n           print(\"\
+      [INTAKE] Retry returned empty response, keeping original\")\n\n   if len(five_whys)\
+      \ < REQUIRED_FIVE_WHYS_COUNT:\n       print(f\"[INTAKE] WARNING: Only {len(five_whys)}/{REQUIRED_FIVE_WHYS_COUNT}\
+      \ Whys in final analysis\")\n\nMake sure the existing code that builds the\
+      \ description (the 'Enrich with 5 Whys' block) remains AFTER this new validation\
+      \ block, using the potentially-updated variables.\n\nAlso make sure that\
+      \ if the description variable has not been set yet before the retry block,\
+      \ you initialize it from parsed[\"description\"] before the retry check.\
+      \ The flow should be:\n\n   1. Parse response -> extract title, root_need,\
+      \ five_whys, classification\n   2. Validate five_whys count, retry if needed\n\
+      \   3. Build description (using potentially updated parsed results)\n   4.\
+      \ Enrich description with 5 Whys and root_need\n   5. Create backlog item\n\
+      \nAfter making changes, verify syntax:\n  python3 -c \"import py_compile;\
+      \ py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\n"
+- id: phase-2
+  name: Phase 2 - Tests
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add unit tests for 5 Whys validation and retry logic
+    agent: coder
+    depends_on:
+    - '1.2'
+    status: pending
+    description: "In tests/test_slack_notifier.py, add the following tests after\
+      \ the existing intake tests.\n\nAll tests should use the same pattern as\
+      \ existing intake tests: create a tmp_path-based notifier with monkeypatch\
+      \ mocking _call_claude_print.\n\nTest 1: test_intake_analysis_retries_on_incomplete_whys\n\
+      \  - Mock _call_claude_print to return:\n    First call: a response with\
+      \ only 2 Whys (use a well-formatted response with Title, Classification,\
+      \ only 2 entries under '5 Whys:', Root Need, Description)\n    Second call\
+      \ (retry): a complete response with 5 Whys\n  - Create an IntakeState and\
+      \ run _run_intake_analysis\n  - Assert _call_claude_print was called exactly\
+      \ 2 times\n  - Assert intake.status == \"done\"\n  - Verify the created\
+      \ backlog .md file contains \"5 Whys Analysis\" with 5 numbered entries\n\
+      \nTest 2: test_intake_analysis_proceeds_after_failed_retry\n  - Mock _call_claude_print\
+      \ to return:\n    First call: a response with only 1 Why\n    Second call\
+      \ (retry): a response with only 1 Why (retry also incomplete)\n  - Create\
+      \ an IntakeState and run _run_intake_analysis\n  - Assert _call_claude_print\
+      \ was called exactly 2 times\n  - Assert intake.status == \"done\" (graceful\
+      \ degradation)\n  - Verify the created backlog .md file still contains the\
+      \ 1 Why that was returned\n\nTest 3: test_intake_analysis_no_retry_on_complete_whys\n\
+      \  - Mock _call_claude_print to return a complete response with exactly 5\
+      \ Whys\n  - Create an IntakeState and run _run_intake_analysis\n  - Assert\
+      \ _call_claude_print was called exactly 1 time (no retry)\n  - Assert intake.status\
+      \ == \"done\"\n\nTest 4: test_intake_constants_five_whys\n  - Import REQUIRED_FIVE_WHYS_COUNT\
+      \ and MAX_INTAKE_RETRIES from the module\n  - Assert REQUIRED_FIVE_WHYS_COUNT\
+      \ == 5\n  - Assert MAX_INTAKE_RETRIES == 1\n  - Assert \"MUST provide exactly\
+      \ 5\" in INTAKE_ANALYSIS_PROMPT\n  - Assert INTAKE_RETRY_PROMPT is defined\
+      \ and non-empty\n\nFor the mock _call_claude_print, use a list of responses\
+      \ and pop from it on each call, or use side_effect with a counter.\n\nAfter\
+      \ writing tests, run them:\n  ~/.pyenv/versions/3.11.*/bin/python -m pytest\
+      \ tests/test_slack_notifier.py -v -k \"intake\" --tb=short\n\nFix any failures\
+      \ immediately.\n"
+- id: phase-3
+  name: Phase 3 - Verification
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Verify syntax and run full test suite
+    agent: code-reviewer
+    depends_on:
+    - '2.1'
+    status: pending
+    description: "Run the following verification steps:\n\n1. Compile-check both\
+      \ main scripts:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\
+      \n\n2. Run the full test suite:\n   python3 -m pytest tests/ 2>/dev/null\
+      \ || echo 'No test suite configured'\n\n3. Verify REQUIRED_FIVE_WHYS_COUNT\
+      \ constant exists:\n   grep -n \"REQUIRED_FIVE_WHYS_COUNT\" scripts/plan-orchestrator.py\n\
+      \   Expected: at least 2 matches (definition + usage).\n\n4. Verify MAX_INTAKE_RETRIES\
+      \ constant exists:\n   grep -n \"MAX_INTAKE_RETRIES\" scripts/plan-orchestrator.py\n\
+      \   Expected: at least 1 match.\n\n5. Verify the prompt enforcement line:\n\
+      \   grep -n \"MUST provide exactly 5\" scripts/plan-orchestrator.py\n  \
+      \ Expected: at least 1 match in INTAKE_ANALYSIS_PROMPT.\n\n6. Verify INTAKE_RETRY_PROMPT\
+      \ exists:\n   grep -n \"INTAKE_RETRY_PROMPT\" scripts/plan-orchestrator.py\n\
+      \   Expected: at least 2 matches (definition + usage).\n\n7. Verify retry\
+      \ logic in _run_intake_analysis:\n   grep -n \"REQUIRED_FIVE_WHYS_COUNT\"\
+      \ scripts/plan-orchestrator.py\n   Expected: matches inside _run_intake_analysis\
+      \ function.\n\n8. Verify the existing defect file is referenced correctly:\n\
+      \   Read docs/defect-backlog/6-new-defect-when-a-defect-or-feature-is-received-the-agent-is-supposed-to-do-a.md\n\
+      \   Confirm it describes incomplete 5 Whys analysis.\n\nReport findings\
+      \ as PASS/WARN/FAIL.\n"
