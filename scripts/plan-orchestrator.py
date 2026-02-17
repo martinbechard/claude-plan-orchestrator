@@ -2702,7 +2702,7 @@ class SlackNotifier:
         question: str,
         options: list[str],
         timeout_minutes: int = 0
-    ) -> str | None:
+    ) -> Optional[str]:
         """Send a question to Slack and wait for answer.
 
         Uses Socket Mode for interactive buttons if available, otherwise falls
