@@ -180,6 +180,22 @@ def verbose_log(message: str) -> None:
         print(f"[{timestamp}] [VERBOSE:{_PIPELINE_PID}] {message}", flush=True)
 
 
+def compact_plan_label(plan_path: str) -> str:
+    """Produce a compact label from a plan filename for log prefixes.
+
+    Strips the .yaml extension and truncates to MAX_LOG_PREFIX_LENGTH chars
+    with ellipsis if the basename exceeds the limit.
+
+    Examples:
+        "long-filename-here.yaml" -> "long-filename-here..."
+        "short.yaml" -> "short"
+    """
+    stem = Path(plan_path).stem
+    if len(stem) <= MAX_LOG_PREFIX_LENGTH:
+        return stem
+    return stem[:MAX_LOG_PREFIX_LENGTH - 3] + "..."
+
+
 # ─── Claude Binary Resolution ────────────────────────────────────────
 
 
@@ -507,6 +523,9 @@ class ProcessResult:
 
 # Max chars from plan name used in report filenames (matches plan-orchestrator.py)
 MAX_PLAN_NAME_LENGTH = 50
+
+# Max chars from plan filename used in log prefixes (prevents line wrapping)
+MAX_LOG_PREFIX_LENGTH = 30
 
 
 class SessionUsageTracker:
@@ -1001,7 +1020,7 @@ def create_plan(item: BacklogItem, dry_run: bool = False) -> Optional[str]:
 
     result = run_child_process(
         cmd,
-        description=f"Plan creation for {item.slug}",
+        description=f"Plan: {compact_plan_label(item.slug)}",
         timeout=PLAN_CREATION_TIMEOUT_SECONDS,
         show_output=VERBOSE,
     )
@@ -1023,7 +1042,7 @@ def create_plan(item: BacklogItem, dry_run: bool = False) -> Optional[str]:
     # Dry-run validation
     validate_result = run_child_process(
         ["python", "scripts/plan-orchestrator.py", "--plan", plan_path, "--dry-run"],
-        description=f"Plan validation for {item.slug}",
+        description=f"Validate: {compact_plan_label(item.slug)}",
         timeout=30,
     )
 
@@ -1131,9 +1150,12 @@ def start_dev_server() -> None:
 
 def execute_plan(plan_path: str, dry_run: bool = False) -> bool:
     """Execute a YAML plan via the plan orchestrator. Returns True on success."""
+    label = compact_plan_label(plan_path)
     if dry_run:
         log(f"[DRY RUN] Would execute plan: {plan_path}")
         return True
+
+    log(f"Executing plan: {plan_path}")
 
     # Stop dev server before orchestrator runs (builds conflict with turbopack cache)
     stop_dev_server()
@@ -1145,7 +1167,7 @@ def execute_plan(plan_path: str, dry_run: bool = False) -> bool:
 
         result = run_child_process(
             orch_cmd,
-            description=f"Orchestrator: {os.path.basename(plan_path)}",
+            description=f"Orch: {label}",
             timeout=None,  # Orchestrator has its own timeouts
             show_output=True,  # Always stream orchestrator output
         )
@@ -1565,6 +1587,7 @@ def main_loop(dry_run: bool = False, once: bool = False,
         log("Filesystem watcher started")
 
     slack = SlackNotifier()
+    slack.start_background_polling()
 
     try:
         while True:
@@ -1596,9 +1619,6 @@ def main_loop(dry_run: bool = False, once: bool = False,
                     # After resuming, re-scan (completed plans may unblock new items)
                     continue
 
-            # Poll for inbound Slack messages at scan checkpoint
-            slack.process_inbound()
-
             # Scan for items (with dependency filtering)
             items = scan_all_backlogs()
 
@@ -1615,9 +1635,6 @@ def main_loop(dry_run: bool = False, once: bool = False,
                     break
                 log(f"No items to process. Watching for new items...")
                 log(f"  (Ctrl+C or 'touch {STOP_SEMAPHORE_PATH}' to stop)")
-
-                # Poll for inbound Slack messages during idle wait
-                slack.process_inbound()
 
                 # Wait for either a filesystem event or the safety scan interval
                 new_item_event.clear()
@@ -1659,9 +1676,6 @@ def main_loop(dry_run: bool = False, once: bool = False,
                     failed_items.add(item.path)
                     log(f"Item failed - will not retry in this session: {item.slug}")
 
-                # Poll for inbound Slack messages after processing each item
-                slack.process_inbound()
-
             # Brief pause before next scan
             time.sleep(2)
 
@@ -1674,6 +1688,7 @@ def main_loop(dry_run: bool = False, once: bool = False,
         if session_report:
             log(f"[Session usage report: {session_report}]")
 
+        slack.stop_background_polling()
         if not once:
             observer.stop()
             observer.join(timeout=5)
