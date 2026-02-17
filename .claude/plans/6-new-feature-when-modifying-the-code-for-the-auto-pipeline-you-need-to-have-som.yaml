@@ -20,7 +20,7 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Implementation
-  status: in_progress
+  status: completed
   tasks:
   - id: '1.1'
     name: Add source hash snapshot and change detection functions
@@ -68,7 +68,7 @@ sections:
     agent: coder
     depends_on:
     - '1.1'
-    status: pending
+    status: completed
     description: "In scripts/auto-pipeline.py, modify the main_loop() and main() functions\
       \ to support hot-reload self-restart.\n\nStep 1: In main_loop() (around line\
       \ 1625), add a parameter for the startup hashes. Change the function signature\
@@ -118,6 +118,13 @@ sections:
       \                    os.execv(sys.executable, [sys.executable] + sys.argv)\n\
       \nStep 5: Verify syntax:\n  python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True)\"\n"
+    attempts: 1
+    last_attempt: '2026-02-17T12:11:41.615155'
+    model_used: sonnet
+    completed_at: '2026-02-17T12:14:49.118303'
+    result_message: Added hot-reload self-restart logic to main_loop. The pipeline
+      now captures source file hashes at startup and checks for changes after each
+      work item, performing graceful os.execv() restart when code changes are detected.
 - id: phase-2
   name: Phase 2 - Unit Tests
   status: pending
