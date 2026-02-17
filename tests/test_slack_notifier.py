@@ -819,3 +819,322 @@ def test_poll_messages_updates_last_read(tmp_path):
     finally:
         urllib.request.urlopen = original_urlopen
         mod.SLACK_LAST_READ_PATH = original_path
+
+
+# --- Test: classify_message patterns ---
+
+
+def test_classify_feature_request(tmp_path):
+    """classify_message should identify 'feature:' prefix as new_feature."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    classification, title, body = notifier.classify_message("feature: Add cache TTL")
+    assert classification == "new_feature"
+    assert title == "Add cache TTL"
+    assert body == ""
+
+
+def test_classify_feature_with_body(tmp_path):
+    """classify_message should parse multi-line feature messages."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    classification, title, body = notifier.classify_message(
+        "feature: Cache TTL\nNeeds configurable expiry"
+    )
+    assert classification == "new_feature"
+    assert title == "Cache TTL"
+    assert body == "Needs configurable expiry"
+
+
+def test_classify_enhancement(tmp_path):
+    """classify_message should identify 'enhancement:' as new_feature."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    classification, title, body = notifier.classify_message("enhancement: Better logging")
+    assert classification == "new_feature"
+    assert title == "Better logging"
+    assert body == ""
+
+
+def test_classify_defect(tmp_path):
+    """classify_message should identify 'defect:' prefix as new_defect."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    classification, title, body = notifier.classify_message(
+        "defect: Broken import in auth"
+    )
+    assert classification == "new_defect"
+    assert title == "Broken import in auth"
+    assert body == ""
+
+
+def test_classify_bug(tmp_path):
+    """classify_message should identify 'bug:' prefix as new_defect."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    classification, title, body = notifier.classify_message(
+        "bug: NullPointerException on startup"
+    )
+    assert classification == "new_defect"
+    assert title == "NullPointerException on startup"
+    assert body == ""
+
+
+def test_classify_stop(tmp_path):
+    """classify_message should identify 'stop' command as control_stop."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    classification, title, body = notifier.classify_message("stop")
+    assert classification == "control_stop"
+    assert title == "stop"
+    assert body == ""
+
+
+def test_classify_pause(tmp_path):
+    """classify_message should identify 'pause' command as control_stop."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    classification, title, body = notifier.classify_message("pause")
+    assert classification == "control_stop"
+    assert title == "pause"
+    assert body == ""
+
+
+def test_classify_skip(tmp_path):
+    """classify_message should identify 'skip' command as control_skip."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    classification, title, body = notifier.classify_message("skip")
+    assert classification == "control_skip"
+    assert title == "skip"
+    assert body == ""
+
+
+def test_classify_status(tmp_path):
+    """classify_message should identify 'status' as info_request."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    classification, title, body = notifier.classify_message("status")
+    assert classification == "info_request"
+    assert title == "status"
+    assert body == ""
+
+
+def test_classify_question_mark(tmp_path):
+    """classify_message should identify messages ending with '?' as question."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    classification, title, body = notifier.classify_message("how much budget is left?")
+    assert classification == "question"
+    # Title and body content is implementation-dependent; just verify classification
+
+
+def test_classify_question_word(tmp_path):
+    """classify_message should identify messages starting with question words."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    classification, title, body = notifier.classify_message("what is in the backlog")
+    assert classification == "question"
+
+
+def test_classify_acknowledgement(tmp_path):
+    """classify_message should classify generic messages as acknowledgement."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    classification, title, body = notifier.classify_message("sounds good")
+    assert classification == "acknowledgement"
+    assert title == "sounds good"
+    assert body == ""
+
+
+def test_classify_empty(tmp_path):
+    """classify_message should handle empty strings as acknowledgement."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    classification, title, body = notifier.classify_message("")
+    assert classification == "acknowledgement"
+    assert title == ""
+    assert body == ""
+
+
+def test_classify_case_insensitive(tmp_path):
+    """classify_message should perform case-insensitive matching."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+
+    # Test uppercase FEATURE
+    classification, title, body = notifier.classify_message("FEATURE: Test")
+    assert classification == "new_feature"
+    assert title == "Test"
+
+    # Test mixed case Bug
+    classification, title, body = notifier.classify_message("Bug: something")
+    assert classification == "new_defect"
+    assert title == "something"
