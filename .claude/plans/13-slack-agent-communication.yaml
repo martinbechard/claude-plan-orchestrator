@@ -1,0 +1,582 @@
+meta:
+  name: Slack Communication Channel for Agents
+  description: >
+    Allow orchestrator agents to communicate with the human operator via Slack.
+    Agents send status updates, ask blocking questions, report defects, and propose
+    feature ideas as Slack messages. The feature is opt-in: dormant unless
+    .claude/slack.local.yaml exists with slack.enabled: true. Uses urllib.request
+    (stdlib only) for webhook POST. File-based polling for question/answer flow.
+    Integrates with plan-orchestrator.py lifecycle events and auto-pipeline.py.
+  plan_doc: docs/plans/2026-02-16-13-slack-agent-communication-design.md
+  created: '2026-02-16'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - validator
+    max_validation_attempts: 1
+sections:
+- id: phase-1
+  name: Phase 1 - Configuration and Gitignore
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Create Slack config template and update .gitignore
+    agent: coder
+    status: pending
+    description: >
+      Create the Slack configuration template file and update .gitignore.
+
+      Reference: docs/plans/2026-02-16-13-slack-agent-communication-design.md
+
+      Steps:
+
+      1. Create .claude/slack.local.yaml.template with the full example configuration.
+         This is the committed template (not the actual config). Contents:
+
+         # Slack notifications for the plan orchestrator.
+         # Copy this file to .claude/slack.local.yaml and fill in your webhook URL.
+         # The .local.yaml file is gitignored and must never be committed.
+         slack:
+           enabled: true
+           webhook_url: "https://hooks.slack.com/services/T.../B.../xxx"
+           channel: "#orchestrator-updates"
+           notify:
+             on_plan_start: true
+             on_task_complete: true
+             on_plan_complete: true
+             on_validation_fail: true
+             on_budget_threshold: true
+             on_question: true
+             on_defect_found: true
+             on_idea_found: true
+           questions:
+             enabled: true
+             timeout_minutes: 60
+             fallback: "skip"
+
+      2. Update .gitignore to add these patterns (under the "Auto-generated" section):
+
+         .claude/slack.local.yaml
+         .claude/slack-*.json
+
+      3. Verify the template file exists:
+         python3 -c "
+         import yaml
+         with open('.claude/slack.local.yaml.template') as f:
+             config = yaml.safe_load(f)
+         assert config['slack']['enabled'] is True
+         assert 'webhook_url' in config['slack']
+         assert config['slack']['questions']['fallback'] == 'skip'
+         print('Template validated OK')
+         "
+
+      Files: .claude/slack.local.yaml.template, .gitignore
+
+- id: phase-2
+  name: Phase 2 - SlackNotifier Class
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Implement SlackNotifier class in plan-orchestrator.py
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.1'
+    description: >
+      Add the SlackNotifier class to scripts/plan-orchestrator.py.
+
+      Reference: docs/plans/2026-02-16-13-slack-agent-communication-design.md
+
+      Steps:
+
+      1. Read scripts/plan-orchestrator.py. Find the constants section near the top
+         (around lines 30-60). Add a new constant:
+
+         SLACK_CONFIG_PATH = ".claude/slack.local.yaml"
+         SLACK_QUESTION_PATH = ".claude/slack-pending-question.json"
+         SLACK_ANSWER_PATH = ".claude/slack-answer.json"
+         SLACK_POLL_INTERVAL_SECONDS = 30
+         SLACK_LEVEL_EMOJI = {
+             "info": ":large_blue_circle:",
+             "success": ":white_check_mark:",
+             "error": ":x:",
+             "warning": ":warning:",
+             "question": ":question:",
+         }
+
+      2. After the existing send_notification() function (around line 2510), add
+         the SlackNotifier class with these methods:
+
+         class SlackNotifier:
+             """Sends messages to Slack via Incoming Webhooks.
+             Reads .claude/slack.local.yaml on init. If the file is missing or
+             slack.enabled is false, all methods are no-ops (silent, no errors).
+             Uses urllib.request (stdlib only) for HTTP POST to the webhook URL.
+             """
+
+             def __init__(self, config_path: str = SLACK_CONFIG_PATH):
+                 - Load YAML config from config_path
+                 - If file missing or slack.enabled is false, set self._enabled = False
+                 - Store webhook_url, notify settings, question settings
+                 - Import urllib.request and json (already at module level)
+
+             def is_enabled(self) -> bool:
+                 return self._enabled
+
+             def _should_notify(self, event: str) -> bool:
+                 """Check if a specific event type is enabled in config."""
+                 return self._enabled and self._notify_config.get(event, False)
+
+             def _post_webhook(self, payload: dict) -> bool:
+                 """POST a JSON payload to the Slack webhook URL.
+                 Uses urllib.request. Returns True on success, False on error.
+                 Catches all exceptions and logs errors without raising.
+                 """
+                 - Create urllib.request.Request with Content-Type: application/json
+                 - POST json.dumps(payload).encode("utf-8")
+                 - Return True on HTTP 200, False otherwise
+                 - Catch Exception, print warning, return False
+
+             def _build_status_block(self, message: str, level: str) -> dict:
+                 """Build a Slack Block Kit payload for a status message."""
+                 emoji = SLACK_LEVEL_EMOJI.get(level, ":large_blue_circle:")
+                 return {
+                     "blocks": [{
+                         "type": "section",
+                         "text": {"type": "mrkdwn", "text": f"{emoji} {message}"}
+                     }]
+                 }
+
+             def send_status(self, message: str, level: str = "info") -> None:
+                 """Send a status update to Slack. No-op if disabled or event not configured."""
+                 - Map level to event name using a dict: "info" -> check multiple events,
+                   but the caller specifies the event context. For simplicity, always send
+                   if _enabled and webhook_url is set.
+                 - Build payload with _build_status_block
+                 - Call _post_webhook
+
+             def send_question(self, question: str, options: list[str],
+                               timeout_minutes: int = 0) -> str | None:
+                 """Send a question to Slack and poll for answer via file.
+                 Returns the answer string, or None on timeout.
+                 """
+                 if not self._should_notify("on_question"):
+                     return None
+                 if not self._question_config.get("enabled", False):
+                     return None
+
+                 effective_timeout = timeout_minutes or self._question_config.get("timeout_minutes", 60)
+                 fallback = self._question_config.get("fallback", "skip")
+
+                 - Post question message to Slack with options listed as text
+                 - Write SLACK_QUESTION_PATH with question, options, asked_at, timeout_minutes
+                 - Poll for SLACK_ANSWER_PATH every SLACK_POLL_INTERVAL_SECONDS
+                 - If answer file appears, read answer, clean up both files, return answer
+                 - If timeout, clean up pending file, return fallback value
+                 - On any error, clean up files, return None
+
+             def send_defect(self, title: str, description: str,
+                             file_path: str = "") -> None:
+                 """Send a defect report to Slack."""
+                 if not self._should_notify("on_defect_found"):
+                     return
+                 msg = f":beetle: *Defect found:* {title}"
+                 if file_path:
+                     msg += f"\n`{file_path}`"
+                 if description:
+                     msg += f"\n{description}"
+                 self._post_webhook(self._build_status_block(msg, "error"))
+
+             def send_idea(self, title: str, description: str) -> None:
+                 """Send a feature idea to Slack."""
+                 if not self._should_notify("on_idea_found"):
+                     return
+                 msg = f":bulb: *Idea:* {title}"
+                 if description:
+                     msg += f"\n{description}"
+                 self._post_webhook(self._build_status_block(msg, "info"))
+
+             def process_agent_messages(self, status: dict) -> None:
+                 """Process slack_messages from a task-status.json dict."""
+                 messages = status.get("slack_messages", [])
+                 for msg in messages:
+                     msg_type = msg.get("type", "")
+                     title = msg.get("title", "")
+                     desc = msg.get("description", "")
+                     if msg_type == "defect":
+                         self.send_defect(title, desc, msg.get("file_path", ""))
+                     elif msg_type == "idea":
+                         self.send_idea(title, desc)
+
+      3. Add the import for urllib.request at the top of the file (in the import
+         section). It is a stdlib module, so add it with the other stdlib imports:
+         import urllib.request
+
+      4. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      5. Quick smoke test - verify class can be instantiated without a config file:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         notifier = mod.SlackNotifier('/nonexistent/path')
+         assert not notifier.is_enabled(), 'Should be disabled with missing config'
+         assert notifier.send_status('test') is None
+         print('SlackNotifier class instantiated OK (disabled mode)')
+         "
+
+      Files: scripts/plan-orchestrator.py
+
+  - id: '2.2'
+    name: Hook SlackNotifier into orchestrator lifecycle
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.1'
+    description: >
+      Integrate SlackNotifier into the plan-orchestrator.py execution lifecycle.
+
+      Reference: docs/plans/2026-02-16-13-slack-agent-communication-design.md
+
+      Steps:
+
+      1. Read scripts/plan-orchestrator.py. Find the main execution function
+         (the block starting around line 2580 with "=== Plan Orchestrator ===").
+
+      2. After the BudgetGuard initialization (around line 2583), create
+         the SlackNotifier instance:
+
+         slack = SlackNotifier()
+
+      3. After the initial plan info prints (around line 2607), add:
+
+         if slack.is_enabled():
+             print(f"Slack: enabled (webhook configured)")
+             # Count total tasks across all sections
+             total_tasks = sum(len(s.get("tasks", [])) for s in plan.get("sections", []))
+             total_sections = len(plan.get("sections", []))
+             slack.send_status(
+                 f"*Plan started:* {meta.get('name', 'Unknown')}\n"
+                 f"{total_tasks} tasks across {total_sections} phases",
+                 level="info"
+             )
+         else:
+             print("Slack: disabled (no .claude/slack.local.yaml)")
+
+      4. After the "All tasks completed!" print (around line 2888), before the
+         existing send_notification calls, add:
+
+         slack.send_status(
+             f"*Plan completed:* {meta.get('name', 'Unknown')}\n"
+             f"Completed: {tasks_completed}, Failed: {tasks_failed}",
+             level="success" if tasks_failed == 0 else "warning"
+         )
+
+      5. After task SUCCESS result handling (where tasks_completed is incremented),
+         add:
+
+         slack.send_status(
+             f"*Task {task_id} completed* ({task.get('name', '')})\n"
+             f"Attempt {task.get('attempts', 1)}, "
+             f"{task_result.duration_seconds:.0f}s",
+             level="success"
+         )
+
+      6. After max_attempts reached (around line 2938, where send_notification
+         is called for failures), add:
+
+         slack.send_status(
+             f"*Task {task_id} failed* ({task.get('name', '')})\n"
+             f"Failed after {max_attempts} attempts. Manual intervention required.",
+             level="error"
+         )
+
+      7. After reading the status file (around line 2432 in run_claude_task),
+         process agent-initiated messages. Find the block where status is read
+         and the TaskResult is constructed. After status = read_status_file(),
+         add a call to process agent messages. Since the SlackNotifier is not
+         available inside run_claude_task (it is in the outer loop), handle this
+         in the main loop instead: after getting the task_result back, check
+         status file for slack_messages:
+
+         # In the main loop, after task_result is obtained:
+         status = read_status_file()
+         if status:
+             slack.process_agent_messages(status)
+
+      8. Where BudgetGuard blocks (around line after can_proceed returns False),
+         add:
+
+         slack.send_status(
+             f"*Budget threshold reached*\n{reason}",
+             level="warning"
+         )
+
+      9. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      Files: scripts/plan-orchestrator.py
+
+  - id: '2.3'
+    name: Integrate SlackNotifier into auto-pipeline.py
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.1'
+    description: >
+      Add Slack notifications to the auto-pipeline daemon.
+
+      Reference: docs/plans/2026-02-16-13-slack-agent-communication-design.md
+
+      Steps:
+
+      1. Read scripts/auto-pipeline.py. At the top of the file, after the existing
+         imports (around line 30), add an import for the SlackNotifier class:
+
+         # Import SlackNotifier from plan-orchestrator
+         import importlib.util
+         _po_spec = importlib.util.spec_from_file_location(
+             "plan_orchestrator", "scripts/plan-orchestrator.py")
+         _po_mod = importlib.util.module_from_spec(_po_spec)
+         _po_spec.loader.exec_module(_po_mod)
+         SlackNotifier = _po_mod.SlackNotifier
+
+         Note: This uses importlib because plan-orchestrator.py has a hyphen in
+         its name. An alternative is to add a try/except that falls back to a
+         no-op class if the import fails.
+
+      2. In the process_item function (around line 1410), at the start of the
+         function before any processing, create a notifier:
+
+         slack = SlackNotifier()
+
+      3. After the "Processing {item.display_name}" log (around line 1430), add:
+
+         slack.send_status(
+             f"*Pipeline: processing* {item.display_name}\n"
+             f"Type: {item.item_type}",
+             level="info"
+         )
+
+      4. After successful archive (around line 1476, after "Item complete" log), add:
+
+         slack.send_status(
+             f"*Pipeline: completed* {item.display_name}\n"
+             f"Duration: {minutes}m {seconds}s",
+             level="success"
+         )
+
+      5. After failure exits (the "return False" paths), add Slack notification
+         before returning:
+
+         slack.send_status(
+             f"*Pipeline: failed* {item.display_name}",
+             level="error"
+         )
+
+      6. In the main_loop function, where the pipeline pauses or stops (around
+         graceful stop handling), add:
+
+         slack.send_status("*Pipeline stopped:* Graceful stop requested", level="warning")
+
+      7. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
+
+      Files: scripts/auto-pipeline.py
+
+- id: phase-3
+  name: Phase 3 - Unit Tests
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Write unit tests for SlackNotifier
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.2'
+    - '2.3'
+    description: >
+      Create tests/test_slack_notifier.py with comprehensive unit tests.
+
+      Reference: docs/plans/2026-02-16-13-slack-agent-communication-design.md
+
+      Steps:
+
+      1. Create tests/test_slack_notifier.py with these test cases:
+
+         Import the module using importlib (same pattern as other tests):
+         import importlib.util
+         spec = importlib.util.spec_from_file_location(
+             "plan_orchestrator", "scripts/plan-orchestrator.py")
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         SlackNotifier = mod.SlackNotifier
+
+         a. test_disabled_when_no_config_file:
+            Create SlackNotifier with a nonexistent path.
+            Assert is_enabled() returns False.
+            Assert send_status("test") returns None (no error).
+
+         b. test_disabled_when_slack_not_enabled:
+            Write a temp YAML file with slack.enabled: false.
+            Create SlackNotifier with that path.
+            Assert is_enabled() returns False.
+
+         c. test_enabled_when_config_valid:
+            Write a temp YAML file with slack.enabled: true and a webhook_url.
+            Create SlackNotifier with that path.
+            Assert is_enabled() returns True.
+
+         d. test_should_notify_respects_config:
+            Write a temp YAML with on_plan_start: true, on_task_complete: false.
+            Create SlackNotifier. Assert _should_notify("on_plan_start") is True.
+            Assert _should_notify("on_task_complete") is False.
+
+         e. test_build_status_block_format:
+            Create an enabled SlackNotifier.
+            Call _build_status_block("Test message", "success").
+            Assert the result has "blocks" key with a section block.
+            Assert the text contains ":white_check_mark:" and "Test message".
+
+         f. test_build_status_block_default_emoji:
+            Call _build_status_block("msg", "unknown_level").
+            Assert it uses the default blue circle emoji.
+
+         g. test_post_webhook_called_on_send_status:
+            Monkey-patch _post_webhook to record calls.
+            Call send_status("Plan started", level="info").
+            Assert _post_webhook was called once with a dict containing blocks.
+
+         h. test_send_status_noop_when_disabled:
+            Create disabled SlackNotifier. Call send_status("test").
+            Assert no error raised.
+
+         i. test_process_agent_messages_defect:
+            Create enabled SlackNotifier with patched _post_webhook.
+            Call process_agent_messages with a status dict containing:
+            {"slack_messages": [{"type": "defect", "title": "Bug", "description": "Details"}]}
+            Assert _post_webhook was called and payload contains "Bug".
+
+         j. test_process_agent_messages_idea:
+            Same as above but with type "idea".
+            Assert payload contains ":bulb:" and the idea title.
+
+         k. test_process_agent_messages_empty:
+            Call process_agent_messages with {"slack_messages": []}.
+            Assert _post_webhook was NOT called.
+
+         l. test_process_agent_messages_no_field:
+            Call process_agent_messages with {} (no slack_messages key).
+            Assert _post_webhook was NOT called.
+
+         m. test_send_question_returns_none_when_disabled:
+            Create disabled SlackNotifier.
+            Assert send_question("Q?", ["A", "B"]) returns None.
+
+         n. test_slack_config_constants_exist:
+            Assert mod.SLACK_CONFIG_PATH == ".claude/slack.local.yaml"
+            Assert mod.SLACK_QUESTION_PATH == ".claude/slack-pending-question.json"
+            Assert mod.SLACK_ANSWER_PATH == ".claude/slack-answer.json"
+            Assert mod.SLACK_POLL_INTERVAL_SECONDS == 30
+
+         o. test_slack_level_emoji_map:
+            Assert mod.SLACK_LEVEL_EMOJI has keys: info, success, error, warning, question.
+            Assert each value starts with ":".
+
+         Use pytest fixtures and tmp_path for temporary config files.
+
+      2. Run tests:
+         python3 -m pytest tests/test_slack_notifier.py -v
+         Fix any failures.
+
+      Files: tests/test_slack_notifier.py
+
+- id: phase-4
+  name: Phase 4 - Verification
+  status: pending
+  tasks:
+  - id: '4.1'
+    name: Verify syntax, tests, and dry-run
+    agent: code-reviewer
+    status: pending
+    depends_on:
+    - '3.1'
+    description: >
+      Run verification checks to confirm the Slack communication feature works correctly.
+
+      Steps:
+
+      1. Check Python syntax for both scripts:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+      2. Run all unit tests:
+         python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
+
+      3. Verify SlackNotifier class exists and has correct methods:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         notifier = mod.SlackNotifier('/nonexistent')
+         assert not notifier.is_enabled()
+         assert hasattr(notifier, 'send_status')
+         assert hasattr(notifier, 'send_question')
+         assert hasattr(notifier, 'send_defect')
+         assert hasattr(notifier, 'send_idea')
+         assert hasattr(notifier, 'process_agent_messages')
+         assert hasattr(notifier, '_post_webhook')
+         assert hasattr(notifier, '_build_status_block')
+         assert hasattr(notifier, '_should_notify')
+         print('SlackNotifier class verified: all methods present')
+         "
+
+      4. Verify constants exist:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert hasattr(mod, 'SLACK_CONFIG_PATH'), 'SLACK_CONFIG_PATH missing'
+         assert hasattr(mod, 'SLACK_QUESTION_PATH'), 'SLACK_QUESTION_PATH missing'
+         assert hasattr(mod, 'SLACK_ANSWER_PATH'), 'SLACK_ANSWER_PATH missing'
+         assert hasattr(mod, 'SLACK_POLL_INTERVAL_SECONDS'), 'SLACK_POLL_INTERVAL_SECONDS missing'
+         assert hasattr(mod, 'SLACK_LEVEL_EMOJI'), 'SLACK_LEVEL_EMOJI missing'
+         print(f'SLACK_CONFIG_PATH: {mod.SLACK_CONFIG_PATH}')
+         print(f'SLACK_LEVEL_EMOJI: {mod.SLACK_LEVEL_EMOJI}')
+         print('All Slack constants verified')
+         "
+
+      5. Verify .gitignore contains Slack patterns:
+         python3 -c "
+         with open('.gitignore') as f:
+             content = f.read()
+         assert 'slack.local.yaml' in content, '.gitignore missing slack.local.yaml'
+         assert 'slack-*.json' in content, '.gitignore missing slack-*.json'
+         print('.gitignore patterns verified')
+         "
+
+      6. Verify template file is valid YAML:
+         python3 -c "
+         import yaml
+         with open('.claude/slack.local.yaml.template') as f:
+             config = yaml.safe_load(f)
+         assert config['slack']['enabled'] is True
+         assert 'webhook_url' in config['slack']
+         assert config['slack']['questions']['fallback'] == 'skip'
+         print('Template YAML validated')
+         "
+
+      7. Run orchestrator dry-run to verify no startup errors:
+         python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
+
+      If any check fails, report the failure with specific details.
+
+      Files: scripts/plan-orchestrator.py, scripts/auto-pipeline.py,
+             .claude/slack.local.yaml.template, .gitignore,
+             tests/test_slack_notifier.py
