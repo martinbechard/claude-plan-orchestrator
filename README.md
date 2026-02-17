@@ -294,6 +294,169 @@ Use `--verbose` for real-time streaming of Claude's output via `--output-format 
 python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml --verbose
 ```
 
+### Agent Framework
+
+The orchestrator uses specialized agents defined in `.claude/agents/`. Each agent has a YAML frontmatter header specifying its name, tools, model, and capabilities.
+
+Available agents:
+
+| Agent | Role | Model |
+|-------|------|-------|
+| coder | Implementation specialist - writes code, runs tests | sonnet (default) |
+| code-reviewer | Read-only reviewer - checks compliance, no code changes | sonnet |
+| systems-designer | Architecture and data model designer | sonnet |
+| ux-designer | Visual and interaction design specialist | sonnet |
+| ux-reviewer | UX/UI quality reviewer | sonnet |
+| spec-verifier | Functional specification compliance checker | sonnet |
+| qa-auditor | QA audit specialist with coverage matrices | sonnet |
+| planner | Design-to-implementation bridge - creates YAML phases | sonnet |
+| issue-verifier | Defect fix verification with symptom checking | sonnet |
+| validator | Per-task validation with PASS/WARN/FAIL verdicts | sonnet |
+
+Tasks can specify their agent in the YAML plan:
+
+```yaml
+- id: '2.1'
+  name: Implement the feature
+  agent: coder
+  status: pending
+  description: ...
+
+- id: '3.1'
+  name: Review code quality
+  agent: code-reviewer
+  status: pending
+  description: ...
+```
+
+If no agent is specified, the orchestrator infers it from the task name and description (review/verification -> code-reviewer, design -> systems-designer, everything else -> coder).
+
+### Per-Task Validation
+
+Enable automatic validation after each coder task by adding a `validation` block to the plan meta:
+
+```yaml
+meta:
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - validator
+    max_validation_attempts: 1
+```
+
+The validator agent runs independently after each task and produces:
+- **PASS**: Task proceeds normally
+- **WARN**: Task completes but warnings are logged
+- **FAIL**: Task is retried with validation findings prepended to the prompt
+
+For defect verification, use the `issue-verifier` validator which reads the original defect file and checks whether reported symptoms are resolved.
+
+### Design Competitions
+
+For significant architectural decisions, the orchestrator supports a Phase 0 design competition pattern where multiple design agents generate competing proposals and an AI judge selects the winner:
+
+```yaml
+- id: '0.1'
+  name: Generate Design 1
+  agent: systems-designer
+  parallel_group: phase-0-designs
+  status: pending
+  description: ...
+
+- id: '0.2'
+  name: Generate Design 2
+  agent: ux-designer
+  parallel_group: phase-0-designs
+  status: pending
+  description: ...
+
+- id: '0.7'
+  name: Extend plan with implementation tasks
+  agent: planner
+  depends_on: ['0.1', '0.2']
+  status: pending
+  description: ...
+```
+
+The planner agent reads the winning design and creates implementation phases, setting `plan_modified: true` to trigger a plan reload.
+
+### Model Escalation
+
+The orchestrator supports tiered model selection that automatically escalates to more capable (and expensive) models after consecutive task failures:
+
+```bash
+# Use default escalation (haiku -> sonnet -> opus after 2 failures each)
+python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml
+
+# Start with sonnet, escalate after 1 failure
+python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml \
+  --starting-model sonnet --escalate-after-failures 1
+
+# Cap at sonnet (never use opus)
+python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml \
+  --max-model sonnet
+```
+
+Model tiers: haiku (fastest/cheapest) -> sonnet (balanced) -> opus (most capable).
+
+### Budget and Quota Management
+
+Track token usage and enforce budget limits during plan execution:
+
+```bash
+# Set maximum quota percentage (stop if usage exceeds this % of daily quota)
+python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml \
+  --max-quota-percent 80
+
+# Set quota ceiling in USD (API-equivalent estimate)
+python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml \
+  --quota-ceiling-usd 50.00
+
+# Set reserved budget (stop when remaining budget drops below this)
+python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml \
+  --reserved-budget-usd 10.00
+```
+
+Cost displays use `~$` prefix to indicate API-equivalent estimates. Note: Claude Max subscription users are not billed per-token; these are estimates for planning purposes.
+
+### Slack Integration
+
+The auto-pipeline integrates with Slack for real-time notifications and inbound work items:
+
+**Outbound notifications** are sent to dedicated channels:
+- `orchestrator-notifications` - Status updates, progress reports
+- `orchestrator-defects` - Defect intake and status
+- `orchestrator-features` - Feature intake and status
+- `orchestrator-questions` - Questions from the orchestrator to the team
+
+**Inbound message processing** supports:
+- Submitting new features and defects via Slack messages
+- Asking questions about the pipeline state (answered by LLM with full context)
+- Control commands (stop, status, etc.)
+- 5 Whys analysis for intake - the system automatically structures incoming feature/defect requests using the 5 Whys methodology
+
+Configure Slack in `.claude/slack.local.yaml`:
+
+```yaml
+bot_token: xoxb-your-bot-token
+channel_prefix: orchestrator
+```
+
+The background polling thread checks for new messages every 15 seconds, independent of task execution.
+
+### Hot-Reload
+
+The auto-pipeline monitors its own source files for changes. When a modification is detected between work items, it performs a graceful self-restart using `os.execv()` to pick up the new code without disrupting the Slack polling thread:
+
+```
+Work item completes -> Check source file hashes -> Changed? -> Graceful restart
+                                                       -> No change? -> Continue
+```
+
+Monitored files are defined in `HOT_RELOAD_WATCHED_FILES` in auto-pipeline.py.
+
 ## Auto-Pipeline
 
 The auto-pipeline daemon (`scripts/auto-pipeline.py`) watches backlog folders and drives the orchestrator automatically:
@@ -352,6 +515,7 @@ Customize build and test commands in `.claude/orchestrator-config.yaml`:
 # test_command: "pnpm test"
 # dev_server_command: "pnpm dev"
 # dev_server_port: 3000
+# agents_dir: ".claude/agents"
 ```
 
 ### Backlog Item Format
