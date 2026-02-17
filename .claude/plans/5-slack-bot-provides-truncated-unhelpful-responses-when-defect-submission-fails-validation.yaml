@@ -225,7 +225,7 @@ sections:
     agent: code-reviewer
     depends_on:
     - '2.1'
-    status: pending
+    status: failed
     description: "Run the following verification steps:\n1. Compile-check both main\
       \ scripts:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\
@@ -249,3 +249,9 @@ sections:
       \ intake notifications include item reference:\n   grep -n \"item_ref\" scripts/plan-orchestrator.py\n\
       \   Expected: multiple matches in _run_intake_analysis.\n\nReport findings as\
       \ PASS/WARN/FAIL for each check.\n"
+    attempts: 3
+    last_attempt: '2026-02-17T01:21:09.849984'
+    model_used: sonnet
+    last_error: 'VERDICT: FAIL - Syntax passes but 6 test failures due to mock implementations
+      not updated to match new create_backlog_item() API contract (returns dict instead
+      of string)'
