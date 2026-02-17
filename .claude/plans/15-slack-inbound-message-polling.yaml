@@ -1,0 +1,932 @@
+meta:
+  name: Slack Inbound Message Polling
+  description: >-
+    Poll the Slack channel for new human messages at control-flow boundaries
+    in the auto-pipeline and orchestrator. Classify each message and take
+    action: create backlog items (feature/defect), answer questions, respond
+    to control commands (stop/skip/status), or acknowledge informational
+    messages. Extends the existing SlackNotifier class with inbound polling
+    via conversations.history API. Uses synchronous polling at existing
+    checkpoints - no background threads. Prefix-based message classification
+    with extensible pattern table.
+  plan_doc: docs/plans/2026-02-16-15-slack-inbound-message-polling-design.md
+  created: '2026-02-16'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - validator
+    max_validation_attempts: 1
+sections:
+- id: phase-1
+  name: Phase 1 - Config Template Update
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add channels:history scope to config template
+    agent: coder
+    status: pending
+    description: >-
+      Update the Slack config template to include the channels:history permission
+      needed for reading channel messages.
+
+      Reference: docs/plans/2026-02-16-15-slack-inbound-message-polling-design.md
+
+      Steps:
+
+      1. Read .claude/slack.local.yaml.template.
+
+      2. In the setup instructions comment (line 8), change:
+         #   3. Add Bot Token Scopes (OAuth & Permissions): chat:write, channels:read
+         to:
+         #   3. Add Bot Token Scopes (OAuth & Permissions): chat:write, channels:read, channels:history
+
+      3. Verify the template is still valid YAML:
+         python3 -c "
+         import yaml
+         with open('.claude/slack.local.yaml.template') as f:
+             config = yaml.safe_load(f)
+         assert config['slack']['enabled'] is True
+         assert 'bot_token' in config['slack']
+         assert 'channels:history' in open('.claude/slack.local.yaml.template').read()
+         print('Template validated OK with channels:history scope')
+         "
+
+      Files: .claude/slack.local.yaml.template
+
+- id: phase-2
+  name: Phase 2 - Message Polling and Classification
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add constants and poll_messages with last-read tracking
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.1'
+    description: >-
+      Add inbound message polling to SlackNotifier in scripts/plan-orchestrator.py.
+
+      Reference: docs/plans/2026-02-16-15-slack-inbound-message-polling-design.md
+
+      Steps:
+
+      1. Read scripts/plan-orchestrator.py. Find the Slack constants section (around line 72-82).
+
+      2. After the existing SLACK_LEVEL_EMOJI dict, add two new constants:
+         SLACK_LAST_READ_PATH = ".claude/slack-last-read.json"
+         SLACK_INBOUND_POLL_LIMIT = 20
+
+      3. In the SlackNotifier class, add a new method _load_last_read:
+         def _load_last_read(self) -> str:
+             """Load the last-read message timestamp from disk.
+             Returns '0' if no prior state exists (will only process messages
+             from this session forward by using current time on first poll).
+             """
+             try:
+                 with open(SLACK_LAST_READ_PATH, "r") as f:
+                     data = json.load(f)
+                 return data.get("last_ts", "0")
+             except (IOError, json.JSONDecodeError):
+                 return "0"
+
+      4. Add _save_last_read method:
+         def _save_last_read(self, ts: str) -> None:
+             """Persist the last-read timestamp to disk."""
+             try:
+                 data = {"channel_id": self._channel_id, "last_ts": ts}
+                 with open(SLACK_LAST_READ_PATH, "w") as f:
+                     json.dump(data, f)
+             except IOError as e:
+                 print(f"[SLACK] Failed to save last-read state: {e}")
+
+      5. Add poll_messages method:
+         def poll_messages(self) -> list:
+             """Fetch unread messages since last poll from the Slack channel.
+             Uses conversations.history API with oldest parameter.
+             Filters out bot messages. Updates last-read timestamp.
+             Returns empty list if disabled, no new messages, or on error.
+             """
+             if not self._enabled or not self._bot_token or not self._channel_id:
+                 return []
+
+             last_ts = self._load_last_read()
+             # On first run, use current time to avoid processing history
+             if last_ts == "0":
+                 import time as _time
+                 current_ts = str(_time.time())
+                 self._save_last_read(current_ts)
+                 return []
+
+             try:
+                 params = urllib.parse.urlencode({
+                     "channel": self._channel_id,
+                     "oldest": last_ts,
+                     "limit": SLACK_INBOUND_POLL_LIMIT,
+                     "inclusive": "false"
+                 })
+                 url = f"https://slack.com/api/conversations.history?{params}"
+                 req = urllib.request.Request(
+                     url,
+                     headers={"Authorization": f"Bearer {self._bot_token}"}
+                 )
+                 with urllib.request.urlopen(req, timeout=10) as resp:
+                     result = json.loads(resp.read())
+
+                 if not result.get("ok", False):
+                     print(f"[SLACK] conversations.history error: {result.get('error', 'unknown')}")
+                     return []
+
+                 messages = result.get("messages", [])
+                 if not messages:
+                     return []
+
+                 # Filter out bot messages (our own posts and other bots)
+                 human_messages = [
+                     m for m in messages
+                     if not m.get("bot_id") and m.get("subtype") is None
+                 ]
+
+                 # Update last-read to the newest message timestamp
+                 # messages are returned newest-first by the API
+                 newest_ts = messages[0].get("ts", last_ts)
+                 self._save_last_read(newest_ts)
+
+                 return human_messages
+
+             except Exception as e:
+                 print(f"[SLACK] Failed to poll messages: {e}")
+                 return []
+
+      6. Add "import urllib.parse" near the top of the file with the other stdlib
+         imports (check if it is already imported; if not, add it after the
+         existing urllib.request import).
+
+      7. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      8. Verify new methods exist:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         notifier = mod.SlackNotifier('/nonexistent')
+         assert hasattr(notifier, 'poll_messages'), 'Missing poll_messages'
+         assert hasattr(notifier, '_load_last_read'), 'Missing _load_last_read'
+         assert hasattr(notifier, '_save_last_read'), 'Missing _save_last_read'
+         assert hasattr(mod, 'SLACK_LAST_READ_PATH'), 'Missing SLACK_LAST_READ_PATH'
+         assert hasattr(mod, 'SLACK_INBOUND_POLL_LIMIT'), 'Missing SLACK_INBOUND_POLL_LIMIT'
+         print('poll_messages and last-read tracking verified OK')
+         "
+
+      Files: scripts/plan-orchestrator.py
+
+  - id: '2.2'
+    name: Add classify_message method
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.1'
+    description: >-
+      Add message classification to SlackNotifier in scripts/plan-orchestrator.py.
+
+      Reference: docs/plans/2026-02-16-15-slack-inbound-message-polling-design.md
+
+      Steps:
+
+      1. Read scripts/plan-orchestrator.py. Find the SlackNotifier class.
+
+      2. Add a classify_message method after poll_messages:
+         def classify_message(self, text: str) -> tuple:
+             """Classify a Slack message by its text content.
+
+             Returns (classification, title, body) where:
+             - classification: one of 'new_feature', 'new_defect', 'control_stop',
+               'control_skip', 'info_request', 'question', 'acknowledgement'
+             - title: extracted title (first line after prefix removal)
+             - body: remaining text (lines after the first)
+             """
+             if not text or not text.strip():
+                 return ("acknowledgement", "", "")
+
+             text = text.strip()
+             lower = text.lower()
+             lines = text.split("\n", 1)
+             first_line = lines[0].strip()
+             body = lines[1].strip() if len(lines) > 1 else ""
+
+             # Feature request
+             for prefix in ("feature:", "enhancement:"):
+                 if lower.startswith(prefix):
+                     title = first_line[len(prefix):].strip()
+                     return ("new_feature", title, body)
+
+             # Defect report
+             for prefix in ("defect:", "bug:"):
+                 if lower.startswith(prefix):
+                     title = first_line[len(prefix):].strip()
+                     return ("new_defect", title, body)
+
+             # Control commands
+             if lower.startswith("stop") or lower.startswith("pause"):
+                 return ("control_stop", first_line, "")
+             if lower.startswith("skip"):
+                 return ("control_skip", first_line, "")
+
+             # Status request
+             if lower.startswith("status"):
+                 return ("info_request", first_line, "")
+
+             # Question detection
+             question_words = ("what", "how", "where", "when", "why", "which", "can", "is", "are", "do", "does", "will", "should")
+             if text.rstrip().endswith("?") or any(lower.startswith(w) for w in question_words):
+                 return ("question", first_line, body)
+
+             return ("acknowledgement", first_line, body)
+
+      3. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      4. Quick smoke test:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         notifier = mod.SlackNotifier('/nonexistent')
+         assert hasattr(notifier, 'classify_message'), 'Missing classify_message'
+         cls, title, body = notifier.classify_message('feature: Add cache TTL')
+         assert cls == 'new_feature', f'Expected new_feature, got {cls}'
+         assert title == 'Add cache TTL', f'Expected title, got {title}'
+         cls2, _, _ = notifier.classify_message('stop')
+         assert cls2 == 'control_stop', f'Expected control_stop, got {cls2}'
+         cls3, _, _ = notifier.classify_message('what is the status?')
+         assert cls3 == 'question', f'Expected question, got {cls3}'
+         print('classify_message verified OK')
+         "
+
+      Files: scripts/plan-orchestrator.py
+
+  - id: '2.3'
+    name: Add create_backlog_item method
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.2'
+    description: >-
+      Add backlog item creation from Slack messages to SlackNotifier.
+
+      Reference: docs/plans/2026-02-16-15-slack-inbound-message-polling-design.md
+
+      Steps:
+
+      1. Read scripts/plan-orchestrator.py. Find the SlackNotifier class.
+
+      2. Add a create_backlog_item method:
+         def create_backlog_item(self, item_type: str, title: str, body: str,
+                                 user: str = "", ts: str = "") -> str:
+             """Create a backlog markdown file from a Slack message.
+
+             Args:
+                 item_type: 'feature' or 'defect'
+                 title: Item title
+                 body: Item description
+                 user: Slack user ID who sent the message
+                 ts: Message timestamp
+
+             Returns:
+                 Created file path, or empty string on error
+             """
+             if item_type == "feature":
+                 backlog_dir = "docs/feature-backlog"
+             elif item_type == "defect":
+                 backlog_dir = "docs/defect-backlog"
+             else:
+                 return ""
+
+             # Find next available number
+             try:
+                 existing = [f for f in os.listdir(backlog_dir)
+                             if f.endswith(".md") and f[0].isdigit()]
+                 numbers = []
+                 for f in existing:
+                     parts = f.split("-", 1)
+                     if parts[0].isdigit():
+                         numbers.append(int(parts[0]))
+                 next_num = max(numbers) + 1 if numbers else 1
+             except (OSError, ValueError):
+                 next_num = 1
+
+             # Create slug from title
+             slug = title.lower().strip()
+             slug = slug.replace(" ", "-")
+             # Remove non-alphanumeric chars except hyphens
+             slug = "".join(c for c in slug if c.isalnum() or c == "-")
+             slug = slug.strip("-")
+             if not slug:
+                 slug = "untitled"
+
+             filename = f"{next_num}-{slug}.md"
+             filepath = os.path.join(backlog_dir, filename)
+
+             # Build markdown content
+             source_line = "Created from Slack message"
+             if user:
+                 source_line += f" by {user}"
+             if ts:
+                 source_line += f" at {ts}"
+             source_line += "."
+
+             content = (
+                 f"# {title}\n\n"
+                 f"## Status: Open\n\n"
+                 f"## Priority: Medium\n\n"
+                 f"## Summary\n\n"
+                 f"{body if body else title}\n\n"
+                 f"## Source\n\n"
+                 f"{source_line}\n"
+             )
+
+             try:
+                 os.makedirs(backlog_dir, exist_ok=True)
+                 with open(filepath, "w") as f:
+                     f.write(content)
+                 # Confirm in Slack
+                 item_label = "feature" if item_type == "feature" else "defect"
+                 self.send_status(
+                     f"*Created {item_label} backlog item:* {filename}",
+                     level="success"
+                 )
+                 return filepath
+             except IOError as e:
+                 print(f"[SLACK] Failed to create backlog item: {e}")
+                 return ""
+
+      3. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      4. Verify method exists:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         notifier = mod.SlackNotifier('/nonexistent')
+         assert hasattr(notifier, 'create_backlog_item'), 'Missing create_backlog_item'
+         print('create_backlog_item method verified OK')
+         "
+
+      Files: scripts/plan-orchestrator.py
+
+  - id: '2.4'
+    name: Add handle_control_command and answer_question methods
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.3'
+    description: >-
+      Add control command handling and question answering to SlackNotifier.
+
+      Reference: docs/plans/2026-02-16-15-slack-inbound-message-polling-design.md
+
+      Steps:
+
+      1. Read scripts/plan-orchestrator.py. Find the SlackNotifier class and
+         the STOP_SEMAPHORE_PATH constant (should be defined near the top).
+
+      2. Add handle_control_command method:
+         def handle_control_command(self, command: str, classification: str) -> None:
+             """Handle a control command from Slack.
+
+             Args:
+                 command: The original message text
+                 classification: One of 'control_stop', 'control_skip', 'info_request'
+             """
+             if classification == "control_stop":
+                 # Write stop semaphore to signal graceful stop
+                 try:
+                     with open(STOP_SEMAPHORE_PATH, "w") as f:
+                         f.write(f"stop requested via Slack: {command}\n")
+                     self.send_status(
+                         "*Stop requested* via Slack. Pipeline will stop after current task.",
+                         level="warning"
+                     )
+                 except IOError as e:
+                     print(f"[SLACK] Failed to write stop semaphore: {e}")
+
+             elif classification == "control_skip":
+                 self.send_status(
+                     "*Skip requested* via Slack. (Note: skip is not yet implemented "
+                     "in the orchestrator. Use 'stop' to halt the pipeline.)",
+                     level="warning"
+                 )
+
+             elif classification == "info_request":
+                 # Post a basic status response
+                 # Full pipeline state is not available inside SlackNotifier,
+                 # so we post what we can determine
+                 self.send_status(
+                     "*Pipeline Status*\nState: running\n"
+                     "_Use the terminal for detailed status._",
+                     level="info"
+                 )
+
+      3. Add answer_question method:
+         def answer_question(self, question: str) -> None:
+             """Respond to a question from Slack.
+
+             For now, acknowledges the question and suggests using the terminal
+             for detailed answers. A future enhancement could use an LLM call.
+
+             Args:
+                 question: The question text
+             """
+             self.send_status(
+                 f"*Question received:* {question}\n"
+                 "_Detailed answers are not yet available via Slack. "
+                 "Check the terminal session for full pipeline context._",
+                 level="info"
+             )
+
+      4. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      5. Verify methods exist:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         notifier = mod.SlackNotifier('/nonexistent')
+         assert hasattr(notifier, 'handle_control_command'), 'Missing handle_control_command'
+         assert hasattr(notifier, 'answer_question'), 'Missing answer_question'
+         print('handle_control_command and answer_question verified OK')
+         "
+
+      Files: scripts/plan-orchestrator.py
+
+  - id: '2.5'
+    name: Add process_inbound orchestration method
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.4'
+    description: >-
+      Add the main process_inbound method that ties together polling,
+      classification, and dispatch in SlackNotifier.
+
+      Reference: docs/plans/2026-02-16-15-slack-inbound-message-polling-design.md
+
+      Steps:
+
+      1. Read scripts/plan-orchestrator.py. Find the SlackNotifier class.
+
+      2. Add process_inbound method (should be the last public method):
+         def process_inbound(self) -> None:
+             """Poll for new Slack messages, classify, and act on each.
+
+             This is the main entry point called at pipeline checkpoints.
+             Catches all exceptions to never disrupt the pipeline.
+             No-op if Slack is disabled.
+             """
+             if not self._enabled:
+                 return
+
+             try:
+                 messages = self.poll_messages()
+                 for msg in messages:
+                     text = msg.get("text", "").strip()
+                     if not text:
+                         continue
+
+                     user = msg.get("user", "unknown")
+                     ts = msg.get("ts", "")
+
+                     classification, title, body = self.classify_message(text)
+
+                     if classification == "new_feature":
+                         self.create_backlog_item("feature", title, body, user, ts)
+                     elif classification == "new_defect":
+                         self.create_backlog_item("defect", title, body, user, ts)
+                     elif classification in ("control_stop", "control_skip", "info_request"):
+                         self.handle_control_command(text, classification)
+                     elif classification == "question":
+                         self.answer_question(text)
+                     elif classification == "acknowledgement":
+                         # Log but don't spam Slack with receipts
+                         print(f"[SLACK] Acknowledged message from {user}: {text[:80]}")
+                     else:
+                         print(f"[SLACK] Unhandled classification: {classification}")
+
+             except Exception as e:
+                 # Never let inbound processing disrupt the pipeline
+                 print(f"[SLACK] Error in process_inbound: {e}")
+
+      3. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      4. Verify method exists and is callable on disabled notifier:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         notifier = mod.SlackNotifier('/nonexistent')
+         assert hasattr(notifier, 'process_inbound'), 'Missing process_inbound'
+         # Should be a no-op when disabled
+         notifier.process_inbound()
+         print('process_inbound verified OK (no-op when disabled)')
+         "
+
+      Files: scripts/plan-orchestrator.py
+
+- id: phase-3
+  name: Phase 3 - Pipeline Integration
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Integrate process_inbound into auto-pipeline
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.5'
+    description: >-
+      Add slack.process_inbound() calls at checkpoints in auto-pipeline.py.
+
+      Reference: docs/plans/2026-02-16-15-slack-inbound-message-polling-design.md
+
+      Steps:
+
+      1. Read scripts/auto-pipeline.py. Find the main_loop function (around line 1524).
+
+      2. Find the line "items = scan_all_backlogs()" (around line 1597).
+         Add BEFORE that line:
+             # Poll for inbound Slack messages at scan checkpoint
+             slack.process_inbound()
+
+      3. Find the first process_item call in the items loop (around line 1648):
+             success = process_item(item, dry_run, session_tracker)
+         Add AFTER the "if not success:" block that follows it (after line ~1651):
+             # Poll for inbound Slack messages after processing each item
+             slack.process_inbound()
+
+      4. Find the idle wait block (around line 1615):
+             new_item_event.clear()
+             new_item_event.wait(timeout=SAFETY_SCAN_INTERVAL_SECONDS)
+         Add BEFORE the new_item_event.clear() line:
+             # Poll for inbound Slack messages during idle wait
+             slack.process_inbound()
+
+      5. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
+
+      6. Verify process_inbound calls exist:
+         python3 -c "
+         with open('scripts/auto-pipeline.py') as f:
+             content = f.read()
+         count = content.count('slack.process_inbound()')
+         assert count >= 3, f'Expected at least 3 process_inbound calls, found {count}'
+         print(f'Found {count} slack.process_inbound() calls in auto-pipeline.py')
+         "
+
+      Files: scripts/auto-pipeline.py
+
+  - id: '3.2'
+    name: Integrate process_inbound into orchestrator
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.5'
+    description: >-
+      Add slack.process_inbound() calls at checkpoints in plan-orchestrator.py.
+
+      Reference: docs/plans/2026-02-16-15-slack-inbound-message-polling-design.md
+
+      Steps:
+
+      1. Read scripts/plan-orchestrator.py. Find the main execution loop
+         (the "while True:" block starting around line 3007).
+
+      2. After the stop semaphore check (around line 3016, after the "break"
+         from check_stop_requested), add before the circuit breaker check:
+             # Poll for inbound Slack messages between tasks
+             slack.process_inbound()
+
+      3. Find the validation results section (around line 3445, where
+         "continue  # Retry the task" is). Add BEFORE that continue:
+             # Poll for inbound Slack messages after validation
+             slack.process_inbound()
+
+      4. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      5. Verify process_inbound calls exist in orchestrator:
+         python3 -c "
+         with open('scripts/plan-orchestrator.py') as f:
+             content = f.read()
+         count = content.count('slack.process_inbound()')
+         assert count >= 2, f'Expected at least 2 process_inbound calls in orchestrator, found {count}'
+         print(f'Found {count} slack.process_inbound() calls in plan-orchestrator.py')
+         "
+
+      Files: scripts/plan-orchestrator.py
+
+- id: phase-4
+  name: Phase 4 - Unit Tests
+  status: pending
+  tasks:
+  - id: '4.1'
+    name: Test poll_messages and last-read tracking
+    agent: coder
+    status: pending
+    depends_on:
+    - '3.2'
+    description: >-
+      Add unit tests for poll_messages and last-read state management
+      to tests/test_slack_notifier.py.
+
+      Reference: docs/plans/2026-02-16-15-slack-inbound-message-polling-design.md
+
+      Steps:
+
+      1. Read tests/test_slack_notifier.py to understand the current test structure
+         and imports.
+
+      2. Read scripts/plan-orchestrator.py to understand poll_messages, _load_last_read,
+         _save_last_read implementations.
+
+      3. Add the following test cases at the end of the test file:
+
+         a. test_load_last_read_no_file:
+            Use tmp_path. Create a SlackNotifier with a valid config.
+            Monkey-patch SLACK_LAST_READ_PATH to a nonexistent path in tmp_path.
+            Assert _load_last_read() returns "0".
+
+         b. test_save_and_load_last_read:
+            Use tmp_path. Create a SlackNotifier with a valid config.
+            Monkey-patch SLACK_LAST_READ_PATH to a path in tmp_path.
+            Call _save_last_read("1234567890.123456").
+            Assert _load_last_read() returns "1234567890.123456".
+            Assert the file contains the channel_id.
+
+         c. test_poll_messages_disabled:
+            Create a disabled SlackNotifier.
+            Assert poll_messages() returns [].
+
+         d. test_poll_messages_first_run_sets_timestamp:
+            Use tmp_path. Create an enabled SlackNotifier.
+            Monkey-patch SLACK_LAST_READ_PATH to tmp_path.
+            On first call, poll_messages should save current time and return [].
+            Verify the last-read file was created.
+
+         e. test_poll_messages_filters_bots:
+            Create a mock response for conversations.history that contains:
+            - A human message: {"text": "hello", "user": "U123", "ts": "1.1"}
+            - A bot message: {"text": "status update", "bot_id": "B123", "ts": "1.2"}
+            - A message with subtype: {"text": "joined", "subtype": "channel_join", "ts": "1.3"}
+            Monkey-patch urllib.request.urlopen to return this mock.
+            Set up last-read state.
+            Assert poll_messages returns only the human message.
+
+         f. test_poll_messages_updates_last_read:
+            Similar to above but verify _save_last_read is called with
+            the newest message timestamp after polling.
+
+      4. Add the new SLACK constants to the existing test_slack_config_constants_exist
+         test (or add a new test):
+         assert mod.SLACK_LAST_READ_PATH == ".claude/slack-last-read.json"
+         assert mod.SLACK_INBOUND_POLL_LIMIT == 20
+
+      5. Run tests:
+         python3 -m pytest tests/test_slack_notifier.py -v
+         Fix any failures.
+
+      Files: tests/test_slack_notifier.py
+
+  - id: '4.2'
+    name: Test classify_message
+    agent: coder
+    status: pending
+    depends_on:
+    - '4.1'
+    description: >-
+      Add unit tests for classify_message to tests/test_slack_notifier.py.
+
+      Reference: docs/plans/2026-02-16-15-slack-inbound-message-polling-design.md
+
+      Steps:
+
+      1. Read tests/test_slack_notifier.py to see current state after 4.1.
+
+      2. Add the following test cases:
+
+         a. test_classify_feature_request:
+            Assert classify_message("feature: Add cache TTL") returns
+            ("new_feature", "Add cache TTL", "").
+
+         b. test_classify_feature_with_body:
+            Assert classify_message("feature: Cache TTL\nNeeds configurable expiry")
+            returns ("new_feature", "Cache TTL", "Needs configurable expiry").
+
+         c. test_classify_enhancement:
+            Assert classify_message("enhancement: Better logging") returns
+            ("new_feature", "Better logging", "").
+
+         d. test_classify_defect:
+            Assert classify_message("defect: Broken import in auth") returns
+            ("new_defect", "Broken import in auth", "").
+
+         e. test_classify_bug:
+            Assert classify_message("bug: NullPointerException on startup") returns
+            ("new_defect", "NullPointerException on startup", "").
+
+         f. test_classify_stop:
+            Assert classify_message("stop") returns ("control_stop", "stop", "").
+
+         g. test_classify_pause:
+            Assert classify_message("pause") returns ("control_stop", "pause", "").
+
+         h. test_classify_skip:
+            Assert classify_message("skip") returns ("control_skip", "skip", "").
+
+         i. test_classify_status:
+            Assert classify_message("status") returns ("info_request", "status", "").
+
+         j. test_classify_question_mark:
+            Assert classify_message("how much budget is left?") returns
+            ("question", ...).
+
+         k. test_classify_question_word:
+            Assert classify_message("what is in the backlog") returns
+            ("question", ...).
+
+         l. test_classify_acknowledgement:
+            Assert classify_message("sounds good") returns
+            ("acknowledgement", "sounds good", "").
+
+         m. test_classify_empty:
+            Assert classify_message("") returns ("acknowledgement", "", "").
+
+         n. test_classify_case_insensitive:
+            Assert classify_message("FEATURE: Test") returns ("new_feature", ...).
+            Assert classify_message("Bug: something") returns ("new_defect", ...).
+
+      3. Run tests:
+         python3 -m pytest tests/test_slack_notifier.py -v
+         Fix any failures.
+
+      Files: tests/test_slack_notifier.py
+
+  - id: '4.3'
+    name: Test create_backlog_item and process_inbound
+    agent: coder
+    status: pending
+    depends_on:
+    - '4.2'
+    description: >-
+      Add unit tests for create_backlog_item and process_inbound
+      to tests/test_slack_notifier.py.
+
+      Reference: docs/plans/2026-02-16-15-slack-inbound-message-polling-design.md
+
+      Steps:
+
+      1. Read tests/test_slack_notifier.py to see current state after 4.2.
+         Read scripts/plan-orchestrator.py to see create_backlog_item implementation.
+
+      2. Add the following test cases:
+
+         a. test_create_backlog_feature:
+            Use tmp_path. Create a feature-backlog dir inside tmp_path.
+            Create an enabled SlackNotifier, monkey-patch _post_message to capture calls.
+            Monkey-patch the backlog dir path in the method or pass appropriate args.
+            Actually: since create_backlog_item uses hardcoded "docs/feature-backlog",
+            we need to either:
+            - Use monkeypatch to change os.listdir behavior and open to write to tmp_path
+            - Or create actual docs/feature-backlog dir in a temp working dir
+            The simplest approach: use monkeypatch.chdir(tmp_path), create the dirs
+            inside tmp_path, then call create_backlog_item.
+
+            Steps:
+            1. monkeypatch.chdir(tmp_path)
+            2. os.makedirs("docs/feature-backlog")
+            3. Call create_backlog_item("feature", "Cache TTL", "Add configurable expiry", "U123", "1234.5678")
+            4. Assert a file was created in docs/feature-backlog/
+            5. Read the file. Assert it contains "# Cache TTL" and "## Status: Open"
+            6. Assert the file starts with "1-" (first item)
+
+         b. test_create_backlog_defect:
+            Similar to above but for defect type. Verify file in docs/defect-backlog/.
+
+         c. test_create_backlog_numbering:
+            Create tmp working dir. Add an existing file "15-existing.md" in
+            docs/feature-backlog/. Call create_backlog_item for a feature.
+            Assert the new file starts with "16-".
+
+         d. test_process_inbound_disabled:
+            Create disabled SlackNotifier. Call process_inbound().
+            Assert no error raised (no-op).
+
+         e. test_process_inbound_dispatches_feature:
+            Create an enabled SlackNotifier.
+            Monkey-patch poll_messages to return [{"text": "feature: New feature", "user": "U1", "ts": "1.0"}].
+            Monkey-patch create_backlog_item to capture calls.
+            Call process_inbound().
+            Assert create_backlog_item was called with ("feature", "New feature", ...).
+
+         f. test_process_inbound_dispatches_stop:
+            Similar but with "stop" message. Verify handle_control_command called.
+
+         g. test_process_inbound_error_resilience:
+            Monkey-patch poll_messages to raise an Exception.
+            Call process_inbound(). Assert no exception propagates.
+
+      3. Run all tests:
+         python3 -m pytest tests/test_slack_notifier.py -v
+         Fix any failures.
+
+      Files: tests/test_slack_notifier.py
+
+- id: phase-5
+  name: Phase 5 - Verification
+  status: pending
+  tasks:
+  - id: '5.1'
+    name: Verify syntax, tests, and dry-run
+    agent: code-reviewer
+    status: pending
+    depends_on:
+    - '4.3'
+    description: >-
+      Run verification checks to confirm the Slack inbound message polling
+      feature works correctly.
+
+      Steps:
+
+      1. Check Python syntax for both scripts:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+      2. Run all unit tests:
+         python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
+
+      3. Verify SlackNotifier class has all new methods:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         notifier = mod.SlackNotifier('/nonexistent')
+         assert not notifier.is_enabled()
+         for method in ['poll_messages', 'classify_message', 'create_backlog_item',
+                        'handle_control_command', 'answer_question', 'process_inbound']:
+             assert hasattr(notifier, method), f'Missing {method}'
+         print('SlackNotifier class verified: all new inbound methods present')
+         "
+
+      4. Verify new constants exist:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert mod.SLACK_LAST_READ_PATH == '.claude/slack-last-read.json'
+         assert mod.SLACK_INBOUND_POLL_LIMIT == 20
+         print('New constants verified')
+         "
+
+      5. Verify process_inbound calls in auto-pipeline:
+         python3 -c "
+         with open('scripts/auto-pipeline.py') as f:
+             content = f.read()
+         count = content.count('slack.process_inbound()')
+         assert count >= 3, f'Expected at least 3 process_inbound calls, found {count}'
+         print(f'auto-pipeline.py: {count} process_inbound calls')
+         "
+
+      6. Verify process_inbound calls in orchestrator:
+         python3 -c "
+         with open('scripts/plan-orchestrator.py') as f:
+             content = f.read()
+         count = content.count('slack.process_inbound()')
+         assert count >= 2, f'Expected at least 2 process_inbound calls, found {count}'
+         print(f'plan-orchestrator.py: {count} process_inbound calls')
+         "
+
+      7. Verify config template has channels:history scope:
+         python3 -c "
+         with open('.claude/slack.local.yaml.template') as f:
+             content = f.read()
+         assert 'channels:history' in content, 'Missing channels:history scope in template'
+         print('Config template has channels:history scope')
+         "
+
+      8. Run orchestrator dry-run to verify no startup errors:
+         python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
+
+      If any check fails, report the failure with specific details.
+
+      Files: scripts/plan-orchestrator.py, scripts/auto-pipeline.py,
+             .claude/slack.local.yaml.template, tests/test_slack_notifier.py
