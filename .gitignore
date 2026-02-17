@@ -15,6 +15,7 @@ venv/
 .claude/plans/task-status.json
 .claude/plans/current-plan.yaml
 .claude/plans/.stop
+.claude/plans/logs/
 .claude/subagent-status/
 .claude/agent-claims.json
 .claude/slack.local.yaml
