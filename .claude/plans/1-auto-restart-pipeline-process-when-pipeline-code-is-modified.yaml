@@ -121,12 +121,12 @@ sections:
       integration in task 3.1.
 - id: phase-3
   name: Phase 3 - Integrate Monitor into Main Loop
-  status: pending
+  status: completed
   tasks:
   - id: '3.1'
     name: Wire CodeChangeMonitor into main_loop
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.1'
     description: "In scripts/auto-pipeline.py, integrate the CodeChangeMonitor into\
@@ -152,6 +152,12 @@ sections:
       \ The only check_code_changed()\n   calls should now be inside CodeChangeMonitor._monitor_loop().\n\
       \n5. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py\n"
+    attempts: 1
+    last_attempt: '2026-02-17T13:35:20.832379'
+    model_used: sonnet
+    completed_at: '2026-02-17T13:37:41.974646'
+    result_message: 'Integrated CodeChangeMonitor into main_loop: created monitor
+      instance, added restart check in idle wait, and added cleanup in finally block'
 - id: phase-4
   name: Phase 4 - Unit Tests
   status: pending
