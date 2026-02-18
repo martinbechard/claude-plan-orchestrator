@@ -25,6 +25,9 @@ check_code_changed = mod.check_code_changed
 CodeChangeMonitor = mod.CodeChangeMonitor
 CODE_CHANGE_POLL_INTERVAL_SECONDS = mod.CODE_CHANGE_POLL_INTERVAL_SECONDS
 _perform_restart = mod._perform_restart
+_resolve_item_path = mod._resolve_item_path
+archive_item = mod.archive_item
+BacklogItem = mod.BacklogItem
 
 
 # --- compact_plan_label() tests ---
@@ -394,3 +397,125 @@ def test_perform_restart_calls_cleanup_sequence(monkeypatch):
     mock_observer.stop.assert_called_once()
     mock_observer.join.assert_called_once()
     mock_execv.assert_called_once()
+
+
+# --- _resolve_item_path() tests ---
+
+
+def test_resolve_item_path_file_at_original_location(tmp_path):
+    """File exists at item.path: helper returns item.path unchanged."""
+    backlog_dir = tmp_path / "defect-backlog"
+    backlog_dir.mkdir()
+    item_file = backlog_dir / "my-item.md"
+    item_file.write_text("# My Item\n")
+
+    item = BacklogItem(
+        path=str(item_file),
+        item_type="defect",
+        slug="my-item",
+        name="My Item",
+    )
+
+    assert _resolve_item_path(item) == str(item_file)
+
+
+def test_resolve_item_path_file_in_completed_subfolder(tmp_path):
+    """File has been moved to completed/ subfolder: helper returns new path."""
+    backlog_dir = tmp_path / "defect-backlog"
+    completed_dir = backlog_dir / "completed"
+    completed_dir.mkdir(parents=True)
+
+    item_file_in_completed = completed_dir / "my-item.md"
+    item_file_in_completed.write_text("# My Item\n")
+
+    # item.path points to the root (stale path, file no longer there)
+    stale_path = str(backlog_dir / "my-item.md")
+    item = BacklogItem(
+        path=stale_path,
+        item_type="defect",
+        slug="my-item",
+        name="My Item",
+    )
+
+    assert _resolve_item_path(item) == str(item_file_in_completed)
+
+
+def test_resolve_item_path_file_not_found(tmp_path):
+    """File missing from both locations: helper returns None."""
+    stale_path = str(tmp_path / "defect-backlog" / "ghost-item.md")
+    item = BacklogItem(
+        path=stale_path,
+        item_type="defect",
+        slug="ghost-item",
+        name="Ghost Item",
+    )
+
+    assert _resolve_item_path(item) is None
+
+
+# --- archive_item() tests ---
+
+
+def test_archive_item_succeeds_when_file_in_completed_subfolder(tmp_path, monkeypatch):
+    """archive_item() resolves relocated file and moves it to archive dir."""
+    backlog_dir = tmp_path / "defect-backlog"
+    completed_dir = backlog_dir / "completed"
+    completed_dir.mkdir(parents=True)
+
+    item_file = completed_dir / "my-item.md"
+    item_file.write_text("# My Item\n")
+
+    archive_dir = tmp_path / "completed-backlog" / "defects"
+    archive_dir.mkdir(parents=True)
+
+    monkeypatch.setattr(mod, "COMPLETED_DIRS", {"defect": str(archive_dir), "feature": str(archive_dir)})
+    monkeypatch.setattr(mod.subprocess, "run", lambda *args, **kwargs: None)
+
+    stale_path = str(backlog_dir / "my-item.md")
+    item = BacklogItem(
+        path=stale_path,
+        item_type="defect",
+        slug="my-item",
+        name="My Item",
+    )
+
+    result = archive_item(item, dry_run=False)
+
+    assert result is True
+    assert (archive_dir / "my-item.md").exists()
+
+
+def test_archive_item_returns_false_when_file_not_found(tmp_path, monkeypatch):
+    """archive_item() returns False when file exists at neither location."""
+    archive_dir = tmp_path / "completed-backlog" / "defects"
+    archive_dir.mkdir(parents=True)
+
+    monkeypatch.setattr(mod, "COMPLETED_DIRS", {"defect": str(archive_dir), "feature": str(archive_dir)})
+    monkeypatch.setattr(mod.subprocess, "run", lambda *args, **kwargs: None)
+
+    stale_path = str(tmp_path / "defect-backlog" / "ghost-item.md")
+    item = BacklogItem(
+        path=stale_path,
+        item_type="defect",
+        slug="ghost-item",
+        name="Ghost Item",
+    )
+
+    result = archive_item(item, dry_run=False)
+
+    assert result is False
+
+
+def test_archive_item_dry_run_does_not_require_file(tmp_path):
+    """archive_item() in dry-run mode returns True without touching disk."""
+    stale_path = str(tmp_path / "defect-backlog" / "ghost-item.md")
+    item = BacklogItem(
+        path=stale_path,
+        item_type="defect",
+        slug="ghost-item",
+        name="Ghost Item",
+    )
+
+    result = archive_item(item, dry_run=True)
+
+    assert result is True
