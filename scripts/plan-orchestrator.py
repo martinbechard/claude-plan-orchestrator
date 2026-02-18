@@ -3776,7 +3776,7 @@ class SlackNotifier:
         state = self._gather_pipeline_state()
         state_context = self._format_state_context(state)
         prompt = QUESTION_ANSWER_PROMPT.format(
-            state_context=state_context, question=question
+            history_context="", state_context=state_context, question=question
         )
 
         try:
