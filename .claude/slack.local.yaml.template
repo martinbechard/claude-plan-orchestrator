@@ -5,7 +5,10 @@
 # Setup: Create a Slack App at https://api.slack.com/apps
 #   1. Create new app from scratch
 #   2. Enable Socket Mode (Settings > Socket Mode) - generates app_token (xapp-...)
-#   3. Add Bot Token Scopes (OAuth & Permissions): chat:write, channels:read, channels:history
+#   3. Add Bot Token Scopes (OAuth & Permissions):
+#        chat:write, channels:read, channels:history, channels:manage, channels:join,
+#        groups:read, groups:history, groups:write, groups:write.invites,
+#        users:read, users:read.email
 #   4. Enable Interactivity (Interactivity & Shortcuts) - required for button responses
 #   5. Install to workspace - generates bot_token (xoxb-...)
 #   6. Invite bot to your channel, note the channel_id (right-click channel > View channel details)

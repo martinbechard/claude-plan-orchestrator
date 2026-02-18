@@ -1,10 +1,13 @@
 # scripts/setup-slack.py
 # Interactive Slack workspace setup for the plan orchestrator.
-# Creates a new Slack app (via manifest), channels, and writes config.
+# Creates a new Slack app (via manifest), private channels, and writes config.
 #
 # Usage:
 #   python scripts/setup-slack.py --prefix myproject
 #   python scripts/setup-slack.py --prefix myproject --app-name "My Orchestrator"
+#   python scripts/setup-slack.py --prefix myproject --bot-token xoxb-... --app-token xapp-...
+#   python scripts/setup-slack.py --prefix myproject --bot-token xoxb-... --app-token xapp-... --non-interactive
+#   python scripts/setup-slack.py --prefix myproject --invite-user user@example.com
 
 import argparse
 import json
@@ -13,7 +16,6 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-import webbrowser
 
 # Channel suffixes that the orchestrator expects (must match plan-orchestrator.py)
 CHANNEL_SUFFIXES = ("notifications", "defects", "features", "questions")
@@ -23,13 +25,17 @@ SLACK_APPS_URL = "https://api.slack.com/apps"
 
 # Required bot token scopes for full orchestrator functionality
 REQUIRED_BOT_SCOPES = [
-    "chat:write",          # Send messages
-    "channels:read",       # List channels
-    "channels:history",    # Read message history (polling)
-    "channels:manage",     # Create channels
-    "channels:join",       # Join channels
-    "groups:read",         # List private channels (discovery)
-    "groups:history",      # Read private channel history
+    "chat:write",              # Send messages
+    "channels:read",           # List public channels
+    "channels:history",        # Read public channel history (polling)
+    "channels:manage",         # Create public channels (fallback)
+    "channels:join",           # Join public channels
+    "groups:read",             # List private channels (discovery)
+    "groups:history",          # Read private channel history (polling)
+    "groups:write",            # Create private channels
+    "groups:write.invites",    # Invite members to private channels
+    "users:read",              # Look up user IDs (for --invite-user)
+    "users:read.email",        # Look up user by email (for --invite-user)
 ]
 
 CONFIG_PATH = ".claude/slack.local.yaml"
@@ -97,6 +103,30 @@ def slack_api(method: str, token: str, params: dict = None,
     return result
 
 
+def slack_api_raw(method: str, token: str, params: dict = None,
+                  post_json: dict = None) -> dict:
+    """Call a Slack Web API method and return raw response (no ok check).
+
+    Same as slack_api but does not raise on ok=false. Used when the caller
+    needs to inspect the error code directly.
+    """
+    url = f"{SLACK_API_BASE}/{method}"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    if post_json is not None:
+        headers["Content-Type"] = "application/json; charset=utf-8"
+        data = json.dumps(post_json).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers=headers)
+    elif params:
+        url = f"{url}?{urllib.parse.urlencode(params)}"
+        req = urllib.request.Request(url, headers=headers)
+    else:
+        req = urllib.request.Request(url, headers=headers)
+
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read())
+
+
 def generate_app_manifest(app_name: str, prefix: str) -> dict:
     """Generate a Slack app manifest for the orchestrator.
 
@@ -160,64 +190,142 @@ def verify_token(bot_token: str) -> str:
     return bot_user_id
 
 
-def create_channel(bot_token: str, channel_name: str) -> str:
-    """Create a public Slack channel, or return its ID if it exists.
+def lookup_user_by_email(bot_token: str, email: str) -> str:
+    """Look up a Slack user ID by email address.
 
     Args:
-        bot_token: Bot token with channels:manage scope
+        bot_token: Bot token with users:read.email scope
+        email: Email address to look up
+
+    Returns:
+        User ID string
+
+    Raises:
+        RuntimeError: If user not found or scope missing
+    """
+    result = slack_api("users.lookupByEmail", bot_token,
+                       params={"email": email})
+    user_id = result.get("user", {}).get("id", "")
+    if not user_id:
+        raise RuntimeError(f"Could not find Slack user for {email}")
+    name = result.get("user", {}).get("real_name", email)
+    print(f"  Found user: {name} ({user_id})")
+    return user_id
+
+
+def unarchive_channel(bot_token: str, channel_id: str) -> bool:
+    """Attempt to unarchive a channel.
+
+    Args:
+        bot_token: Bot token with appropriate scope
+        channel_id: Channel to unarchive
+
+    Returns:
+        True if unarchived, False if failed
+    """
+    result = slack_api_raw("conversations.unarchive", bot_token,
+                           post_json={"channel": channel_id})
+    return result.get("ok", False)
+
+
+def create_channel(bot_token: str, channel_name: str,
+                   is_private: bool = True) -> str:
+    """Create a Slack channel, or return its ID if it exists.
+
+    Creates private channels by default. Handles name_taken by looking up
+    the existing channel, and handles archived channels by unarchiving them.
+
+    Args:
+        bot_token: Bot token with groups:write or channels:manage scope
         channel_name: Name for the new channel
+        is_private: Create as private channel (default True)
 
     Returns:
         The channel ID
     """
-    try:
-        result = slack_api("conversations.create", bot_token,
-                           post_json={"name": channel_name})
+    result = slack_api_raw("conversations.create", bot_token,
+                           post_json={
+                               "name": channel_name,
+                               "is_private": is_private,
+                           })
+
+    if result.get("ok", False):
         channel_id = result["channel"]["id"]
-        print(f"  Created #{channel_name} ({channel_id})")
+        visibility = "private" if is_private else "public"
+        print(f"  Created #{channel_name} ({channel_id}, {visibility})")
         return channel_id
-    except RuntimeError as e:
-        if "name_taken" in str(e):
-            # Channel exists — find its ID
-            channel_id = find_channel_by_name(bot_token, channel_name)
-            if channel_id:
+
+    error = result.get("error", "unknown")
+
+    if error == "name_taken":
+        # Channel exists — find it (check both public and private)
+        channel_id = find_channel_by_name(bot_token, channel_name)
+        if channel_id:
+            # Check if archived
+            info = slack_api_raw("conversations.info", bot_token,
+                                 params={"channel": channel_id})
+            if (info.get("ok") and
+                    info.get("channel", {}).get("is_archived", False)):
+                print(f"  #{channel_name} is archived, unarchiving...")
+                if unarchive_channel(bot_token, channel_id):
+                    print(f"  Unarchived #{channel_name} ({channel_id})")
+                else:
+                    print(f"  WARNING: Could not unarchive #{channel_name}. "
+                          f"Unarchive it manually in Slack, then re-run.")
+                    sys.exit(1)
+            else:
                 print(f"  #{channel_name} already exists ({channel_id})")
-                return channel_id
-            raise RuntimeError(
-                f"Channel #{channel_name} exists but could not find its ID. "
-                f"Invite the bot to #{channel_name} manually."
-            ) from e
-        raise
+            return channel_id
+
+        raise RuntimeError(
+            f"Channel #{channel_name} exists but could not find its ID. "
+            f"It may be archived. Check Slack and unarchive or delete it, "
+            f"then re-run this script."
+        )
+
+    if error == "missing_scope":
+        scope_needed = "groups:write" if is_private else "channels:manage"
+        raise RuntimeError(
+            f"Missing scope '{scope_needed}' to create "
+            f"{'private' if is_private else 'public'} channels. "
+            f"Add it in Slack App > OAuth & Permissions, then reinstall."
+        )
+
+    raise RuntimeError(f"conversations.create failed: {error}")
 
 
 def find_channel_by_name(bot_token: str, channel_name: str) -> str:
-    """Find a channel ID by name using conversations.list.
+    """Find a channel ID by name, searching both public and private channels.
 
     Args:
-        bot_token: Bot token with channels:read scope
+        bot_token: Bot token with channels:read and groups:read scopes
         channel_name: Exact channel name to find
 
     Returns:
         Channel ID string, or empty string if not found
     """
-    cursor = ""
-    while True:
-        params = {"types": "public_channel", "limit": "200"}
-        if cursor:
-            params["cursor"] = cursor
-        result = slack_api("conversations.list", bot_token, params=params)
-        for ch in result.get("channels", []):
-            if ch.get("name") == channel_name:
-                return ch["id"]
-        cursor = (result.get("response_metadata", {})
-                  .get("next_cursor", ""))
-        if not cursor:
-            break
+    for channel_types in ("public_channel", "private_channel"):
+        cursor = ""
+        while True:
+            params = {"types": channel_types, "limit": "200"}
+            if cursor:
+                params["cursor"] = cursor
+            result = slack_api("conversations.list", bot_token, params=params)
+            for ch in result.get("channels", []):
+                if ch.get("name") == channel_name:
+                    return ch["id"]
+            cursor = (result.get("response_metadata", {})
+                      .get("next_cursor", ""))
+            if not cursor:
+                break
     return ""
 
 
 def join_channel(bot_token: str, channel_id: str) -> None:
     """Have the bot join a channel.
+
+    For private channels, the bot is automatically a member after creation.
+    This handles the case where the channel already existed.
 
     Args:
         bot_token: Bot token with channels:join scope
@@ -227,8 +335,32 @@ def join_channel(bot_token: str, channel_id: str) -> None:
         slack_api("conversations.join", bot_token,
                   post_json={"channel": channel_id})
     except RuntimeError as e:
-        if "already_in_channel" not in str(e):
+        error_str = str(e)
+        if ("already_in_channel" not in error_str
+                and "method_not_supported_for_channel_type" not in error_str):
             raise
+
+
+def invite_user_to_channel(bot_token: str, channel_id: str,
+                           user_id: str) -> None:
+    """Invite a user to a channel.
+
+    Args:
+        bot_token: Bot token with groups:write.invites scope
+        channel_id: Channel to invite user to
+        user_id: User ID to invite
+    """
+    try:
+        slack_api("conversations.invite", bot_token,
+                  post_json={"channel": channel_id, "users": user_id})
+    except RuntimeError as e:
+        error_str = str(e)
+        if "already_in_channel" in error_str:
+            pass  # Already a member, that's fine
+        elif "cant_invite_self" in error_str:
+            pass  # Bot trying to invite itself
+        else:
+            print(f"  WARNING: Could not invite user to channel: {e}")
 
 
 def prompt_token(label: str, expected_prefix: str) -> str:
@@ -240,12 +372,23 @@ def prompt_token(label: str, expected_prefix: str) -> str:
 
     Returns:
         The validated token string
+
+    Raises:
+        SystemExit: If running non-interactively (EOFError)
     """
     while True:
-        value = input(f"  Paste your {label} ({expected_prefix}...): ").strip()
+        try:
+            value = input(
+                f"  Paste your {label} ({expected_prefix}...): "
+            ).strip()
+        except EOFError:
+            print(f"\n  ERROR: Cannot read {label} in non-interactive mode.")
+            print(f"  Pass --bot-token and --app-token on the command line.")
+            sys.exit(1)
         if value.startswith(expected_prefix):
             return value
-        print(f"  Expected a token starting with '{expected_prefix}'. Try again.")
+        print(f"  Expected a token starting with '{expected_prefix}'. "
+              f"Try again.")
 
 
 def write_config(bot_token: str, app_token: str, default_channel_id: str,
@@ -297,30 +440,58 @@ def main():
         "--app-token", default="",
         help="Existing app-level token (xapp-...), used with --bot-token"
     )
+    parser.add_argument(
+        "--invite-user", default="",
+        help="Email address of a user to invite to all created channels"
+    )
+    parser.add_argument(
+        "--public", action="store_true",
+        help="Create public channels instead of private (default: private)"
+    )
+    parser.add_argument(
+        "--non-interactive", action="store_true",
+        help="Skip browser-open and input prompts. Requires --bot-token "
+             "and --app-token."
+    )
     args = parser.parse_args()
 
+    # Validate non-interactive mode has required tokens
+    if args.non_interactive and (not args.bot_token or not args.app_token):
+        print("ERROR: --non-interactive requires both --bot-token and "
+              "--app-token")
+        sys.exit(1)
+
+    is_private = not args.public
     prefix = args.prefix.rstrip("-") + "-"
     app_name = args.app_name or f"{args.prefix.title()} Orchestrator"
     channel_names = [f"{prefix}{suffix}" for suffix in CHANNEL_SUFFIXES]
+    visibility = "private" if is_private else "public"
 
     print()
     print(f"Slack Setup for Plan Orchestrator")
     print(f"  App name:    {app_name}")
     print(f"  Prefix:      {prefix}")
     print(f"  Channels:    {', '.join(f'#{n}' for n in channel_names)}")
+    print(f"  Visibility:  {visibility}")
+    if args.invite_user:
+        print(f"  Invite user: {args.invite_user}")
     print()
 
     # --- Step 1: Get tokens (create new app or use existing) ---
 
     bot_token = args.bot_token
     app_token = args.app_token
+    step_count = 5 if args.invite_user else 4
 
     if bot_token:
-        print("[1/4] Using existing tokens")
+        print(f"[1/{step_count}] Using existing tokens")
         if not app_token:
             app_token = prompt_token("App-Level Token", "xapp-")
+    elif args.non_interactive:
+        print("ERROR: --non-interactive requires --bot-token")
+        sys.exit(1)
     else:
-        print("[1/4] Create a new Slack App")
+        print(f"[1/{step_count}] Create a new Slack App")
         manifest = generate_app_manifest(app_name, prefix)
         manifest_json = json.dumps(manifest, indent=2)
 
@@ -338,15 +509,19 @@ def main():
         print("  4. Click 'Create' to finish app creation")
         print("  5. Go to 'Settings > Socket Mode' and generate an app token")
         print("     (any name, e.g. 'orchestrator')")
-        print("  6. Go to 'OAuth & Permissions' and click 'Install to Workspace'")
+        print("  6. Go to 'OAuth & Permissions' and click 'Install to "
+              "Workspace'")
         print("  7. Copy the Bot User OAuth Token and the App-Level Token")
         print()
 
-        input("  Press Enter to open Slack in your browser...")
-        webbrowser.open(SLACK_APPS_URL)
-        print()
+        try:
+            input("  Press Enter to open Slack in your browser...")
+            import webbrowser
+            webbrowser.open(SLACK_APPS_URL)
+        except EOFError:
+            print(f"\n  Open this URL manually: {SLACK_APPS_URL}")
 
-        # Wait a moment for the browser to open
+        print()
         time.sleep(1)
 
         bot_token = prompt_token("Bot User OAuth Token", "xoxb-")
@@ -355,7 +530,7 @@ def main():
     # --- Step 2: Verify token ---
 
     print()
-    print("[2/4] Verifying bot token...")
+    print(f"[2/{step_count}] Verifying bot token...")
     try:
         verify_token(bot_token)
     except Exception as e:
@@ -366,16 +541,16 @@ def main():
     # --- Step 3: Create channels ---
 
     print()
-    print("[3/4] Creating channels...")
+    print(f"[3/{step_count}] Creating {visibility} channels...")
     created_channels = {}
     for name in channel_names:
         try:
-            channel_id = create_channel(bot_token, name)
+            channel_id = create_channel(bot_token, name,
+                                        is_private=is_private)
             join_channel(bot_token, channel_id)
             created_channels[name] = channel_id
         except Exception as e:
             print(f"  ERROR creating #{name}: {e}")
-            print("  You may need to add 'channels:manage' scope to the bot.")
             sys.exit(1)
 
     # The notifications channel is the default
@@ -384,11 +559,26 @@ def main():
     if not default_channel_id:
         default_channel_id = next(iter(created_channels.values()), "")
 
+    # --- Step 3b: Invite user if requested ---
+
+    if args.invite_user:
+        print()
+        print(f"[4/{step_count}] Inviting {args.invite_user} to channels...")
+        try:
+            user_id = lookup_user_by_email(bot_token, args.invite_user)
+            for name, channel_id in created_channels.items():
+                invite_user_to_channel(bot_token, channel_id, user_id)
+                print(f"  Invited to #{name}")
+        except Exception as e:
+            print(f"  WARNING: Could not invite user: {e}")
+            print("  You can invite them manually in Slack.")
+
     # --- Step 4: Write config ---
 
     print()
-    print("[4/4] Writing configuration...")
-    config_path = write_config(bot_token, app_token, default_channel_id, prefix)
+    print(f"[{step_count}/{step_count}] Writing configuration...")
+    config_path = write_config(bot_token, app_token, default_channel_id,
+                               prefix)
     print(f"  Written to {config_path}")
 
     # --- Summary ---

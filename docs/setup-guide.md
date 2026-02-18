@@ -46,14 +46,28 @@ python scripts/setup-slack.py --prefix myproject
 The script will:
 1. Generate a Slack app manifest and open your browser
 2. Walk you through creating the app and pasting tokens
-3. Create four channels: myproject-notifications, myproject-defects,
+3. Create four private channels: myproject-notifications, myproject-defects,
    myproject-features, myproject-questions
 4. Write the config to .claude/slack.local.yaml
+
+Channels are private by default. To create public channels instead, add --public.
+
+To invite a human user to all channels by email:
+
+```bash
+python scripts/setup-slack.py --prefix myproject --invite-user user@example.com
+```
 
 If you already have a Slack app and just want new channels for a second project:
 
 ```bash
 python scripts/setup-slack.py --prefix myproject --bot-token xoxb-your-existing-token --app-token xapp-your-existing-token
+```
+
+For CI or non-interactive contexts (no browser, no prompts):
+
+```bash
+python scripts/setup-slack.py --prefix myproject --bot-token xoxb-... --app-token xapp-... --non-interactive
 ```
 
 Each project MUST use a unique prefix. Two projects with the same prefix will
@@ -65,12 +79,16 @@ The setup script configures these automatically via the manifest. If setting up
 manually, the bot needs these OAuth scopes:
 
 - chat:write (send messages)
-- channels:read (list channels)
-- channels:history (read message history for polling)
-- channels:manage (create channels)
-- channels:join (join channels)
+- channels:read (list public channels)
+- channels:history (read public channel history for polling)
+- channels:manage (create public channels, fallback)
+- channels:join (join public channels)
 - groups:read (list private channels)
-- groups:history (read private channel history)
+- groups:history (read private channel history for polling)
+- groups:write (create private channels)
+- groups:write.invites (invite members to private channels)
+- users:read (look up user IDs for --invite-user)
+- users:read.email (look up users by email for --invite-user)
 
 ## 4. Configure the project
 

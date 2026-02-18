@@ -62,7 +62,7 @@ LLMs degrade on long-running tasks. Context accumulates, quality drops, and impl
 
 See [docs/narrative/](docs/narrative/) for the full development history and design rationale.
 
-**New here?** Follow the [Setup Guide](docs/setup-guide.md) for step-by-step instructions including Slack setup, gitignore configuration, and upgrading.
+**New here?** Read the [Setup Guide](docs/setup-guide.md) before proceeding. It contains the complete step-by-step setup procedure: dependency installation, Slack app creation (via automated script), required .gitignore entries for orchestrator transient files, backlog directory setup, and upgrade/migration instructions from earlier versions.
 
 ## Requirements
 
@@ -94,7 +94,7 @@ After plugin install, the orchestrator scripts are available in the plugin direc
 python "$(claude plugin path plan-orchestrator)/scripts/plan-orchestrator.py" --plan .claude/plans/my-feature.yaml
 ```
 
-See the [Setup Guide](docs/setup-guide.md) for full instructions including upgrading from manual-copy installs.
+See the [Setup Guide](docs/setup-guide.md) for the complete setup procedure including Slack integration, .gitignore configuration, and upgrading from manual-copy installs or webhook-based Slack.
 
 ### Manual Install (Alternative)
 
@@ -452,12 +452,7 @@ The auto-pipeline integrates with Slack for real-time notifications and inbound 
 - Control commands (stop, status, etc.)
 - 5 Whys analysis for intake - the system automatically structures incoming feature/defect requests using the 5 Whys methodology
 
-Configure Slack in `.claude/slack.local.yaml`:
-
-```yaml
-bot_token: xoxb-your-bot-token
-channel_prefix: orchestrator
-```
+**Setup:** Run `python scripts/setup-slack.py --prefix myproject` to create a Slack app, channels, and config automatically. For a second project reusing an existing app, pass `--bot-token` and `--app-token` with a different `--prefix`. See the [Setup Guide](docs/setup-guide.md) for the full walkthrough including required bot scopes, manual setup alternative, and migration from webhook-based Slack to app-based Slack.
 
 The background polling thread checks for new messages every 15 seconds, independent of task execution.
 
