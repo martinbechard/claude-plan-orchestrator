@@ -7,7 +7,7 @@ tools:
   - Read
   - Grep
   - Glob
-model: opus
+model: sonnet
 ---
 
 # UX Designer Agent
