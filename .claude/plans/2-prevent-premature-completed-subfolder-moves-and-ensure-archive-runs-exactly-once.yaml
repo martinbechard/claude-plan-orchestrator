@@ -74,12 +74,12 @@ sections:
       subfolder moves. Both syntax check and smoke tests pass.'
 - id: phase-2
   name: Phase 2 - Unit Tests
-  status: pending
+  status: completed
   tasks:
   - id: '2.1'
     name: Add regression tests for idempotency guard and premature-move warning
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '1.1'
     description: "Add regression tests to tests/test_auto_pipeline.py for the two\
@@ -109,6 +109,13 @@ sections:
       \ -v\n\nFix any failures immediately.\n\nFiles: tests/test_auto_pipeline.py\n"
     attempts: 1
     last_attempt: '2026-02-18T08:29:53.605659'
+    model_used: sonnet
+    completed_at: '2026-02-18T08:32:44.918692'
+    result_message: 'Added three regression tests to tests/test_auto_pipeline.py:
+      (1) test_archive_item_idempotent_when_dest_exists verifies True return and no
+      git call when dest exists; (2) test_archive_item_idempotent_does_not_overwrite
+      verifies sentinel content unchanged; (3) test_resolve_item_path_warning_log_for_completed_subfolder
+      verifies WARNING in stdout. All 25 tests pass.'
 - id: phase-3
   name: Phase 3 - Verification
   status: pending
