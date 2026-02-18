@@ -1577,11 +1577,11 @@ def test_answer_question_calls_llm(tmp_path, monkeypatch):
 
     notifier.answer_question("do you have any work?", channel_id="C999")
 
-    # CLI was called with sonnet model and the question in the prompt
+    # CLI was called with the configured LLM model and the question in the prompt
     assert len(cli_calls) == 1
     cmd = cli_calls[0]
     assert "--model" in cmd
-    assert cmd[cmd.index("--model") + 1] == "sonnet"
+    assert cmd[cmd.index("--model") + 1] == "claude-opus-4-6"
     prompt_arg = cmd[cmd.index("--print") + 1]
     assert "do you have any work?" in prompt_arg
 
