@@ -213,12 +213,12 @@ sections:
       to slack.local.yaml.template after the questions: block. YAML validated successfully.'
 - id: phase-3
   name: Phase 3 - Unit Tests
-  status: pending
+  status: completed
   tasks:
   - id: '3.1'
     name: Add unit tests for history accumulation, trimming, injection, and config
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '2.1'
     description: "Add unit tests for the new conversation history feature to\ntests/test_slack_notifier.py.\n\
@@ -280,6 +280,12 @@ sections:
       \ -v\n   Fix any failures.\n\nFiles: tests/test_slack_notifier.py\n"
     attempts: 1
     last_attempt: '2026-02-18T08:10:03.695388'
+    model_used: sonnet
+    completed_at: '2026-02-18T08:13:07.999061'
+    result_message: 'Added 10 unit tests for conversation history feature: constant
+      existence, initial state, config loading, config defaults, exchange recording,
+      history injection, trimming to max_turns, disabled behavior, max_turns=0 behavior,
+      and prompt placeholder. All 80 tests pass.'
 - id: phase-4
   name: Phase 4 - Verification
   status: pending
