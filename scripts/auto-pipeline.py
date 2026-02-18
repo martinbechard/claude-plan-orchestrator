@@ -256,16 +256,30 @@ def _log_summary(level: str, event: str, slug: str, detail: str = "") -> None:
 
 
 def log(message: str) -> None:
-    """Print a timestamped log message with PID for process tracking."""
+    """Print a timestamped log message with PID for process tracking.
+
+    Also writes to the currently-open item detail log file (if any).
+    """
     timestamp = datetime.now().strftime("%H:%M:%S")
-    print(f"[{timestamp}] [AUTO-PIPELINE:{_PIPELINE_PID}] {message}", flush=True)
+    line = f"[{timestamp}] [AUTO-PIPELINE:{_PIPELINE_PID}] {message}"
+    print(line, flush=True)
+    if _item_log_file is not None:
+        _item_log_file.write(line + "\n")
+        _item_log_file.flush()
 
 
 def verbose_log(message: str) -> None:
-    """Print a verbose log message if verbose mode is enabled."""
+    """Print a verbose log message if verbose mode is enabled.
+
+    Also writes to the currently-open item detail log file (if any).
+    """
     if VERBOSE:
         timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        print(f"[{timestamp}] [VERBOSE:{_PIPELINE_PID}] {message}", flush=True)
+        line = f"[{timestamp}] [VERBOSE:{_PIPELINE_PID}] {message}"
+        print(line, flush=True)
+        if _item_log_file is not None:
+            _item_log_file.write(line + "\n")
+            _item_log_file.flush()
 
 
 def compact_plan_label(plan_path: str) -> str:
