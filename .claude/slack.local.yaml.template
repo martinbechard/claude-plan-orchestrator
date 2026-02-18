@@ -36,3 +36,6 @@ slack:
     enabled: true
     timeout_minutes: 60
     fallback: "skip"
+  conversation_history:
+    enabled: true          # Set to false to disable rolling history
+    max_turns: 3           # Number of prior Q&A turns to include in each prompt (0 = disabled)
