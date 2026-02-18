@@ -1,0 +1,231 @@
+meta:
+  name: Fix Archiving Failure When Backlog Items Are Moved to completed/ Subfolder Mid-Pipeline
+  description: >-
+    archive_item() uses item.path captured at scan time. If a consumer project's orchestrator
+    moves the file into a completed/ subfolder inside the backlog directory between scan and
+    archive, shutil.move raises FileNotFoundError. Fix: add _resolve_item_path() helper that
+    probes the completed/ subfolder as a fallback before giving up.
+  plan_doc: docs/plans/2026-02-18-1-archiving-fails-when-backlog-items-are-moved-to-completed-subfolder-mid-pipeline-design.md
+  created: '2026-02-18'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+      - coder
+    validators:
+      - issue-verifier
+    max_validation_attempts: 1
+sections:
+- id: phase-1
+  name: Phase 1 - Implementation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add _resolve_item_path() helper and update archive_item()
+    agent: coder
+    status: pending
+    description: |
+      Add a _resolve_item_path() helper function to scripts/auto-pipeline.py and update
+      archive_item() to use it, so that archiving succeeds even when the consumer project
+      has moved the backlog file to a completed/ subfolder.
+
+      Reference: docs/plans/2026-02-18-1-archiving-fails-when-backlog-items-are-moved-to-completed-subfolder-mid-pipeline-design.md
+
+      Steps:
+      1. Read scripts/auto-pipeline.py. Locate archive_item() (around line 1375).
+         Also note the COMPLETED_DIRS constant near line 61.
+
+      2. Just above the archive_item() function definition, add the following helper:
+
+           def _resolve_item_path(item: "BacklogItem") -> Optional[str]:
+               """Locate the actual file path for a backlog item at archive time.
+
+               Returns item.path if the file exists there. Falls back to checking
+               <backlog_dir>/completed/<filename> in case an external process relocated
+               the file mid-pipeline. Returns None if the file cannot be found at either
+               location.
+               """
+               if os.path.exists(item.path):
+                   return item.path
+               candidate = os.path.join(
+                   os.path.dirname(item.path), "completed", os.path.basename(item.path)
+               )
+               if os.path.exists(candidate):
+                   log(f"[ARCHIVE] Item relocated to completed/ subfolder, using: {candidate}")
+                   return candidate
+               return None
+
+      3. Update archive_item() to call _resolve_item_path() before shutil.move().
+         Replace the existing function body with:
+
+           def archive_item(item: BacklogItem, dry_run: bool = False) -> bool:
+               """Move a completed backlog item to the top-level archive directory."""
+               dest_dir = COMPLETED_DIRS[item.item_type]
+               dest = os.path.join(dest_dir, os.path.basename(item.path))
+
+               if dry_run:
+                   log(f"[DRY RUN] Would archive: {item.path} -> {dest}")
+                   return True
+
+               source = _resolve_item_path(item)
+               if source is None:
+                   log(f"WARNING: Cannot archive {item.path}: file not found at original path or completed/ subfolder")
+                   return False
+
+               try:
+                   os.makedirs(dest_dir, exist_ok=True)
+                   shutil.move(source, dest)
+
+                   # Git commit the move
+                   subprocess.run(["git", "add", source, dest], capture_output=True, check=True)
+                   subprocess.run(
+                       ["git", "commit", "-m", f"chore: archive completed {item.item_type} {item.slug}"],
+                       capture_output=True, check=True,
+                   )
+                   log(f"Archived: {source} -> {dest}")
+                   return True
+               except (OSError, subprocess.CalledProcessError) as e:
+                   log(f"WARNING: Failed to archive {source}: {e}")
+                   return False
+
+      4. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
+
+      5. Verify _resolve_item_path is importable:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert hasattr(mod, '_resolve_item_path'), 'Missing _resolve_item_path'
+         print('_resolve_item_path found OK')
+         "
+
+      Files: scripts/auto-pipeline.py
+
+- id: phase-2
+  name: Phase 2 - Unit Tests
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add unit tests for _resolve_item_path() and archive_item() fallback
+    agent: coder
+    status: pending
+    depends_on:
+      - '1.1'
+    description: |
+      Add unit tests for the new _resolve_item_path() helper and the updated archive_item()
+      fallback behavior to tests/test_auto_pipeline.py.
+
+      Reference: docs/plans/2026-02-18-1-archiving-fails-when-backlog-items-are-moved-to-completed-subfolder-mid-pipeline-design.md
+
+      Steps:
+      1. Read tests/test_auto_pipeline.py to understand existing test structure and imports.
+         Note: the module is loaded via importlib (because of the hyphen in the filename).
+         Find the mod variable and the existing import list (compact_plan_label, etc.).
+
+      2. Add the following to the import list at the top of the file:
+           _resolve_item_path = mod._resolve_item_path
+           archive_item = mod.archive_item
+           BacklogItem = mod.BacklogItem
+
+      3. Add a new test section at the end of the file with these test cases:
+
+         a. test_resolve_item_path_file_at_original_location(tmp_path):
+            - Create tmp_path / "defect-backlog" / "my-item.md" with some content.
+            - Create a BacklogItem with path=str(that file), item_type="defect", slug="my-item", name="My Item".
+            - Assert _resolve_item_path(item) == str(that file).
+
+         b. test_resolve_item_path_file_in_completed_subfolder(tmp_path):
+            - Create directory tmp_path / "defect-backlog" / "completed".
+            - Place "my-item.md" inside the completed subfolder (NOT at the root).
+            - Create a BacklogItem with path pointing to the root (non-existent) location.
+            - Assert _resolve_item_path(item) == str(completed/my-item.md).
+
+         c. test_resolve_item_path_file_not_found(tmp_path):
+            - Create a BacklogItem with a path that does not exist anywhere.
+            - Assert _resolve_item_path(item) is None.
+
+         d. test_archive_item_succeeds_when_file_in_completed_subfolder(tmp_path, monkeypatch):
+            - Create tmp_path / "defect-backlog" / "completed" / "my-item.md" with dummy content.
+            - Create BacklogItem with path=str(tmp_path / "defect-backlog" / "my-item.md") (stale).
+            - Set up COMPLETED_DEFECTS_DIR-equivalent destination inside tmp_path.
+            - Monkeypatch mod.COMPLETED_DIRS to point to a temp archive dir.
+            - Monkeypatch subprocess.run to no-op (avoid real git calls).
+            - Call archive_item(item, dry_run=False).
+            - Assert the function returns True.
+            - Assert the destination file exists in the archive dir.
+
+         e. test_archive_item_returns_false_when_file_not_found(tmp_path, monkeypatch):
+            - Create BacklogItem with a path that does not exist (no completed/ subfolder either).
+            - Monkeypatch mod.COMPLETED_DIRS and subprocess.run.
+            - Call archive_item(item, dry_run=False).
+            - Assert the function returns False.
+
+         f. test_archive_item_dry_run_does_not_require_file(tmp_path):
+            - Create BacklogItem with a non-existent path.
+            - Call archive_item(item, dry_run=True).
+            - Assert the function returns True (dry run never touches disk).
+
+      4. Run tests:
+         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_auto_pipeline.py -v
+         Fix any failures.
+
+      Files: tests/test_auto_pipeline.py
+
+- id: phase-3
+  name: Phase 3 - Verification
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Final verification - syntax, tests, and dry-run
+    agent: code-reviewer
+    status: pending
+    depends_on:
+      - '2.1'
+    description: |
+      Run verification checks to confirm the fix is correct and all tests pass.
+
+      Steps:
+      1. Check Python syntax for both scripts:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+      2. Run the full test suite:
+         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
+
+      3. Verify _resolve_item_path is present and behaves correctly with a quick smoke test:
+         python3 -c "
+         import importlib.util, tempfile, os
+         from pathlib import Path
+         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+
+         with tempfile.TemporaryDirectory() as tmp:
+             # Case 1: file at original path
+             f = Path(tmp) / 'item.md'
+             f.write_text('content')
+             item = mod.BacklogItem(path=str(f), name='Item', slug='item', item_type='defect')
+             assert mod._resolve_item_path(item) == str(f), 'Should find at original path'
+
+             # Case 2: file moved to completed/
+             comp = Path(tmp) / 'completed'
+             comp.mkdir()
+             moved = comp / 'item2.md'
+             moved.write_text('content')
+             item2 = mod.BacklogItem(path=str(Path(tmp) / 'item2.md'), name='Item2', slug='item2', item_type='defect')
+             assert mod._resolve_item_path(item2) == str(moved), 'Should find in completed/ subfolder'
+
+             # Case 3: file not found anywhere
+             item3 = mod.BacklogItem(path=str(Path(tmp) / 'ghost.md'), name='Ghost', slug='ghost', item_type='defect')
+             assert mod._resolve_item_path(item3) is None, 'Should return None when not found'
+
+         print('_resolve_item_path smoke test OK')
+         "
+
+      4. Run orchestrator dry-run to confirm no startup errors:
+         python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
+
+      If any check fails, report the specific failure with details.
+
+      Files: scripts/auto-pipeline.py, scripts/plan-orchestrator.py, tests/test_auto_pipeline.py
