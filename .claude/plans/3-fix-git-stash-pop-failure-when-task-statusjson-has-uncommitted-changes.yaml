@@ -54,12 +54,12 @@ sections:
       working tree
 - id: phase-2
   name: Phase 2 - Unit Tests
-  status: pending
+  status: completed
   tasks:
   - id: '2.1'
     name: Add regression test for stash pop with uncommitted task-status.json
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '1.1'
     description: "Add a regression test to tests/test_plan_orchestrator.py that verifies\n\
@@ -103,6 +103,13 @@ sections:
       \nFiles: tests/test_plan_orchestrator.py\n"
     attempts: 1
     last_attempt: '2026-02-18T08:42:06.990361'
+    model_used: sonnet
+    completed_at: '2026-02-18T08:44:41.383787'
+    result_message: 'Added test_stash_pop_discards_task_status_json() integration
+      test using a real temporary git repo. Test reproduces the bug scenario: stash
+      push WIP, then write task-status.json post-stash, then verify git_stash_pop()
+      succeeds and WIP is restored. Also added subprocess import and STATUS_FILE_PATH
+      to module imports. All 24 tests pass.'
 - id: phase-3
   name: Phase 3 - Verification
   status: pending
