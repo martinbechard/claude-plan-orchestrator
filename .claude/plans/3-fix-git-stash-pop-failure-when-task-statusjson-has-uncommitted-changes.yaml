@@ -1,0 +1,186 @@
+meta:
+  name: Fix git stash pop failure when task-status.json has uncommitted changes
+  description: >-
+    Discard the orchestrator-owned task-status.json from the working tree
+    immediately before git stash pop to prevent a merge conflict. The file is
+    ephemeral: its content is already consumed by read_status_file() before the
+    finally block runs, so discarding it is safe and avoids polluting git history
+    with committed orchestrator state.
+  plan_doc: docs/plans/2026-02-18-3-fix-git-stash-pop-failure-when-task-statusjson-has-uncommitted-changes-design.md
+  created: '2026-02-18'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+      - coder
+    validators:
+      - issue-verifier
+    max_validation_attempts: 1
+sections:
+  - id: phase-1
+    name: Phase 1 - Implementation
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: Discard task-status.json before git stash pop
+        agent: coder
+        status: pending
+        description: |
+          Apply a targeted fix to git_stash_pop() in scripts/plan-orchestrator.py.
+
+          Reference design: docs/plans/2026-02-18-3-fix-git-stash-pop-failure-when-task-statusjson-has-uncommitted-changes-design.md
+
+          ## Background
+
+          When git_stash_pop() is called in the finally block after a task completes,
+          task-status.json (STATUS_FILE_PATH) may still exist as an uncommitted file
+          in the working tree. The stash pop fails with a conflict because the stash
+          also contains that file.
+
+          task-status.json is orchestrator-owned and ephemeral: it was already read by
+          read_status_file() before the finally block executes. Discarding it just
+          before the pop is safe and correct.
+
+          ## Fix
+
+          Read scripts/plan-orchestrator.py and locate git_stash_pop() (around line 1505).
+
+          Before the subprocess.run(["git", "stash", "pop"], ...) call, insert a block
+          that discards any uncommitted changes to STATUS_FILE_PATH:
+
+              # Discard task-status.json before pop to prevent merge conflict.
+              # The file is ephemeral: its content was already consumed by read_status_file().
+              if os.path.exists(STATUS_FILE_PATH):
+                  subprocess.run(
+                      ["git", "checkout", "--", STATUS_FILE_PATH],
+                      capture_output=True
+                  )
+
+          The fix goes inside git_stash_pop(), before the existing subprocess.run call.
+          Do not change any other logic in the function.
+
+          ## Verification after change
+
+          Run syntax check:
+            python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+          Confirm the checkout line is present:
+            grep -n "checkout.*STATUS_FILE_PATH\|checkout.*task-status" scripts/plan-orchestrator.py
+
+          Files: scripts/plan-orchestrator.py
+
+  - id: phase-2
+    name: Phase 2 - Unit Tests
+    status: pending
+    tasks:
+      - id: '2.1'
+        name: Add regression test for stash pop with uncommitted task-status.json
+        agent: coder
+        status: pending
+        depends_on:
+          - '1.1'
+        description: |
+          Add a regression test to tests/test_plan_orchestrator.py that verifies
+          git_stash_pop() succeeds when task-status.json exists in the working tree.
+
+          Reference design: docs/plans/2026-02-18-3-fix-git-stash-pop-failure-when-task-statusjson-has-uncommitted-changes-design.md
+
+          ## Context
+
+          tests/test_plan_orchestrator.py already imports:
+            - git_stash_pop (from mod)
+            - git_stash_working_changes (from mod)
+            - ORCHESTRATOR_STASH_MESSAGE (from mod)
+
+          The module (mod) is already loaded via importlib at the top of the file.
+          Also import STATUS_FILE_PATH from mod at the top of the test file.
+
+          ## Test to add
+
+          ### test_stash_pop_discards_task_status_json(tmp_path, monkeypatch)
+
+          This test uses actual git subprocess calls against a temporary git repo.
+
+          1. Create a temporary git repository:
+               subprocess.run(["git", "init"], cwd=str(tmp_path), check=True)
+               subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=str(tmp_path), check=True)
+               subprocess.run(["git", "config", "user.name", "Test"], cwd=str(tmp_path), check=True)
+
+          2. Create the .claude/plans/ directory inside the tmp repo:
+               plans_dir = tmp_path / ".claude" / "plans"
+               plans_dir.mkdir(parents=True)
+
+          3. Create an initial commit with a sentinel file so the repo is not empty:
+               sentinel = tmp_path / "sentinel.txt"
+               sentinel.write_text("initial")
+               subprocess.run(["git", "add", "."], cwd=str(tmp_path), check=True)
+               subprocess.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), check=True)
+
+          4. Create a file that will be stashed (simulates user work-in-progress):
+               wip = tmp_path / "work.txt"
+               wip.write_text("wip")
+               subprocess.run(["git", "add", "work.txt"], cwd=str(tmp_path), check=True)
+
+          5. Create the stash (with the wip file):
+               subprocess.run(
+                   ["git", "stash", "push", "--include-untracked", "-m", ORCHESTRATOR_STASH_MESSAGE],
+                   cwd=str(tmp_path), check=True
+               )
+
+          6. Now write task-status.json to simulate the orchestrator writing it after task completion
+             (this is the file that triggers the bug):
+               status_file = tmp_path / ".claude" / "plans" / "task-status.json"
+               status_file.write_text('{"status": "completed"}')
+
+          7. Monkeypatch mod.STATUS_FILE_PATH to the tmp_path version so git_stash_pop()
+             uses the correct path:
+               monkeypatch.setattr(mod, "STATUS_FILE_PATH", str(status_file))
+
+          8. Change the working directory to tmp_path for git operations:
+               monkeypatch.chdir(tmp_path)
+
+          9. Call git_stash_pop() and assert it returns True (success):
+               result = mod.git_stash_pop()
+               assert result is True, "git_stash_pop() should succeed even with task-status.json present"
+
+          10. Assert the wip file was restored (confirming the stash pop applied correctly):
+                assert (tmp_path / "work.txt").exists(), "Stashed WIP file should be restored"
+
+          Run tests after adding them:
+            ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_plan_orchestrator.py -v
+
+          Fix any failures immediately.
+
+          Files: tests/test_plan_orchestrator.py
+
+  - id: phase-3
+    name: Phase 3 - Verification
+    status: pending
+    tasks:
+      - id: '3.1'
+        name: Final verification — syntax, full test suite, confirm fix
+        agent: code-reviewer
+        status: pending
+        depends_on:
+          - '2.1'
+        description: |
+          Run all verification checks to confirm the fix is correct and complete.
+
+          1. Check Python syntax for both scripts:
+             python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+          2. Run the full test suite:
+             ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ -v 2>/dev/null || echo 'No test suite configured'
+
+          3. Confirm the git checkout discard is present in git_stash_pop():
+             grep -n "checkout.*STATUS_FILE_PATH\|checkout.*task-status" scripts/plan-orchestrator.py
+
+          4. Confirm the discard block appears BEFORE the git stash pop call:
+             grep -n -A2 "Discard task-status" scripts/plan-orchestrator.py
+
+          5. Run orchestrator dry-run to confirm no startup errors:
+             python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
+
+          Report any failures with specific details. All checks must pass.
+
+          Files: scripts/plan-orchestrator.py, tests/test_plan_orchestrator.py
