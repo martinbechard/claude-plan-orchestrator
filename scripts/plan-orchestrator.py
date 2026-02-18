@@ -40,6 +40,9 @@ except ImportError:
 # Worktree configuration
 WORKTREE_BASE_DIR = ".worktrees"
 
+# Git stash management
+ORCHESTRATOR_STASH_MESSAGE = "orchestrator-auto-stash"
+
 # Orchestrator project config
 ORCHESTRATOR_CONFIG_PATH = ".claude/orchestrator-config.yaml"
 DEFAULT_DEV_SERVER_PORT = 3000
@@ -1441,6 +1444,67 @@ def save_plan(plan_path: str, plan: dict, commit: bool = False, commit_message: 
             print(f"[Committed plan changes: {msg}]")
         except subprocess.CalledProcessError as e:
             print(f"[Warning: Failed to commit plan changes: {e}]")
+
+
+def git_stash_working_changes() -> bool:
+    """Stash any uncommitted working-tree changes before running an agent task.
+
+    Returns True if a stash was created, False if the tree was already clean
+    or if the stash command failed.
+    """
+    diff_result = subprocess.run(
+        ["git", "diff", "--quiet"],
+        capture_output=True
+    )
+    cached_result = subprocess.run(
+        ["git", "diff", "--cached", "--quiet"],
+        capture_output=True
+    )
+    untracked_result = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        capture_output=True
+    )
+
+    tree_is_clean = (
+        diff_result.returncode == 0
+        and cached_result.returncode == 0
+        and untracked_result.stdout.strip() == b""
+    )
+
+    if tree_is_clean:
+        return False
+
+    stash_result = subprocess.run(
+        ["git", "stash", "push", "--include-untracked", "-m", ORCHESTRATOR_STASH_MESSAGE],
+        capture_output=True
+    )
+
+    if stash_result.returncode == 0:
+        print("[Stashed working-tree changes before task]")
+        return True
+
+    print(f"[Warning: git stash push failed - proceeding without stash]")
+    return False
+
+
+def git_stash_pop() -> bool:
+    """Restore stashed working-tree changes after an agent task completes.
+
+    Returns True on success, False if the pop failed (stash preserved for manual resolution).
+    """
+    result = subprocess.run(
+        ["git", "stash", "pop"],
+        capture_output=True
+    )
+
+    if result.returncode == 0:
+        print("[Restored stashed working-tree changes]")
+        return True
+
+    print("[WARNING] git stash pop failed - stash preserved for manual resolution")
+    if result.stderr:
+        print(result.stderr.decode(errors="replace"))
+    return False
 
 
 def read_status_file() -> Optional[dict]:
