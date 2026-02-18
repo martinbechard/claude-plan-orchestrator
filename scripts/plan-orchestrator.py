@@ -353,6 +353,15 @@ UX_REVIEWER_KEYWORDS = [
     "accessibility review", "ui quality"
 ]
 
+# Keywords indicating a frontend UI implementation task.
+# When infer_agent_for_task() matches any of these, it selects "frontend-coder".
+# Checked before REVIEWER_KEYWORDS to catch UI tasks that also mention "verify",
+# but AFTER all multi-word specialist keywords to avoid false positives.
+FRONTEND_CODER_KEYWORDS = [
+    "ui component", "ui implementation", "frontend component",
+    "frontend", "component", "form", "dialog", "modal"
+]
+
 # Regex patterns for parsing validation verdicts from validator agent output.
 # Matches structured output like: **Verdict: PASS**
 VERDICT_PATTERN = re.compile(
@@ -378,6 +387,7 @@ def infer_agent_for_task(task: dict) -> Optional[str]:
     4. UX_REVIEWER_KEYWORDS (multi-word phrases, checked before REVIEWER_KEYWORDS
        to avoid false matches on "review") -> "ux-reviewer"
     5. REVIEWER_KEYWORDS -> "code-reviewer"
+    5.5. FRONTEND_CODER_KEYWORDS (single words like 'frontend', 'component') -> "frontend-coder"
     6. DESIGNER_KEYWORDS -> "systems-designer"
     7. Default -> "coder"
 
@@ -408,6 +418,10 @@ def infer_agent_for_task(task: dict) -> Optional[str]:
     for keyword in REVIEWER_KEYWORDS:
         if keyword in text:
             return "code-reviewer"
+
+    for keyword in FRONTEND_CODER_KEYWORDS:
+        if keyword in text:
+            return "frontend-coder"
 
     for keyword in DESIGNER_KEYWORDS:
         if keyword in text:
