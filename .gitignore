@@ -21,6 +21,9 @@ venv/
 .claude/slack.local.yaml
 .claude/slack-*.json
 
+# Runtime pipeline logs (generated at runtime, not committed)
+logs/
+
 # OS
 .DS_Store
 Thumbs.db
