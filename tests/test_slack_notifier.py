@@ -2306,3 +2306,218 @@ def test_slack_channel_role_suffixes_constant():
 
     # Verify the old SLACK_CHANNEL_ROLES constant no longer exists
     assert getattr(mod, "SLACK_CHANNEL_ROLES", None) is None
+
+
+# ============================================================================
+# Tests for configurable conversation history (Q&A history)
+# ============================================================================
+
+
+# --- Test: QA_HISTORY_DEFAULT_MAX_TURNS constant exists ---
+
+
+def test_qa_history_constant_exists():
+    """QA_HISTORY_DEFAULT_MAX_TURNS should be defined with value 3."""
+    assert hasattr(mod, "QA_HISTORY_DEFAULT_MAX_TURNS")
+    assert mod.QA_HISTORY_DEFAULT_MAX_TURNS == 3
+
+
+# --- Test: initial state of qa_history fields ---
+
+
+def test_qa_history_initial_state(tmp_path):
+    """SlackNotifier should initialize qa_history fields to defaults."""
+    notifier = _make_notifier(tmp_path)
+    assert notifier._qa_history == []
+    assert notifier._qa_history_enabled is True
+    assert notifier._qa_history_max_turns == 3
+
+
+# --- Test: conversation_history config is loaded ---
+
+
+def test_qa_history_config_loads(tmp_path):
+    """SlackNotifier should load conversation_history config block."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+            "conversation_history": {
+                "enabled": False,
+                "max_turns": 5,
+            },
+        }
+    }
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+    assert notifier._qa_history_enabled is False
+    assert notifier._qa_history_max_turns == 5
+
+
+# --- Test: defaults when conversation_history key is absent ---
+
+
+def test_qa_history_config_defaults_when_absent(tmp_path):
+    """SlackNotifier should use defaults when conversation_history key is absent."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+    assert notifier._qa_history_max_turns == 3
+    assert notifier._qa_history_enabled is True
+
+
+# --- Test: answer_question records the exchange ---
+
+
+def test_answer_question_records_exchange(tmp_path, monkeypatch):
+    """answer_question should append (question, answer) tuple to _qa_history."""
+    notifier = _make_notifier(tmp_path)
+    notifier._gather_pipeline_state = lambda: {}
+    notifier._format_state_context = lambda state: "state: idle"
+    notifier._call_claude_print = lambda prompt, **kw: "Pipeline is idle."
+    notifier.send_status = lambda msg, **kw: None
+
+    notifier.answer_question("What is the status?")
+
+    assert len(notifier._qa_history) == 1
+    assert notifier._qa_history[0] == ("What is the status?", "Pipeline is idle.")
+
+
+# --- Test: answer_question injects history into prompt ---
+
+
+def test_answer_question_injects_history(tmp_path, monkeypatch):
+    """answer_question should inject prior Q&A into the prompt."""
+    notifier = _make_notifier(tmp_path)
+    notifier._qa_history = [("Prior Q", "Prior A")]
+    notifier._gather_pipeline_state = lambda: {}
+    notifier._format_state_context = lambda state: "state: idle"
+    notifier.send_status = lambda msg, **kw: None
+
+    captured_prompts = []
+
+    def mock_call_claude_print(prompt, **kw):
+        captured_prompts.append(prompt)
+        return "Answer"
+
+    notifier._call_claude_print = mock_call_claude_print
+
+    notifier.answer_question("Follow-up question")
+
+    assert len(captured_prompts) == 1
+    prompt = captured_prompts[0]
+    assert "Prior Q" in prompt
+    assert "Prior A" in prompt
+    assert "Prior conversation:" in prompt
+
+
+# --- Test: answer_question trims history to max_turns ---
+
+
+def test_answer_question_trims_history(tmp_path, monkeypatch):
+    """answer_question should keep only the most recent max_turns exchanges."""
+    notifier = _make_notifier(tmp_path)
+    notifier._qa_history_max_turns = 2
+    notifier._gather_pipeline_state = lambda: {}
+    notifier._format_state_context = lambda state: "state: idle"
+    notifier._call_claude_print = lambda prompt, **kw: "Answer N"
+    notifier.send_status = lambda msg, **kw: None
+
+    notifier.answer_question("Q1")
+    notifier.answer_question("Q2")
+    notifier.answer_question("Q3")
+
+    assert len(notifier._qa_history) == 2
+    assert notifier._qa_history[0][0] == "Q2"
+    assert notifier._qa_history[1][0] == "Q3"
+
+
+# --- Test: answer_question does not inject or record when history disabled ---
+
+
+def test_answer_question_history_disabled(tmp_path, monkeypatch):
+    """answer_question should not inject or record history when disabled."""
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+            "conversation_history": {
+                "enabled": False,
+                "max_turns": 3,
+            },
+        }
+    }
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+
+    notifier = SlackNotifier(config_path=str(config_file))
+    notifier._qa_history = [("Seeded Q", "Seeded A")]
+    notifier._gather_pipeline_state = lambda: {}
+    notifier._format_state_context = lambda state: "state: idle"
+    notifier.send_status = lambda msg, **kw: None
+
+    captured_prompts = []
+
+    def mock_call_claude_print(prompt, **kw):
+        captured_prompts.append(prompt)
+        return "Answer"
+
+    notifier._call_claude_print = mock_call_claude_print
+
+    notifier.answer_question("What is running?")
+
+    assert len(captured_prompts) == 1
+    assert "Prior conversation:" not in captured_prompts[0]
+    # No new entry added; still only the seeded one
+    assert len(notifier._qa_history) == 1
+
+
+# --- Test: answer_question does not inject or record when max_turns is zero ---
+
+
+def test_answer_question_history_max_turns_zero(tmp_path, monkeypatch):
+    """answer_question should not inject or record history when max_turns is 0."""
+    notifier = _make_notifier(tmp_path)
+    notifier._qa_history_max_turns = 0
+    notifier._qa_history = [("Seeded Q", "Seeded A")]
+    notifier._gather_pipeline_state = lambda: {}
+    notifier._format_state_context = lambda state: "state: idle"
+    notifier.send_status = lambda msg, **kw: None
+
+    captured_prompts = []
+
+    def mock_call_claude_print(prompt, **kw):
+        captured_prompts.append(prompt)
+        return "Answer"
+
+    notifier._call_claude_print = mock_call_claude_print
+
+    notifier.answer_question("Test")
+
+    assert len(captured_prompts) == 1
+    assert "Prior conversation:" not in captured_prompts[0]
+    # No new entry added; still only the seeded one
+    assert len(notifier._qa_history) == 1
+
+
+# --- Test: QUESTION_ANSWER_PROMPT contains history_context placeholder ---
+
+
+def test_question_answer_prompt_has_history_placeholder():
+    """QUESTION_ANSWER_PROMPT should contain the {history_context} placeholder."""
+    assert "{history_context}" in mod.QUESTION_ANSWER_PROMPT
