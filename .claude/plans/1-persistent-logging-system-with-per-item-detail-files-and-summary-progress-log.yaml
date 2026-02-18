@@ -21,7 +21,7 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Core Logging Infrastructure
-  status: in_progress
+  status: completed
   tasks:
   - id: '1.1'
     name: Add logging constants and module-level state to auto-pipeline.py
@@ -121,7 +121,7 @@ sections:
   - id: '1.3'
     name: Extend log() and verbose_log() to tee output to item detail log
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '1.2'
     description: "Extend the existing log() and verbose_log() functions in scripts/auto-pipeline.py\n\
@@ -155,14 +155,18 @@ sections:
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py\n"
     attempts: 1
     last_attempt: '2026-02-18T08:57:13.645332'
+    model_used: sonnet
+    completed_at: '2026-02-18T08:58:40.088767'
+    result_message: 'Extended log() and verbose_log() to tee output to _item_log_file:
+      format line once, print to stdout, write+flush to file when open.'
 - id: phase-2
   name: Phase 2 - Wire Logging into process_item()
-  status: pending
+  status: completed
   tasks:
   - id: '2.1'
     name: Open/close item log and emit summary events in process_item()
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.3'
     description: "Wire the logging lifecycle into process_item() and the _archive_and_report()\n\
@@ -207,6 +211,14 @@ sections:
       \ 'scripts/auto-pipeline.py')\n   mod = importlib.util.module_from_spec(spec)\n\
       \   spec.loader.exec_module(mod)\n   assert callable(mod.process_item), 'process_item\
       \ not found'\n   print('process_item verified OK')\n   \"\n\nFiles: scripts/auto-pipeline.py\n"
+    attempts: 1
+    last_attempt: '2026-02-18T08:58:42.716466'
+    model_used: sonnet
+    completed_at: '2026-02-18T09:02:48.733518'
+    result_message: Extracted process_item body into _process_item_inner() for try/finally
+      pattern. Opens item log + emits STARTED at entry. Emits FAILED, STOPPED, VERIFICATION_EXHAUSTED
+      events at each failure path. Adds COMPLETED/ARCHIVE_FAILED events in _archive_and_report().
+      Catches unexpected exceptions with CRASHED event. All 214 tests pass.
 - id: phase-3
   name: Phase 3 - Gitignore and Cleanup
   status: pending
