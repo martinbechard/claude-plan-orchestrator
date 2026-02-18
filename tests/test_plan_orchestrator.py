@@ -1,11 +1,13 @@
 # tests/test_plan_orchestrator.py
-# Unit tests for SlackNotifier methods in plan-orchestrator.py
+# Unit tests for plan-orchestrator.py functions
 # Design ref: docs/plans/2026-02-17-5-slack-bot-provides-truncated-unhelpful-responses-when-defect-submission-fails-validation-design.md
+# Design ref: docs/plans/2026-02-17-7-pipeline-agent-commits-unrelated-working-tree-changes-design.md
 
 import importlib.util
 import os
 import tempfile
 import shutil
+import unittest.mock
 from pathlib import Path
 
 # plan-orchestrator.py has a hyphen in the filename, so we must use importlib
@@ -20,6 +22,9 @@ SlackNotifier = mod.SlackNotifier
 SLACK_BLOCK_TEXT_MAX_LENGTH = mod.SLACK_BLOCK_TEXT_MAX_LENGTH
 IntakeState = mod.IntakeState
 REQUIRED_FIVE_WHYS_COUNT = mod.REQUIRED_FIVE_WHYS_COUNT
+git_stash_working_changes = mod.git_stash_working_changes
+git_stash_pop = mod.git_stash_pop
+ORCHESTRATOR_STASH_MESSAGE = mod.ORCHESTRATOR_STASH_MESSAGE
 
 
 # --- _truncate_for_slack tests ---
@@ -597,3 +602,108 @@ def test_intake_ack_on_analysis_error(tmp_path):
 
     finally:
         os.chdir(original_cwd)
+
+
+# --- git stash helper tests ---
+
+
+def _make_run_result(returncode=0, stdout=b"", stderr=b""):
+    """Build a minimal subprocess.CompletedProcess mock result."""
+    result = unittest.mock.MagicMock()
+    result.returncode = returncode
+    result.stdout = stdout
+    result.stderr = stderr
+    return result
+
+
+def _clean_tree_side_effect(cmd, **kwargs):
+    """subprocess.run side_effect for a clean working tree."""
+    if cmd[:2] == ["git", "diff"] and "--cached" not in cmd:
+        return _make_run_result(returncode=0)
+    if cmd[:3] == ["git", "diff", "--cached"]:
+        return _make_run_result(returncode=0)
+    if cmd[:2] == ["git", "ls-files"]:
+        return _make_run_result(returncode=0, stdout=b"")
+    return _make_run_result(returncode=0)
+
+
+def _dirty_tree_side_effect(cmd, **kwargs):
+    """subprocess.run side_effect for a dirty working tree (unstaged changes)."""
+    if cmd[:2] == ["git", "diff"] and "--cached" not in cmd:
+        return _make_run_result(returncode=1)
+    if cmd[:3] == ["git", "diff", "--cached"]:
+        return _make_run_result(returncode=0)
+    if cmd[:2] == ["git", "ls-files"]:
+        return _make_run_result(returncode=0, stdout=b"")
+    if cmd[:3] == ["git", "stash", "push"]:
+        return _make_run_result(returncode=0)
+    return _make_run_result(returncode=0)
+
+
+def _dirty_tree_stash_fails_side_effect(cmd, **kwargs):
+    """subprocess.run side_effect: dirty tree but stash push fails."""
+    if cmd[:2] == ["git", "diff"] and "--cached" not in cmd:
+        return _make_run_result(returncode=1)
+    if cmd[:3] == ["git", "diff", "--cached"]:
+        return _make_run_result(returncode=0)
+    if cmd[:2] == ["git", "ls-files"]:
+        return _make_run_result(returncode=0, stdout=b"")
+    if cmd[:3] == ["git", "stash", "push"]:
+        return _make_run_result(returncode=1, stderr=b"stash push error")
+    return _make_run_result(returncode=0)
+
+
+def test_git_stash_working_changes_clean_tree():
+    """Returns False and does not call stash push when tree is clean."""
+    with unittest.mock.patch("subprocess.run", side_effect=_clean_tree_side_effect) as mock_run:
+        result = git_stash_working_changes()
+
+    assert result is False
+
+    stash_push_calls = [
+        call for call in mock_run.call_args_list
+        if call.args[0][:3] == ["git", "stash", "push"]
+    ]
+    assert len(stash_push_calls) == 0
+
+
+def test_git_stash_working_changes_dirty_tree():
+    """Returns True and calls stash push with correct args when tree is dirty."""
+    with unittest.mock.patch("subprocess.run", side_effect=_dirty_tree_side_effect) as mock_run:
+        result = git_stash_working_changes()
+
+    assert result is True
+
+    stash_push_calls = [
+        call for call in mock_run.call_args_list
+        if call.args[0][:3] == ["git", "stash", "push"]
+    ]
+    assert len(stash_push_calls) == 1
+    stash_cmd = stash_push_calls[0].args[0]
+    assert "--include-untracked" in stash_cmd
+    assert "-m" in stash_cmd
+    assert ORCHESTRATOR_STASH_MESSAGE in stash_cmd
+
+
+def test_git_stash_working_changes_stash_fails():
+    """Returns False when tree is dirty but stash push command fails."""
+    with unittest.mock.patch("subprocess.run", side_effect=_dirty_tree_stash_fails_side_effect):
+        result = git_stash_working_changes()
+
+    assert result is False
+
+
+def test_git_stash_pop_success():
+    """Returns True when git stash pop succeeds."""
+    with unittest.mock.patch("subprocess.run", return_value=_make_run_result(returncode=0)):
+        result = git_stash_pop()
+
+    assert result is True
+
+
+def test_git_stash_pop_conflict():
+    """Returns False when git stash pop fails (e.g. merge conflict)."""
+    with unittest.mock.patch("subprocess.run", return_value=_make_run_result(returncode=1, stderr=b"conflict")):
+        result = git_stash_pop()
+
+    assert result is False
