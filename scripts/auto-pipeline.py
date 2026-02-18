@@ -1739,6 +1739,8 @@ def _archive_and_report(
             "Item completed but could not be moved to completed-backlog.",
             level="warning"
         )
+        _log_summary("WARN", "ARCHIVE_FAILED", item.slug,
+                     f"duration={minutes}m{seconds}s")
         return False
 
     log(f"Item complete: {item.display_name} ({minutes}m {seconds}s)")
@@ -1747,6 +1749,8 @@ def _archive_and_report(
         f"Duration: {minutes}m {seconds}s",
         level="success"
     )
+    _log_summary("INFO", "COMPLETED", item.slug,
+                 f"duration={minutes}m{seconds}s")
     return True
 
 
@@ -1769,29 +1773,15 @@ def _mark_as_verification_exhausted(item_path: str) -> None:
         log(f"WARNING: Could not update status in {item_path}: {e}")
 
 
-def process_item(
+def _process_item_inner(
     item: BacklogItem,
-    dry_run: bool = False,
-    session_tracker: Optional[SessionUsageTracker] = None,
+    dry_run: bool,
+    session_tracker: Optional[SessionUsageTracker],
 ) -> bool:
-    """Process a single backlog item through the full pipeline.
+    """Inner implementation of process_item() - called within a try/finally wrapper.
 
-    For defects, runs a verify-then-fix cycle:
-      Phase 1: Create plan
-      Phase 2: Execute plan (orchestrator) -- skipped if plan already completed
-      Phase 3: Verify symptoms resolved (verifier agent, append-only)
-        - If PASS: Phase 4 (archive)
-        - If FAIL: Delete stale plan, loop back to Phase 1
-          (next plan creation sees verification findings in the defect file)
-      Phase 4: Archive
-
-    Optimizations to avoid wasting credits:
-    - If verification already passed (PASS verdict exists), skips to archive
-    - Prior verification attempts count against MAX_VERIFICATION_CYCLES
-    - Fully-completed plans skip the orchestrator (Phase 2)
-    - Plan YAML is cleaned up after max cycles to prevent loops on restart
-
-    Returns True on success, False on failure or max cycles exceeded.
+    All return paths here have already had _log_summary() called where appropriate.
+    The outer wrapper guarantees _close_item_log() runs regardless of outcome.
     """
     slack = SlackNotifier()
     item_start = time.time()
@@ -1831,6 +1821,8 @@ def process_item(
             f"Archived after {MAX_VERIFICATION_CYCLES} failed verification cycles.",
             level="warning"
         )
+        _log_summary("WARN", "VERIFICATION_EXHAUSTED", item.slug,
+                     f"cycles={MAX_VERIFICATION_CYCLES}")
         _archive_and_report(item, slack, item_start, dry_run)
         return False
 
@@ -1841,6 +1833,7 @@ def process_item(
 
         if check_stop_requested():
             log("Stop requested during processing.")
+            _log_summary("WARN", "STOPPED", item.slug, "stop-requested")
             return False
 
         # Phase 1: Create plan
@@ -1852,6 +1845,7 @@ def process_item(
                 f"*Pipeline: failed* {item.display_name}",
                 level="error"
             )
+            _log_summary("ERROR", "FAILED", item.slug, "phase=plan-creation")
             return False
 
         # Phase 2: Execute plan (skip if all tasks already completed)
@@ -1871,6 +1865,7 @@ def process_item(
                     f"*Pipeline: failed* {item.display_name}",
                     level="error"
                 )
+                _log_summary("ERROR", "FAILED", item.slug, "phase=orchestrator")
                 return False
 
         # Phase 3: Verify symptoms
@@ -1903,10 +1898,48 @@ def process_item(
         f"Archived after {MAX_VERIFICATION_CYCLES} failed verification cycles.",
         level="warning"
     )
+    _log_summary("WARN", "VERIFICATION_EXHAUSTED", item.slug,
+                 f"cycles={MAX_VERIFICATION_CYCLES}")
     _archive_and_report(item, slack, item_start, dry_run)
     log("Defect archived with accumulated verification findings.")
 
     return False
+
+
+def process_item(
+    item: BacklogItem,
+    dry_run: bool = False,
+    session_tracker: Optional[SessionUsageTracker] = None,
+) -> bool:
+    """Process a single backlog item through the full pipeline.
+
+    For defects, runs a verify-then-fix cycle:
+      Phase 1: Create plan
+      Phase 2: Execute plan (orchestrator) -- skipped if plan already completed
+      Phase 3: Verify symptoms resolved (verifier agent, append-only)
+        - If PASS: Phase 4 (archive)
+        - If FAIL: Delete stale plan, loop back to Phase 1
+          (next plan creation sees verification findings in the defect file)
+      Phase 4: Archive
+
+    Optimizations to avoid wasting credits:
+    - If verification already passed (PASS verdict exists), skips to archive
+    - Prior verification attempts count against MAX_VERIFICATION_CYCLES
+    - Fully-completed plans skip the orchestrator (Phase 2)
+    - Plan YAML is cleaned up after max cycles to prevent loops on restart
+
+    Returns True on success, False on failure or max cycles exceeded.
+    """
+    _open_item_log(item.slug, item.display_name, item.item_type)
+    _log_summary("INFO", "STARTED", item.slug, f"type={item.item_type}")
+    try:
+        return _process_item_inner(item, dry_run, session_tracker)
+    except Exception as e:
+        log(f"UNEXPECTED ERROR in process_item: {e}")
+        _log_summary("ERROR", "CRASHED", item.slug, str(e))
+        return False
+    finally:
+        _close_item_log("done")
 
 
 def main_loop(dry_run: bool = False, once: bool = False,
