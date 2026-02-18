@@ -1,0 +1,258 @@
+meta:
+  name: Announce Completed Items in Type-Specific Slack Channels (features/defects)
+  description: >-
+    When _archive_and_report() in auto-pipeline.py successfully archives a
+    completed item, send an additional announcement to the type-specific Slack
+    channel (orchestrator-features for features, orchestrator-defects for
+    defects) alongside the existing orchestrator-notifications message. Adds
+    get_type_channel_id() to SlackNotifier and wires the cross-post into
+    _archive_and_report().
+  plan_doc: docs/plans/2026-02-18-1-announce-completed-items-in-their-type-specific-slack-channels-featuresdefects-design.md
+  created: '2026-02-18'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - validator
+    max_validation_attempts: 1
+sections:
+- id: phase-1
+  name: Phase 1 - Implementation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add get_type_channel_id() to SlackNotifier in plan-orchestrator.py
+    agent: coder
+    status: pending
+    description: |
+      Add a new public method `get_type_channel_id(item_type)` to the
+      `SlackNotifier` class in `scripts/plan-orchestrator.py`.
+
+      Reference: docs/plans/2026-02-18-1-announce-completed-items-in-their-type-specific-slack-channels-featuresdefects-design.md
+
+      Steps:
+      1. Read scripts/plan-orchestrator.py. Find the method
+         `_get_notifications_channel_id()` (around line 2990). Note its
+         structure: it builds a channel name from the prefix, calls
+         `_discover_channels()`, and does a dict lookup with a fallback.
+
+      2. Immediately AFTER `_get_notifications_channel_id()` and BEFORE
+         `send_status()`, insert the new method:
+
+           def get_type_channel_id(self, item_type: str) -> str:
+               """Return the channel ID for the type-specific channel.
+
+               Maps item_type ('feature' or 'defect') to the corresponding
+               Slack channel (e.g. orchestrator-features or
+               orchestrator-defects) using the existing _discover_channels()
+               infrastructure.
+
+               Returns empty string if the channel is not found or Slack
+               is disabled.
+               """
+               suffix_map = {"feature": "features", "defect": "defects"}
+               suffix = suffix_map.get(item_type, "")
+               if not suffix:
+                   return ""
+               channel_name = f"{self._channel_prefix}{suffix}"
+               channels = self._discover_channels()
+               return channels.get(channel_name, "")
+
+      3. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      4. Verify the method is callable:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         notifier = mod.SlackNotifier()
+         assert callable(notifier.get_type_channel_id), 'Method not found'
+         print('get_type_channel_id verified OK')
+         "
+
+      Files: scripts/plan-orchestrator.py
+
+  - id: '1.2'
+    name: Cross-post completion announcement in _archive_and_report()
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.1'
+    description: |
+      Wire the cross-post into `_archive_and_report()` in
+      `scripts/auto-pipeline.py` so that a successful archive sends an
+      additional announcement to the type-specific Slack channel.
+
+      Reference: docs/plans/2026-02-18-1-announce-completed-items-in-their-type-specific-slack-channels-featuresdefects-design.md
+
+      Steps:
+      1. Read scripts/auto-pipeline.py. Find `_archive_and_report()` (around
+         line 1722). Locate the success branch — the block that calls:
+           log(f"Item complete: {item.display_name} ({minutes}m {seconds}s)")
+           slack.send_status(
+               f"*Pipeline: completed* {item.display_name}\n"
+               f"Duration: {minutes}m {seconds}s",
+               level="success"
+           )
+           _log_summary("INFO", "COMPLETED", item.slug, ...)
+           return True
+
+      2. After the existing `slack.send_status(...)` call (and BEFORE
+         `_log_summary(...)` and `return True`), insert:
+
+           # Cross-post to type-specific channel (orchestrator-features or orchestrator-defects)
+           type_channel_id = slack.get_type_channel_id(item.item_type)
+           if type_channel_id:
+               slack.send_status(
+                   f"*Completed:* {item.display_name}\n"
+                   f"Duration: {minutes}m {seconds}s",
+                   level="success",
+                   channel_id=type_channel_id,
+               )
+
+      3. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
+
+      4. Verify _archive_and_report is still importable:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert callable(mod._archive_and_report), '_archive_and_report not found'
+         print('_archive_and_report verified OK')
+         "
+
+      Files: scripts/auto-pipeline.py
+
+- id: phase-2
+  name: Phase 2 - Unit Tests
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add unit tests for get_type_channel_id()
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.2'
+    description: |
+      Add unit tests for `SlackNotifier.get_type_channel_id()` to
+      `tests/test_plan_orchestrator.py`.
+
+      Reference: docs/plans/2026-02-18-1-announce-completed-items-in-their-type-specific-slack-channels-featuresdefects-design.md
+
+      Steps:
+      1. Read tests/test_plan_orchestrator.py to understand the existing test
+         patterns. Note that SlackNotifier is imported from the module loaded
+         via importlib. The existing tests use `SlackNotifier()` (no args)
+         which creates a disabled notifier.
+
+      2. Add the following tests after the existing tests:
+
+         a. test_get_type_channel_id_feature_returns_features_channel():
+            - Create a SlackNotifier instance: notifier = SlackNotifier()
+            - Set notifier._channel_prefix = "orchestrator-"
+            - Set notifier._discovered_channels = {
+                  "orchestrator-features": "C_FEATURES_ID",
+                  "orchestrator-defects": "C_DEFECTS_ID",
+                  "orchestrator-notifications": "C_NOTIFY_ID",
+              }
+            - Set notifier._channels_discovered_at = float("inf")  # prevent re-discovery
+            - Call result = notifier.get_type_channel_id("feature")
+            - Assert result == "C_FEATURES_ID"
+
+         b. test_get_type_channel_id_defect_returns_defects_channel():
+            - Same setup as above.
+            - Call result = notifier.get_type_channel_id("defect")
+            - Assert result == "C_DEFECTS_ID"
+
+         c. test_get_type_channel_id_unknown_type_returns_empty():
+            - Create a SlackNotifier instance.
+            - Call result = notifier.get_type_channel_id("unknown")
+            - Assert result == ""
+
+         d. test_get_type_channel_id_channel_not_in_discovered_returns_empty():
+            - Create a SlackNotifier instance.
+            - Set notifier._channel_prefix = "orchestrator-"
+            - Set notifier._discovered_channels = {}  # no channels discovered
+            - Set notifier._channels_discovered_at = float("inf")
+            - Call result = notifier.get_type_channel_id("feature")
+            - Assert result == ""
+
+         e. test_get_type_channel_id_custom_prefix():
+            - Create a SlackNotifier instance.
+            - Set notifier._channel_prefix = "myteam-"
+            - Set notifier._discovered_channels = {
+                  "myteam-features": "C_CUSTOM_FEATURES",
+              }
+            - Set notifier._channels_discovered_at = float("inf")
+            - Call result = notifier.get_type_channel_id("feature")
+            - Assert result == "C_CUSTOM_FEATURES"
+
+      3. Run the tests:
+         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_plan_orchestrator.py -v
+         Fix any failures before marking this task complete.
+
+      Files: tests/test_plan_orchestrator.py
+
+- id: phase-3
+  name: Phase 3 - Verification
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Final verification - syntax, tests, and dry-run
+    agent: code-reviewer
+    status: pending
+    depends_on:
+    - '2.1'
+    description: |
+      Run all verification checks to confirm the feature is correctly
+      implemented and all tests pass.
+
+      Steps:
+      1. Check Python syntax for both scripts:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+      2. Run the full test suite:
+         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
+
+      3. Verify get_type_channel_id() method exists and maps correctly:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         notifier = mod.SlackNotifier()
+         notifier._channel_prefix = 'orchestrator-'
+         notifier._discovered_channels = {
+             'orchestrator-features': 'C_F',
+             'orchestrator-defects': 'C_D',
+         }
+         notifier._channels_discovered_at = float('inf')
+         assert notifier.get_type_channel_id('feature') == 'C_F', 'feature channel mismatch'
+         assert notifier.get_type_channel_id('defect') == 'C_D', 'defect channel mismatch'
+         assert notifier.get_type_channel_id('unknown') == '', 'unknown should return empty'
+         print('get_type_channel_id verified OK')
+         "
+
+      4. Verify _archive_and_report calls get_type_channel_id:
+         python3 -c "
+         import importlib.util, inspect
+         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         src = inspect.getsource(mod._archive_and_report)
+         assert 'get_type_channel_id' in src, 'Cross-post not found in _archive_and_report'
+         print('Cross-post wiring verified OK')
+         "
+
+      5. Run orchestrator dry-run to confirm no startup errors:
+         python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
+
+      If any check fails, report the specific failure with details.
+
+      Files: scripts/auto-pipeline.py, scripts/plan-orchestrator.py, tests/test_plan_orchestrator.py
