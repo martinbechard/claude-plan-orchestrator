@@ -1,7 +1,6 @@
 meta:
   name: Auto-archive backlog items marked completed but still in active backlog directory
-  description: >-
-    When scan_directory() finds a .md file whose status header is Completed/Fixed,
+  description: When scan_directory() finds a .md file whose status header is Completed/Fixed,
     it should call archive_item() to move it to docs/completed-backlog/ rather than
     silently skipping it every cycle. This closes the perpetual-skip-loop for items
     that reach completed status outside the normal pipeline flow.
@@ -11,195 +10,114 @@ meta:
   validation:
     enabled: true
     run_after:
-      - coder
+    - coder
     validators:
-      - issue-verifier
+    - issue-verifier
     max_validation_attempts: 1
 sections:
-  - id: phase-1
-    name: Phase 1 - Implementation
+- id: phase-1
+  name: Phase 1 - Implementation
+  status: completed
+  tasks:
+  - id: '1.1'
+    name: Auto-archive completed items in scan_directory()
+    agent: coder
+    status: completed
+    description: "Modify scan_directory() in scripts/auto-pipeline.py to call archive_item()\n\
+      when a completed-but-unarchived item is found, instead of just logging a skip.\n\
+      \nReference design: docs/plans/2026-02-18-1-new-defect-reported-in-another-project-design.md\n\
+      \n## Background\n\nscan_directory() (around line 544) currently short-circuits\
+      \ with a verbose_log\nand continue whenever is_item_completed() returns True.\
+      \ This means any item\nwhose .md file is marked Completed/Fixed but hasn't been\
+      \ moved to the archive\ndirectory produces a skip-log entry every single polling\
+      \ cycle — indefinitely.\n\nThe fix: when is_item_completed() returns True, construct\
+      \ a BacklogItem from\nthe available data and call archive_item(). On failure\
+      \ log one warning and\ncontinue. On success, archive_item() itself logs the\
+      \ move.\n\n## Fix\n\nRead scripts/auto-pipeline.py. Find scan_directory() (around\
+      \ line 544).\n\nLocate this block (around lines 555-557):\n\n    if is_item_completed(str(md_file)):\n\
+      \        verbose_log(f\"Skipping completed item: {md_file.name}\")\n       \
+      \ continue\n\nReplace it with:\n\n    if is_item_completed(str(md_file)):\n\
+      \        item = BacklogItem(\n            path=str(md_file),\n            name=md_file.stem.replace(\"\
+      -\", \" \").title(),\n            slug=md_file.stem,\n            item_type=item_type,\n\
+      \        )\n        if not archive_item(item):\n            log(f\"WARNING:\
+      \ Failed to auto-archive completed item: {md_file.name}\")\n        continue\n\
+      \nDo not change any other logic in scan_directory() or elsewhere.\n\n## Verification\
+      \ after change\n\nRun syntax check:\n  python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); print('syntax OK')\"\n\nConfirm the old verbose_log skip is\
+      \ gone:\n  grep -n \"Skipping completed item\" scripts/auto-pipeline.py\n\n\
+      Confirm archive_item call is present:\n  grep -n \"auto-archive completed item\\\
+      |archive_item(item)\" scripts/auto-pipeline.py\n\nFiles: scripts/auto-pipeline.py\n"
+    attempts: 1
+    last_attempt: '2026-02-18T17:13:54.242114'
+    model_used: sonnet
+    completed_at: '2026-02-18T17:17:27.741919'
+    result_message: Replaced verbose_log skip in scan_directory() with archive_item()
+      call. Completed-but-unarchived items are now auto-archived instead of producing
+      repetitive skip-log noise every polling cycle.
+- id: phase-2
+  name: Phase 2 - Unit Tests
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add regression tests for auto-archive in scan_directory()
+    agent: coder
     status: pending
-    tasks:
-      - id: '1.1'
-        name: Auto-archive completed items in scan_directory()
-        agent: coder
-        status: pending
-        description: |
-          Modify scan_directory() in scripts/auto-pipeline.py to call archive_item()
-          when a completed-but-unarchived item is found, instead of just logging a skip.
-
-          Reference design: docs/plans/2026-02-18-1-new-defect-reported-in-another-project-design.md
-
-          ## Background
-
-          scan_directory() (around line 544) currently short-circuits with a verbose_log
-          and continue whenever is_item_completed() returns True. This means any item
-          whose .md file is marked Completed/Fixed but hasn't been moved to the archive
-          directory produces a skip-log entry every single polling cycle — indefinitely.
-
-          The fix: when is_item_completed() returns True, construct a BacklogItem from
-          the available data and call archive_item(). On failure log one warning and
-          continue. On success, archive_item() itself logs the move.
-
-          ## Fix
-
-          Read scripts/auto-pipeline.py. Find scan_directory() (around line 544).
-
-          Locate this block (around lines 555-557):
-
-              if is_item_completed(str(md_file)):
-                  verbose_log(f"Skipping completed item: {md_file.name}")
-                  continue
-
-          Replace it with:
-
-              if is_item_completed(str(md_file)):
-                  item = BacklogItem(
-                      path=str(md_file),
-                      name=md_file.stem.replace("-", " ").title(),
-                      slug=md_file.stem,
-                      item_type=item_type,
-                  )
-                  if not archive_item(item):
-                      log(f"WARNING: Failed to auto-archive completed item: {md_file.name}")
-                  continue
-
-          Do not change any other logic in scan_directory() or elsewhere.
-
-          ## Verification after change
-
-          Run syntax check:
-            python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
-
-          Confirm the old verbose_log skip is gone:
-            grep -n "Skipping completed item" scripts/auto-pipeline.py
-
-          Confirm archive_item call is present:
-            grep -n "auto-archive completed item\|archive_item(item)" scripts/auto-pipeline.py
-
-          Files: scripts/auto-pipeline.py
-
-  - id: phase-2
-    name: Phase 2 - Unit Tests
+    depends_on:
+    - '1.1'
+    description: "Add regression tests to tests/test_completed_archive.py that verify\n\
+      scan_directory() auto-archives completed items instead of skipping them.\n\n\
+      Reference design: docs/plans/2026-02-18-1-new-defect-reported-in-another-project-design.md\n\
+      \n## Context\n\ntests/test_completed_archive.py already imports:\n  - archive_item,\
+      \ scan_all_backlogs, BacklogItem, process_item from mod\nThe module (mod) is\
+      \ auto_pipeline loaded via importlib.\n\nAlso import scan_directory, is_item_completed,\
+      \ COMPLETED_DEFECTS_DIR,\nCOMPLETED_FEATURES_DIR, DEFECT_DIR from mod at the\
+      \ top of the test file\n(add to existing imports).\n\n## Tests to add\n\n###\
+      \ test_scan_directory_auto_archives_completed_item(tmp_path, monkeypatch)\n\n\
+      Verify that when scan_directory() encounters a completed .md file it calls\n\
+      archive_item() and does NOT include the item in the returned list.\n\n1. Create\
+      \ a fake defect backlog directory:\n     defect_dir = tmp_path / \"defect-backlog\"\
+      \n     defect_dir.mkdir()\n\n2. Write a completed .md file:\n     md = defect_dir\
+      \ / \"my-completed-defect.md\"\n     md.write_text(\"## Status: Completed\\\
+      n\\nSome content.\\n\")\n\n3. Track archive_item() calls:\n     archived = []\n\
+      \     def fake_archive(item, dry_run=False):\n         archived.append(item)\n\
+      \         return True\n     monkeypatch.setattr(mod, \"archive_item\", fake_archive)\n\
+      \n4. Call scan_directory():\n     result = mod.scan_directory(str(defect_dir),\
+      \ \"defect\")\n\n5. Assert the item was not returned (it was archived, not queued):\n\
+      \     assert result == []\n\n6. Assert archive_item was called once with the\
+      \ correct item:\n     assert len(archived) == 1\n     assert archived[0].slug\
+      \ == \"my-completed-defect\"\n     assert archived[0].item_type == \"defect\"\
+      \n\n### test_scan_directory_warns_on_archive_failure(tmp_path, monkeypatch,\
+      \ capsys)\n\nVerify that a WARNING is logged when archive_item() returns False.\n\
+      \n1. Create a completed .md file as above.\n\n2. Monkeypatch archive_item()\
+      \ to return False.\n\n3. Call scan_directory() and capture stdout.\n\n4. Assert\
+      \ result == [] (item not queued even on failure).\n\n5. Assert \"WARNING\" appears\
+      \ in the captured stdout.\n\n### test_scan_directory_includes_incomplete_item(tmp_path,\
+      \ monkeypatch)\n\nVerify that non-completed items are still returned normally\
+      \ (regression guard).\n\n1. Create a .md file without a Completed status:\n\
+      \     md.write_text(\"## Status: Open\\n\\nContent.\\n\")\n\n2. Monkeypatch\
+      \ archive_item() to record calls.\n\n3. Call scan_directory(). Assert result\
+      \ has one item and archive_item was NOT called.\n\n## After adding tests\n\n\
+      Run:\n  ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_completed_archive.py\
+      \ -v\n\nFix any failures immediately.\n\nFiles: tests/test_completed_archive.py\n"
+- id: phase-3
+  name: Phase 3 - Verification
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Final verification — syntax, full test suite, confirm fix
+    agent: code-reviewer
     status: pending
-    tasks:
-      - id: '2.1'
-        name: Add regression tests for auto-archive in scan_directory()
-        agent: coder
-        status: pending
-        depends_on:
-          - '1.1'
-        description: |
-          Add regression tests to tests/test_completed_archive.py that verify
-          scan_directory() auto-archives completed items instead of skipping them.
-
-          Reference design: docs/plans/2026-02-18-1-new-defect-reported-in-another-project-design.md
-
-          ## Context
-
-          tests/test_completed_archive.py already imports:
-            - archive_item, scan_all_backlogs, BacklogItem, process_item from mod
-          The module (mod) is auto_pipeline loaded via importlib.
-
-          Also import scan_directory, is_item_completed, COMPLETED_DEFECTS_DIR,
-          COMPLETED_FEATURES_DIR, DEFECT_DIR from mod at the top of the test file
-          (add to existing imports).
-
-          ## Tests to add
-
-          ### test_scan_directory_auto_archives_completed_item(tmp_path, monkeypatch)
-
-          Verify that when scan_directory() encounters a completed .md file it calls
-          archive_item() and does NOT include the item in the returned list.
-
-          1. Create a fake defect backlog directory:
-               defect_dir = tmp_path / "defect-backlog"
-               defect_dir.mkdir()
-
-          2. Write a completed .md file:
-               md = defect_dir / "my-completed-defect.md"
-               md.write_text("## Status: Completed\n\nSome content.\n")
-
-          3. Track archive_item() calls:
-               archived = []
-               def fake_archive(item, dry_run=False):
-                   archived.append(item)
-                   return True
-               monkeypatch.setattr(mod, "archive_item", fake_archive)
-
-          4. Call scan_directory():
-               result = mod.scan_directory(str(defect_dir), "defect")
-
-          5. Assert the item was not returned (it was archived, not queued):
-               assert result == []
-
-          6. Assert archive_item was called once with the correct item:
-               assert len(archived) == 1
-               assert archived[0].slug == "my-completed-defect"
-               assert archived[0].item_type == "defect"
-
-          ### test_scan_directory_warns_on_archive_failure(tmp_path, monkeypatch, capsys)
-
-          Verify that a WARNING is logged when archive_item() returns False.
-
-          1. Create a completed .md file as above.
-
-          2. Monkeypatch archive_item() to return False.
-
-          3. Call scan_directory() and capture stdout.
-
-          4. Assert result == [] (item not queued even on failure).
-
-          5. Assert "WARNING" appears in the captured stdout.
-
-          ### test_scan_directory_includes_incomplete_item(tmp_path, monkeypatch)
-
-          Verify that non-completed items are still returned normally (regression guard).
-
-          1. Create a .md file without a Completed status:
-               md.write_text("## Status: Open\n\nContent.\n")
-
-          2. Monkeypatch archive_item() to record calls.
-
-          3. Call scan_directory(). Assert result has one item and archive_item was NOT called.
-
-          ## After adding tests
-
-          Run:
-            ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_completed_archive.py -v
-
-          Fix any failures immediately.
-
-          Files: tests/test_completed_archive.py
-
-  - id: phase-3
-    name: Phase 3 - Verification
-    status: pending
-    tasks:
-      - id: '3.1'
-        name: Final verification — syntax, full test suite, confirm fix
-        agent: code-reviewer
-        status: pending
-        depends_on:
-          - '2.1'
-        description: |
-          Run all verification checks to confirm the fix is correct and complete.
-
-          1. Check Python syntax for both scripts:
-             python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
-
-          2. Run the full test suite:
-             ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ -v 2>/dev/null || echo 'No test suite configured'
-
-          3. Confirm the old skip log is gone from scan_directory():
-             grep -n "Skipping completed item" scripts/auto-pipeline.py
-
-          4. Confirm archive_item() call is present in scan_directory():
-             grep -n "auto-archive completed item\|archive_item(item)" scripts/auto-pipeline.py
-
-          5. Run orchestrator dry-run to confirm no startup errors:
-             python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
-
-          Report any failures with specific details. All checks must pass.
-
-          Files: scripts/auto-pipeline.py, tests/test_completed_archive.py
+    depends_on:
+    - '2.1'
+    description: "Run all verification checks to confirm the fix is correct and complete.\n\
+      \n1. Check Python syntax for both scripts:\n   python3 -c \"import py_compile;\
+      \ py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True)\"\n\n2. Run the full test suite:\n   ~/.pyenv/versions/3.11.*/bin/python\
+      \ -m pytest tests/ -v 2>/dev/null || echo 'No test suite configured'\n\n3. Confirm\
+      \ the old skip log is gone from scan_directory():\n   grep -n \"Skipping completed\
+      \ item\" scripts/auto-pipeline.py\n\n4. Confirm archive_item() call is present\
+      \ in scan_directory():\n   grep -n \"auto-archive completed item\\|archive_item(item)\"\
+      \ scripts/auto-pipeline.py\n\n5. Run orchestrator dry-run to confirm no startup\
+      \ errors:\n   python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml\
+      \ --dry-run\n\nReport any failures with specific details. All checks must pass.\n\
+      \nFiles: scripts/auto-pipeline.py, tests/test_completed_archive.py\n"
