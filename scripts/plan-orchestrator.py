@@ -72,6 +72,10 @@ DEFAULT_MAX_MODEL = "opus"
 DEFAULT_VALIDATION_MODEL = "sonnet"
 DEFAULT_STARTING_MODEL = "sonnet"
 
+# Slack LLM model — all substantive Slack interactions (Q&A, intake analysis)
+# use Opus for highest reasoning quality
+SLACK_LLM_MODEL = "claude-opus-4-6"
+
 # Slack notification configuration
 SLACK_CONFIG_PATH = ".claude/slack.local.yaml"
 SLACK_QUESTION_PATH = ".claude/slack-pending-question.json"
@@ -3824,7 +3828,7 @@ class SlackNotifier:
         )
 
         try:
-            answer = self._call_claude_print(prompt)
+            answer = self._call_claude_print(prompt, model=SLACK_LLM_MODEL)
             if not answer:
                 answer = f"_(LLM returned empty)_\n{state_context}"
         except Exception as e:
@@ -3914,7 +3918,7 @@ class SlackNotifier:
                 item_type=intake.item_type, text=intake.original_text
             )
             response_text = self._call_claude_print(
-                prompt, model="sonnet",
+                prompt, model=SLACK_LLM_MODEL,
                 timeout=INTAKE_ANALYSIS_TIMEOUT_SECONDS
             )
 
@@ -3954,7 +3958,7 @@ class SlackNotifier:
                     analysis=response_text,
                 )
                 retry_text = self._call_claude_print(
-                    retry_prompt, model="sonnet",
+                    retry_prompt, model=SLACK_LLM_MODEL,
                     timeout=INTAKE_ANALYSIS_TIMEOUT_SECONDS
                 )
                 if retry_text:

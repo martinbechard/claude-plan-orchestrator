@@ -58,7 +58,7 @@ sections:
   - id: '1.2'
     name: Cross-post completion announcement in _archive_and_report()
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '1.1'
     description: "Wire the cross-post into `_archive_and_report()` in\n`scripts/auto-pipeline.py`\
@@ -83,6 +83,8 @@ sections:
       \   spec.loader.exec_module(mod)\n   assert callable(mod._archive_and_report),\
       \ '_archive_and_report not found'\n   print('_archive_and_report verified OK')\n\
       \   \"\n\nFiles: scripts/auto-pipeline.py\n"
+    attempts: 1
+    last_attempt: '2026-02-18T17:03:29.621037'
 - id: phase-2
   name: Phase 2 - Unit Tests
   status: pending

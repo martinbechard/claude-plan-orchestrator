@@ -1749,6 +1749,15 @@ def _archive_and_report(
         f"Duration: {minutes}m {seconds}s",
         level="success"
     )
+    # Cross-post to type-specific channel (orchestrator-features or orchestrator-defects)
+    type_channel_id = slack.get_type_channel_id(item.item_type)
+    if type_channel_id:
+        slack.send_status(
+            f"*Completed:* {item.display_name}\n"
+            f"Duration: {minutes}m {seconds}s",
+            level="success",
+            channel_id=type_channel_id,
+        )
     _log_summary("INFO", "COMPLETED", item.slug,
                  f"duration={minutes}m{seconds}s")
     return True
