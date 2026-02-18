@@ -1,0 +1,547 @@
+meta:
+  name: Persistent Logging System with Per-Item Detail Files and Summary Progress Log
+  description: >-
+    Implement a two-tier logging system in auto-pipeline.py: a logs/ directory
+    containing one detailed log file per backlog item (named to match the item slug)
+    capturing all console output for that item's full lifecycle, plus a top-level
+    logs/pipeline.log capturing summary events only (item started, completed,
+    warnings, errors). All existing log() and verbose_log() calls route through
+    an extended facade so no call-site changes are needed. Log files persist across
+    restarts, appending new runs with timestamped session headers.
+  plan_doc: docs/plans/2026-02-18-1-persistent-logging-system-with-per-item-detail-files-and-summary-progress-log-design.md
+  created: '2026-02-18'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - validator
+    max_validation_attempts: 1
+sections:
+- id: phase-1
+  name: Phase 1 - Core Logging Infrastructure
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add logging constants and module-level state to auto-pipeline.py
+    agent: coder
+    status: pending
+    description: |
+      Add the constants and module-level state needed for the two-tier logging system
+      to scripts/auto-pipeline.py.
+
+      Reference: docs/plans/2026-02-18-1-persistent-logging-system-with-per-item-detail-files-and-summary-progress-log-design.md
+
+      Steps:
+      1. Read scripts/auto-pipeline.py. Find the "# ─── Configuration ─..." block
+         (around line 50). Note the existing constants like DEFECT_DIR, PLANS_DIR etc.
+
+      2. After the existing constants block (after STOP_SEMAPHORE_PATH and before
+         HOT_RELOAD_WATCHED_FILES), add:
+           LOGS_DIR = "logs"
+           SUMMARY_LOG_FILENAME = "pipeline.log"
+
+      3. Find the "# Global state" block (around line 138). After the existing
+         global state variables (_PIPELINE_PID, VERBOSE, CLAUDE_CMD, etc.), add:
+           _item_log_file: Optional["TextIO"] = None  # Detail log for current item
+
+         Note: "TextIO" needs to be imported. Add to the typing import:
+           from typing import Optional, TextIO
+         (Replace the existing "from typing import Optional" line.)
+
+      4. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
+
+      5. Verify the constants exist:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert hasattr(mod, 'LOGS_DIR'), 'Missing LOGS_DIR'
+         assert mod.LOGS_DIR == 'logs', f'Wrong LOGS_DIR: {mod.LOGS_DIR}'
+         assert hasattr(mod, 'SUMMARY_LOG_FILENAME'), 'Missing SUMMARY_LOG_FILENAME'
+         assert mod.SUMMARY_LOG_FILENAME == 'pipeline.log'
+         print('Constants verified OK')
+         "
+
+      Files: scripts/auto-pipeline.py
+
+  - id: '1.2'
+    name: Implement _open_item_log(), _close_item_log(), and _log_summary() helpers
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.1'
+    description: |
+      Add three helper functions to scripts/auto-pipeline.py for the two-tier logging
+      system. These functions manage the per-item detail log file and write to the
+      summary log.
+
+      Reference: docs/plans/2026-02-18-1-persistent-logging-system-with-per-item-detail-files-and-summary-progress-log-design.md
+
+      Steps:
+      1. Read scripts/auto-pipeline.py. Find the "# ─── Logging ─..." section
+         (around line 174) where log() and verbose_log() are defined.
+
+      2. Immediately BEFORE the log() function definition, add the three new helpers:
+
+         def _open_item_log(slug: str, item_name: str, item_type: str) -> None:
+             """Open a per-item detail log file in logs/<slug>.log (append mode).
+
+             Creates the logs/ directory if it does not exist. Writes a session-start
+             header so multiple pipeline runs are clearly separated in the log file.
+
+             Args:
+                 slug: Backlog item slug used as the log filename (e.g. '1-feature-slug').
+                 item_name: Human-readable item name for the session header.
+                 item_type: Item type string ('defect' or 'feature').
+             """
+             global _item_log_file
+             os.makedirs(LOGS_DIR, exist_ok=True)
+             log_path = os.path.join(LOGS_DIR, f"{slug}.log")
+             _item_log_file = open(log_path, "a", encoding="utf-8", buffering=1)
+             ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+             header = (
+                 "=" * 80 + "\n"
+                 f"SESSION START  {ts}  PID={_PIPELINE_PID}\n"
+                 f"Item: {slug}\n"
+                 f"Name: {item_name}\n"
+                 f"Type: {item_type}\n"
+                 + "=" * 80 + "\n"
+             )
+             _item_log_file.write(header)
+             _item_log_file.flush()
+
+
+         def _close_item_log(result: str) -> None:
+             """Write a session-end footer and close the current item detail log.
+
+             Safe to call even if no log is open (no-op in that case).
+
+             Args:
+                 result: Short result string written into the footer (e.g. 'success',
+                         'failed', 'verification-exhausted').
+             """
+             global _item_log_file
+             if _item_log_file is None:
+                 return
+             ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+             footer = (
+                 "=" * 80 + "\n"
+                 f"SESSION END  {ts}  result={result}\n"
+                 + "=" * 80 + "\n"
+             )
+             _item_log_file.write(footer)
+             _item_log_file.flush()
+             _item_log_file.close()
+             _item_log_file = None
+
+
+         def _log_summary(level: str, event: str, slug: str, detail: str = "") -> None:
+             """Append a single structured line to logs/pipeline.log.
+
+             Creates logs/ if it does not exist. Each line has the format:
+               YYYY-MM-DD HH:MM:SS [LEVEL]  EVENT  slug  detail
+
+             Args:
+                 level: One of 'INFO', 'WARN', 'ERROR'.
+                 event: Event keyword (e.g. 'STARTED', 'COMPLETED', 'FAILED').
+                 slug: Backlog item slug.
+                 detail: Optional extra detail appended after the slug.
+             """
+             os.makedirs(LOGS_DIR, exist_ok=True)
+             summary_path = os.path.join(LOGS_DIR, SUMMARY_LOG_FILENAME)
+             ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+             parts = [ts, f"[{level}]", event, slug]
+             if detail:
+                 parts.append(detail)
+             line = "  ".join(parts) + "\n"
+             with open(summary_path, "a", encoding="utf-8") as f:
+                 f.write(line)
+
+      3. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
+
+      4. Verify the functions are importable:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert callable(mod._open_item_log), 'Missing _open_item_log'
+         assert callable(mod._close_item_log), 'Missing _close_item_log'
+         assert callable(mod._log_summary), 'Missing _log_summary'
+         print('Helper functions verified OK')
+         "
+
+      Files: scripts/auto-pipeline.py
+
+  - id: '1.3'
+    name: Extend log() and verbose_log() to tee output to item detail log
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.2'
+    description: |
+      Extend the existing log() and verbose_log() functions in scripts/auto-pipeline.py
+      to tee their output to the currently-open item detail log file (_item_log_file).
+
+      Reference: docs/plans/2026-02-18-1-persistent-logging-system-with-per-item-detail-files-and-summary-progress-log-design.md
+
+      Steps:
+      1. Read scripts/auto-pipeline.py. Find log() (around line 180) and
+         verbose_log() (around line 186). Their current implementations are:
+
+           def log(message: str) -> None:
+               """Print a timestamped log message with PID for process tracking."""
+               timestamp = datetime.now().strftime("%H:%M:%S")
+               print(f"[{timestamp}] [AUTO-PIPELINE:{_PIPELINE_PID}] {message}", flush=True)
+
+           def verbose_log(message: str) -> None:
+               """Print a verbose log message if verbose mode is enabled."""
+               if VERBOSE:
+                   timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                   print(f"[{timestamp}] [VERBOSE:{_PIPELINE_PID}] {message}", flush=True)
+
+      2. Replace log() with:
+
+           def log(message: str) -> None:
+               """Print a timestamped log message with PID for process tracking.
+
+               Also writes to the currently-open item detail log file (if any).
+               """
+               timestamp = datetime.now().strftime("%H:%M:%S")
+               line = f"[{timestamp}] [AUTO-PIPELINE:{_PIPELINE_PID}] {message}"
+               print(line, flush=True)
+               if _item_log_file is not None:
+                   _item_log_file.write(line + "\n")
+                   _item_log_file.flush()
+
+      3. Replace verbose_log() with:
+
+           def verbose_log(message: str) -> None:
+               """Print a verbose log message if verbose mode is enabled.
+
+               Also writes to the currently-open item detail log file (if any).
+               """
+               if VERBOSE:
+                   timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                   line = f"[{timestamp}] [VERBOSE:{_PIPELINE_PID}] {message}"
+                   print(line, flush=True)
+                   if _item_log_file is not None:
+                       _item_log_file.write(line + "\n")
+                       _item_log_file.flush()
+
+      4. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
+
+      Files: scripts/auto-pipeline.py
+
+- id: phase-2
+  name: Phase 2 - Wire Logging into process_item()
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Open/close item log and emit summary events in process_item()
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.3'
+    description: |
+      Wire the logging lifecycle into process_item() and the _archive_and_report()
+      helper in scripts/auto-pipeline.py so that:
+        - The item detail log is opened before processing starts.
+        - Summary events are written to pipeline.log at key lifecycle points.
+        - The item detail log is closed (with appropriate result) when processing ends.
+
+      Reference: docs/plans/2026-02-18-1-persistent-logging-system-with-per-item-detail-files-and-summary-progress-log-design.md
+
+      Steps:
+      1. Read scripts/auto-pipeline.py. Find process_item() (around line 1680).
+         Note the structure:
+           - Creates SlackNotifier, logs header, calls slack.send_status
+           - Fast path: last_verification_passed -> _archive_and_report
+           - Main cycle loop
+           - Various return points (True for success, False for failure)
+
+      2. At the very start of process_item(), after the SlackNotifier is created
+         and before any log() calls, add:
+           _open_item_log(item.slug, item.display_name, item.item_type)
+           _log_summary("INFO", "STARTED", item.slug, f"type={item.item_type}")
+
+      3. Find every return statement in process_item() and in _archive_and_report().
+         Wrap each return path to call _close_item_log() with an appropriate result
+         string before returning:
+           - Success returns: _close_item_log("success")
+           - Failure returns (plan creation failed, orchestrator failed, etc.):
+             _close_item_log("failed")
+           - Verification exhausted: _close_item_log("verification-exhausted")
+           - Stop requested: _close_item_log("stopped")
+
+         Also add _log_summary() calls at key points:
+           - After archive completes: _log_summary("INFO", "COMPLETED", item.slug, ...)
+           - After orchestrator failure: _log_summary("ERROR", "FAILED", item.slug, "phase=orchestrator")
+           - After plan creation failure: _log_summary("ERROR", "FAILED", item.slug, "phase=plan-creation")
+           - After verification exhausted: _log_summary("WARN", "VERIFICATION_EXHAUSTED", item.slug, ...)
+
+         IMPORTANT: Use a try/finally pattern to guarantee _close_item_log() is
+         always called even if an unexpected exception occurs:
+
+           def process_item(item, dry_run=False, session_tracker=None) -> bool:
+               _open_item_log(item.slug, item.display_name, item.item_type)
+               _log_summary("INFO", "STARTED", item.slug, f"type={item.item_type}")
+               try:
+                   return _process_item_inner(item, dry_run, session_tracker)
+               except Exception as e:
+                   log(f"UNEXPECTED ERROR in process_item: {e}")
+                   _log_summary("ERROR", "CRASHED", item.slug, str(e))
+                   return False
+               finally:
+                   _close_item_log("done")
+
+         Alternatively, if the refactoring to _process_item_inner is too invasive,
+         wrap each return individually with _close_item_log() and _log_summary().
+         Use whichever approach causes fewer changes to the existing code structure.
+
+      4. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
+
+      5. Verify process_item can still be imported:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert callable(mod.process_item), 'process_item not found'
+         print('process_item verified OK')
+         "
+
+      Files: scripts/auto-pipeline.py
+
+- id: phase-3
+  name: Phase 3 - Gitignore and Cleanup
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Add logs/ to .gitignore
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.1'
+    description: |
+      Add a logs/ entry to .gitignore so runtime log files are not committed to git.
+
+      Steps:
+      1. Read .gitignore (if it exists). If it does not exist, create it.
+
+      2. Check if "logs/" is already present. If not, append:
+           # Runtime pipeline logs (generated at runtime, not committed)
+           logs/
+
+      3. Verify .gitignore contains the entry:
+         python3 -c "
+         content = open('.gitignore').read()
+         assert 'logs/' in content, 'logs/ not in .gitignore'
+         print('.gitignore verified OK')
+         "
+
+      Files: .gitignore
+
+- id: phase-4
+  name: Phase 4 - Unit Tests
+  status: pending
+  tasks:
+  - id: '4.1'
+    name: Add unit tests for logging helpers and tee behavior
+    agent: coder
+    status: pending
+    depends_on:
+    - '3.1'
+    description: |
+      Add unit tests for the new logging infrastructure to tests/test_auto_pipeline.py.
+
+      Reference: docs/plans/2026-02-18-1-persistent-logging-system-with-per-item-detail-files-and-summary-progress-log-design.md
+
+      Steps:
+      1. Read tests/test_auto_pipeline.py to understand the test structure, imports,
+         and the importlib pattern used to load auto-pipeline.py.
+
+      2. At the top of the file, add these new names to the imports from mod:
+           _open_item_log = mod._open_item_log
+           _close_item_log = mod._close_item_log
+           _log_summary = mod._log_summary
+           LOGS_DIR = mod.LOGS_DIR
+           SUMMARY_LOG_FILENAME = mod.SUMMARY_LOG_FILENAME
+
+      3. Add the following test cases after the existing tests:
+
+         a. test_logs_dir_constant():
+            Import the module. Assert mod.LOGS_DIR == 'logs'.
+            Assert mod.SUMMARY_LOG_FILENAME == 'pipeline.log'.
+
+         b. test_open_item_log_creates_file(tmp_path, monkeypatch):
+            Monkeypatch mod.LOGS_DIR to str(tmp_path / 'logs').
+            Monkeypatch mod._PIPELINE_PID to 99999.
+            Call mod._open_item_log('test-slug', 'Test Feature', 'feature').
+            Assert (tmp_path / 'logs' / 'test-slug.log').exists().
+            content = (tmp_path / 'logs' / 'test-slug.log').read_text()
+            Assert 'SESSION START' in content.
+            Assert 'test-slug' in content.
+            Assert 'feature' in content.
+            Call mod._close_item_log('success').
+            Assert mod._item_log_file is None.
+
+         c. test_close_item_log_writes_footer(tmp_path, monkeypatch):
+            Monkeypatch mod.LOGS_DIR to str(tmp_path / 'logs').
+            Call mod._open_item_log('slug2', 'Item', 'defect').
+            Call mod._close_item_log('failed').
+            content = (tmp_path / 'logs' / 'slug2.log').read_text()
+            Assert 'SESSION END' in content.
+            Assert 'failed' in content.
+            Assert mod._item_log_file is None.
+
+         d. test_close_item_log_noop_when_not_open():
+            Ensure mod._item_log_file is None (it should be after other tests).
+            Call mod._close_item_log('result') — should not raise.
+
+         e. test_log_tees_to_item_log_file(tmp_path, monkeypatch):
+            Monkeypatch mod.LOGS_DIR to str(tmp_path / 'logs').
+            Call mod._open_item_log('tee-slug', 'Tee Test', 'feature').
+            Call mod.log('hello from log').
+            content = (tmp_path / 'logs' / 'tee-slug.log').read_text()
+            Assert 'hello from log' in content.
+            Call mod._close_item_log('success').
+
+         f. test_log_summary_creates_pipeline_log(tmp_path, monkeypatch):
+            Monkeypatch mod.LOGS_DIR to str(tmp_path / 'logs').
+            Call mod._log_summary('INFO', 'STARTED', 'my-slug', 'type=feature').
+            summary_path = tmp_path / 'logs' / 'pipeline.log'
+            Assert summary_path.exists().
+            content = summary_path.read_text()
+            Assert '[INFO]' in content.
+            Assert 'STARTED' in content.
+            Assert 'my-slug' in content.
+            Assert 'type=feature' in content.
+
+         g. test_log_summary_appends(tmp_path, monkeypatch):
+            Monkeypatch mod.LOGS_DIR to str(tmp_path / 'logs').
+            Call mod._log_summary('INFO', 'STARTED', 'slug-a').
+            Call mod._log_summary('INFO', 'COMPLETED', 'slug-a').
+            content = (tmp_path / 'logs' / 'pipeline.log').read_text()
+            lines = [l for l in content.splitlines() if l.strip()]
+            Assert len(lines) >= 2.
+            Assert any('STARTED' in l for l in lines).
+            Assert any('COMPLETED' in l for l in lines).
+
+         h. test_open_item_log_appends_on_second_run(tmp_path, monkeypatch):
+            Monkeypatch mod.LOGS_DIR to str(tmp_path / 'logs').
+            # First run
+            mod._open_item_log('append-slug', 'Item', 'feature')
+            mod.log('first run message')
+            mod._close_item_log('success')
+            # Second run
+            mod._open_item_log('append-slug', 'Item', 'feature')
+            mod.log('second run message')
+            mod._close_item_log('success')
+            content = (tmp_path / 'logs' / 'append-slug.log').read_text()
+            Assert 'first run message' in content.
+            Assert 'second run message' in content.
+            # Two session headers
+            Assert content.count('SESSION START') == 2.
+
+      4. Run tests:
+         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_auto_pipeline.py -v
+         Fix any failures before marking this task complete.
+
+      Files: tests/test_auto_pipeline.py
+
+- id: phase-5
+  name: Phase 5 - Verification
+  status: pending
+  tasks:
+  - id: '5.1'
+    name: Final verification - syntax, tests, and dry-run
+    agent: code-reviewer
+    status: pending
+    depends_on:
+    - '4.1'
+    description: |
+      Run all verification checks to confirm the persistent logging feature is
+      correct and all tests pass.
+
+      Steps:
+      1. Check Python syntax for both scripts:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+      2. Run the full test suite:
+         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
+
+      3. Verify the new constants exist:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert hasattr(mod, 'LOGS_DIR'), 'Missing LOGS_DIR'
+         assert mod.LOGS_DIR == 'logs'
+         assert hasattr(mod, 'SUMMARY_LOG_FILENAME'), 'Missing SUMMARY_LOG_FILENAME'
+         assert callable(mod._open_item_log), 'Missing _open_item_log'
+         assert callable(mod._close_item_log), 'Missing _close_item_log'
+         assert callable(mod._log_summary), 'Missing _log_summary'
+         print('All logging constants and helpers verified OK')
+         "
+
+      4. Verify log() tees to file (functional smoke test):
+         python3 -c "
+         import importlib.util, tempfile, os
+         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         with tempfile.TemporaryDirectory() as td:
+             mod.LOGS_DIR = td
+             mod._open_item_log('smoke-test', 'Smoke Test Item', 'feature')
+             mod.log('smoke test line')
+             mod._close_item_log('success')
+             log_path = os.path.join(td, 'smoke-test.log')
+             assert os.path.exists(log_path), 'Log file not created'
+             content = open(log_path).read()
+             assert 'smoke test line' in content, 'Log line not in file'
+             assert 'SESSION START' in content, 'Missing session header'
+             assert 'SESSION END' in content, 'Missing session footer'
+             print('Smoke test passed OK')
+         "
+
+      5. Verify summary log smoke test:
+         python3 -c "
+         import importlib.util, tempfile, os
+         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         with tempfile.TemporaryDirectory() as td:
+             mod.LOGS_DIR = td
+             mod._log_summary('INFO', 'STARTED', 'test-item', 'type=feature')
+             mod._log_summary('INFO', 'COMPLETED', 'test-item', 'duration=10s')
+             summary = os.path.join(td, 'pipeline.log')
+             assert os.path.exists(summary), 'Summary log not created'
+             content = open(summary).read()
+             assert 'STARTED' in content
+             assert 'COMPLETED' in content
+             assert 'test-item' in content
+             print('Summary log smoke test passed OK')
+         "
+
+      6. Verify .gitignore has logs/ entry:
+         python3 -c "
+         content = open('.gitignore').read()
+         assert 'logs/' in content, 'logs/ missing from .gitignore'
+         print('.gitignore verified OK')
+         "
+
+      7. Run orchestrator dry-run to confirm no startup errors:
+         python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
+
+      If any check fails, report the specific failure with details.
+
+      Files: scripts/auto-pipeline.py, scripts/plan-orchestrator.py, .gitignore, tests/test_auto_pipeline.py
