@@ -519,3 +519,90 @@ def test_archive_item_dry_run_does_not_require_file(tmp_path):
     result = archive_item(item, dry_run=True)
 
     assert result is True
+
+
+# --- archive_item() idempotency tests ---
+
+
+def test_archive_item_idempotent_when_dest_exists(tmp_path, monkeypatch):
+    """archive_item() returns True immediately when destination file already exists."""
+    archive_dir = tmp_path / "completed-backlog" / "defects"
+    archive_dir.mkdir(parents=True)
+
+    # Simulate a previously archived item already present at the destination
+    dest_file = archive_dir / "my-item.md"
+    dest_file.write_text("# Already archived\n")
+
+    monkeypatch.setattr(mod, "COMPLETED_DIRS", {"defect": str(archive_dir), "feature": str(archive_dir)})
+
+    git_call_count = []
+
+    def track_subprocess_run(*args, **kwargs):
+        git_call_count.append(args)
+
+    monkeypatch.setattr(mod.subprocess, "run", track_subprocess_run)
+
+    stale_path = str(tmp_path / "defect-backlog" / "my-item.md")
+    item = BacklogItem(
+        path=stale_path,
+        item_type="defect",
+        slug="my-item",
+        name="My Item",
+    )
+
+    result = archive_item(item, dry_run=False)
+
+    assert result is True
+    assert len(git_call_count) == 0, "git should not be called when item is already archived"
+
+
+def test_archive_item_idempotent_does_not_overwrite(tmp_path, monkeypatch):
+    """archive_item() leaves the existing destination file unchanged on re-archive."""
+    archive_dir = tmp_path / "completed-backlog" / "defects"
+    archive_dir.mkdir(parents=True)
+
+    sentinel = "SENTINEL_CONTENT_UNCHANGED"
+    dest_file = archive_dir / "my-item.md"
+    dest_file.write_text(sentinel)
+
+    monkeypatch.setattr(mod, "COMPLETED_DIRS", {"defect": str(archive_dir), "feature": str(archive_dir)})
+    monkeypatch.setattr(mod.subprocess, "run", lambda *args, **kwargs: None)
+
+    stale_path = str(tmp_path / "defect-backlog" / "my-item.md")
+    item = BacklogItem(
+        path=stale_path,
+        item_type="defect",
+        slug="my-item",
+        name="My Item",
+    )
+
+    archive_item(item, dry_run=False)
+
+    assert dest_file.read_text() == sentinel, "destination file content must not be modified on re-archive"
+
+
+# --- _resolve_item_path() warning log test ---
+
+
+def test_resolve_item_path_warning_log_for_completed_subfolder(tmp_path, capsys):
+    """_resolve_item_path() emits a WARNING when file is found in the completed/ subfolder."""
+    backlog_dir = tmp_path / "defect-backlog"
+    completed_dir = backlog_dir / "completed"
+    completed_dir.mkdir(parents=True)
+
+    item_file = completed_dir / "item.md"
+    item_file.write_text("# Item\n")
+
+    # item.path points to the root (file is not there — it was moved prematurely)
+    stale_path = str(backlog_dir / "item.md")
+    item = BacklogItem(
+        path=stale_path,
+        item_type="defect",
+        slug="item",
+        name="Item",
+    )
+
+    _resolve_item_path(item)
+
+    captured = capsys.readouterr()
+    assert "WARNING" in captured.out, "Expected WARNING in log output when item is in completed/ subfolder"
