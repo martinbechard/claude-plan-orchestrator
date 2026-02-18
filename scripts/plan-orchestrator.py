@@ -1507,6 +1507,14 @@ def git_stash_pop() -> bool:
 
     Returns True on success, False if the pop failed (stash preserved for manual resolution).
     """
+    # Discard task-status.json before pop to prevent merge conflict.
+    # The file is ephemeral: its content was already consumed by read_status_file().
+    if os.path.exists(STATUS_FILE_PATH):
+        subprocess.run(
+            ["git", "checkout", "--", STATUS_FILE_PATH],
+            capture_output=True
+        )
+
     result = subprocess.run(
         ["git", "stash", "pop"],
         capture_output=True
