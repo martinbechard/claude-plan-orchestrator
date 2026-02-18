@@ -1372,15 +1372,38 @@ def find_in_progress_plans() -> list[str]:
     return in_progress
 
 
+def _resolve_item_path(item: "BacklogItem") -> Optional[str]:
+    """Locate the actual file path for a backlog item at archive time.
+
+    Returns item.path if the file exists there. Falls back to checking
+    <backlog_dir>/completed/<filename> in case an external process relocated
+    the file mid-pipeline. Returns None if the file cannot be found at either
+    location.
+    """
+    if os.path.exists(item.path):
+        return item.path
+    candidate = os.path.join(
+        os.path.dirname(item.path), "completed", os.path.basename(item.path)
+    )
+    if os.path.exists(candidate):
+        log(f"[ARCHIVE] Item relocated to completed/ subfolder, using: {candidate}")
+        return candidate
+    return None
+
+
 def archive_item(item: BacklogItem, dry_run: bool = False) -> bool:
     """Move a completed backlog item to the top-level archive directory."""
-    source = item.path
     dest_dir = COMPLETED_DIRS[item.item_type]
     dest = os.path.join(dest_dir, os.path.basename(item.path))
 
     if dry_run:
-        log(f"[DRY RUN] Would archive: {source} -> {dest}")
+        log(f"[DRY RUN] Would archive: {item.path} -> {dest}")
         return True
+
+    source = _resolve_item_path(item)
+    if source is None:
+        log(f"WARNING: Cannot archive {item.path}: file not found at original path or completed/ subfolder")
+        return False
 
     try:
         os.makedirs(dest_dir, exist_ok=True)
