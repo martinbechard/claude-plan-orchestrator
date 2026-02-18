@@ -4558,182 +4558,193 @@ def run_orchestrator(
         if not dry_run:
             save_plan(plan_path, plan)  # Don't commit in_progress state
 
-        # Clear previous status file
-        verbose_log("Clearing previous status file", "TASK")
-        clear_status_file()
+        # Stash any uncommitted changes so the agent sees a clean working tree
+        stash_created = False
+        if not dry_run:
+            stash_created = git_stash_working_changes()
 
-        # Build and execute prompt
-        verbose_log("Building Claude prompt...", "TASK")
-        prompt = build_claude_prompt(plan, section, task, plan_path,
-                                     attempt_number=task.get("attempts", 1))
-        verbose_log(f"Prompt built, length: {len(prompt)} chars", "TASK")
-        if VERBOSE:
-            print("-" * 40)
-            print("[PROMPT PREVIEW]")
-            print(prompt[:500] + ("..." if len(prompt) > 500 else ""))
-            print("-" * 40)
+        try:
+            # Clear previous status file
+            verbose_log("Clearing previous status file", "TASK")
+            clear_status_file()
 
-        # Compute effective model for this task attempt
-        agent_name = task.get("agent") or infer_agent_for_task(task) or FALLBACK_AGENT_NAME
-        agent_def = load_agent_definition(agent_name)
-        agent_model = agent_def.get("model", "") if agent_def else ""
-        current_attempt = task.get("attempts", 1)
-        effective_model = escalation_config.get_effective_model(agent_model, current_attempt)
+            # Build and execute prompt
+            verbose_log("Building Claude prompt...", "TASK")
+            prompt = build_claude_prompt(plan, section, task, plan_path,
+                                         attempt_number=task.get("attempts", 1))
+            verbose_log(f"Prompt built, length: {len(prompt)} chars", "TASK")
+            if VERBOSE:
+                print("-" * 40)
+                print("[PROMPT PREVIEW]")
+                print(prompt[:500] + ("..." if len(prompt) > 500 else ""))
+                print("-" * 40)
 
-        # Log model selection
-        if escalation_config.enabled:
-            if effective_model != agent_model:
-                print(f"Task {task_id} attempt {current_attempt}: escalating from {agent_model} to {effective_model}")
-            else:
-                print(f"Task {task_id} attempt {current_attempt}: using {effective_model}")
+            # Compute effective model for this task attempt
+            agent_name = task.get("agent") or infer_agent_for_task(task) or FALLBACK_AGENT_NAME
+            agent_def = load_agent_definition(agent_name)
+            agent_model = agent_def.get("model", "") if agent_def else ""
+            current_attempt = task.get("attempts", 1)
+            effective_model = escalation_config.get_effective_model(agent_model, current_attempt)
 
-        # Record model used for observability
-        task["model_used"] = effective_model
+            # Log model selection
+            if escalation_config.enabled:
+                if effective_model != agent_model:
+                    print(f"Task {task_id} attempt {current_attempt}: escalating from {agent_model} to {effective_model}")
+                else:
+                    print(f"Task {task_id} attempt {current_attempt}: using {effective_model}")
 
-        verbose_log("Executing Claude task...", "TASK")
-        task_result = run_claude_task(prompt, dry_run=dry_run, model=effective_model)
-        verbose_log(f"Task result: success={task_result.success}, message={task_result.message}", "TASK")
+            # Record model used for observability
+            task["model_used"] = effective_model
 
-        print(f"Result: {'SUCCESS' if task_result.success else 'FAILED'}")
-        print(f"Duration: {task_result.duration_seconds:.1f}s")
-        print(f"Message: {task_result.message}")
+            verbose_log("Executing Claude task...", "TASK")
+            task_result = run_claude_task(prompt, dry_run=dry_run, model=effective_model)
+            verbose_log(f"Task result: success={task_result.success}, message={task_result.message}", "TASK")
 
-        if task_result.usage:
-            usage_tracker.record(task_id, task_result.usage, model=effective_model)
-            print(usage_tracker.format_summary_line(task_id))
+            print(f"Result: {'SUCCESS' if task_result.success else 'FAILED'}")
+            print(f"Duration: {task_result.duration_seconds:.1f}s")
+            print(f"Message: {task_result.message}")
 
-        if budget_config.is_enabled:
-            print(budget_guard.format_status())
+            if task_result.usage:
+                usage_tracker.record(task_id, task_result.usage, model=effective_model)
+                print(usage_tracker.format_summary_line(task_id))
 
-        # Process agent-initiated Slack messages from status file
-        status = read_status_file()
-        if status:
-            slack.process_agent_messages(status)
+            if budget_config.is_enabled:
+                print(budget_guard.format_status())
 
-        # Check if Claude modified the plan
-        if task_result.plan_modified:
-            print("[Plan was modified by Claude - reloading]")
-            plan = load_plan(plan_path)
-            meta = plan.get("meta", {})
-            # Re-find the task in the reloaded plan
-            task_lookup = find_task_by_id(plan, task_id)
-            if task_lookup:
-                section, task = task_lookup
+            # Process agent-initiated Slack messages from status file
+            status = read_status_file()
+            if status:
+                slack.process_agent_messages(status)
 
-        if task_result.success:
-            # Run validation if enabled
-            if validation_config.enabled:
-                validation_attempts = task.get("validation_attempts", 0)
-                if validation_attempts < validation_config.max_validation_attempts:
-                    verdict = run_validation(
-                        task, section, task_result, validation_config, dry_run,
-                        escalation_config=escalation_config,
-                    )
+            # Check if Claude modified the plan
+            if task_result.plan_modified:
+                print("[Plan was modified by Claude - reloading]")
+                plan = load_plan(plan_path)
+                meta = plan.get("meta", {})
+                # Re-find the task in the reloaded plan
+                task_lookup = find_task_by_id(plan, task_id)
+                if task_lookup:
+                    section, task = task_lookup
 
-                    if verdict.verdict == "FAIL":
-                        print(f"[VALIDATION] FAIL - {len(verdict.findings)} findings")
-                        for finding in verdict.findings:
-                            print(f"  {finding}")
-                        task["status"] = "pending"
-                        task["validation_findings"] = "\n".join(verdict.findings)
-                        task["validation_attempts"] = validation_attempts + 1
-                        if not dry_run:
-                            save_plan(plan_path, plan)
-                        continue  # Retry the task
+            if task_result.success:
+                # Run validation if enabled
+                if validation_config.enabled:
+                    validation_attempts = task.get("validation_attempts", 0)
+                    if validation_attempts < validation_config.max_validation_attempts:
+                        verdict = run_validation(
+                            task, section, task_result, validation_config, dry_run,
+                            escalation_config=escalation_config,
+                        )
 
-                    elif verdict.verdict == "WARN":
-                        print(f"[VALIDATION] WARN - {len(verdict.findings)} findings (proceeding)")
-                        for finding in verdict.findings:
-                            print(f"  {finding}")
-                        # Fall through to normal completion
+                        if verdict.verdict == "FAIL":
+                            print(f"[VALIDATION] FAIL - {len(verdict.findings)} findings")
+                            for finding in verdict.findings:
+                                print(f"  {finding}")
+                            task["status"] = "pending"
+                            task["validation_findings"] = "\n".join(verdict.findings)
+                            task["validation_attempts"] = validation_attempts + 1
+                            if not dry_run:
+                                save_plan(plan_path, plan)
+                            continue  # Retry the task
 
-                    else:
-                        print(f"[VALIDATION] PASS")
+                        elif verdict.verdict == "WARN":
+                            print(f"[VALIDATION] WARN - {len(verdict.findings)} findings (proceeding)")
+                            for finding in verdict.findings:
+                                print(f"  {finding}")
+                            # Fall through to normal completion
 
-            # Original completion logic
-            task["status"] = "completed"
-            task["completed_at"] = datetime.now().isoformat()
-            task["result_message"] = task_result.message
-            tasks_completed += 1
-            circuit_breaker.record_success()
+                        else:
+                            print(f"[VALIDATION] PASS")
 
-            # Send Slack notification for task success
-            slack.send_status(
-                f"*Task {task_id} completed* ({task.get('name', '')})\n"
-                f"Attempt {task.get('attempts', 1)}, "
-                f"{task_result.duration_seconds:.0f}s",
-                level="success"
-            )
+                # Original completion logic
+                task["status"] = "completed"
+                task["completed_at"] = datetime.now().isoformat()
+                task["result_message"] = task_result.message
+                tasks_completed += 1
+                circuit_breaker.record_success()
 
-            # Check if section is complete
-            update_section_status(section)
-            if section.get("status") == "completed":
-                print(f"\n=== Section {section.get('id')} completed! ===")
-                send_notification(
-                    plan,
-                    f"Section Completed: {section.get('name')}",
-                    f"All tasks in section '{section.get('name')}' have been completed successfully."
+                # Send Slack notification for task success
+                slack.send_status(
+                    f"*Task {task_id} completed* ({task.get('name', '')})\n"
+                    f"Attempt {task.get('attempts', 1)}, "
+                    f"{task_result.duration_seconds:.0f}s",
+                    level="success"
                 )
-        else:
-            task["status"] = "pending"  # Will retry
-            task["last_error"] = task_result.message
 
-            # Handle rate limiting separately from regular failures
-            if task_result.rate_limited:
-                print(f"\n[RATE LIMIT] Task {task_id} hit API rate limit")
-                # Don't count rate limits as circuit breaker failures
-                # Don't increment attempt count - this wasn't a real failure
-                task["attempts"] = max(0, task.get("attempts", 1) - 1)
+                # Check if section is complete
+                update_section_status(section)
+                if section.get("status") == "completed":
+                    print(f"\n=== Section {section.get('id')} completed! ===")
+                    send_notification(
+                        plan,
+                        f"Section Completed: {section.get('name')}",
+                        f"All tasks in section '{section.get('name')}' have been completed successfully."
+                    )
+            else:
+                task["status"] = "pending"  # Will retry
+                task["last_error"] = task_result.message
 
-                if not dry_run:
-                    save_plan(plan_path, plan)
+                # Handle rate limiting separately from regular failures
+                if task_result.rate_limited:
+                    print(f"\n[RATE LIMIT] Task {task_id} hit API rate limit")
+                    # Don't count rate limits as circuit breaker failures
+                    # Don't increment attempt count - this wasn't a real failure
+                    task["attempts"] = max(0, task.get("attempts", 1) - 1)
 
-                # Wait for rate limit reset
-                should_continue = wait_for_rate_limit_reset(task_result.rate_limit_reset_time)
-                if not should_continue:
-                    # User aborted, save and exit
+                    if not dry_run:
+                        save_plan(plan_path, plan)
+
+                    # Wait for rate limit reset
+                    should_continue = wait_for_rate_limit_reset(task_result.rate_limit_reset_time)
+                    if not should_continue:
+                        # User aborted, save and exit
+                        if not dry_run:
+                            save_plan(plan_path, plan, commit=True,
+                                      commit_message=f"plan: Rate limit wait aborted by user at task {task_id}")
+                        break
+                    # After waiting, continue the loop to retry the same task
+                    continue
+
+                circuit_breaker.record_failure()
+
+                # Check if circuit breaker tripped
+                if circuit_breaker.is_open:
+                    print(f"\n[CIRCUIT BREAKER] Stopping orchestrator - too many consecutive failures")
+                    print(f"[CIRCUIT BREAKER] Will wait {circuit_breaker.reset_timeout}s before allowing retry")
+                    send_notification(
+                        plan,
+                        "Circuit Breaker Tripped",
+                        f"Orchestrator stopped after {circuit_breaker.consecutive_failures} consecutive failures. "
+                        f"LLM may be unavailable. Manual intervention required."
+                    )
                     if not dry_run:
                         save_plan(plan_path, plan, commit=True,
-                                  commit_message=f"plan: Rate limit wait aborted by user at task {task_id}")
+                                  commit_message=f"plan: Circuit breaker tripped after {circuit_breaker.consecutive_failures} failures")
                     break
-                # After waiting, continue the loop to retry the same task
-                continue
 
-            circuit_breaker.record_failure()
+            # Save and commit on success or if Claude modified the plan
+            if not dry_run:
+                should_commit = task_result.success or task_result.plan_modified
+                commit_msg = f"plan: Task {task_id} {'completed' if task_result.success else 'updated'}"
+                save_plan(plan_path, plan, commit=should_commit, commit_message=commit_msg)
 
-            # Check if circuit breaker tripped
-            if circuit_breaker.is_open:
-                print(f"\n[CIRCUIT BREAKER] Stopping orchestrator - too many consecutive failures")
-                print(f"[CIRCUIT BREAKER] Will wait {circuit_breaker.reset_timeout}s before allowing retry")
-                send_notification(
-                    plan,
-                    "Circuit Breaker Tripped",
-                    f"Orchestrator stopped after {circuit_breaker.consecutive_failures} consecutive failures. "
-                    f"LLM may be unavailable. Manual intervention required."
-                )
-                if not dry_run:
-                    save_plan(plan_path, plan, commit=True,
-                              commit_message=f"plan: Circuit breaker tripped after {circuit_breaker.consecutive_failures} failures")
+            if single_task:
+                print("\n[Single task mode - stopping]")
                 break
 
-        # Save and commit on success or if Claude modified the plan
-        if not dry_run:
-            should_commit = task_result.success or task_result.plan_modified
-            commit_msg = f"plan: Task {task_id} {'completed' if task_result.success else 'updated'}"
-            save_plan(plan_path, plan, commit=should_commit, commit_message=commit_msg)
+            # Exponential backoff between tasks on failure, small delay on success
+            if not dry_run:
+                if task_result.success:
+                    time.sleep(2)
+                else:
+                    backoff = circuit_breaker.get_backoff_delay(current_attempts + 1)
+                    print(f"[Backoff] Waiting {backoff:.0f}s before retry...")
+                    time.sleep(backoff)
 
-        if single_task:
-            print("\n[Single task mode - stopping]")
-            break
-
-        # Exponential backoff between tasks on failure, small delay on success
-        if not dry_run:
-            if task_result.success:
-                time.sleep(2)
-            else:
-                backoff = circuit_breaker.get_backoff_delay(current_attempts + 1)
-                print(f"[Backoff] Waiting {backoff:.0f}s before retry...")
-                time.sleep(backoff)
+        finally:
+            # Restore stashed changes regardless of task outcome
+            if stash_created:
+                git_stash_pop()
 
     # Stop background Slack polling before final summary
     slack.stop_background_polling()
