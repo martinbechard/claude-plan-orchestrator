@@ -27,7 +27,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TextIO
 from zoneinfo import ZoneInfo
 
 import yaml
@@ -68,6 +68,8 @@ PLANS_DIR = ".claude/plans"
 DESIGN_DIR = "docs/plans"
 VERIFICATION_EXHAUSTED_STATUS = "Archived (verification failed)"
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
+LOGS_DIR = "logs"
+SUMMARY_LOG_FILENAME = "pipeline.log"
 SAFETY_SCAN_INTERVAL_SECONDS = 60
 PLAN_CREATION_TIMEOUT_SECONDS = 600
 CHILD_SHUTDOWN_TIMEOUT_SECONDS = 10
@@ -140,6 +142,7 @@ VERBOSE = False
 CLAUDE_CMD: list[str] = ["claude"]
 _saved_terminal_settings = None  # Saved termios settings for restoration
 _startup_file_hashes: dict[str, str] = {}  # Populated at startup by snapshot_source_hashes()
+_item_log_file: Optional[TextIO] = None  # Detail log for current item
 
 # ─── Terminal Management ─────────────────────────────────────────────
 
