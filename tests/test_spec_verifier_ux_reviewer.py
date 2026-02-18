@@ -158,6 +158,59 @@ def test_infer_agent_non_spec_ux_task():
     assert result == "coder", f"Expected 'coder', got '{result}'"
 
 
+def test_frontend_coder_agent_definition():
+    """frontend-coder agent should exist with sonnet model and correct tools."""
+    frontend_coder = load_agent_definition("frontend-coder")
+
+    assert frontend_coder is not None, "frontend-coder agent should exist"
+    assert frontend_coder["name"] == "frontend-coder"
+    assert frontend_coder["model"] == "sonnet", \
+        f"frontend-coder should use sonnet model, got {frontend_coder['model']}"
+    assert "Read" in frontend_coder["tools"], "frontend-coder should have Read tool"
+    assert "Edit" in frontend_coder["tools"], "frontend-coder should have Edit tool"
+    assert "Write" in frontend_coder["tools"], "frontend-coder should have Write tool"
+
+
+def test_infer_agent_for_frontend_form_task():
+    """Task with 'form' keyword should infer frontend-coder agent."""
+    task = {
+        "name": "Build login form",
+        "description": "Implement the login form with validation"
+    }
+    result = infer_agent_for_task(task)
+    assert result == "frontend-coder", f"Expected 'frontend-coder', got '{result}'"
+
+
+def test_infer_agent_for_frontend_component_task():
+    """Task with 'component' keyword should infer frontend-coder agent."""
+    task = {
+        "name": "Build navigation component",
+        "description": "Implement the navigation bar component"
+    }
+    result = infer_agent_for_task(task)
+    assert result == "frontend-coder", f"Expected 'frontend-coder', got '{result}'"
+
+
+def test_infer_agent_for_modal_task():
+    """Task with 'modal' keyword should infer frontend-coder agent."""
+    task = {
+        "name": "Implement confirmation modal",
+        "description": "Add a confirmation modal dialog"
+    }
+    result = infer_agent_for_task(task)
+    assert result == "frontend-coder", f"Expected 'frontend-coder', got '{result}'"
+
+
+def test_infer_agent_frontend_does_not_collide_with_reviewer():
+    """A task with both 'verify' and 'component' should pick code-reviewer (higher priority)."""
+    task = {
+        "name": "Verify component",
+        "description": "Verify the component implementation"
+    }
+    result = infer_agent_for_task(task)
+    assert result == "code-reviewer", f"Expected 'code-reviewer', got '{result}'"
+
+
 # --- ValidationConfig Tests ---
 
 
