@@ -119,6 +119,7 @@ Human's question: {question}
 Answer:"""
 
 QUESTION_ANSWER_TIMEOUT_SECONDS = 60  # 1 minute for question answering
+QA_HISTORY_DEFAULT_MAX_TURNS = 3  # Default rolling window size for Q&A history
 
 # Message routing prompt for LLM-based Slack message classification
 MESSAGE_ROUTING_PROMPT = """You are a message router for a CI/CD pipeline orchestrator.
@@ -2807,6 +2808,9 @@ class SlackNotifier:
         self._intake_lock = threading.Lock()
         self._poll_thread: Optional[threading.Thread] = None
         self._poll_stop_event = threading.Event()
+        self._qa_history: list[tuple[str, str]] = []
+        self._qa_history_enabled: bool = True
+        self._qa_history_max_turns: int = QA_HISTORY_DEFAULT_MAX_TURNS
 
         try:
             with open(config_path, "r") as f:
@@ -2828,6 +2832,13 @@ class SlackNotifier:
             self._channel_id = slack_config.get("channel_id", "")
             self._notify_config = slack_config.get("notify", {})
             self._question_config = slack_config.get("questions", {})
+
+            conv_config = slack_config.get("conversation_history", {})
+            if isinstance(conv_config, dict):
+                self._qa_history_enabled = bool(conv_config.get("enabled", True))
+                self._qa_history_max_turns = int(
+                    conv_config.get("max_turns", QA_HISTORY_DEFAULT_MAX_TURNS)
+                )
 
             prefix = slack_config.get("channel_prefix", "")
             if prefix:
