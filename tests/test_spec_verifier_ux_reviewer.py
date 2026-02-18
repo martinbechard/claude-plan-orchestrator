@@ -88,7 +88,7 @@ def test_ux_reviewer_agent_body_has_sections():
 
 
 def test_ux_reviewer_distinct_from_ux_designer():
-    """ux-reviewer should be distinct from ux-designer (different models)."""
+    """ux-reviewer should be distinct from ux-designer (different names, both use sonnet)."""
     ux_reviewer = load_agent_definition("ux-reviewer")
     ux_designer = load_agent_definition("ux-designer")
 
@@ -99,8 +99,8 @@ def test_ux_reviewer_distinct_from_ux_designer():
         "ux-reviewer and ux-designer should have different names"
     assert ux_reviewer["model"] == "sonnet", \
         f"ux-reviewer should use sonnet model, got {ux_reviewer['model']}"
-    assert ux_designer["model"] == "opus", \
-        f"ux-designer should use opus model, got {ux_designer['model']}"
+    assert ux_designer["model"] == "sonnet", \
+        f"ux-designer should use sonnet model, got {ux_designer['model']}"
 
 
 # --- Agent Inference Tests ---
