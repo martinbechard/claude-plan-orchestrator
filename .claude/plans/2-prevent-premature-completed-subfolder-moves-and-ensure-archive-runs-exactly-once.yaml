@@ -1,0 +1,189 @@
+meta:
+  name: Prevent Premature completed/ Subfolder Moves and Ensure Archive Runs Exactly Once
+  description: >-
+    Two targeted fixes in archive_item() and _resolve_item_path():
+    (1) Add an idempotency guard in archive_item() so a second call for the
+    same item is a no-op success rather than an error or silent overwrite.
+    (2) Upgrade the log in _resolve_item_path() from info to WARNING when a
+    file is found in the completed/ subfolder, making premature mid-pipeline
+    relocations visible in monitoring.
+  plan_doc: docs/plans/2026-02-18-2-prevent-premature-completed-subfolder-moves-and-ensure-archive-runs-exactly-once-design.md
+  created: '2026-02-18'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+      - coder
+    validators:
+      - issue-verifier
+    max_validation_attempts: 1
+
+sections:
+- id: phase-1
+  name: Phase 1 - Implementation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add idempotency guard and upgrade premature-move log level
+    agent: coder
+    status: pending
+    description: |
+      Apply two targeted fixes to scripts/auto-pipeline.py.
+
+      Reference design: docs/plans/2026-02-18-2-prevent-premature-completed-subfolder-moves-and-ensure-archive-runs-exactly-once-design.md
+
+      ### Fix 1 — Idempotent archive_item()
+
+      Read scripts/auto-pipeline.py and locate archive_item() (around line 1394).
+
+      After the `if dry_run:` block and before the `source = _resolve_item_path(item)` line,
+      insert the following idempotency guard:
+
+          if os.path.exists(dest):
+              log(f"[ARCHIVE] Already archived, skipping: {dest}")
+              return True
+
+      The resulting function body must follow this order:
+        1. Compute dest_dir and dest (already present).
+        2. dry_run short-circuit (already present).
+        3. NEW: dest-exists idempotency guard (return True if already archived).
+        4. source = _resolve_item_path(item) (already present).
+        5. source is None guard (already present).
+        6. makedirs + shutil.move + git commit (already present).
+
+      ### Fix 2 — Upgrade log level in _resolve_item_path()
+
+      Locate _resolve_item_path() (around line 1375). Find the log() call inside
+      the `if os.path.exists(candidate):` branch. Replace:
+
+          log(f"[ARCHIVE] Item relocated to completed/ subfolder, using: {candidate}")
+
+      with:
+
+          log(f"WARNING: [ARCHIVE] Item relocated to completed/ subfolder — unexpected mid-pipeline move: {candidate}")
+
+      ### Verification after changes
+
+      Run syntax check:
+        python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
+
+      Run quick smoke test to confirm both behaviors:
+        python3 -c "
+        import importlib.util, tempfile, os, subprocess
+        from pathlib import Path
+        from unittest.mock import patch
+        spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # Test idempotency: dest already exists
+            dest_dir = Path(tmp) / 'completed'
+            dest_dir.mkdir()
+            dest_file = dest_dir / 'item.md'
+            dest_file.write_text('content')
+
+            item = mod.BacklogItem(path=str(Path(tmp) / 'item.md'), name='Item', slug='item', item_type='defect')
+            with patch.dict('os.environ'), patch.object(mod, 'COMPLETED_DIRS', {'defect': str(dest_dir)}):
+                result = mod.archive_item(item, dry_run=False)
+            assert result is True, 'Idempotency: already-archived item should return True'
+
+            # Test premature-move warning: file in completed/ subfolder emits WARNING
+            backlog_dir = Path(tmp) / 'defect-backlog'
+            backlog_dir.mkdir()
+            comp_dir = backlog_dir / 'completed'
+            comp_dir.mkdir()
+            moved_file = comp_dir / 'other.md'
+            moved_file.write_text('content')
+            item2 = mod.BacklogItem(path=str(backlog_dir / 'other.md'), name='Other', slug='other', item_type='defect')
+            resolved = mod._resolve_item_path(item2)
+            assert resolved == str(moved_file), 'Should resolve to completed/ path'
+
+        print('smoke tests OK')
+        "
+
+      Files: scripts/auto-pipeline.py
+
+- id: phase-2
+  name: Phase 2 - Unit Tests
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add regression tests for idempotency guard and premature-move warning
+    agent: coder
+    status: pending
+    depends_on:
+      - '1.1'
+    description: |
+      Add regression tests to tests/test_auto_pipeline.py for the two new behaviors.
+
+      Reference design: docs/plans/2026-02-18-2-prevent-premature-completed-subfolder-moves-and-ensure-archive-runs-exactly-once-design.md
+
+      Read tests/test_auto_pipeline.py to understand existing structure. The module is
+      already imported as `mod` via importlib. `archive_item` and `BacklogItem` are
+      already imported at the top of the file from the existing defect-1 tests.
+
+      Add the following test functions at the end of the file:
+
+      ### test_archive_item_idempotent_when_dest_exists(tmp_path, monkeypatch)
+      - Create an archive destination directory inside tmp_path.
+      - Write a file at dest_dir / "my-item.md" (simulating a previously archived item).
+      - Create a BacklogItem with path pointing to the original (non-existent) backlog location.
+      - Monkeypatch mod.COMPLETED_DIRS to point to the temp dest_dir.
+      - Monkeypatch subprocess.run to no-op (no real git calls).
+      - Call archive_item(item, dry_run=False).
+      - Assert the function returns True (idempotency: already archived => success).
+      - Assert no subprocess.run call was made for git (no git commit on re-archive).
+
+      ### test_archive_item_idempotent_does_not_overwrite(tmp_path, monkeypatch)
+      - Same setup as above, but verify the destination file content is unchanged
+        after the idempotent call (the file should not have been moved/overwritten).
+      - Use a sentinel string in the pre-existing destination file and confirm it is
+        still present after archive_item() returns.
+
+      ### test_resolve_item_path_warning_log_for_completed_subfolder(tmp_path, capsys)
+      - Create tmp_path / "defect-backlog" / "completed" directory.
+      - Write "item.md" inside the completed/ subfolder.
+      - Create a BacklogItem with path pointing to the non-existent root location.
+      - Call _resolve_item_path(item).
+      - Capture stdout (the log() function writes to stdout).
+      - Assert the output contains "WARNING" to confirm the upgraded log level.
+
+      Run tests after adding them:
+        ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_auto_pipeline.py -v
+
+      Fix any failures immediately.
+
+      Files: tests/test_auto_pipeline.py
+
+- id: phase-3
+  name: Phase 3 - Verification
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Final verification — syntax, full test suite, smoke test
+    agent: code-reviewer
+    status: pending
+    depends_on:
+      - '2.1'
+    description: |
+      Run all verification checks to confirm the fix is correct and complete.
+
+      1. Check Python syntax for both scripts:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+      2. Run the full test suite:
+         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ -v 2>/dev/null || echo 'No test suite configured'
+
+      3. Confirm archive_item() body has the idempotency guard before _resolve_item_path():
+         grep -n "Already archived" scripts/auto-pipeline.py
+
+      4. Confirm _resolve_item_path() log contains "WARNING":
+         grep -n "WARNING.*completed/ subfolder" scripts/auto-pipeline.py
+
+      5. Run orchestrator dry-run to confirm no startup errors:
+         python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
+
+      Report any failures with specific details. All checks must pass.
+
+      Files: scripts/auto-pipeline.py, scripts/plan-orchestrator.py, tests/test_auto_pipeline.py
