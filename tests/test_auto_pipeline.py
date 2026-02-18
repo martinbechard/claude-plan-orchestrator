@@ -28,6 +28,11 @@ _perform_restart = mod._perform_restart
 _resolve_item_path = mod._resolve_item_path
 archive_item = mod.archive_item
 BacklogItem = mod.BacklogItem
+_open_item_log = mod._open_item_log
+_close_item_log = mod._close_item_log
+_log_summary = mod._log_summary
+LOGS_DIR = mod.LOGS_DIR
+SUMMARY_LOG_FILENAME = mod.SUMMARY_LOG_FILENAME
 
 
 # --- compact_plan_label() tests ---
@@ -606,3 +611,115 @@ def test_resolve_item_path_warning_log_for_completed_subfolder(tmp_path, capsys)
 
     captured = capsys.readouterr()
     assert "WARNING" in captured.out, "Expected WARNING in log output when item is in completed/ subfolder"
+
+
+# --- Logging infrastructure tests ---
+
+
+def test_logs_dir_constant():
+    """LOGS_DIR and SUMMARY_LOG_FILENAME constants have expected values."""
+    assert mod.LOGS_DIR == "logs"
+    assert mod.SUMMARY_LOG_FILENAME == "pipeline.log"
+
+
+def test_open_item_log_creates_file(tmp_path, monkeypatch):
+    """_open_item_log() creates the log file with a SESSION START header."""
+    monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+    monkeypatch.setattr(mod, "_PIPELINE_PID", 99999)
+
+    _open_item_log("test-slug", "Test Feature", "feature")
+
+    log_file = tmp_path / "logs" / "test-slug.log"
+    assert log_file.exists()
+
+    content = log_file.read_text()
+    assert "SESSION START" in content
+    assert "test-slug" in content
+    assert "feature" in content
+
+    _close_item_log("success")
+    assert mod._item_log_file is None
+
+
+def test_close_item_log_writes_footer(tmp_path, monkeypatch):
+    """_close_item_log() writes SESSION END footer and releases the file handle."""
+    monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+
+    _open_item_log("slug2", "Item", "defect")
+    _close_item_log("failed")
+
+    content = (tmp_path / "logs" / "slug2.log").read_text()
+    assert "SESSION END" in content
+    assert "failed" in content
+    assert mod._item_log_file is None
+
+
+def test_close_item_log_noop_when_not_open():
+    """_close_item_log() does not raise when no item log is currently open."""
+    # Ensure state is clean (previous tests should have closed)
+    assert mod._item_log_file is None
+    # Must not raise
+    _close_item_log("result")
+
+
+def test_log_tees_to_item_log_file(tmp_path, monkeypatch):
+    """log() output is written to the open item log file as well as stdout."""
+    monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+
+    _open_item_log("tee-slug", "Tee Test", "feature")
+    mod.log("hello from log")
+
+    content = (tmp_path / "logs" / "tee-slug.log").read_text()
+    assert "hello from log" in content
+
+    _close_item_log("success")
+
+
+def test_log_summary_creates_pipeline_log(tmp_path, monkeypatch):
+    """_log_summary() creates pipeline.log and writes a structured summary line."""
+    monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+
+    _log_summary("INFO", "STARTED", "my-slug", "type=feature")
+
+    summary_path = tmp_path / "logs" / "pipeline.log"
+    assert summary_path.exists()
+
+    content = summary_path.read_text()
+    assert "[INFO]" in content
+    assert "STARTED" in content
+    assert "my-slug" in content
+    assert "type=feature" in content
+
+
+def test_log_summary_appends(tmp_path, monkeypatch):
+    """_log_summary() appends multiple entries; both are present in the file."""
+    monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+
+    _log_summary("INFO", "STARTED", "slug-a")
+    _log_summary("INFO", "COMPLETED", "slug-a")
+
+    content = (tmp_path / "logs" / "pipeline.log").read_text()
+    lines = [l for l in content.splitlines() if l.strip()]
+    assert len(lines) >= 2
+    assert any("STARTED" in l for l in lines)
+    assert any("COMPLETED" in l for l in lines)
+
+
+def test_open_item_log_appends_on_second_run(tmp_path, monkeypatch):
+    """_open_item_log() appends to an existing log file on subsequent runs."""
+    monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+
+    # First run
+    _open_item_log("append-slug", "Item", "feature")
+    mod.log("first run message")
+    _close_item_log("success")
+
+    # Second run
+    _open_item_log("append-slug", "Item", "feature")
+    mod.log("second run message")
+    _close_item_log("success")
+
+    content = (tmp_path / "logs" / "append-slug.log").read_text()
+    assert "first run message" in content
+    assert "second run message" in content
+    assert content.count("SESSION START") == 2
