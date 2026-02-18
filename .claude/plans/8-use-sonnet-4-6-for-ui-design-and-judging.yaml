@@ -1,131 +1,90 @@
 meta:
   name: Use Sonnet 4.6 for UI Design and Judging
-  description: >-
-    Optimize model selection for UI-related tasks: switch ux-designer from opus to
-    sonnet, create a frontend-coder agent specialized for UI implementation, add
-    FRONTEND_CODER_KEYWORDS to infer_agent_for_task(), and add a judge_model meta
-    field to YAML plans for design competition judging.
+  description: 'Optimize model selection for UI-related tasks: switch ux-designer
+    from opus to sonnet, create a frontend-coder agent specialized for UI implementation,
+    add FRONTEND_CODER_KEYWORDS to infer_agent_for_task(), and add a judge_model meta
+    field to YAML plans for design competition judging.'
   plan_doc: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md
   created: '2026-02-17'
   max_attempts_default: 3
   validation:
     enabled: true
     run_after:
-      - coder
+    - coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 1
-
 sections:
 - id: phase-1
   name: Phase 1 - Agent Files
-  status: pending
+  status: in_progress
   tasks:
   - id: '1.1'
     name: Update ux-designer model from opus to sonnet
     agent: coder
-    status: pending
-    description: |
-      In .claude/agents/ux-designer.md, change the model field from opus to sonnet.
-
-      This is a one-line change in the YAML frontmatter:
-        model: opus  ->  model: sonnet
-
-      Rationale: Sonnet 4.6 is optimized for UI design tasks and produces better
-      visual designs faster and cheaper. The README agent table already shows sonnet
-      for ux-designer (documentation was ahead of the code).
-
-      After making the change, verify the frontmatter is still valid YAML:
-        python3 -c "
-        import yaml
-        content = open('.claude/agents/ux-designer.md').read()
-        parts = content.split('---', 2)
-        meta = yaml.safe_load(parts[1])
-        assert meta['model'] == 'sonnet', f'Expected sonnet, got {meta[\"model\"]}'
-        print('OK: ux-designer model =', meta['model'])
-        "
-
-      Commit with message: "feat: update ux-designer agent to use sonnet model"
-
-      Reference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md
-
+    status: completed
+    description: "In .claude/agents/ux-designer.md, change the model field from opus\
+      \ to sonnet.\n\nThis is a one-line change in the YAML frontmatter:\n  model:\
+      \ opus  ->  model: sonnet\n\nRationale: Sonnet 4.6 is optimized for UI design\
+      \ tasks and produces better\nvisual designs faster and cheaper. The README agent\
+      \ table already shows sonnet\nfor ux-designer (documentation was ahead of the\
+      \ code).\n\nAfter making the change, verify the frontmatter is still valid YAML:\n\
+      \  python3 -c \"\n  import yaml\n  content = open('.claude/agents/ux-designer.md').read()\n\
+      \  parts = content.split('---', 2)\n  meta = yaml.safe_load(parts[1])\n  assert\
+      \ meta['model'] == 'sonnet', f'Expected sonnet, got {meta[\\\"model\\\"]}'\n\
+      \  print('OK: ux-designer model =', meta['model'])\n  \"\n\nCommit with message:\
+      \ \"feat: update ux-designer agent to use sonnet model\"\n\nReference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md\n"
+    attempts: 2
+    last_attempt: '2026-02-17T21:47:38.353087'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: FAIL: 1 test
+      regression - test_spec_verifier_ux_reviewer.py:102 still asserts model == ''opus''
+      but ux-designer now uses ''sonnet'''
+    validation_attempts: 1
+    completed_at: '2026-02-17T21:48:33.237522'
+    result_message: 'ux-designer agent already had model: sonnet. Fixed test_spec_verifier_ux_reviewer.py
+      line 102 which still asserted opus model. All 189 tests pass.'
   - id: '1.2'
     name: Create frontend-coder agent definition
     agent: coder
     status: pending
     depends_on:
-      - '1.1'
-    description: |
-      Create a new agent definition file at .claude/agents/frontend-coder.md.
-
-      Use the markdown-with-YAML-frontmatter format from existing agents.
-      Reference .claude/agents/coder.md for format examples.
-
-      Frontmatter:
-        name: frontend-coder
-        description: "Frontend implementation specialist for UI components, pages,
-          and forms. Uses sonnet for optimized UI code generation with focus on
-          accessibility, responsive design, and design system adherence."
-        tools:
-          - Read
-          - Edit
-          - Write
-          - Bash
-          - Grep
-          - Glob
-        model: sonnet
-
-      Body sections:
-
-      1. Role: You are a frontend implementation specialist. Your job is to build
-         high-quality UI components, pages, and forms that follow the project's
-         design system and accessibility standards. You produce production-ready
-         frontend code.
-
-      2. Before Writing Code checklist:
-         - Read CODING-RULES.md in the project root
-         - Read the design document or wireframes referenced in the task
-         - Read existing UI components to understand the design system
-         - Identify reusable components before creating new ones
-         - Understand the task's acceptance criteria from the YAML plan
-
-      3. Frontend Standards:
-         - Accessibility: Every interactive element needs ARIA attributes, keyboard
-           navigation, and screen reader support. Use semantic HTML first.
-         - Responsive Design: Mobile-first. All layouts must work at 320px, 768px,
-           and 1280px breakpoints minimum.
-         - Component Structure: Prefer composition over props drilling. Extract
-           reusable sub-components when a component exceeds 100 lines.
-         - Performance: Lazy-load heavy components. Avoid inline functions in render.
-         - Design System: Use existing design tokens (colors, spacing, typography).
-           Never hardcode hex values or pixel sizes that duplicate design tokens.
-
-      4. Anti-Patterns to Avoid (same as coder.md anti-patterns section):
-         - No over-engineering beyond what was requested
-         - No fake fallback data
-         - No deferred integration
-         - No hardcoded design values that duplicate design tokens
-         - No TODO/FIXME comments
-
-      5. Output Protocol: Same as coder.md output protocol (write task-status.json).
-
-      After creating the file, verify it parses correctly:
-        python3 -c "
-        import yaml
-        content = open('.claude/agents/frontend-coder.md').read()
-        parts = content.split('---', 2)
-        meta = yaml.safe_load(parts[1])
-        assert meta['name'] == 'frontend-coder'
-        assert meta['model'] == 'sonnet'
-        assert 'Read' in meta['tools']
-        assert 'Edit' in meta['tools']
-        print('OK: frontend-coder agent valid, model =', meta['model'])
-        "
-
-      Commit with message: "feat: add frontend-coder agent for UI implementation tasks"
-
-      Reference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md
-
+    - '1.1'
+    description: "Create a new agent definition file at .claude/agents/frontend-coder.md.\n\
+      \nUse the markdown-with-YAML-frontmatter format from existing agents.\nReference\
+      \ .claude/agents/coder.md for format examples.\n\nFrontmatter:\n  name: frontend-coder\n\
+      \  description: \"Frontend implementation specialist for UI components, pages,\n\
+      \    and forms. Uses sonnet for optimized UI code generation with focus on\n\
+      \    accessibility, responsive design, and design system adherence.\"\n  tools:\n\
+      \    - Read\n    - Edit\n    - Write\n    - Bash\n    - Grep\n    - Glob\n \
+      \ model: sonnet\n\nBody sections:\n\n1. Role: You are a frontend implementation\
+      \ specialist. Your job is to build\n   high-quality UI components, pages, and\
+      \ forms that follow the project's\n   design system and accessibility standards.\
+      \ You produce production-ready\n   frontend code.\n\n2. Before Writing Code\
+      \ checklist:\n   - Read CODING-RULES.md in the project root\n   - Read the design\
+      \ document or wireframes referenced in the task\n   - Read existing UI components\
+      \ to understand the design system\n   - Identify reusable components before\
+      \ creating new ones\n   - Understand the task's acceptance criteria from the\
+      \ YAML plan\n\n3. Frontend Standards:\n   - Accessibility: Every interactive\
+      \ element needs ARIA attributes, keyboard\n     navigation, and screen reader\
+      \ support. Use semantic HTML first.\n   - Responsive Design: Mobile-first. All\
+      \ layouts must work at 320px, 768px,\n     and 1280px breakpoints minimum.\n\
+      \   - Component Structure: Prefer composition over props drilling. Extract\n\
+      \     reusable sub-components when a component exceeds 100 lines.\n   - Performance:\
+      \ Lazy-load heavy components. Avoid inline functions in render.\n   - Design\
+      \ System: Use existing design tokens (colors, spacing, typography).\n     Never\
+      \ hardcode hex values or pixel sizes that duplicate design tokens.\n\n4. Anti-Patterns\
+      \ to Avoid (same as coder.md anti-patterns section):\n   - No over-engineering\
+      \ beyond what was requested\n   - No fake fallback data\n   - No deferred integration\n\
+      \   - No hardcoded design values that duplicate design tokens\n   - No TODO/FIXME\
+      \ comments\n\n5. Output Protocol: Same as coder.md output protocol (write task-status.json).\n\
+      \nAfter creating the file, verify it parses correctly:\n  python3 -c \"\n  import\
+      \ yaml\n  content = open('.claude/agents/frontend-coder.md').read()\n  parts\
+      \ = content.split('---', 2)\n  meta = yaml.safe_load(parts[1])\n  assert meta['name']\
+      \ == 'frontend-coder'\n  assert meta['model'] == 'sonnet'\n  assert 'Read' in\
+      \ meta['tools']\n  assert 'Edit' in meta['tools']\n  print('OK: frontend-coder\
+      \ agent valid, model =', meta['model'])\n  \"\n\nCommit with message: \"feat:\
+      \ add frontend-coder agent for UI implementation tasks\"\n\nReference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md\n"
 - id: phase-2
   name: Phase 2 - Orchestrator Changes
   status: pending
@@ -135,138 +94,77 @@ sections:
     agent: coder
     status: pending
     depends_on:
-      - '1.2'
-    description: |
-      In scripts/plan-orchestrator.py, make two changes:
-
-      CHANGE 1: Add FRONTEND_CODER_KEYWORDS constant after UX_REVIEWER_KEYWORDS
-      (currently around line 351-354).
-
-      Add after the UX_REVIEWER_KEYWORDS block:
-
-        # Keywords indicating a frontend UI implementation task.
-        # When infer_agent_for_task() matches any of these, it selects "frontend-coder".
-        # Checked before REVIEWER_KEYWORDS to catch UI tasks that also mention "verify",
-        # but AFTER all multi-word specialist keywords to avoid false positives.
-        FRONTEND_CODER_KEYWORDS = [
-            "ui component", "ui implementation", "frontend component",
-            "frontend", "component", "form", "dialog", "modal"
-        ]
-
-      IMPORTANT: The multi-word phrases ("ui component", "ui implementation",
-      "frontend component") must come BEFORE single-word phrases in the list.
-      Python iterates the list in order, and more-specific phrases should match first.
-
-      CHANGE 2: Update infer_agent_for_task() to check FRONTEND_CODER_KEYWORDS.
-
-      The current priority order (from the function docstring):
-        1. PLANNER_KEYWORDS -> planner
-        2. QA_AUDITOR_KEYWORDS -> qa-auditor
-        3. SPEC_VERIFIER_KEYWORDS -> spec-verifier
-        4. UX_REVIEWER_KEYWORDS -> ux-reviewer
-        5. REVIEWER_KEYWORDS -> code-reviewer
-        6. DESIGNER_KEYWORDS -> systems-designer
-        7. Default -> coder
-
-      New priority order (insert FRONTEND_CODER_KEYWORDS at position 5.5):
-        1. PLANNER_KEYWORDS -> planner
-        2. QA_AUDITOR_KEYWORDS -> qa-auditor
-        3. SPEC_VERIFIER_KEYWORDS -> spec-verifier
-        4. UX_REVIEWER_KEYWORDS -> ux-reviewer
-        5. REVIEWER_KEYWORDS -> code-reviewer
-        5.5. FRONTEND_CODER_KEYWORDS -> frontend-coder  <<< NEW
-        6. DESIGNER_KEYWORDS -> systems-designer
-        7. Default -> coder
-
-      In the function body, insert the FRONTEND_CODER_KEYWORDS check block
-      immediately after the REVIEWER_KEYWORDS check block and before the
-      DESIGNER_KEYWORDS check block.
-
-      Also update the function docstring to list 8 outcomes instead of 7,
-      adding the new entry:
-        "5.5. FRONTEND_CODER_KEYWORDS (single words like 'frontend', 'component') -> 'frontend-coder'"
-
-      Verify with:
-        python3 -c "
-        import py_compile
-        py_compile.compile('scripts/plan-orchestrator.py', doraise=True)
-        print('Syntax OK')
-        "
-
-      Then verify inference:
-        python3 -c "
-        import importlib.util, sys, os
-        spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        infer = mod.infer_agent_for_task
-
-        tests = [
-            ({'name': 'Build login form', 'description': ''}, 'frontend-coder'),
-            ({'name': 'Implement modal dialog', 'description': ''}, 'frontend-coder'),
-            ({'name': 'Build UI component', 'description': 'frontend implementation'}, 'frontend-coder'),
-            ({'name': 'Verify build', 'description': ''}, 'code-reviewer'),
-            ({'name': 'Generate wireframe design', 'description': ''}, 'systems-designer'),
-            ({'name': 'Implement feature', 'description': ''}, 'coder'),
-        ]
-        for task, expected in tests:
-            result = infer(task)
-            status = 'OK' if result == expected else 'FAIL'
-            print(f'{status}: {task[\"name\"]!r} -> {result!r} (expected {expected!r})')
-        "
-
-      Commit with message: "feat: add FRONTEND_CODER_KEYWORDS and update infer_agent_for_task"
-
-      Reference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md
-
+    - '1.2'
+    description: "In scripts/plan-orchestrator.py, make two changes:\n\nCHANGE 1:\
+      \ Add FRONTEND_CODER_KEYWORDS constant after UX_REVIEWER_KEYWORDS\n(currently\
+      \ around line 351-354).\n\nAdd after the UX_REVIEWER_KEYWORDS block:\n\n  #\
+      \ Keywords indicating a frontend UI implementation task.\n  # When infer_agent_for_task()\
+      \ matches any of these, it selects \"frontend-coder\".\n  # Checked before REVIEWER_KEYWORDS\
+      \ to catch UI tasks that also mention \"verify\",\n  # but AFTER all multi-word\
+      \ specialist keywords to avoid false positives.\n  FRONTEND_CODER_KEYWORDS =\
+      \ [\n      \"ui component\", \"ui implementation\", \"frontend component\",\n\
+      \      \"frontend\", \"component\", \"form\", \"dialog\", \"modal\"\n  ]\n\n\
+      IMPORTANT: The multi-word phrases (\"ui component\", \"ui implementation\",\n\
+      \"frontend component\") must come BEFORE single-word phrases in the list.\n\
+      Python iterates the list in order, and more-specific phrases should match first.\n\
+      \nCHANGE 2: Update infer_agent_for_task() to check FRONTEND_CODER_KEYWORDS.\n\
+      \nThe current priority order (from the function docstring):\n  1. PLANNER_KEYWORDS\
+      \ -> planner\n  2. QA_AUDITOR_KEYWORDS -> qa-auditor\n  3. SPEC_VERIFIER_KEYWORDS\
+      \ -> spec-verifier\n  4. UX_REVIEWER_KEYWORDS -> ux-reviewer\n  5. REVIEWER_KEYWORDS\
+      \ -> code-reviewer\n  6. DESIGNER_KEYWORDS -> systems-designer\n  7. Default\
+      \ -> coder\n\nNew priority order (insert FRONTEND_CODER_KEYWORDS at position\
+      \ 5.5):\n  1. PLANNER_KEYWORDS -> planner\n  2. QA_AUDITOR_KEYWORDS -> qa-auditor\n\
+      \  3. SPEC_VERIFIER_KEYWORDS -> spec-verifier\n  4. UX_REVIEWER_KEYWORDS ->\
+      \ ux-reviewer\n  5. REVIEWER_KEYWORDS -> code-reviewer\n  5.5. FRONTEND_CODER_KEYWORDS\
+      \ -> frontend-coder  <<< NEW\n  6. DESIGNER_KEYWORDS -> systems-designer\n \
+      \ 7. Default -> coder\n\nIn the function body, insert the FRONTEND_CODER_KEYWORDS\
+      \ check block\nimmediately after the REVIEWER_KEYWORDS check block and before\
+      \ the\nDESIGNER_KEYWORDS check block.\n\nAlso update the function docstring\
+      \ to list 8 outcomes instead of 7,\nadding the new entry:\n  \"5.5. FRONTEND_CODER_KEYWORDS\
+      \ (single words like 'frontend', 'component') -> 'frontend-coder'\"\n\nVerify\
+      \ with:\n  python3 -c \"\n  import py_compile\n  py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True)\n  print('Syntax OK')\n  \"\n\nThen verify inference:\n  python3\
+      \ -c \"\n  import importlib.util, sys, os\n  spec = importlib.util.spec_from_file_location('po',\
+      \ 'scripts/plan-orchestrator.py')\n  mod = importlib.util.module_from_spec(spec)\n\
+      \  spec.loader.exec_module(mod)\n  infer = mod.infer_agent_for_task\n\n  tests\
+      \ = [\n      ({'name': 'Build login form', 'description': ''}, 'frontend-coder'),\n\
+      \      ({'name': 'Implement modal dialog', 'description': ''}, 'frontend-coder'),\n\
+      \      ({'name': 'Build UI component', 'description': 'frontend implementation'},\
+      \ 'frontend-coder'),\n      ({'name': 'Verify build', 'description': ''}, 'code-reviewer'),\n\
+      \      ({'name': 'Generate wireframe design', 'description': ''}, 'systems-designer'),\n\
+      \      ({'name': 'Implement feature', 'description': ''}, 'coder'),\n  ]\n \
+      \ for task, expected in tests:\n      result = infer(task)\n      status = 'OK'\
+      \ if result == expected else 'FAIL'\n      print(f'{status}: {task[\\\"name\\\
+      \"]!r} -> {result!r} (expected {expected!r})')\n  \"\n\nCommit with message:\
+      \ \"feat: add FRONTEND_CODER_KEYWORDS and update infer_agent_for_task\"\n\n\
+      Reference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md\n"
   - id: '2.2'
     name: Add judge_model support to orchestrator task execution
     agent: coder
     status: pending
     depends_on:
-      - '2.1'
-    description: |
-      In scripts/plan-orchestrator.py, add support for a `meta.judge_model` field
-      that overrides the planner agent's model for design competition judging.
-
-      WHAT TO ADD:
-
-      In the main task execution block (around line 4582, where effective_model is
-      computed), add a judge_model override after the effective_model is computed:
-
-        # Apply judge_model override for planner tasks in design competitions
-        judge_model = plan.get("meta", {}).get("judge_model", "")
-        if judge_model and agent_name == "planner":
-            effective_model = judge_model
-            if escalation_config.enabled:
-                print(f"Task {task_id}: using judge_model override '{judge_model}'")
-
-      Do the same in the PARALLEL TASK execution block (around line 4270, where
-      par_effective_model is computed):
-
-        # Apply judge_model override for planner tasks in design competitions
-        judge_model = plan.get("meta", {}).get("judge_model", "")
-        if judge_model and par_agent_name == "planner":
-            par_effective_model = judge_model
-
-      IMPORTANT: The override must come AFTER escalation_config.get_effective_model()
-      is called, because judge_model is a direct override, not subject to escalation.
-
-      Also ensure the plan variable is accessible in both locations. The plan dict
-      is available as a parameter in both code paths — check the surrounding code
-      to confirm.
-
-      Verify with:
-        python3 -c "
-        import py_compile
-        py_compile.compile('scripts/plan-orchestrator.py', doraise=True)
-        print('Syntax OK')
-        "
-
-      Commit with message: "feat: add judge_model meta field for design competition judging"
-
-      Reference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md
-
+    - '2.1'
+    description: "In scripts/plan-orchestrator.py, add support for a `meta.judge_model`\
+      \ field\nthat overrides the planner agent's model for design competition judging.\n\
+      \nWHAT TO ADD:\n\nIn the main task execution block (around line 4582, where\
+      \ effective_model is\ncomputed), add a judge_model override after the effective_model\
+      \ is computed:\n\n  # Apply judge_model override for planner tasks in design\
+      \ competitions\n  judge_model = plan.get(\"meta\", {}).get(\"judge_model\",\
+      \ \"\")\n  if judge_model and agent_name == \"planner\":\n      effective_model\
+      \ = judge_model\n      if escalation_config.enabled:\n          print(f\"Task\
+      \ {task_id}: using judge_model override '{judge_model}'\")\n\nDo the same in\
+      \ the PARALLEL TASK execution block (around line 4270, where\npar_effective_model\
+      \ is computed):\n\n  # Apply judge_model override for planner tasks in design\
+      \ competitions\n  judge_model = plan.get(\"meta\", {}).get(\"judge_model\",\
+      \ \"\")\n  if judge_model and par_agent_name == \"planner\":\n      par_effective_model\
+      \ = judge_model\n\nIMPORTANT: The override must come AFTER escalation_config.get_effective_model()\n\
+      is called, because judge_model is a direct override, not subject to escalation.\n\
+      \nAlso ensure the plan variable is accessible in both locations. The plan dict\n\
+      is available as a parameter in both code paths — check the surrounding code\n\
+      to confirm.\n\nVerify with:\n  python3 -c \"\n  import py_compile\n  py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True)\n  print('Syntax OK')\n  \"\n\nCommit with message: \"feat:\
+      \ add judge_model meta field for design competition judging\"\n\nReference:\
+      \ docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md\n"
 - id: phase-3
   name: Phase 3 - Template and Documentation Updates
   status: pending
@@ -276,93 +174,58 @@ sections:
     agent: coder
     status: pending
     depends_on:
-      - '2.2'
-    description: |
-      In scripts/auto-pipeline.py, update the PLAN_CREATION_PROMPT_TEMPLATE
-      to document the new frontend-coder agent and judge_model meta field.
-
-      CHANGE 1: In the Agent Selection section (currently lists 5 agents),
-      add frontend-coder after the coder entry:
-
-        - **frontend-coder**: Frontend implementation specialist for UI components,
-          pages, and forms. Use for tasks mentioning frontend, component, UI
-          implementation, form, dialog, or modal.
-
-      CHANGE 2: In the meta section example (or the meta documentation), add
-      judge_model as an optional field with a comment:
-
-        meta:
-          judge_model: sonnet   # Optional: model for design competition judging
-          # judge_model: opus   # Default: planner agent's own model is used
-
-      CHANGE 3: Update the inference description sentence to mention frontend-coder:
-      "If you do not set the agent field, the orchestrator will infer it from the
-      task name and description (review/verification -> code-reviewer, design/architecture
-      -> systems-designer, plan extension -> planner, frontend/component/UI ->
-      frontend-coder, everything else -> coder)."
-
-      After making changes, verify syntax:
-        python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('Syntax OK')"
-
-      Commit with message: "docs: update PLAN_CREATION_PROMPT_TEMPLATE with frontend-coder and judge_model"
-
-      Reference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md
-
+    - '2.2'
+    description: "In scripts/auto-pipeline.py, update the PLAN_CREATION_PROMPT_TEMPLATE\n\
+      to document the new frontend-coder agent and judge_model meta field.\n\nCHANGE\
+      \ 1: In the Agent Selection section (currently lists 5 agents),\nadd frontend-coder\
+      \ after the coder entry:\n\n  - **frontend-coder**: Frontend implementation\
+      \ specialist for UI components,\n    pages, and forms. Use for tasks mentioning\
+      \ frontend, component, UI\n    implementation, form, dialog, or modal.\n\nCHANGE\
+      \ 2: In the meta section example (or the meta documentation), add\njudge_model\
+      \ as an optional field with a comment:\n\n  meta:\n    judge_model: sonnet \
+      \  # Optional: model for design competition judging\n    # judge_model: opus\
+      \   # Default: planner agent's own model is used\n\nCHANGE 3: Update the inference\
+      \ description sentence to mention frontend-coder:\n\"If you do not set the agent\
+      \ field, the orchestrator will infer it from the\ntask name and description\
+      \ (review/verification -> code-reviewer, design/architecture\n-> systems-designer,\
+      \ plan extension -> planner, frontend/component/UI ->\nfrontend-coder, everything\
+      \ else -> coder).\"\n\nAfter making changes, verify syntax:\n  python3 -c \"\
+      import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
+      \ print('Syntax OK')\"\n\nCommit with message: \"docs: update PLAN_CREATION_PROMPT_TEMPLATE\
+      \ with frontend-coder and judge_model\"\n\nReference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md\n"
   - id: '3.2'
     name: Update README agent table and documentation
     agent: coder
     status: pending
     depends_on:
-      - '3.1'
-    description: |
-      In README.md, update three areas to reflect the new frontend-coder agent
-      and judge_model feature:
-
-      CHANGE 1: In the Agent Framework feature bullet (line ~19), update the count
-      from 10 to 11 and add frontend-coder to the list:
-        "**Agent Framework**: 11 specialized agents (coder, frontend-coder,
-         code-reviewer, systems-designer, ux-designer, ux-reviewer, spec-verifier,
-         qa-auditor, planner, issue-verifier, validator) with YAML frontmatter definitions"
-
-      CHANGE 2: In the agents table (line ~305-316), add frontend-coder row
-      after the coder row:
-        | frontend-coder | Frontend implementation specialist - UI components, pages, forms | sonnet |
-
-      CHANGE 3: Update the inference sentence (line ~334) to mention frontend-coder:
-        "If no agent is specified, the orchestrator infers it from the task name and
-         description (review/verification -> code-reviewer, design/architecture ->
-         systems-designer, plan extension -> planner, frontend/component/UI ->
-         frontend-coder, everything else -> coder)."
-
-      CHANGE 4: In the directory tree (line ~632-640), add the new agent file:
-        ├── frontend-coder.md      # Frontend implementation specialist
-
-      CHANGE 5: In the What's Included changelog section (line ~720-726), add a
-      new bullet:
-        - Sonnet 4.6 model optimization for ux-designer and new frontend-coder agent
-
-      CHANGE 6: Add a judge_model section in the Agent Framework documentation.
-      After the Per-Task Validation section (or in the Phase 0 Design Competition
-      section), add:
-
-        ### Judge Model for Design Competitions
-
-        Design competition judging can use a different model by adding judge_model
-        to the plan meta:
-
-        ```yaml
-        meta:
-          judge_model: sonnet   # For UI-focused competitions
-          # judge_model: opus   # For architecture competitions
-        ```
-
-        When judge_model is set, the planner task that evaluates competition designs
-        uses that model instead of the planner agent's default.
-
-      Commit with message: "docs: update README with frontend-coder agent and judge_model documentation"
-
-      Reference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md
-
+    - '3.1'
+    description: "In README.md, update three areas to reflect the new frontend-coder\
+      \ agent\nand judge_model feature:\n\nCHANGE 1: In the Agent Framework feature\
+      \ bullet (line ~19), update the count\nfrom 10 to 11 and add frontend-coder\
+      \ to the list:\n  \"**Agent Framework**: 11 specialized agents (coder, frontend-coder,\n\
+      \   code-reviewer, systems-designer, ux-designer, ux-reviewer, spec-verifier,\n\
+      \   qa-auditor, planner, issue-verifier, validator) with YAML frontmatter definitions\"\
+      \n\nCHANGE 2: In the agents table (line ~305-316), add frontend-coder row\n\
+      after the coder row:\n  | frontend-coder | Frontend implementation specialist\
+      \ - UI components, pages, forms | sonnet |\n\nCHANGE 3: Update the inference\
+      \ sentence (line ~334) to mention frontend-coder:\n  \"If no agent is specified,\
+      \ the orchestrator infers it from the task name and\n   description (review/verification\
+      \ -> code-reviewer, design/architecture ->\n   systems-designer, plan extension\
+      \ -> planner, frontend/component/UI ->\n   frontend-coder, everything else ->\
+      \ coder).\"\n\nCHANGE 4: In the directory tree (line ~632-640), add the new\
+      \ agent file:\n  ├── frontend-coder.md      # Frontend implementation specialist\n\
+      \nCHANGE 5: In the What's Included changelog section (line ~720-726), add a\n\
+      new bullet:\n  - Sonnet 4.6 model optimization for ux-designer and new frontend-coder\
+      \ agent\n\nCHANGE 6: Add a judge_model section in the Agent Framework documentation.\n\
+      After the Per-Task Validation section (or in the Phase 0 Design Competition\n\
+      section), add:\n\n  ### Judge Model for Design Competitions\n\n  Design competition\
+      \ judging can use a different model by adding judge_model\n  to the plan meta:\n\
+      \n  ```yaml\n  meta:\n    judge_model: sonnet   # For UI-focused competitions\n\
+      \    # judge_model: opus   # For architecture competitions\n  ```\n\n  When\
+      \ judge_model is set, the planner task that evaluates competition designs\n\
+      \  uses that model instead of the planner agent's default.\n\nCommit with message:\
+      \ \"docs: update README with frontend-coder agent and judge_model documentation\"\
+      \n\nReference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md\n"
 - id: phase-4
   name: Phase 4 - Tests
   status: pending
@@ -372,85 +235,52 @@ sections:
     agent: coder
     status: pending
     depends_on:
-      - '3.2'
-    description: |
-      In tests/test_spec_verifier_ux_reviewer.py, update the failing assertion and
-      add new tests for the frontend-coder agent.
-
-      CHANGE 1: Update test_ux_reviewer_distinct_from_ux_designer (line ~90-103).
-      The assertion `assert ux_designer["model"] == "opus"` is now wrong.
-      Change it to:
-        assert ux_designer["model"] == "sonnet", \
-            f"ux-designer should use sonnet model, got {ux_designer['model']}"
-
-      Also update the docstring to reflect the new expectation:
-        """ux-reviewer and ux-designer should be distinct agents, both using sonnet."""
-
-      CHANGE 2: Add a test for frontend-coder agent definition at the end of
-      the file (after test_infer_agent_non_spec_ux_task):
-
-        def test_frontend_coder_agent_definition():
-            """frontend-coder agent should exist with sonnet model and correct tools."""
-            frontend_coder = load_agent_definition("frontend-coder")
-
-            assert frontend_coder is not None, "frontend-coder agent should exist"
-            assert frontend_coder["name"] == "frontend-coder"
-            assert frontend_coder["model"] == "sonnet", \
-                f"frontend-coder should use sonnet model, got {frontend_coder['model']}"
-            assert "Read" in frontend_coder["tools"], "frontend-coder should have Read tool"
-            assert "Edit" in frontend_coder["tools"], "frontend-coder should have Edit tool"
-            assert "Write" in frontend_coder["tools"], "frontend-coder should have Write tool"
-
-
-        def test_infer_agent_for_frontend_form_task():
-            """Task with 'form' keyword should infer frontend-coder agent."""
-            task = {
-                "name": "Build login form",
-                "description": "Implement the login form with validation"
-            }
-            result = infer_agent_for_task(task)
-            assert result == "frontend-coder", f"Expected 'frontend-coder', got '{result}'"
-
-
-        def test_infer_agent_for_frontend_component_task():
-            """Task with 'component' keyword should infer frontend-coder agent."""
-            task = {
-                "name": "Build navigation component",
-                "description": "Implement the navigation bar component"
-            }
-            result = infer_agent_for_task(task)
-            assert result == "frontend-coder", f"Expected 'frontend-coder', got '{result}'"
-
-
-        def test_infer_agent_for_modal_task():
-            """Task with 'modal' keyword should infer frontend-coder agent."""
-            task = {
-                "name": "Implement confirmation modal",
-                "description": "Add a confirmation modal dialog"
-            }
-            result = infer_agent_for_task(task)
-            assert result == "frontend-coder", f"Expected 'frontend-coder', got '{result}'"
-
-
-        def test_infer_agent_frontend_does_not_collide_with_reviewer():
-            """A task with both 'verify' and 'component' should pick code-reviewer (higher priority)."""
-            task = {
-                "name": "Verify component",
-                "description": "Verify the component implementation"
-            }
-            result = infer_agent_for_task(task)
-            assert result == "code-reviewer", f"Expected 'code-reviewer', got '{result}'"
-
-      After changes, run the full test suite:
-        ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ -v
-
-      Fix any failures immediately. If test_ux_reviewer_distinct_from_ux_designer
-      still fails after the update, re-read the file to confirm the change was saved.
-
-      Commit with message: "test: update ux-designer model assertion and add frontend-coder tests"
-
-      Reference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md
-
+    - '3.2'
+    description: "In tests/test_spec_verifier_ux_reviewer.py, update the failing assertion\
+      \ and\nadd new tests for the frontend-coder agent.\n\nCHANGE 1: Update test_ux_reviewer_distinct_from_ux_designer\
+      \ (line ~90-103).\nThe assertion `assert ux_designer[\"model\"] == \"opus\"\
+      ` is now wrong.\nChange it to:\n  assert ux_designer[\"model\"] == \"sonnet\"\
+      , \\\n      f\"ux-designer should use sonnet model, got {ux_designer['model']}\"\
+      \n\nAlso update the docstring to reflect the new expectation:\n  \"\"\"ux-reviewer\
+      \ and ux-designer should be distinct agents, both using sonnet.\"\"\"\n\nCHANGE\
+      \ 2: Add a test for frontend-coder agent definition at the end of\nthe file\
+      \ (after test_infer_agent_non_spec_ux_task):\n\n  def test_frontend_coder_agent_definition():\n\
+      \      \"\"\"frontend-coder agent should exist with sonnet model and correct\
+      \ tools.\"\"\"\n      frontend_coder = load_agent_definition(\"frontend-coder\"\
+      )\n\n      assert frontend_coder is not None, \"frontend-coder agent should\
+      \ exist\"\n      assert frontend_coder[\"name\"] == \"frontend-coder\"\n   \
+      \   assert frontend_coder[\"model\"] == \"sonnet\", \\\n          f\"frontend-coder\
+      \ should use sonnet model, got {frontend_coder['model']}\"\n      assert \"\
+      Read\" in frontend_coder[\"tools\"], \"frontend-coder should have Read tool\"\
+      \n      assert \"Edit\" in frontend_coder[\"tools\"], \"frontend-coder should\
+      \ have Edit tool\"\n      assert \"Write\" in frontend_coder[\"tools\"], \"\
+      frontend-coder should have Write tool\"\n\n\n  def test_infer_agent_for_frontend_form_task():\n\
+      \      \"\"\"Task with 'form' keyword should infer frontend-coder agent.\"\"\
+      \"\n      task = {\n          \"name\": \"Build login form\",\n          \"\
+      description\": \"Implement the login form with validation\"\n      }\n     \
+      \ result = infer_agent_for_task(task)\n      assert result == \"frontend-coder\"\
+      , f\"Expected 'frontend-coder', got '{result}'\"\n\n\n  def test_infer_agent_for_frontend_component_task():\n\
+      \      \"\"\"Task with 'component' keyword should infer frontend-coder agent.\"\
+      \"\"\n      task = {\n          \"name\": \"Build navigation component\",\n\
+      \          \"description\": \"Implement the navigation bar component\"\n   \
+      \   }\n      result = infer_agent_for_task(task)\n      assert result == \"\
+      frontend-coder\", f\"Expected 'frontend-coder', got '{result}'\"\n\n\n  def\
+      \ test_infer_agent_for_modal_task():\n      \"\"\"Task with 'modal' keyword\
+      \ should infer frontend-coder agent.\"\"\"\n      task = {\n          \"name\"\
+      : \"Implement confirmation modal\",\n          \"description\": \"Add a confirmation\
+      \ modal dialog\"\n      }\n      result = infer_agent_for_task(task)\n     \
+      \ assert result == \"frontend-coder\", f\"Expected 'frontend-coder', got '{result}'\"\
+      \n\n\n  def test_infer_agent_frontend_does_not_collide_with_reviewer():\n  \
+      \    \"\"\"A task with both 'verify' and 'component' should pick code-reviewer\
+      \ (higher priority).\"\"\"\n      task = {\n          \"name\": \"Verify component\"\
+      ,\n          \"description\": \"Verify the component implementation\"\n    \
+      \  }\n      result = infer_agent_for_task(task)\n      assert result == \"code-reviewer\"\
+      , f\"Expected 'code-reviewer', got '{result}'\"\n\nAfter changes, run the full\
+      \ test suite:\n  ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ -v\n\n\
+      Fix any failures immediately. If test_ux_reviewer_distinct_from_ux_designer\n\
+      still fails after the update, re-read the file to confirm the change was saved.\n\
+      \nCommit with message: \"test: update ux-designer model assertion and add frontend-coder\
+      \ tests\"\n\nReference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md\n"
 - id: phase-5
   name: Phase 5 - Verification
   status: pending
@@ -460,72 +290,38 @@ sections:
     agent: code-reviewer
     status: pending
     depends_on:
-      - '4.1'
-    description: |
-      Run all verification checks to confirm feature 8 is correctly implemented.
-
-      1. Verify Python syntax for both scripts:
-         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('Syntax OK')"
-
-      2. Verify all agent files exist and have valid frontmatter:
-         python3 -c "
-         import yaml
-         agents = [
-             ('ux-designer', 'sonnet'),
-             ('frontend-coder', 'sonnet'),
-             ('systems-designer', 'opus'),
-             ('coder', 'sonnet'),
-         ]
-         for name, expected_model in agents:
-             path = f'.claude/agents/{name}.md'
-             content = open(path).read()
-             parts = content.split('---', 2)
-             meta = yaml.safe_load(parts[1])
-             assert meta['model'] == expected_model, f'{name}: expected {expected_model}, got {meta[\"model\"]}'
-             print(f'OK: {name} uses {meta[\"model\"]}')
-         print('All agent models verified')
-         "
-
-      3. Verify inference routes frontend tasks correctly:
-         python3 -c "
-         import importlib.util
-         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
-         mod = importlib.util.module_from_spec(spec)
-         spec.loader.exec_module(mod)
-         infer = mod.infer_agent_for_task
-
-         cases = [
-             ({'name': 'Build login form', 'description': ''}, 'frontend-coder'),
-             ({'name': 'Build nav component', 'description': ''}, 'frontend-coder'),
-             ({'name': 'Implement modal', 'description': ''}, 'frontend-coder'),
-             ({'name': 'Verify build', 'description': ''}, 'code-reviewer'),
-             ({'name': 'Generate design', 'description': ''}, 'systems-designer'),
-             ({'name': 'Implement feature', 'description': ''}, 'coder'),
-         ]
-         all_pass = True
-         for task, expected in cases:
-             result = infer(task)
-             ok = result == expected
-             if not ok:
-                 all_pass = False
-             print(f'{'OK' if ok else 'FAIL'}: {task[\"name\"]!r} -> {result!r}')
-         assert all_pass, 'Some inference cases failed'
-         print('All inference cases passed')
-         "
-
-      4. Run full test suite:
-         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ -v
-
-      5. Verify FRONTEND_CODER_KEYWORDS is defined in plan-orchestrator.py:
-         python3 -c "
-         import importlib.util
-         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
-         mod = importlib.util.module_from_spec(spec)
-         spec.loader.exec_module(mod)
-         assert hasattr(mod, 'FRONTEND_CODER_KEYWORDS'), 'FRONTEND_CODER_KEYWORDS not found'
-         print('OK: FRONTEND_CODER_KEYWORDS =', mod.FRONTEND_CODER_KEYWORDS)
-         "
-
-      Report PASS if all checks succeed, FAIL with specific findings otherwise.
-
-      Reference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md
+    - '4.1'
+    description: "Run all verification checks to confirm feature 8 is correctly implemented.\n\
+      \n1. Verify Python syntax for both scripts:\n   python3 -c \"import py_compile;\
+      \ py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('Syntax OK')\"\n\n2. Verify all agent files exist and\
+      \ have valid frontmatter:\n   python3 -c \"\n   import yaml\n   agents = [\n\
+      \       ('ux-designer', 'sonnet'),\n       ('frontend-coder', 'sonnet'),\n \
+      \      ('systems-designer', 'opus'),\n       ('coder', 'sonnet'),\n   ]\n  \
+      \ for name, expected_model in agents:\n       path = f'.claude/agents/{name}.md'\n\
+      \       content = open(path).read()\n       parts = content.split('---', 2)\n\
+      \       meta = yaml.safe_load(parts[1])\n       assert meta['model'] == expected_model,\
+      \ f'{name}: expected {expected_model}, got {meta[\\\"model\\\"]}'\n       print(f'OK:\
+      \ {name} uses {meta[\\\"model\\\"]}')\n   print('All agent models verified')\n\
+      \   \"\n\n3. Verify inference routes frontend tasks correctly:\n   python3 -c\
+      \ \"\n   import importlib.util\n   spec = importlib.util.spec_from_file_location('po',\
+      \ 'scripts/plan-orchestrator.py')\n   mod = importlib.util.module_from_spec(spec)\n\
+      \   spec.loader.exec_module(mod)\n   infer = mod.infer_agent_for_task\n\n  \
+      \ cases = [\n       ({'name': 'Build login form', 'description': ''}, 'frontend-coder'),\n\
+      \       ({'name': 'Build nav component', 'description': ''}, 'frontend-coder'),\n\
+      \       ({'name': 'Implement modal', 'description': ''}, 'frontend-coder'),\n\
+      \       ({'name': 'Verify build', 'description': ''}, 'code-reviewer'),\n  \
+      \     ({'name': 'Generate design', 'description': ''}, 'systems-designer'),\n\
+      \       ({'name': 'Implement feature', 'description': ''}, 'coder'),\n   ]\n\
+      \   all_pass = True\n   for task, expected in cases:\n       result = infer(task)\n\
+      \       ok = result == expected\n       if not ok:\n           all_pass = False\n\
+      \       print(f'{'OK' if ok else 'FAIL'}: {task[\\\"name\\\"]!r} -> {result!r}')\n\
+      \   assert all_pass, 'Some inference cases failed'\n   print('All inference\
+      \ cases passed')\n   \"\n\n4. Run full test suite:\n   ~/.pyenv/versions/3.11.*/bin/python\
+      \ -m pytest tests/ -v\n\n5. Verify FRONTEND_CODER_KEYWORDS is defined in plan-orchestrator.py:\n\
+      \   python3 -c \"\n   import importlib.util\n   spec = importlib.util.spec_from_file_location('po',\
+      \ 'scripts/plan-orchestrator.py')\n   mod = importlib.util.module_from_spec(spec)\n\
+      \   spec.loader.exec_module(mod)\n   assert hasattr(mod, 'FRONTEND_CODER_KEYWORDS'),\
+      \ 'FRONTEND_CODER_KEYWORDS not found'\n   print('OK: FRONTEND_CODER_KEYWORDS\
+      \ =', mod.FRONTEND_CODER_KEYWORDS)\n   \"\n\nReport PASS if all checks succeed,\
+      \ FAIL with specific findings otherwise.\n\nReference: docs/plans/2026-02-17-8-use-sonnet-4-6-for-ui-design-and-judging-design.md\n"
