@@ -180,6 +180,81 @@ def restore_terminal_settings() -> None:
 _PIPELINE_PID = os.getpid()
 
 
+def _open_item_log(slug: str, item_name: str, item_type: str) -> None:
+    """Open a per-item detail log file in logs/<slug>.log (append mode).
+
+    Creates the logs/ directory if it does not exist. Writes a session-start
+    header so multiple pipeline runs are clearly separated in the log file.
+
+    Args:
+        slug: Backlog item slug used as the log filename (e.g. '1-feature-slug').
+        item_name: Human-readable item name for the session header.
+        item_type: Item type string ('defect' or 'feature').
+    """
+    global _item_log_file
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    log_path = os.path.join(LOGS_DIR, f"{slug}.log")
+    _item_log_file = open(log_path, "a", encoding="utf-8", buffering=1)
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    header = (
+        "=" * 80 + "\n"
+        f"SESSION START  {ts}  PID={_PIPELINE_PID}\n"
+        f"Item: {slug}\n"
+        f"Name: {item_name}\n"
+        f"Type: {item_type}\n"
+        + "=" * 80 + "\n"
+    )
+    _item_log_file.write(header)
+    _item_log_file.flush()
+
+
+def _close_item_log(result: str) -> None:
+    """Write a session-end footer and close the current item detail log.
+
+    Safe to call even if no log is open (no-op in that case).
+
+    Args:
+        result: Short result string written into the footer (e.g. 'success',
+                'failed', 'verification-exhausted').
+    """
+    global _item_log_file
+    if _item_log_file is None:
+        return
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    footer = (
+        "=" * 80 + "\n"
+        f"SESSION END  {ts}  result={result}\n"
+        + "=" * 80 + "\n"
+    )
+    _item_log_file.write(footer)
+    _item_log_file.flush()
+    _item_log_file.close()
+    _item_log_file = None
+
+
+def _log_summary(level: str, event: str, slug: str, detail: str = "") -> None:
+    """Append a single structured line to logs/pipeline.log.
+
+    Creates logs/ if it does not exist. Each line has the format:
+      YYYY-MM-DD HH:MM:SS [LEVEL]  EVENT  slug  detail
+
+    Args:
+        level: One of 'INFO', 'WARN', 'ERROR'.
+        event: Event keyword (e.g. 'STARTED', 'COMPLETED', 'FAILED').
+        slug: Backlog item slug.
+        detail: Optional extra detail appended after the slug.
+    """
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    summary_path = os.path.join(LOGS_DIR, SUMMARY_LOG_FILENAME)
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    parts = [ts, f"[{level}]", event, slug]
+    if detail:
+        parts.append(detail)
+    line = "  ".join(parts) + "\n"
+    with open(summary_path, "a", encoding="utf-8") as f:
+        f.write(line)
+
+
 def log(message: str) -> None:
     """Print a timestamped log message with PID for process tracking."""
     timestamp = datetime.now().strftime("%H:%M:%S")

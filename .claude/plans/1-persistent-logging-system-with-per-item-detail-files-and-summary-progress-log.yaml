@@ -57,7 +57,7 @@ sections:
   - id: '1.2'
     name: Implement _open_item_log(), _close_item_log(), and _log_summary() helpers
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '1.1'
     description: "Add three helper functions to scripts/auto-pipeline.py for the two-tier\
@@ -111,6 +111,8 @@ sections:
       \ _open_item_log'\n   assert callable(mod._close_item_log), 'Missing _close_item_log'\n\
       \   assert callable(mod._log_summary), 'Missing _log_summary'\n   print('Helper\
       \ functions verified OK')\n   \"\n\nFiles: scripts/auto-pipeline.py\n"
+    attempts: 1
+    last_attempt: '2026-02-18T08:55:02.139226'
   - id: '1.3'
     name: Extend log() and verbose_log() to tee output to item detail log
     agent: coder
