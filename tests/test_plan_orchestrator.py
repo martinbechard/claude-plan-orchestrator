@@ -711,6 +711,78 @@ def test_git_stash_pop_conflict():
     assert result is False
 
 
+# --- get_type_channel_id tests ---
+
+
+def test_get_type_channel_id_feature_returns_features_channel():
+    """Verify 'feature' maps to the orchestrator-features channel."""
+    notifier = SlackNotifier()
+    notifier._channel_prefix = "orchestrator-"
+    notifier._discovered_channels = {
+        "orchestrator-features": "C_FEATURES_ID",
+        "orchestrator-defects": "C_DEFECTS_ID",
+        "orchestrator-notifications": "C_NOTIFY_ID",
+    }
+    notifier._channels_discovered_at = float("inf")  # prevent re-discovery
+
+    result = notifier.get_type_channel_id("feature")
+
+    assert result == "C_FEATURES_ID"
+
+
+def test_get_type_channel_id_defect_returns_defects_channel():
+    """Verify 'defect' maps to the orchestrator-defects channel."""
+    notifier = SlackNotifier()
+    notifier._channel_prefix = "orchestrator-"
+    notifier._discovered_channels = {
+        "orchestrator-features": "C_FEATURES_ID",
+        "orchestrator-defects": "C_DEFECTS_ID",
+        "orchestrator-notifications": "C_NOTIFY_ID",
+    }
+    notifier._channels_discovered_at = float("inf")
+
+    result = notifier.get_type_channel_id("defect")
+
+    assert result == "C_DEFECTS_ID"
+
+
+def test_get_type_channel_id_unknown_type_returns_empty():
+    """Verify an unrecognized item_type returns empty string."""
+    notifier = SlackNotifier()
+
+    result = notifier.get_type_channel_id("unknown")
+
+    assert result == ""
+
+
+def test_get_type_channel_id_channel_not_in_discovered_returns_empty():
+    """Verify empty string returned when channel is not in discovered channels."""
+    notifier = SlackNotifier()
+    notifier._channel_prefix = "orchestrator-"
+
+    # Mock _discover_channels to return an empty dict so no real API call is made.
+    # An empty dict is falsy, so the cache guard wouldn't prevent the API call
+    # without this mock.
+    with unittest.mock.patch.object(notifier, '_discover_channels', return_value={}):
+        result = notifier.get_type_channel_id("feature")
+
+    assert result == ""
+
+
+def test_get_type_channel_id_custom_prefix():
+    """Verify custom channel prefix is used when building the channel name."""
+    notifier = SlackNotifier()
+    notifier._channel_prefix = "myteam-"
+    notifier._discovered_channels = {
+        "myteam-features": "C_CUSTOM_FEATURES",
+    }
+    notifier._channels_discovered_at = float("inf")
+
+    result = notifier.get_type_channel_id("feature")
+
+    assert result == "C_CUSTOM_FEATURES"
+
+
 def test_stash_pop_discards_task_status_json(tmp_path, monkeypatch):
     """Regression: git_stash_pop() succeeds when task-status.json is present in working tree.
 
