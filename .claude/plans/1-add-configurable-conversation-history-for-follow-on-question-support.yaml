@@ -1,0 +1,486 @@
+meta:
+  name: Add Configurable Conversation History for Follow-on Question Support
+  description: >-
+    Extend SlackNotifier.answer_question() to maintain a rolling window of prior
+    Q&A exchanges and inject that history into each new question's prompt. The
+    window size is configurable in slack.local.yaml (default: 3 turns). This
+    enables iterative, follow-on questions without requiring users to restate
+    background context each time.
+  plan_doc: docs/plans/2026-02-18-1-add-configurable-conversation-history-for-follow-on-question-support-design.md
+  created: '2026-02-18'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - validator
+    max_validation_attempts: 1
+
+sections:
+- id: phase-1
+  name: Phase 1 - Core Implementation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add QA_HISTORY_DEFAULT_MAX_TURNS constant and update SlackNotifier init
+    agent: coder
+    status: pending
+    description: |
+      Add the history constant and new instance fields to SlackNotifier in
+      scripts/plan-orchestrator.py.
+
+      Reference: docs/plans/2026-02-18-1-add-configurable-conversation-history-for-follow-on-question-support-design.md
+
+      Steps:
+      1. Read scripts/plan-orchestrator.py. Find the block of Slack constants
+         (around lines 74-121, near QUESTION_ANSWER_TIMEOUT_SECONDS).
+
+      2. After the line:
+           QUESTION_ANSWER_TIMEOUT_SECONDS = 60  # 1 minute for question answering
+         Add:
+           QA_HISTORY_DEFAULT_MAX_TURNS = 3  # Default rolling window size for Q&A history
+
+      3. Read the SlackNotifier.__init__ method (around line 2788).
+         At the end of the instance variable initializations block (just before
+         the "try:" that reads the config file), add two new fields:
+           self._qa_history: list[tuple[str, str]] = []
+           self._qa_history_enabled: bool = True
+           self._qa_history_max_turns: int = QA_HISTORY_DEFAULT_MAX_TURNS
+
+      4. Inside the config-reading try block, after the line that reads
+         self._question_config (around line 2830), add config parsing for the
+         new conversation_history section:
+           conv_config = slack_config.get("conversation_history", {})
+           if isinstance(conv_config, dict):
+               self._qa_history_enabled = bool(conv_config.get("enabled", True))
+               self._qa_history_max_turns = int(
+                   conv_config.get("max_turns", QA_HISTORY_DEFAULT_MAX_TURNS)
+               )
+
+      5. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      6. Verify constant and new fields exist:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert hasattr(mod, 'QA_HISTORY_DEFAULT_MAX_TURNS'), 'Missing QA_HISTORY_DEFAULT_MAX_TURNS'
+         assert mod.QA_HISTORY_DEFAULT_MAX_TURNS == 3, 'Wrong default value'
+         n = mod.SlackNotifier('/nonexistent')
+         assert hasattr(n, '_qa_history'), 'Missing _qa_history'
+         assert n._qa_history == [], 'Should start empty'
+         assert hasattr(n, '_qa_history_enabled'), 'Missing _qa_history_enabled'
+         assert hasattr(n, '_qa_history_max_turns'), 'Missing _qa_history_max_turns'
+         assert n._qa_history_max_turns == 3, 'Wrong default max_turns'
+         print('Constant and init fields verified OK')
+         "
+
+      Files: scripts/plan-orchestrator.py
+
+  - id: '1.2'
+    name: Update QUESTION_ANSWER_PROMPT with history_context placeholder
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.1'
+    description: |
+      Update the QUESTION_ANSWER_PROMPT constant to include a {history_context}
+      placeholder in scripts/plan-orchestrator.py.
+
+      Reference: docs/plans/2026-02-18-1-add-configurable-conversation-history-for-follow-on-question-support-design.md
+
+      Steps:
+      1. Read scripts/plan-orchestrator.py. Find QUESTION_ANSWER_PROMPT (around line 101).
+         The current prompt starts with:
+           """You are an AI pipeline orchestrator answering a human's question via Slack.
+
+           Here is the current pipeline state:
+
+           {state_context}
+         ...
+           Human's question: {question}
+
+           Answer:"""
+
+      2. Replace the QUESTION_ANSWER_PROMPT constant so that it starts with
+         {history_context} before the "Here is the current pipeline state:" line:
+
+         QUESTION_ANSWER_PROMPT = """You are an AI pipeline orchestrator answering a human's question via Slack.
+
+         {history_context}Here is the current pipeline state:
+
+         {state_context}
+
+         Important context:
+         - The human runs you via Claude Code on a Max subscription, NOT the direct API.
+         - The "total_cost_usd" in session logs is an API-equivalent estimate reported by
+           Claude CLI. It does NOT represent actual charges for subscription users. If asked
+           about costs, explain this clearly.
+         - Keep your answer concise (2-6 lines) and conversational. Use Slack mrkdwn formatting
+           (*bold*, _italic_) sparingly.
+         - Only include information relevant to the question. Do not dump all available data.
+         - If you genuinely cannot answer from the available state, say so honestly.
+
+         Human's question: {question}
+
+         Answer:"""
+
+         IMPORTANT: Preserve the exact original wording of all other lines.
+         Only prepend {history_context} before "Here is the current pipeline state:".
+
+      3. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      4. Verify the placeholder exists in the prompt:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert '{history_context}' in mod.QUESTION_ANSWER_PROMPT, 'Missing {history_context} in prompt'
+         assert '{state_context}' in mod.QUESTION_ANSWER_PROMPT, 'Missing {state_context}'
+         assert '{question}' in mod.QUESTION_ANSWER_PROMPT, 'Missing {question}'
+         print('QUESTION_ANSWER_PROMPT placeholders verified OK')
+         "
+
+      Files: scripts/plan-orchestrator.py
+
+  - id: '1.3'
+    name: Update answer_question() to inject and record history
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.2'
+    description: |
+      Update answer_question() in SlackNotifier to build and inject conversation
+      history into the prompt, then record the new exchange.
+
+      Reference: docs/plans/2026-02-18-1-add-configurable-conversation-history-for-follow-on-question-support-design.md
+
+      Steps:
+      1. Read scripts/plan-orchestrator.py. Find the answer_question method (around
+         line 3755). It currently looks like:
+
+           def answer_question(self, question: str,
+                               channel_id: Optional[str] = None) -> None:
+               print(f"[SLACK] Answering question: {question[:80]}")
+
+               state = self._gather_pipeline_state()
+               state_context = self._format_state_context(state)
+               prompt = QUESTION_ANSWER_PROMPT.format(
+                   state_context=state_context, question=question
+               )
+
+               try:
+                   answer = self._call_claude_print(prompt)
+                   if not answer:
+                       answer = f"_(LLM returned empty)_\n{state_context}"
+               except Exception as e:
+                   print(f"[SLACK] LLM answer failed: {e}")
+                   answer = f"_(LLM unavailable)_\n{state_context}"
+
+               print(f"[SLACK] Answer: {answer[:120]}")
+               self.send_status(answer, level="info", channel_id=channel_id)
+
+      2. Replace the method body to:
+         a. Build history_context from self._qa_history before formatting the prompt.
+         b. Format the prompt with all three placeholders.
+         c. After a successful answer, append (question, answer) to self._qa_history
+            and trim to self._qa_history_max_turns.
+
+         New implementation:
+
+           def answer_question(self, question: str,
+                               channel_id: Optional[str] = None) -> None:
+               """Respond to a question from Slack using an LLM call with pipeline context.
+
+               Maintains a rolling window of prior Q&A exchanges (size configured by
+               self._qa_history_max_turns) and injects that history into each prompt.
+
+               Args:
+                   question: The question text
+                   channel_id: Reply to this channel. Falls back to default.
+               """
+               print(f"[SLACK] Answering question: {question[:80]}")
+
+               # Build conversation history context for the prompt
+               history_context = ""
+               if (self._qa_history_enabled
+                       and self._qa_history_max_turns > 0
+                       and self._qa_history):
+                   lines = ["Prior conversation:"]
+                   for prior_q, prior_a in self._qa_history:
+                       lines.append(f"Q: {prior_q}")
+                       lines.append(f"A: {prior_a}")
+                   lines.append("")
+                   history_context = "\n".join(lines) + "\n"
+
+               state = self._gather_pipeline_state()
+               state_context = self._format_state_context(state)
+               prompt = QUESTION_ANSWER_PROMPT.format(
+                   history_context=history_context,
+                   state_context=state_context,
+                   question=question,
+               )
+
+               try:
+                   answer = self._call_claude_print(prompt)
+                   if not answer:
+                       answer = f"_(LLM returned empty)_\n{state_context}"
+               except Exception as e:
+                   print(f"[SLACK] LLM answer failed: {e}")
+                   answer = f"_(LLM unavailable)_\n{state_context}"
+
+               print(f"[SLACK] Answer: {answer[:120]}")
+               self.send_status(answer, level="info", channel_id=channel_id)
+
+               # Record this exchange in the rolling history window
+               if self._qa_history_enabled and self._qa_history_max_turns > 0:
+                   self._qa_history.append((question, answer))
+                   if len(self._qa_history) > self._qa_history_max_turns:
+                       self._qa_history = self._qa_history[-self._qa_history_max_turns:]
+
+      3. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      4. Verify the history injection logic by smoke-testing:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         n = mod.SlackNotifier('/nonexistent')
+         # Should start empty
+         assert n._qa_history == []
+
+         # Simulate recording an exchange directly
+         n._qa_history.append(('What is the status?', 'Pipeline is idle.'))
+         assert len(n._qa_history) == 1
+
+         # Simulate trimming when over limit
+         n._qa_history_max_turns = 2
+         for i in range(5):
+             n._qa_history.append((f'Q{i}', f'A{i}'))
+             if len(n._qa_history) > n._qa_history_max_turns:
+                 n._qa_history = n._qa_history[-n._qa_history_max_turns:]
+         assert len(n._qa_history) == 2, f'Expected 2 entries, got {len(n._qa_history)}'
+         assert n._qa_history[-1] == ('Q4', 'A4'), 'Last entry should be most recent'
+         print('answer_question history logic verified OK')
+         "
+
+      Files: scripts/plan-orchestrator.py
+
+- id: phase-2
+  name: Phase 2 - Config Template Update
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Document conversation_history config in slack.local.yaml.template
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.3'
+    description: |
+      Add the conversation_history configuration block to the slack.local.yaml.template
+      so new users discover the feature immediately.
+
+      Steps:
+      1. Read .claude/slack.local.yaml.template.
+
+      2. After the existing "questions:" block at the end of the file, add:
+           conversation_history:
+             enabled: true          # Set to false to disable rolling history
+             max_turns: 3           # Number of prior Q&A turns to include in each prompt (0 = disabled)
+
+      3. Verify the file is valid YAML:
+         python3 -c "
+         import yaml
+         with open('.claude/slack.local.yaml.template') as f:
+             config = yaml.safe_load(f)
+         assert 'conversation_history' in config['slack'], 'Missing conversation_history block'
+         assert config['slack']['conversation_history']['max_turns'] == 3
+         assert config['slack']['conversation_history']['enabled'] is True
+         print('Template validated OK with conversation_history block')
+         "
+
+      Files: .claude/slack.local.yaml.template
+
+- id: phase-3
+  name: Phase 3 - Unit Tests
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Add unit tests for history accumulation, trimming, injection, and config
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.1'
+    description: |
+      Add unit tests for the new conversation history feature to
+      tests/test_slack_notifier.py.
+
+      Reference: docs/plans/2026-02-18-1-add-configurable-conversation-history-for-follow-on-question-support-design.md
+
+      Steps:
+      1. Read tests/test_slack_notifier.py to understand the test structure and
+         imports. Find the "Tests for answer_question (LLM-powered)" section
+         (near the end of the file) and the _make_notifier() helper.
+
+      2. Read scripts/plan-orchestrator.py to confirm the answer_question and
+         QUESTION_ANSWER_PROMPT implementations.
+
+      3. Add the following test cases at the end of the file, after the last
+         existing test in the answer_question section:
+
+         a. test_qa_history_constant_exists:
+            Load the module. Assert hasattr(mod, 'QA_HISTORY_DEFAULT_MAX_TURNS').
+            Assert mod.QA_HISTORY_DEFAULT_MAX_TURNS == 3.
+
+         b. test_qa_history_initial_state(tmp_path):
+            Create notifier with _make_notifier(tmp_path).
+            Assert notifier._qa_history == [].
+            Assert notifier._qa_history_enabled is True.
+            Assert notifier._qa_history_max_turns == 3.
+
+         c. test_qa_history_config_loads(tmp_path):
+            Create a config yaml with:
+              slack.conversation_history.enabled = false
+              slack.conversation_history.max_turns = 5
+            Create SlackNotifier from that config.
+            Assert notifier._qa_history_enabled is False.
+            Assert notifier._qa_history_max_turns == 5.
+
+         d. test_qa_history_config_defaults_when_absent(tmp_path):
+            Create a config yaml WITHOUT a conversation_history key.
+            Assert notifier._qa_history_max_turns == 3 (default).
+            Assert notifier._qa_history_enabled is True (default).
+
+         e. test_answer_question_records_exchange(tmp_path, monkeypatch):
+            Create notifier with _make_notifier(tmp_path).
+            Monkey-patch notifier._gather_pipeline_state to return {}.
+            Monkey-patch notifier._format_state_context to return "state: idle".
+            Monkey-patch notifier._call_claude_print to return "Pipeline is idle.".
+            Monkey-patch notifier.send_status to capture calls.
+            Call notifier.answer_question("What is the status?").
+            Assert len(notifier._qa_history) == 1.
+            Assert notifier._qa_history[0] == ("What is the status?", "Pipeline is idle.").
+
+         f. test_answer_question_injects_history(tmp_path, monkeypatch):
+            Create notifier with _make_notifier(tmp_path).
+            Pre-seed: notifier._qa_history = [("Prior Q", "Prior A")].
+            Monkey-patch notifier._gather_pipeline_state to return {}.
+            Monkey-patch notifier._format_state_context to return "state: idle".
+            Capture the prompt passed to _call_claude_print (use monkeypatch).
+            Monkey-patch _call_claude_print to record its argument and return "Answer".
+            Monkey-patch send_status to no-op.
+            Call notifier.answer_question("Follow-up question").
+            Assert "Prior Q" in the captured prompt.
+            Assert "Prior A" in the captured prompt.
+            Assert "Prior conversation:" in the captured prompt.
+
+         g. test_answer_question_trims_history(tmp_path, monkeypatch):
+            Create notifier with _make_notifier(tmp_path).
+            Set notifier._qa_history_max_turns = 2.
+            Monkey-patch _gather_pipeline_state, _format_state_context, send_status.
+            Monkey-patch _call_claude_print to return "Answer N".
+            Call answer_question("Q1"), answer_question("Q2"), answer_question("Q3").
+            Assert len(notifier._qa_history) == 2.
+            Assert notifier._qa_history[0][0] == "Q2".
+            Assert notifier._qa_history[1][0] == "Q3".
+
+         h. test_answer_question_history_disabled(tmp_path, monkeypatch):
+            Create notifier with conversation_history.enabled = false in config.
+            Seed notifier._qa_history with one entry.
+            Monkey-patch _gather_pipeline_state, _format_state_context, send_status.
+            Capture prompt via monkeypatched _call_claude_print.
+            Call answer_question("What is running?").
+            Assert "Prior conversation:" NOT in the captured prompt.
+            Assert len(notifier._qa_history) == 1 (no new entry added, disabled).
+
+         i. test_answer_question_history_max_turns_zero(tmp_path, monkeypatch):
+            Create notifier, set notifier._qa_history_max_turns = 0.
+            Seed notifier._qa_history with one entry.
+            Monkey-patch dependencies as above.
+            Call answer_question("Test").
+            Assert "Prior conversation:" NOT in the captured prompt.
+            Assert len(notifier._qa_history) == 1 (no new entry added).
+
+         j. test_question_answer_prompt_has_history_placeholder:
+            Load the module.
+            Assert '{history_context}' in mod.QUESTION_ANSWER_PROMPT.
+
+      4. Run tests:
+         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_slack_notifier.py -v
+         Fix any failures.
+
+      Files: tests/test_slack_notifier.py
+
+- id: phase-4
+  name: Phase 4 - Verification
+  status: pending
+  tasks:
+  - id: '4.1'
+    name: Final verification - syntax, tests, and dry-run
+    agent: code-reviewer
+    status: pending
+    depends_on:
+    - '3.1'
+    description: |
+      Run verification checks to confirm the conversation history feature is
+      correct and all tests pass.
+
+      Steps:
+      1. Check Python syntax for both scripts:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+      2. Run the full test suite:
+         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
+
+      3. Verify the new constant and fields exist:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert hasattr(mod, 'QA_HISTORY_DEFAULT_MAX_TURNS'), 'Missing constant'
+         assert mod.QA_HISTORY_DEFAULT_MAX_TURNS == 3
+         n = mod.SlackNotifier('/nonexistent')
+         assert hasattr(n, '_qa_history')
+         assert hasattr(n, '_qa_history_enabled')
+         assert hasattr(n, '_qa_history_max_turns')
+         assert n._qa_history_max_turns == 3
+         print('All constant and init fields verified OK')
+         "
+
+      4. Verify history placeholder is in QUESTION_ANSWER_PROMPT:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert '{history_context}' in mod.QUESTION_ANSWER_PROMPT
+         assert '{state_context}' in mod.QUESTION_ANSWER_PROMPT
+         assert '{question}' in mod.QUESTION_ANSWER_PROMPT
+         print('QUESTION_ANSWER_PROMPT placeholders verified OK')
+         "
+
+      5. Verify the config template has the new block:
+         python3 -c "
+         import yaml
+         with open('.claude/slack.local.yaml.template') as f:
+             config = yaml.safe_load(f)
+         assert 'conversation_history' in config['slack']
+         assert config['slack']['conversation_history']['max_turns'] == 3
+         print('Config template conversation_history block verified')
+         "
+
+      6. Run orchestrator dry-run to confirm no startup errors:
+         python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
+
+      If any check fails, report the specific failure with details.
+
+      Files: scripts/plan-orchestrator.py, scripts/auto-pipeline.py,
+             .claude/slack.local.yaml.template, tests/test_slack_notifier.py
