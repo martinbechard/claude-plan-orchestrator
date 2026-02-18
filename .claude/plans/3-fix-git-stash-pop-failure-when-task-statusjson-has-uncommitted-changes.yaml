@@ -59,7 +59,7 @@ sections:
   - id: '2.1'
     name: Add regression test for stash pop with uncommitted task-status.json
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '1.1'
     description: "Add a regression test to tests/test_plan_orchestrator.py that verifies\n\
@@ -101,6 +101,8 @@ sections:
       \ WIP file should be restored\"\n\nRun tests after adding them:\n  ~/.pyenv/versions/3.11.*/bin/python\
       \ -m pytest tests/test_plan_orchestrator.py -v\n\nFix any failures immediately.\n\
       \nFiles: tests/test_plan_orchestrator.py\n"
+    attempts: 1
+    last_attempt: '2026-02-18T08:42:06.990361'
 - id: phase-3
   name: Phase 3 - Verification
   status: pending

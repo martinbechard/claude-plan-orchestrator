@@ -5,6 +5,7 @@
 
 import importlib.util
 import os
+import subprocess
 import tempfile
 import shutil
 import unittest.mock
@@ -25,6 +26,7 @@ REQUIRED_FIVE_WHYS_COUNT = mod.REQUIRED_FIVE_WHYS_COUNT
 git_stash_working_changes = mod.git_stash_working_changes
 git_stash_pop = mod.git_stash_pop
 ORCHESTRATOR_STASH_MESSAGE = mod.ORCHESTRATOR_STASH_MESSAGE
+STATUS_FILE_PATH = mod.STATUS_FILE_PATH
 
 
 # --- _truncate_for_slack tests ---
@@ -707,3 +709,57 @@ def test_git_stash_pop_conflict():
         result = git_stash_pop()
 
     assert result is False
+
+
+def test_stash_pop_discards_task_status_json(tmp_path, monkeypatch):
+    """Regression: git_stash_pop() succeeds when task-status.json is present in working tree.
+
+    Reproduces the defect where stash pop failed with a merge conflict because
+    task-status.json was written by the orchestrator after the stash push, leaving
+    an uncommitted copy in the working tree when git stash pop ran.
+    """
+    # 1. Create a temporary git repository
+    subprocess.run(["git", "init"], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=str(tmp_path), check=True)
+
+    # 2. Create the .claude/plans/ directory inside the tmp repo
+    plans_dir = tmp_path / ".claude" / "plans"
+    plans_dir.mkdir(parents=True)
+
+    # 3. Create an initial commit with a sentinel file so the repo is not empty
+    sentinel = tmp_path / "sentinel.txt"
+    sentinel.write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=str(tmp_path), check=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=str(tmp_path), check=True)
+
+    # 4. Create a file that will be stashed (simulates user work-in-progress)
+    wip = tmp_path / "work.txt"
+    wip.write_text("wip")
+    subprocess.run(["git", "add", "work.txt"], cwd=str(tmp_path), check=True)
+
+    # 5. Create the stash (with the wip file)
+    subprocess.run(
+        ["git", "stash", "push", "--include-untracked", "-m", ORCHESTRATOR_STASH_MESSAGE],
+        cwd=str(tmp_path), check=True
+    )
+
+    # 6. Write task-status.json to simulate the orchestrator writing it after task completion.
+    #    The stash may have removed the plans directory, so recreate it before writing.
+    #    This is the file that triggers the merge conflict bug.
+    status_file = tmp_path / ".claude" / "plans" / "task-status.json"
+    status_file.parent.mkdir(parents=True, exist_ok=True)
+    status_file.write_text('{"status": "completed"}')
+
+    # 7. Monkeypatch mod.STATUS_FILE_PATH so git_stash_pop() uses the correct path
+    monkeypatch.setattr(mod, "STATUS_FILE_PATH", str(status_file))
+
+    # 8. Change the working directory to tmp_path for git operations
+    monkeypatch.chdir(tmp_path)
+
+    # 9. Call git_stash_pop() and assert it returns True (success)
+    result = mod.git_stash_pop()
+    assert result is True, "git_stash_pop() should succeed even with task-status.json present"
+
+    # 10. Assert the wip file was restored (confirming the stash pop applied correctly)
+    assert (tmp_path / "work.txt").exists(), "Stashed WIP file should be restored"
