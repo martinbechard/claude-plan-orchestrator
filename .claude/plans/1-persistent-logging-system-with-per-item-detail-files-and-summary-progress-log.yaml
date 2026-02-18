@@ -244,12 +244,12 @@ sections:
       present; committed.
 - id: phase-4
   name: Phase 4 - Unit Tests
-  status: pending
+  status: completed
   tasks:
   - id: '4.1'
     name: Add unit tests for logging helpers and tee behavior
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '3.1'
     description: "Add unit tests for the new logging infrastructure to tests/test_auto_pipeline.py.\n\
@@ -306,6 +306,11 @@ sections:
       \ this task complete.\n\nFiles: tests/test_auto_pipeline.py\n"
     attempts: 1
     last_attempt: '2026-02-18T09:04:03.390746'
+    model_used: sonnet
+    completed_at: '2026-02-18T09:06:28.862533'
+    result_message: 'Added 8 unit tests for logging infrastructure to tests/test_auto_pipeline.py:
+      constants, _open_item_log(), _close_item_log(), log() tee, _log_summary() creation
+      and append, and append-on-second-run. All 33 tests pass.'
 - id: phase-5
   name: Phase 5 - Verification
   status: pending
