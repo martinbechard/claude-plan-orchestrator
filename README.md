@@ -62,6 +62,8 @@ LLMs degrade on long-running tasks. Context accumulates, quality drops, and impl
 
 See [docs/narrative/](docs/narrative/) for the full development history and design rationale.
 
+**New here?** Follow the [Setup Guide](docs/setup-guide.md) for step-by-step instructions including Slack setup, gitignore configuration, and upgrading.
+
 ## Requirements
 
 - Python 3.8+
@@ -92,7 +94,7 @@ After plugin install, the orchestrator scripts are available in the plugin direc
 python "$(claude plugin path plan-orchestrator)/scripts/plan-orchestrator.py" --plan .claude/plans/my-feature.yaml
 ```
 
-See [Migration Guide](docs/migration-from-manual-copy.md) for migrating from manual-copy to plugin installation.
+See the [Setup Guide](docs/setup-guide.md) for full instructions including upgrading from manual-copy installs.
 
 ### Manual Install (Alternative)
 
