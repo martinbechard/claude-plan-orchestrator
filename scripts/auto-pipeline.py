@@ -553,7 +553,14 @@ def scan_directory(directory: str, item_type: str) -> list[BacklogItem]:
         if md_file.name.startswith("."):
             continue
         if is_item_completed(str(md_file)):
-            verbose_log(f"Skipping completed item: {md_file.name}")
+            item = BacklogItem(
+                path=str(md_file),
+                name=md_file.stem.replace("-", " ").title(),
+                slug=md_file.stem,
+                item_type=item_type,
+            )
+            if not archive_item(item):
+                log(f"WARNING: Failed to auto-archive completed item: {md_file.name}")
             continue
 
         slug = md_file.stem  # filename without .md
