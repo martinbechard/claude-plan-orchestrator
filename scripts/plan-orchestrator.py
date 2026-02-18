@@ -3767,16 +3767,33 @@ class SlackNotifier:
                         channel_id: Optional[str] = None) -> None:
         """Respond to a question from Slack using an LLM call with pipeline context.
 
+        Maintains a rolling window of prior Q&A exchanges (size configured by
+        self._qa_history_max_turns) and injects that history into each prompt.
+
         Args:
             question: The question text
             channel_id: Reply to this channel. Falls back to default.
         """
         print(f"[SLACK] Answering question: {question[:80]}")
 
+        # Build conversation history context for the prompt
+        history_context = ""
+        if (self._qa_history_enabled
+                and self._qa_history_max_turns > 0
+                and self._qa_history):
+            lines = ["Prior conversation:"]
+            for prior_q, prior_a in self._qa_history:
+                lines.append(f"Q: {prior_q}")
+                lines.append(f"A: {prior_a}")
+            lines.append("")
+            history_context = "\n".join(lines) + "\n"
+
         state = self._gather_pipeline_state()
         state_context = self._format_state_context(state)
         prompt = QUESTION_ANSWER_PROMPT.format(
-            history_context="", state_context=state_context, question=question
+            history_context=history_context,
+            state_context=state_context,
+            question=question,
         )
 
         try:
@@ -3789,6 +3806,12 @@ class SlackNotifier:
 
         print(f"[SLACK] Answer: {answer[:120]}")
         self.send_status(answer, level="info", channel_id=channel_id)
+
+        # Record this exchange in the rolling history window
+        if self._qa_history_enabled and self._qa_history_max_turns > 0:
+            self._qa_history.append((question, answer))
+            if len(self._qa_history) > self._qa_history_max_turns:
+                self._qa_history = self._qa_history[-self._qa_history_max_turns:]
 
     @staticmethod
     def _parse_intake_response(text: str) -> dict:
