@@ -57,7 +57,7 @@ sections:
   - id: '1.2'
     name: Implement _open_item_log(), _close_item_log(), and _log_summary() helpers
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '1.1'
     description: "Add three helper functions to scripts/auto-pipeline.py for the two-tier\
@@ -113,6 +113,11 @@ sections:
       \ functions verified OK')\n   \"\n\nFiles: scripts/auto-pipeline.py\n"
     attempts: 1
     last_attempt: '2026-02-18T08:55:02.139226'
+    model_used: sonnet
+    completed_at: '2026-02-18T08:57:11.211567'
+    result_message: Added _open_item_log(), _close_item_log(), and _log_summary()
+      helpers to scripts/auto-pipeline.py immediately before the log() function. Syntax
+      and importability verified OK.
   - id: '1.3'
     name: Extend log() and verbose_log() to tee output to item detail log
     agent: coder
