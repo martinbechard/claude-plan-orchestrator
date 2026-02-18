@@ -4286,6 +4286,12 @@ def run_orchestrator(
                     par_agent_model = par_agent_def.get("model", "") if par_agent_def else ""
                     par_attempt = task.get("attempts", 1)
                     par_effective_model = escalation_config.get_effective_model(par_agent_model, par_attempt)
+
+                    # Apply judge_model override for planner tasks in design competitions
+                    judge_model = plan.get("meta", {}).get("judge_model", "")
+                    if judge_model and par_agent_name == "planner":
+                        par_effective_model = judge_model
+
                     task["model_used"] = par_effective_model
 
                     # Log model selection for parallel tasks
@@ -4599,6 +4605,13 @@ def run_orchestrator(
             agent_model = agent_def.get("model", "") if agent_def else ""
             current_attempt = task.get("attempts", 1)
             effective_model = escalation_config.get_effective_model(agent_model, current_attempt)
+
+            # Apply judge_model override for planner tasks in design competitions
+            judge_model = plan.get("meta", {}).get("judge_model", "")
+            if judge_model and agent_name == "planner":
+                effective_model = judge_model
+                if escalation_config.enabled:
+                    print(f"Task {task_id}: using judge_model override '{judge_model}'")
 
             # Log model selection
             if escalation_config.enabled:
