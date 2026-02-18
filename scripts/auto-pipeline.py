@@ -913,6 +913,9 @@ Available agents are in {agents_dir}:
 
 - **coder**: Implementation specialist. Use for coding, implementation, and
   modification tasks. This is the default if no agent is specified.
+- **frontend-coder**: Frontend implementation specialist for UI components,
+  pages, and forms. Use for tasks mentioning frontend, component, UI
+  implementation, form, dialog, or modal.
 - **code-reviewer**: Read-only reviewer. Use for verification, review, and
   compliance-checking tasks.
 - **systems-designer**: Architecture and data model designer. Use for Phase 0
@@ -953,7 +956,8 @@ Phase 0 Competition Example:
 
 If you do not set the agent field, the orchestrator will infer it from the
 task name and description (review/verification -> code-reviewer, design/architecture
--> systems-designer, plan extension -> planner, everything else -> coder).
+-> systems-designer, plan extension -> planner, frontend/component/UI ->
+frontend-coder, everything else -> coder).
 
 ## Validation (Optional)
 
@@ -962,6 +966,8 @@ Plans can enable per-task validation by adding a validation block to the meta se
 Example meta configuration:
 
   meta:
+    judge_model: sonnet   # Optional: model for design competition judging
+    # judge_model: opus   # Default: planner agent's own model is used
     validation:
       enabled: true
       run_after:
