@@ -1386,7 +1386,7 @@ def _resolve_item_path(item: "BacklogItem") -> Optional[str]:
         os.path.dirname(item.path), "completed", os.path.basename(item.path)
     )
     if os.path.exists(candidate):
-        log(f"[ARCHIVE] Item relocated to completed/ subfolder, using: {candidate}")
+        log(f"WARNING: [ARCHIVE] Item relocated to completed/ subfolder — unexpected mid-pipeline move: {candidate}")
         return candidate
     return None
 
@@ -1398,6 +1398,10 @@ def archive_item(item: BacklogItem, dry_run: bool = False) -> bool:
 
     if dry_run:
         log(f"[DRY RUN] Would archive: {item.path} -> {dest}")
+        return True
+
+    if os.path.exists(dest):
+        log(f"[ARCHIVE] Already archived, skipping: {dest}")
         return True
 
     source = _resolve_item_path(item)
