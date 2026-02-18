@@ -185,12 +185,12 @@ sections:
       a successful answer. Syntax and smoke-test both pass.
 - id: phase-2
   name: Phase 2 - Config Template Update
-  status: pending
+  status: completed
   tasks:
   - id: '2.1'
     name: Document conversation_history config in slack.local.yaml.template
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.3'
     description: "Add the conversation_history configuration block to the slack.local.yaml.template\n\
@@ -205,6 +205,12 @@ sections:
       \ == 3\n   assert config['slack']['conversation_history']['enabled'] is True\n\
       \   print('Template validated OK with conversation_history block')\n   \"\n\n\
       Files: .claude/slack.local.yaml.template\n"
+    attempts: 1
+    last_attempt: '2026-02-18T08:08:51.744901'
+    model_used: sonnet
+    completed_at: '2026-02-18T08:10:01.121082'
+    result_message: 'Added conversation_history block (enabled: true, max_turns: 3)
+      to slack.local.yaml.template after the questions: block. YAML validated successfully.'
 - id: phase-3
   name: Phase 3 - Unit Tests
   status: pending
