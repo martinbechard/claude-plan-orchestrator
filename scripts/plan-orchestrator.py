@@ -100,7 +100,7 @@ SLACK_BLOCK_TEXT_MAX_LENGTH = 2900
 # Question-answering prompt for LLM-powered responses
 QUESTION_ANSWER_PROMPT = """You are an AI pipeline orchestrator answering a human's question via Slack.
 
-Here is the current pipeline state:
+{history_context}Here is the current pipeline state:
 
 {state_context}
 

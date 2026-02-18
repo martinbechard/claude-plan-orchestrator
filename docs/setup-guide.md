@@ -230,7 +230,16 @@ cp -r /path/to/claude-plan-orchestrator/.claude/skills/ .claude/skills/
 ```
 
 4. Check for new .gitignore entries by comparing against the list in step 6
-5. If you had Slack set up with the old webhook format (webhook_url instead of
+5. If you have completed items under docs/defect-backlog/completed/ or
+   docs/feature-backlog/completed/, move them to the centralized location:
+
+```bash
+git mv docs/defect-backlog/completed/* docs/completed-backlog/defects/
+git mv docs/feature-backlog/completed/* docs/completed-backlog/features/
+rmdir docs/defect-backlog/completed docs/feature-backlog/completed
+```
+
+6. If you had Slack set up with the old webhook format (webhook_url instead of
    bot_token), re-run the Slack setup:
 
 ```bash

@@ -18,12 +18,12 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Core Implementation
-  status: in_progress
+  status: pending
   tasks:
   - id: '1.1'
     name: Add QA_HISTORY_DEFAULT_MAX_TURNS constant and update SlackNotifier init
     agent: coder
-    status: completed
+    status: in_progress
     description: "Add the history constant and new instance fields to SlackNotifier\
       \ in\nscripts/plan-orchestrator.py.\n\nReference: docs/plans/2026-02-18-1-add-configurable-conversation-history-for-follow-on-question-support-design.md\n\
       \nSteps:\n1. Read scripts/plan-orchestrator.py. Find the block of Slack constants\n\
@@ -56,12 +56,6 @@ sections:
       \n\nFiles: scripts/plan-orchestrator.py\n"
     attempts: 1
     last_attempt: '2026-02-18T08:01:47.251908'
-    model_used: sonnet
-    completed_at: '2026-02-18T08:03:27.969525'
-    result_message: Added QA_HISTORY_DEFAULT_MAX_TURNS = 3 constant after QUESTION_ANSWER_TIMEOUT_SECONDS.
-      Added _qa_history, _qa_history_enabled, and _qa_history_max_turns fields to
-      SlackNotifier.__init__ (before try block). Added conversation_history config
-      parsing inside try block after _question_config.
   - id: '1.2'
     name: Update QUESTION_ANSWER_PROMPT with history_context placeholder
     agent: coder
