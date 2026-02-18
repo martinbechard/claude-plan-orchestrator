@@ -2993,6 +2993,25 @@ class SlackNotifier:
         channels = self._discover_channels()
         return channels.get(notifications_name, self._channel_id)
 
+    def get_type_channel_id(self, item_type: str) -> str:
+        """Return the channel ID for the type-specific channel.
+
+        Maps item_type ('feature' or 'defect') to the corresponding
+        Slack channel (e.g. orchestrator-features or
+        orchestrator-defects) using the existing _discover_channels()
+        infrastructure.
+
+        Returns empty string if the channel is not found or Slack
+        is disabled.
+        """
+        suffix_map = {"feature": "features", "defect": "defects"}
+        suffix = suffix_map.get(item_type, "")
+        if not suffix:
+            return ""
+        channel_name = f"{self._channel_prefix}{suffix}"
+        channels = self._discover_channels()
+        return channels.get(channel_name, "")
+
     def send_status(self, message: str, level: str = "info",
                     channel_id: Optional[str] = None) -> None:
         """Send a status update to Slack. No-op if disabled.
