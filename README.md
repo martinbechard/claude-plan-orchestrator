@@ -16,7 +16,7 @@ The Plan Orchestrator executes structured YAML plans through Claude Code, provid
 - **Auto-Pipeline**: Daemon that watches backlog folders and drives the orchestrator automatically
 - **Defect Verification Loop**: Independent symptom verification with verify-then-fix retry cycles
 - **Configurable Commands**: Build, test, and dev-server commands configurable per project
-- **Agent Framework**: 10 specialized agents (coder, code-reviewer, systems-designer, ux-designer, ux-reviewer, spec-verifier, qa-auditor, planner, issue-verifier, validator) with YAML frontmatter definitions
+- **Agent Framework**: 11 specialized agents (coder, frontend-coder, code-reviewer, systems-designer, ux-designer, ux-reviewer, spec-verifier, qa-auditor, planner, issue-verifier, validator) with YAML frontmatter definitions
 - **Slack Integration**: Real-time notifications, inbound message processing, LLM-powered question answering, and 5 Whys intake analysis via Slack
 - **Budget Management**: Token usage tracking, API-equivalent cost estimates, and quota-aware execution with configurable limits
 - **Model Escalation**: Tiered model selection (haiku -> sonnet -> opus) with automatic escalation after consecutive failures
@@ -303,6 +303,7 @@ Available agents:
 | Agent | Role | Model |
 |-------|------|-------|
 | coder | Implementation specialist - writes code, runs tests | sonnet (default) |
+| frontend-coder | Frontend implementation specialist - UI components, pages, forms | sonnet |
 | code-reviewer | Read-only reviewer - checks compliance, no code changes | sonnet |
 | systems-designer | Architecture and data model designer | sonnet |
 | ux-designer | Visual and interaction design specialist | sonnet |
@@ -329,7 +330,7 @@ Tasks can specify their agent in the YAML plan:
   description: ...
 ```
 
-If no agent is specified, the orchestrator infers it from the task name and description (review/verification -> code-reviewer, design -> systems-designer, everything else -> coder).
+If no agent is specified, the orchestrator infers it from the task name and description (review/verification -> code-reviewer, design/architecture -> systems-designer, plan extension -> planner, frontend/component/UI -> frontend-coder, everything else -> coder).
 
 ### Per-Task Validation
 
@@ -381,6 +382,18 @@ For significant architectural decisions, the orchestrator supports a Phase 0 des
 ```
 
 The planner agent reads the winning design and creates implementation phases, setting `plan_modified: true` to trigger a plan reload.
+
+### Judge Model for Design Competitions
+
+Design competition judging can use a different model by adding `judge_model` to the plan meta:
+
+```yaml
+meta:
+  judge_model: sonnet   # For UI-focused competitions
+  # judge_model: opus   # For architecture competitions
+```
+
+When `judge_model` is set, the planner task that evaluates competition designs uses that model instead of the planner agent's default.
 
 ### Model Escalation
 
@@ -623,6 +636,7 @@ your-project/
 │   │   ├── code-reviewer.md        # Read-only reviewer
 │   │   ├── systems-designer.md    # Architecture designer
 │   │   ├── ux-designer.md          # UI/UX designer
+│   │   ├── frontend-coder.md       # Frontend implementation specialist
 │   │   ├── ux-reviewer.md           # UX quality reviewer
 │   │   ├── spec-verifier.md        # Spec compliance checker
 │   │   ├── qa-auditor.md           # QA audit specialist
@@ -713,6 +727,7 @@ The orchestrator evolved from a 454-line sequential executor to a ~6700-line par
 - Token usage and budget tracking
 - Slack integration with inbound message polling
 - Hot-reload self-restart for auto-pipeline
+- Sonnet 4.6 model optimization for ux-designer and new frontend-coder agent
 
 ## License
 
