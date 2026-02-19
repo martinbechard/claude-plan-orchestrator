@@ -14,7 +14,6 @@ meta:
     validators:
     - validator
     max_validation_attempts: 2
-
 sections:
 - id: phase-1
   name: Phase 1 - Constants and CompletionTracker
@@ -23,33 +22,24 @@ sections:
   - id: '1.1'
     name: Add progress reporter constants and CompletionTracker class
     agent: coder
-    status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/18-periodic-progress-reporter.md
-
-      Design reference: docs/plans/2026-02-19-18-periodic-progress-reporter-design.md
-
-      This task adds the configuration constants and the CompletionTracker class
-      to scripts/auto-pipeline.py.
-
-      Steps:
-      1. Add constants near the other timing constants (around line 142):
-         PROGRESS_REPORT_INTERVAL_SECONDS = int(os.environ.get("PIPELINE_REPORT_INTERVAL", "900"))
-         COMPLETION_HISTORY_WINDOW_SECONDS = 7200
-         PROGRESS_REPORT_MAX_PREVIEW_ITEMS = 5
-
-      2. Add CompletionTracker class near SessionUsageTracker (around line 995):
-         - Uses collections.deque to store (timestamp, item_type, slug, duration_seconds) tuples
-         - record_completion(item_type, slug, duration_seconds) method
-         - prune_old_entries() removes entries older than COMPLETION_HISTORY_WINDOW_SECONDS
-         - completions_since(since_timestamp) returns list of entries after given time
-         - average_duration_seconds() returns mean of all durations in window (or 0.0)
-         - Thread-safe via threading.Lock
-
-      3. Verify syntax: python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)"
-
-      Files: scripts/auto-pipeline.py
-
+    status: in_progress
+    description: "Implement the work item: docs/feature-backlog/18-periodic-progress-reporter.md\n\
+      Design reference: docs/plans/2026-02-19-18-periodic-progress-reporter-design.md\n\
+      This task adds the configuration constants and the CompletionTracker class to\
+      \ scripts/auto-pipeline.py.\nSteps: 1. Add constants near the other timing constants\
+      \ (around line 142):\n   PROGRESS_REPORT_INTERVAL_SECONDS = int(os.environ.get(\"\
+      PIPELINE_REPORT_INTERVAL\", \"900\"))\n   COMPLETION_HISTORY_WINDOW_SECONDS\
+      \ = 7200\n   PROGRESS_REPORT_MAX_PREVIEW_ITEMS = 5\n\n2. Add CompletionTracker\
+      \ class near SessionUsageTracker (around line 995):\n   - Uses collections.deque\
+      \ to store (timestamp, item_type, slug, duration_seconds) tuples\n   - record_completion(item_type,\
+      \ slug, duration_seconds) method\n   - prune_old_entries() removes entries older\
+      \ than COMPLETION_HISTORY_WINDOW_SECONDS\n   - completions_since(since_timestamp)\
+      \ returns list of entries after given time\n   - average_duration_seconds()\
+      \ returns mean of all durations in window (or 0.0)\n   - Thread-safe via threading.Lock\n\
+      \n3. Verify syntax: python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True)\"\nFiles: scripts/auto-pipeline.py\n"
+    attempts: 1
+    last_attempt: '2026-02-19T15:58:56.327027'
 - id: phase-2
   name: Phase 2 - ProgressReporter Class
   status: pending
@@ -60,35 +50,25 @@ sections:
     status: pending
     depends_on:
     - '1.1'
-    description: >
-      Implement the work item: docs/feature-backlog/18-periodic-progress-reporter.md
-
-      Design reference: docs/plans/2026-02-19-18-periodic-progress-reporter-design.md
-
-      This task adds the ProgressReporter class to scripts/auto-pipeline.py.
-      Follow the CodeChangeMonitor pattern (line 595) for the daemon thread structure.
-
-      Steps:
-      1. Add ProgressReporter class after CompletionTracker:
-         - __init__(self, slack: SlackNotifier, completion_tracker: CompletionTracker,
-           item_in_progress: threading.Event, interval: float = PROGRESS_REPORT_INTERVAL_SECONDS)
-         - start() / stop() methods matching CodeChangeMonitor pattern
-         - _reporter_loop() wakes every interval via _stop_event.wait(timeout=interval)
-         - _should_report() checks silence conditions: returns False if
-           not item_in_progress.is_set() AND scan_all_backlogs() is empty
-         - _build_report() generates the report message string with:
-           a) Queue snapshot by type (defect/feature/analysis count)
-           b) Completions since last report (count + breakdown)
-           c) Velocity (average completion time from tracker)
-           d) ETA (queue_size x average_time)
-           e) Next 5 queued items (name, type)
-         - _send_report() calls slack.send_status() with the formatted report
-         - Tracks _last_report_time to compute "completions since last report"
-
-      2. Verify syntax: python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)"
-
-      Files: scripts/auto-pipeline.py
-
+    description: "Implement the work item: docs/feature-backlog/18-periodic-progress-reporter.md\n\
+      Design reference: docs/plans/2026-02-19-18-periodic-progress-reporter-design.md\n\
+      This task adds the ProgressReporter class to scripts/auto-pipeline.py. Follow\
+      \ the CodeChangeMonitor pattern (line 595) for the daemon thread structure.\n\
+      Steps: 1. Add ProgressReporter class after CompletionTracker:\n   - __init__(self,\
+      \ slack: SlackNotifier, completion_tracker: CompletionTracker,\n     item_in_progress:\
+      \ threading.Event, interval: float = PROGRESS_REPORT_INTERVAL_SECONDS)\n   -\
+      \ start() / stop() methods matching CodeChangeMonitor pattern\n   - _reporter_loop()\
+      \ wakes every interval via _stop_event.wait(timeout=interval)\n   - _should_report()\
+      \ checks silence conditions: returns False if\n     not item_in_progress.is_set()\
+      \ AND scan_all_backlogs() is empty\n   - _build_report() generates the report\
+      \ message string with:\n     a) Queue snapshot by type (defect/feature/analysis\
+      \ count)\n     b) Completions since last report (count + breakdown)\n     c)\
+      \ Velocity (average completion time from tracker)\n     d) ETA (queue_size x\
+      \ average_time)\n     e) Next 5 queued items (name, type)\n   - _send_report()\
+      \ calls slack.send_status() with the formatted report\n   - Tracks _last_report_time\
+      \ to compute \"completions since last report\"\n\n2. Verify syntax: python3\
+      \ -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)\"\
+      \nFiles: scripts/auto-pipeline.py\n"
 - id: phase-3
   name: Phase 3 - Pipeline Integration
   status: pending
@@ -99,41 +79,25 @@ sections:
     status: pending
     depends_on:
     - '2.1'
-    description: >
-      Implement the work item: docs/feature-backlog/18-periodic-progress-reporter.md
-
-      Design reference: docs/plans/2026-02-19-18-periodic-progress-reporter-design.md
-
-      This task wires the CompletionTracker and ProgressReporter into the pipeline.
-
-      Steps:
-      1. In main_loop() (line 2617):
-         - Create item_in_progress = threading.Event() near other local state
-         - Create completion_tracker = CompletionTracker()
-         - Create reporter = ProgressReporter(slack, completion_tracker, item_in_progress)
-         - Call reporter.start() after slack.start_background_polling()
-         - Call reporter.stop() in the finally block before slack.stop_background_polling()
-         - Pass item_in_progress and completion_tracker to process_item() calls
-
-      2. In process_item() (line 2472):
-         - Add optional params: item_in_progress and completion_tracker
-         - Set item_in_progress at entry, clear in finally block
-         - After successful archive, call completion_tracker.record_completion()
-           with elapsed duration
-
-      3. In process_analysis_item() (line 2155):
-         - Add optional params: item_in_progress and completion_tracker
-         - Set item_in_progress at entry, clear in finally block
-         - After successful archive, call completion_tracker.record_completion()
-           with elapsed duration
-
-      4. Update the process_item/process_analysis_item call sites in main_loop()
-         to pass the new parameters.
-
-      5. Verify syntax: python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)"
-
-      Files: scripts/auto-pipeline.py
-
+    description: "Implement the work item: docs/feature-backlog/18-periodic-progress-reporter.md\n\
+      Design reference: docs/plans/2026-02-19-18-periodic-progress-reporter-design.md\n\
+      This task wires the CompletionTracker and ProgressReporter into the pipeline.\n\
+      Steps: 1. In main_loop() (line 2617):\n   - Create item_in_progress = threading.Event()\
+      \ near other local state\n   - Create completion_tracker = CompletionTracker()\n\
+      \   - Create reporter = ProgressReporter(slack, completion_tracker, item_in_progress)\n\
+      \   - Call reporter.start() after slack.start_background_polling()\n   - Call\
+      \ reporter.stop() in the finally block before slack.stop_background_polling()\n\
+      \   - Pass item_in_progress and completion_tracker to process_item() calls\n\
+      \n2. In process_item() (line 2472):\n   - Add optional params: item_in_progress\
+      \ and completion_tracker\n   - Set item_in_progress at entry, clear in finally\
+      \ block\n   - After successful archive, call completion_tracker.record_completion()\n\
+      \     with elapsed duration\n\n3. In process_analysis_item() (line 2155):\n\
+      \   - Add optional params: item_in_progress and completion_tracker\n   - Set\
+      \ item_in_progress at entry, clear in finally block\n   - After successful archive,\
+      \ call completion_tracker.record_completion()\n     with elapsed duration\n\n\
+      4. Update the process_item/process_analysis_item call sites in main_loop()\n\
+      \   to pass the new parameters.\n\n5. Verify syntax: python3 -c \"import py_compile;\
+      \ py_compile.compile('scripts/auto-pipeline.py', doraise=True)\"\nFiles: scripts/auto-pipeline.py\n"
 - id: phase-4
   name: Phase 4 - Unit Tests
   status: pending
@@ -144,32 +108,20 @@ sections:
     status: pending
     depends_on:
     - '3.1'
-    description: >
-      Implement the work item: docs/feature-backlog/18-periodic-progress-reporter.md
-
-      Design reference: docs/plans/2026-02-19-18-periodic-progress-reporter-design.md
-
-      Add unit tests to tests/test_auto_pipeline.py for the new classes.
-
-      Test cases for CompletionTracker:
-      - test_completion_tracker_record_and_retrieve: record items, verify completions_since()
-      - test_completion_tracker_prune_old: record old entries, verify they are pruned
-      - test_completion_tracker_average_duration: verify average calculation
-      - test_completion_tracker_empty: verify zero/empty returns on fresh tracker
-      - test_completion_tracker_constants: verify PROGRESS_REPORT_INTERVAL_SECONDS and
-        COMPLETION_HISTORY_WINDOW_SECONDS exist and have correct defaults
-
-      Test cases for ProgressReporter:
-      - test_progress_reporter_silent_when_idle: mock scan_all_backlogs() to return [],
-        item_in_progress not set -> _should_report() returns False
-      - test_progress_reporter_reports_when_active: item_in_progress is set ->
-        _should_report() returns True
-      - test_progress_reporter_reports_when_queued: scan_all_backlogs() returns items,
-        item_in_progress not set -> _should_report() returns True
-      - test_progress_reporter_build_report_format: verify _build_report() returns
-        a string with expected sections (queue, velocity, ETA, preview)
-
-      Run tests: python3 -m pytest tests/ -v
-      Fix any failures.
-
-      Files: tests/test_auto_pipeline.py
+    description: "Implement the work item: docs/feature-backlog/18-periodic-progress-reporter.md\n\
+      Design reference: docs/plans/2026-02-19-18-periodic-progress-reporter-design.md\n\
+      Add unit tests to tests/test_auto_pipeline.py for the new classes.\nTest cases\
+      \ for CompletionTracker: - test_completion_tracker_record_and_retrieve: record\
+      \ items, verify completions_since() - test_completion_tracker_prune_old: record\
+      \ old entries, verify they are pruned - test_completion_tracker_average_duration:\
+      \ verify average calculation - test_completion_tracker_empty: verify zero/empty\
+      \ returns on fresh tracker - test_completion_tracker_constants: verify PROGRESS_REPORT_INTERVAL_SECONDS\
+      \ and\n  COMPLETION_HISTORY_WINDOW_SECONDS exist and have correct defaults\n\
+      \nTest cases for ProgressReporter: - test_progress_reporter_silent_when_idle:\
+      \ mock scan_all_backlogs() to return [],\n  item_in_progress not set -> _should_report()\
+      \ returns False\n- test_progress_reporter_reports_when_active: item_in_progress\
+      \ is set ->\n  _should_report() returns True\n- test_progress_reporter_reports_when_queued:\
+      \ scan_all_backlogs() returns items,\n  item_in_progress not set -> _should_report()\
+      \ returns True\n- test_progress_reporter_build_report_format: verify _build_report()\
+      \ returns\n  a string with expected sections (queue, velocity, ETA, preview)\n\
+      \nRun tests: python3 -m pytest tests/ -v Fix any failures.\nFiles: tests/test_auto_pipeline.py\n"
