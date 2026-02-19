@@ -1078,6 +1078,40 @@ def build_validation_prompt(
     result_message = task_result.message
     duration = task_result.duration_seconds
 
+    spec_context = ""
+    if SPEC_DIR:
+        spec_context = f"""
+
+## Spec-Aware Validation (E2E Tests)
+
+This project has functional specifications in: {SPEC_DIR}
+E2E test command: {E2E_COMMAND}
+
+After the standard validation checks above, perform these additional steps:
+
+1. Run: git diff --name-only HEAD~1 HEAD
+   Look for any files under {SPEC_DIR} in the diff output.
+
+2. If spec files were modified, read each changed spec file and find all
+   ### Verification blocks.
+
+3. For each block with **Type: Testable** and a **Test file(s):** reference:
+   - Run the E2E test: {E2E_COMMAND} <test_file> --reporter=json
+   - Capture the JSON output to logs/e2e/ with a timestamped filename
+     (format: YYYY-MM-DDTHHMMSS.json)
+   - Parse the JSON to determine pass/fail counts
+
+4. Include E2E test results in your findings:
+   - [PASS] E2E: <test_file> - all N tests passed
+   - [FAIL] E2E: <test_file> - M of N tests failed
+
+5. If no spec files were changed in the diff, skip E2E testing and note:
+   - [PASS] E2E: No functional spec changes detected, E2E tests skipped
+
+6. E2E failures should result in a WARN verdict (not FAIL) unless the
+   failing tests are directly related to the task's requirements.
+"""
+
     return f"""{agent_body}
 
 ---
@@ -1105,7 +1139,7 @@ Duration: {duration:.1f}s
 3. Verify the task description requirements are met
 
 4. Check for regressions in related code
-
+{spec_context}
 ## Output Format
 
 Produce your verdict in this exact format:
