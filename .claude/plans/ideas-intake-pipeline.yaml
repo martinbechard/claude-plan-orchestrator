@@ -48,7 +48,7 @@ sections:
   - id: '1.2'
     name: Add idea intake prompt template and process_idea function
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '1.1'
     description: "Add the Claude prompt template for idea classification and the\n\
@@ -82,6 +82,13 @@ sections:
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py\n"
     attempts: 1
     last_attempt: '2026-02-18T19:55:03.050412'
+    model_used: sonnet
+    completed_at: '2026-02-18T19:58:34.620479'
+    result_message: Added IDEA_INTAKE_PROMPT_TEMPLATE constant (before PLAN_CREATION_PROMPT_TEMPLATE)
+      and process_idea() function (after scan_ideas()). Template instructs Claude
+      to classify ideas into feature/defect backlog items with priority assessment,
+      proper format, and git commit. Function follows the same run_child_process()
+      pattern as plan creation, with rate-limit handling and processed-file verification.
   - id: '1.3'
     name: Add intake_ideas orchestration and wire into main_loop
     agent: coder
