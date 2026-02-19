@@ -174,6 +174,22 @@ CLAUDE_BINARY_SEARCH_PATHS = [
     "/usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js",
 ]
 
+# Sandboxing: when True, Claude tasks receive per-profile --allowedTools flags.
+# Set ORCHESTRATOR_SANDBOX_ENABLED=false to fall back to --dangerously-skip-permissions.
+SANDBOX_ENABLED = os.environ.get("ORCHESTRATOR_SANDBOX_ENABLED", "true").lower() != "false"
+
+# Per-task permission profiles for the pipeline (planner and verifier tasks only).
+PIPELINE_PERMISSION_PROFILES: dict = {
+    "planner": {
+        "tools": ["Read", "Grep", "Glob", "Write", "Bash"],
+        "description": "Plan creation and idea intake",
+    },
+    "verifier": {
+        "tools": ["Read", "Grep", "Glob", "Bash"],
+        "description": "Symptom verification (read + test commands)",
+    },
+}
+
 # Global state
 VERBOSE = False
 CLAUDE_CMD: list[str] = ["claude"]
@@ -358,6 +374,28 @@ def resolve_claude_binary() -> list[str]:
 
     log("WARNING: Could not find 'claude' binary. Tasks will fail.")
     return ["claude"]
+
+
+def build_permission_flags(profile_name: str) -> list[str]:
+    """Build CLI permission flags for a pipeline task profile.
+
+    Returns a list of CLI arguments. Falls back to
+    --dangerously-skip-permissions when SANDBOX_ENABLED is False.
+    """
+    if not SANDBOX_ENABLED:
+        return ["--dangerously-skip-permissions"]
+
+    profile = PIPELINE_PERMISSION_PROFILES.get(profile_name)
+    if not profile:
+        log(f"Unknown permission profile '{profile_name}', using --dangerously-skip-permissions")
+        return ["--dangerously-skip-permissions"]
+
+    tools = profile["tools"]
+    flags = ["--allowedTools"] + tools
+    flags.extend(["--add-dir", os.getcwd()])
+
+    log(f"Permission profile '{profile_name}': tools={tools}")
+    return flags
 
 
 # ─── Output Streaming ────────────────────────────────────────────────
