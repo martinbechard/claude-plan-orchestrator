@@ -77,12 +77,12 @@ sections:
       \ to compute \"completions since last report\"\n\n2. Verify syntax: python3\
       \ -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)\"\
       \nFiles: scripts/auto-pipeline.py\n"
-    attempts: 2
-    last_attempt: '2026-02-19T16:10:20.586539'
+    attempts: 3
+    last_attempt: '2026-02-19T16:13:14.175771'
     model_used: sonnet
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
-    validation_attempts: 1
+    validation_attempts: 2
 - id: phase-3
   name: Phase 3 - Pipeline Integration
   status: pending
