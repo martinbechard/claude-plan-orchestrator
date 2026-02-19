@@ -22,28 +22,22 @@ sections:
   - id: '1.1'
     name: Add threshold constant and step notification gating in plan-orchestrator
     agent: coder
-    status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/19-optional-step-by-step-notifications.md
-
-      Design reference: docs/plans/2026-02-19-19-optional-step-by-step-notifications-design.md
-
-      This task adds the STEP_NOTIFICATION_THRESHOLD constant and
-      should_send_step_notifications() helper to plan-orchestrator.py, then gates
-      the task-success Slack notification (lines 5311-5317) behind the result.
-      Task-failure notifications (lines 5156-5161) must NOT be gated.
-
-      Steps:
-      1. Add STEP_NOTIFICATION_THRESHOLD = 6 near other constants
-      2. Add should_send_step_notifications(plan) helper that checks meta.step_notifications
-         override first, then falls back to task count > threshold
-      3. In run_orchestrator(), compute send_step_notifications = should_send_step_notifications(plan)
-         after loading the plan
-      4. Wrap the task-success slack.send_status() call in an if send_step_notifications check
-      5. Do NOT wrap the task-failure slack.send_status() call
-      6. Verify syntax: python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
-
-      Files: scripts/plan-orchestrator.py
+    status: in_progress
+    description: "Implement the work item: docs/feature-backlog/19-optional-step-by-step-notifications.md\n\
+      Design reference: docs/plans/2026-02-19-19-optional-step-by-step-notifications-design.md\n\
+      This task adds the STEP_NOTIFICATION_THRESHOLD constant and should_send_step_notifications()\
+      \ helper to plan-orchestrator.py, then gates the task-success Slack notification\
+      \ (lines 5311-5317) behind the result. Task-failure notifications (lines 5156-5161)\
+      \ must NOT be gated.\nSteps: 1. Add STEP_NOTIFICATION_THRESHOLD = 6 near other\
+      \ constants 2. Add should_send_step_notifications(plan) helper that checks meta.step_notifications\n\
+      \   override first, then falls back to task count > threshold\n3. In run_orchestrator(),\
+      \ compute send_step_notifications = should_send_step_notifications(plan)\n \
+      \  after loading the plan\n4. Wrap the task-success slack.send_status() call\
+      \ in an if send_step_notifications check 5. Do NOT wrap the task-failure slack.send_status()\
+      \ call 6. Verify syntax: python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True)\"\nFiles: scripts/plan-orchestrator.py\n"
+    attempts: 1
+    last_attempt: '2026-02-19T16:42:00.365415'
 - id: phase-2
   name: Phase 2 - Pipeline override injection
   status: pending
@@ -54,23 +48,17 @@ sections:
     depends_on:
     - '1.1'
     status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/19-optional-step-by-step-notifications.md
-
-      Design reference: docs/plans/2026-02-19-19-optional-step-by-step-notifications-design.md
-
-      This task adds backlog item parsing and plan meta injection in auto-pipeline.py.
-
-      Steps:
-      1. Add parse_step_notifications_override(filepath) function near parse_analysis_metadata()
-         that looks for a line matching "step_notifications: true/false" (case-insensitive)
-         and returns Optional[bool] (None if not found)
-      2. In create_plan(), after plan creation succeeds and before validation,
-         call parse_step_notifications_override(item.path). If the result is not None,
-         load the plan YAML, set meta.step_notifications to the parsed value, and save it back.
-      3. Verify syntax: python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)"
-
-      Files: scripts/auto-pipeline.py
+    description: "Implement the work item: docs/feature-backlog/19-optional-step-by-step-notifications.md\n\
+      Design reference: docs/plans/2026-02-19-19-optional-step-by-step-notifications-design.md\n\
+      This task adds backlog item parsing and plan meta injection in auto-pipeline.py.\n\
+      Steps: 1. Add parse_step_notifications_override(filepath) function near parse_analysis_metadata()\n\
+      \   that looks for a line matching \"step_notifications: true/false\" (case-insensitive)\n\
+      \   and returns Optional[bool] (None if not found)\n2. In create_plan(), after\
+      \ plan creation succeeds and before validation,\n   call parse_step_notifications_override(item.path).\
+      \ If the result is not None,\n   load the plan YAML, set meta.step_notifications\
+      \ to the parsed value, and save it back.\n3. Verify syntax: python3 -c \"import\
+      \ py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)\"\
+      \nFiles: scripts/auto-pipeline.py\n"
 - id: phase-3
   name: Phase 3 - Unit tests
   status: pending
@@ -81,27 +69,28 @@ sections:
     depends_on:
     - '2.1'
     status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/19-optional-step-by-step-notifications.md
+    description: 'Implement the work item: docs/feature-backlog/19-optional-step-by-step-notifications.md
 
       Design reference: docs/plans/2026-02-19-19-optional-step-by-step-notifications-design.md
 
       Add unit tests covering the new functionality.
 
-      Test cases for plan-orchestrator (tests/test_plan_orchestrator.py):
-      - test_should_send_step_notifications_small_plan: plan with 5 tasks -> False
-      - test_should_send_step_notifications_large_plan: plan with 8 tasks -> True
-      - test_should_send_step_notifications_threshold_boundary: plan with exactly 6 tasks -> False, 7 tasks -> True
-      - test_should_send_step_notifications_override_true: plan with 3 tasks but meta.step_notifications=true -> True
-      - test_should_send_step_notifications_override_false: plan with 10 tasks but meta.step_notifications=false -> False
-      - test_step_notification_threshold_constant: verify STEP_NOTIFICATION_THRESHOLD == 6
+      Test cases for plan-orchestrator (tests/test_plan_orchestrator.py): - test_should_send_step_notifications_small_plan:
+      plan with 5 tasks -> False - test_should_send_step_notifications_large_plan:
+      plan with 8 tasks -> True - test_should_send_step_notifications_threshold_boundary:
+      plan with exactly 6 tasks -> False, 7 tasks -> True - test_should_send_step_notifications_override_true:
+      plan with 3 tasks but meta.step_notifications=true -> True - test_should_send_step_notifications_override_false:
+      plan with 10 tasks but meta.step_notifications=false -> False - test_step_notification_threshold_constant:
+      verify STEP_NOTIFICATION_THRESHOLD == 6
 
-      Test cases for auto-pipeline (tests/test_auto_pipeline.py):
-      - test_parse_step_notifications_true: file with "step_notifications: true" -> True
-      - test_parse_step_notifications_false: file with "step_notifications: false" -> False
-      - test_parse_step_notifications_absent: file without the field -> None
-      - test_parse_step_notifications_case_insensitive: "Step_Notifications: True" -> True
+      Test cases for auto-pipeline (tests/test_auto_pipeline.py): - test_parse_step_notifications_true:
+      file with "step_notifications: true" -> True - test_parse_step_notifications_false:
+      file with "step_notifications: false" -> False - test_parse_step_notifications_absent:
+      file without the field -> None - test_parse_step_notifications_case_insensitive:
+      "Step_Notifications: True" -> True
 
       Run tests and fix any failures.
 
       Files: tests/test_plan_orchestrator.py, tests/test_auto_pipeline.py
+
+      '
