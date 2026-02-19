@@ -318,7 +318,7 @@ sections:
   - id: '4.2'
     name: Update _process_item_inner() to branch on analysis type
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '4.1'
     description: "Update _process_item_inner() to route analysis items to the lightweight\
@@ -332,6 +332,8 @@ sections:
       \ loops, plan creation, etc.).\n\n3. Verify syntax:\n   python3 -c \"import\
       \ py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
       \ print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
+    attempts: 1
+    last_attempt: '2026-02-18T22:51:27.106637'
   - id: '4.3'
     name: Update main_loop() filesystem watcher to include analysis directory
     agent: coder

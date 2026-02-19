@@ -2462,6 +2462,8 @@ def process_item(
 
     Returns True on success, False on failure or max cycles exceeded.
     """
+    if item.item_type == "analysis":
+        return process_analysis_item(item, dry_run)
     _open_item_log(item.slug, item.display_name, item.item_type)
     _log_summary("INFO", "STARTED", item.slug, f"type={item.item_type}")
     try:
