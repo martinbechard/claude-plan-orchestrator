@@ -1,0 +1,518 @@
+meta:
+  name: Spec-Aware Validator with E2E Test Logging
+  description: Enhance the validator agent to read functional spec verification blocks,
+    run referenced E2E tests, capture timestamped JSON results, and include E2E pass/fail
+    in the validation verdict. Create an e2e-analyzer agent for on-demand log review.
+  plan_doc: docs/plans/2026-02-18-spec-aware-validator-with-e2e-logging-design.md
+  created: '2026-02-18'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - validator
+    max_validation_attempts: 1
+sections:
+- id: phase-1
+  name: Phase 1 - Documentation and Templates
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Create verification block template
+    agent: coder
+    status: pending
+    description: |
+      Create a reference template for verification blocks in functional spec files.
+
+      Reference: docs/plans/2026-02-18-spec-aware-validator-with-e2e-logging-design.md
+
+      Steps:
+      1. Create the file docs/templates/verification-block.md with the following content:
+
+         A markdown document that explains the verification block format used in
+         functional specification files. Include:
+
+         - A header explaining the purpose: these blocks tell the validator agent
+           which E2E tests verify each requirement
+         - The full block format with all fields:
+           ### Verification
+           **Type:** Testable | Non-E2E | Blocked
+           **Test file(s):** <path to test file(s), comma-separated for multiple>
+           **Status:** Pass | Fail | Missing
+           **Scenario:** <description of what is being verified>
+           - Route: <URL route being tested>
+           - Steps: <human-readable test steps>
+           - Assertions: <what the test checks>
+         - Explanation of each Type value:
+           Testable = has an automated E2E test
+           Non-E2E = verified by other means (unit test, manual, code review)
+           Blocked = no UI/API exists yet, test cannot be written
+         - Explanation of each Status value:
+           Pass = test exists and passes
+           Fail = test exists but is failing
+           Missing = test file referenced but does not exist yet
+         - Example of a complete block for a diagnostics page load test
+         - Example of a Non-E2E block (e.g., a server-side validation check)
+         - Example of a Blocked block
+
+      2. Git commit:
+         git add docs/templates/verification-block.md
+         git commit -m "docs: add verification block template for functional specs"
+
+      Files: docs/templates/verification-block.md
+
+- id: phase-2
+  name: Phase 2 - Implementation
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add spec-aware config constants and parse_verification_blocks helper
+    agent: coder
+    status: pending
+    description: |
+      Add spec-aware validation configuration to plan-orchestrator.py and a helper
+      function to parse verification blocks from functional spec markdown files.
+
+      Reference: docs/plans/2026-02-18-spec-aware-validator-with-e2e-logging-design.md
+
+      Steps:
+      1. Read scripts/plan-orchestrator.py. Find the config constants section
+         (around lines 47-52 where DEFAULT_BUILD_COMMAND etc. are defined).
+
+      2. After DEFAULT_AGENTS_DIR, add two new defaults:
+
+         DEFAULT_SPEC_DIR = ""
+         DEFAULT_E2E_COMMAND = "npx playwright test"
+
+      3. Find where _config values are read (around lines 275-280 where
+         BUILD_COMMAND, TEST_COMMAND etc. are extracted). After AGENTS_DIR, add:
+
+         SPEC_DIR = _config.get("spec_dir", DEFAULT_SPEC_DIR)
+         E2E_COMMAND = _config.get("e2e_command", DEFAULT_E2E_COMMAND)
+
+      4. After the parse_agent_frontmatter() function (around line 302), add a
+         new function parse_verification_blocks(content: str) -> list[dict]:
+
+         This function takes the full text content of a functional spec file and
+         returns a list of dicts, one per verification block found. Each dict has:
+         - type: str (e.g., "Testable", "Non-E2E", "Blocked")
+         - test_files: list[str] (parsed from "Test file(s):" line, split on comma)
+         - status: str (e.g., "Pass", "Fail", "Missing")
+         - scenario: str (the scenario description text)
+
+         Parsing logic:
+         - Split content by "### Verification" headings
+         - For each block after the split, use regex to extract:
+           **Type:** <value>  -> type field
+           **Test file(s):** <value>  -> test_files field (split by comma, strip each)
+           **Status:** <value>  -> status field
+           **Scenario:** <value>  -> scenario field (everything after Scenario: to next **)
+         - Skip blocks that fail to parse (missing fields)
+         - Return empty list if no blocks found
+
+         Use these regex patterns:
+           re.compile(r'\*\*Type:\*\*\s*(.+)')
+           re.compile(r'\*\*Test file\(s\):\*\*\s*(.+)')
+           re.compile(r'\*\*Status:\*\*\s*(.+)')
+           re.compile(r'\*\*Scenario:\*\*\s*(.+)')
+
+      5. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      6. Git commit:
+         git add scripts/plan-orchestrator.py
+         git commit -m "feat: add spec-aware config and parse_verification_blocks helper"
+
+      Files: scripts/plan-orchestrator.py
+
+  - id: '2.2'
+    name: Update build_validation_prompt to include spec-aware context
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.1'
+    description: |
+      Update the build_validation_prompt() function in plan-orchestrator.py to
+      include spec-aware validation context when the project has SPEC_DIR configured.
+
+      Reference: docs/plans/2026-02-18-spec-aware-validator-with-e2e-logging-design.md
+
+      Steps:
+      1. Read scripts/plan-orchestrator.py. Find the build_validation_prompt()
+         function (around line 1005).
+
+      2. After the existing return statement's content (the f-string that ends
+         with the "IMPORTANT: You MUST write..." line), add a spec-aware section
+         that is conditionally included. Modify the function to:
+
+         a. Before constructing the return string, build a spec_context variable:
+
+            spec_context = ""
+            if SPEC_DIR:
+                spec_context = f"""
+
+      ## Spec-Aware Validation (E2E Tests)
+
+      This project has functional specifications in: {SPEC_DIR}
+      E2E test command: {E2E_COMMAND}
+
+      After the standard validation checks above, perform these additional steps:
+
+      1. Run: git diff --name-only HEAD~1 HEAD
+         Look for any files under {SPEC_DIR} in the diff output.
+
+      2. If spec files were modified, read each changed spec file and find all
+         ### Verification blocks.
+
+      3. For each block with **Type: Testable** and a **Test file(s):** reference:
+         - Run the E2E test: {E2E_COMMAND} <test_file> --reporter=json
+         - Capture the JSON output to logs/e2e/ with a timestamped filename
+           (format: YYYY-MM-DDTHHMMSS.json)
+         - Parse the JSON to determine pass/fail counts
+
+      4. Include E2E test results in your findings:
+         - [PASS] E2E: <test_file> - all N tests passed
+         - [FAIL] E2E: <test_file> - M of N tests failed
+
+      5. If no spec files were changed in the diff, skip E2E testing and note:
+         - [PASS] E2E: No functional spec changes detected, E2E tests skipped
+
+      6. E2E failures should result in a WARN verdict (not FAIL) unless the
+         failing tests are directly related to the task's requirements.
+      """
+
+         b. Include spec_context in the returned prompt string, before the
+            "IMPORTANT: You MUST write..." line.
+
+      3. Verify syntax:
+         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
+
+      4. Git commit:
+         git add scripts/plan-orchestrator.py
+         git commit -m "feat: include spec-aware E2E context in validation prompt"
+
+      Files: scripts/plan-orchestrator.py
+
+  - id: '2.3'
+    name: Update validator agent with spec-aware instructions
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.2'
+    description: |
+      Update the validator agent definition to include spec-aware validation
+      instructions.
+
+      Reference: docs/plans/2026-02-18-spec-aware-validator-with-e2e-logging-design.md
+
+      Steps:
+      1. Read .claude/agents/validator.md.
+
+      2. In the "## Validation Steps" section, after step 2 (run test command)
+         and before step 3 (verify requirements), insert a new step:
+
+         3. If the validation prompt includes a "Spec-Aware Validation" section:
+            a. Run `git diff --name-only HEAD~1 HEAD` to find changed files
+            b. Filter for files under the spec directory mentioned in the prompt
+            c. For each changed spec file, read it and find `### Verification` blocks
+            d. For each block with `**Type: Testable**` and `**Test file(s):**`:
+               - Run the E2E test command with `--reporter=json`
+               - Save JSON output to `logs/e2e/<timestamp>.json`
+               - Parse pass/fail counts from the JSON
+            e. If no spec files changed, note that E2E tests were skipped
+
+         Renumber the existing steps 3 and 4 to become 4 and 5.
+
+      3. In the "## Verdict Rules" section, add a clarification:
+
+         Under WARN, add: "E2E test failures for tests not directly related to
+         the task requirements."
+
+         Under FAIL, add: "E2E test failures for tests directly referenced by
+         the task's functional spec changes."
+
+      4. In the "## Constraints" section, add:
+
+         - When running E2E tests, always use --reporter=json and save output to
+           logs/e2e/ with a timestamped filename (YYYY-MM-DDTHHMMSS.json).
+         - Only run E2E tests when the validation prompt includes spec-aware context.
+           Do not search for spec files on your own.
+
+      5. Git commit:
+         git add .claude/agents/validator.md
+         git commit -m "feat: add spec-aware E2E validation to validator agent"
+
+      Files: .claude/agents/validator.md
+
+  - id: '2.4'
+    name: Create e2e-analyzer agent
+    agent: coder
+    status: pending
+    description: |
+      Create a new agent for on-demand analysis of accumulated E2E test logs.
+
+      Reference: docs/plans/2026-02-18-spec-aware-validator-with-e2e-logging-design.md
+
+      Steps:
+      1. Read .claude/agents/validator.md and .claude/agents/issue-verifier.md
+         for agent format reference (YAML frontmatter + markdown body).
+
+      2. Create .claude/agents/e2e-analyzer.md with:
+
+         Frontmatter:
+         - name: e2e-analyzer
+         - description: "E2E test results analyzer. Reads accumulated JSON test logs
+           in logs/e2e/ to identify flaky tests, detect regressions, summarize
+           pass/fail trends, and compare results between runs. Read-only."
+         - tools: [Read, Grep, Glob, Bash]
+         - model: sonnet
+
+         Body sections:
+
+         ## Role
+         You are an E2E test results analyzer. You review accumulated Playwright
+         JSON test logs to provide insights about test health, flakiness, and
+         regressions. You do NOT fix tests or modify code.
+
+         ## Before Analyzing
+         1. List all JSON files in logs/e2e/ sorted by timestamp
+         2. Determine the date range of available logs
+         3. Read the user's analysis request to understand what they want
+
+         ## Analysis Capabilities
+         For each capability, describe the approach:
+
+         ### Summary Report
+         - Count total pass/fail/skip across all runs or a date range
+         - Show per-test-file breakdown
+         - Highlight any tests with 0% pass rate
+
+         ### Flaky Test Detection
+         - Find tests that have both pass and fail results across runs
+         - Calculate flakiness rate (fail_count / total_runs)
+         - Rank by flakiness, most flaky first
+
+         ### Regression Detection
+         - Find tests that were passing before a given date but failing after
+         - Cross-reference with git log to identify potential culprit commits
+         - Report: test name, last pass date, first fail date, suspect commits
+
+         ### Run Comparison
+         - Compare two specific JSON log files
+         - Show tests that changed status (pass->fail, fail->pass)
+         - Show new tests and removed tests
+
+         ## Output Format
+         Use markdown tables for structured data. Include:
+         - Date range analyzed
+         - Number of log files reviewed
+         - Key findings with specific test names and file paths
+
+         ## Constraints
+         - Read-only: do not modify any files
+         - Only use Read, Grep, Glob to inspect logs and code
+         - Use Bash only for listing/sorting log files
+         - Parse JSON with python3 -c "..." one-liners if needed
+
+         ## Output Protocol
+         Write a status file to .claude/plans/task-status.json when done.
+
+      3. Git commit:
+         git add .claude/agents/e2e-analyzer.md
+         git commit -m "feat: add e2e-analyzer agent for test log analysis"
+
+      Files: .claude/agents/e2e-analyzer.md
+
+- id: phase-3
+  name: Phase 3 - Unit Tests
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Add unit tests for parse_verification_blocks
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.1'
+    description: |
+      Add unit tests for the parse_verification_blocks() helper function.
+
+      Reference: docs/plans/2026-02-18-spec-aware-validator-with-e2e-logging-design.md
+
+      Steps:
+      1. Read tests/test_plan_orchestrator.py to understand existing test patterns,
+         especially how the plan-orchestrator module is imported.
+
+      2. Add the following tests:
+
+         a. test_parse_verification_blocks_single_testable():
+            - Input: a spec markdown string containing one ### Verification block
+              with Type: Testable, Test file(s): tests/DG01-test.spec.ts,
+              Status: Pass, Scenario: some description
+            - Call parse_verification_blocks(content)
+            - Assert returns a list with one dict
+            - Assert dict has type="Testable", test_files=["tests/DG01-test.spec.ts"],
+              status="Pass", scenario containing "some description"
+
+         b. test_parse_verification_blocks_multiple_blocks():
+            - Input: spec with two ### Verification blocks (one Testable, one Non-E2E)
+            - Assert returns two dicts with correct types
+
+         c. test_parse_verification_blocks_no_blocks():
+            - Input: a spec markdown string with no ### Verification heading
+            - Assert returns empty list
+
+         d. test_parse_verification_blocks_multiple_test_files():
+            - Input: a block with Test file(s): tests/a.spec.ts, tests/b.spec.ts
+            - Assert test_files is ["tests/a.spec.ts", "tests/b.spec.ts"]
+
+         e. test_parse_verification_blocks_blocked_type():
+            - Input: a block with Type: Blocked
+            - Assert returns a dict with type="Blocked"
+
+         f. test_parse_verification_blocks_missing_fields():
+            - Input: a ### Verification block with only Type field, missing others
+            - Assert the block is skipped (returns empty list)
+
+      3. Run the tests:
+         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_plan_orchestrator.py -v -k parse_verification
+         Fix any failures before marking this task complete.
+
+      Files: tests/test_plan_orchestrator.py
+
+  - id: '3.2'
+    name: Add unit tests for spec-aware build_validation_prompt
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.2'
+    - '3.1'
+    description: |
+      Add unit tests verifying that build_validation_prompt() includes spec-aware
+      context when SPEC_DIR is configured, and omits it when not configured.
+
+      Reference: docs/plans/2026-02-18-spec-aware-validator-with-e2e-logging-design.md
+
+      Steps:
+      1. Read tests/test_plan_orchestrator.py to understand existing test patterns
+         for build_validation_prompt(). Look for any existing tests of this function.
+
+      2. Read scripts/plan-orchestrator.py to check the current signature of
+         build_validation_prompt() and what imports/fixtures the tests need.
+
+      3. Add the following tests:
+
+         a. test_build_validation_prompt_includes_spec_context():
+            - Monkeypatch the module's SPEC_DIR to "docs/specs/"
+            - Monkeypatch E2E_COMMAND to "npx playwright test"
+            - Create minimal task, section, and TaskResult objects
+            - Call build_validation_prompt(task, section, task_result, "validator")
+            - Assert the result contains "Spec-Aware Validation"
+            - Assert the result contains "docs/specs/"
+            - Assert the result contains "npx playwright test"
+
+         b. test_build_validation_prompt_omits_spec_when_unconfigured():
+            - Monkeypatch SPEC_DIR to "" (empty string)
+            - Call build_validation_prompt()
+            - Assert the result does NOT contain "Spec-Aware Validation"
+
+         c. test_build_validation_prompt_still_has_standard_checks():
+            - Monkeypatch SPEC_DIR to "docs/specs/"
+            - Call build_validation_prompt()
+            - Assert the result still contains the BUILD_COMMAND
+            - Assert the result still contains the TEST_COMMAND
+            - Assert the result still contains "Verdict: PASS"
+
+      4. Run the tests:
+         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_plan_orchestrator.py -v -k spec
+         Fix any failures before marking this task complete.
+
+      Files: tests/test_plan_orchestrator.py
+
+- id: phase-4
+  name: Phase 4 - Plugin Version Bump
+  status: pending
+  tasks:
+  - id: '4.1'
+    name: Bump plugin version and update release notes
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.4'
+    description: |
+      Bump the plugin version in plugin.json and update RELEASE-NOTES.md
+      for the spec-aware validator feature.
+
+      Steps:
+      1. Read plugin.json. Find the current version number.
+      2. Bump the minor version (this is a new feature).
+      3. Read RELEASE-NOTES.md. Add a new entry at the top for the new
+         version with a summary:
+         - **Spec-aware validator**: Validator agent reads functional spec
+           verification blocks and runs referenced E2E tests when spec files are
+           changed. Results captured as timestamped JSON in logs/e2e/.
+         - **E2E analyzer agent**: New on-demand agent for reviewing accumulated
+           E2E test logs to identify flaky tests, regressions, and trends.
+         - **Verification block template**: Reference format for annotating
+           functional specs with testable verification blocks.
+      4. Git commit both files:
+         git add plugin.json RELEASE-NOTES.md
+         git commit -m "chore: bump version for spec-aware-validator feature"
+
+      Files: plugin.json, RELEASE-NOTES.md
+
+- id: phase-5
+  name: Phase 5 - Final Verification
+  status: pending
+  tasks:
+  - id: '5.1'
+    name: Final verification - syntax, tests, and dry-run
+    agent: code-reviewer
+    status: pending
+    depends_on:
+    - '3.1'
+    - '3.2'
+    - '4.1'
+    description: |
+      Run all verification checks to confirm the feature is correctly
+      implemented and all tests pass.
+
+      Steps:
+      1. Check Python syntax for both scripts:
+         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+      2. Run the full test suite:
+         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ -v
+
+      3. Verify the new config constants exist in plan-orchestrator.py:
+         python3 -c "
+         import importlib.util
+         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
+         mod = importlib.util.module_from_spec(spec)
+         spec.loader.exec_module(mod)
+         assert hasattr(mod, 'SPEC_DIR'), 'SPEC_DIR not found'
+         assert hasattr(mod, 'E2E_COMMAND'), 'E2E_COMMAND not found'
+         assert callable(mod.parse_verification_blocks), 'parse_verification_blocks not callable'
+         print('All new constants and functions verified OK')
+         "
+
+      4. Verify the validator agent has spec-aware instructions:
+         grep -c "Spec-Aware" .claude/agents/validator.md
+
+      5. Verify the e2e-analyzer agent exists:
+         test -f .claude/agents/e2e-analyzer.md && echo "e2e-analyzer.md exists"
+
+      6. Verify the verification block template exists:
+         test -f docs/templates/verification-block.md && echo "template exists"
+
+      7. Run orchestrator dry-run to confirm no startup errors:
+         python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
+
+      8. Run the fallback test command:
+         python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
+
+      If any check fails, report the specific failure with details.
+
+      Files: scripts/plan-orchestrator.py, .claude/agents/validator.md,
+        .claude/agents/e2e-analyzer.md, docs/templates/verification-block.md,
+        tests/test_plan_orchestrator.py, plugin.json, RELEASE-NOTES.md
