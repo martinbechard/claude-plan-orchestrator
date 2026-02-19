@@ -4,6 +4,7 @@
 # Design ref: docs/plans/2026-02-17-6-new-feature-when-modifying-the-code-for-the-auto-pipeline-you-need-to-have-som-design.md
 # Design ref: docs/plans/2026-02-18-16-least-privilege-agent-sandboxing-design.md
 # Design ref: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md
+# Design ref: docs/plans/2026-02-19-19-optional-step-by-step-notifications-design.md
 
 import importlib.util
 import tempfile
@@ -53,6 +54,7 @@ COMPLETED_DIRS = mod.COMPLETED_DIRS
 ANALYSIS_TYPE_TO_AGENT = mod.ANALYSIS_TYPE_TO_AGENT
 parse_analysis_metadata = mod.parse_analysis_metadata
 scan_all_backlogs = mod.scan_all_backlogs
+parse_step_notifications_override = mod.parse_step_notifications_override
 
 
 # --- compact_plan_label() tests ---
@@ -1270,3 +1272,46 @@ def test_progress_reporter_build_report_format(monkeypatch):
     assert "Next up" in report
     assert "defect" in report
     assert "feature" in report
+
+
+# --- parse_step_notifications_override() tests ---
+
+
+def test_parse_step_notifications_true(tmp_path):
+    """File containing 'step_notifications: true' returns True."""
+    md_file = tmp_path / "item.md"
+    md_file.write_text("# Feature\nstep_notifications: true\nSome description.\n")
+
+    result = parse_step_notifications_override(str(md_file))
+
+    assert result is True
+
+
+def test_parse_step_notifications_false(tmp_path):
+    """File containing 'step_notifications: false' returns False."""
+    md_file = tmp_path / "item.md"
+    md_file.write_text("# Feature\nstep_notifications: false\nSome description.\n")
+
+    result = parse_step_notifications_override(str(md_file))
+
+    assert result is False
+
+
+def test_parse_step_notifications_absent(tmp_path):
+    """File without the field returns None."""
+    md_file = tmp_path / "item.md"
+    md_file.write_text("# Feature\nNo step_notifications field here.\n")
+
+    result = parse_step_notifications_override(str(md_file))
+
+    assert result is None
+
+
+def test_parse_step_notifications_case_insensitive(tmp_path):
+    """'Step_Notifications: True' (mixed case) is recognized and returns True."""
+    md_file = tmp_path / "item.md"
+    md_file.write_text("# Feature\nStep_Notifications: True\n")
+
+    result = parse_step_notifications_override(str(md_file))
+
+    assert result is True

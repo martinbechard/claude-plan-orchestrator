@@ -50,14 +50,14 @@ sections:
       OK.
 - id: phase-2
   name: Phase 2 - Pipeline override injection
-  status: pending
+  status: completed
   tasks:
   - id: '2.1'
     name: Parse step_notifications from backlog items and inject into plan meta
     agent: coder
     depends_on:
     - '1.1'
-    status: in_progress
+    status: completed
     description: "Implement the work item: docs/feature-backlog/19-optional-step-by-step-notifications.md\n\
       Design reference: docs/plans/2026-02-19-19-optional-step-by-step-notifications-design.md\n\
       This task adds backlog item parsing and plan meta injection in auto-pipeline.py.\n\
@@ -69,8 +69,17 @@ sections:
       \ to the parsed value, and save it back.\n3. Verify syntax: python3 -c \"import\
       \ py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)\"\
       \nFiles: scripts/auto-pipeline.py\n"
-    attempts: 1
-    last_attempt: '2026-02-19T16:50:17.280309'
+    attempts: 3
+    last_attempt: '2026-02-19T16:55:11.033257'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: No status file
+      written by Claude'
+    validation_attempts: 2
+    completed_at: '2026-02-19T16:55:55.813706'
+    result_message: parse_step_notifications_override() function added at line 749
+      in auto-pipeline.py, reads step_notifications field from backlog .md files (case-insensitive).
+      Injection into plan YAML meta added in create_plan() at line 1783-1794. Both
+      committed in 230150f. Syntax verified OK.
 - id: phase-3
   name: Phase 3 - Unit tests
   status: pending
@@ -80,7 +89,7 @@ sections:
     agent: coder
     depends_on:
     - '2.1'
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/19-optional-step-by-step-notifications.md
 
       Design reference: docs/plans/2026-02-19-19-optional-step-by-step-notifications-design.md
@@ -106,3 +115,5 @@ sections:
       Files: tests/test_plan_orchestrator.py, tests/test_auto_pipeline.py
 
       '
+    attempts: 1
+    last_attempt: '2026-02-19T16:55:58.111999'

@@ -2,6 +2,7 @@
 # Unit tests for plan-orchestrator.py functions
 # Design ref: docs/plans/2026-02-17-5-slack-bot-provides-truncated-unhelpful-responses-when-defect-submission-fails-validation-design.md
 # Design ref: docs/plans/2026-02-17-7-pipeline-agent-commits-unrelated-working-tree-changes-design.md
+# Design ref: docs/plans/2026-02-19-19-optional-step-by-step-notifications-design.md
 
 import importlib.util
 import os
@@ -42,6 +43,8 @@ update_section_status = mod.update_section_status
 AGENT_PERMISSION_PROFILES = mod.AGENT_PERMISSION_PROFILES
 AGENT_TO_PROFILE = mod.AGENT_TO_PROFILE
 build_permission_flags = mod.build_permission_flags
+should_send_step_notifications = mod.should_send_step_notifications
+STEP_NOTIFICATION_THRESHOLD = mod.STEP_NOTIFICATION_THRESHOLD
 
 
 # --- _truncate_for_slack tests ---
@@ -1056,9 +1059,8 @@ def _make_minimal_task_result() -> "TaskResult":
     return TaskResult(success=True, message="Task completed", duration_seconds=5.0)
 
 
-def test_build_validation_prompt_includes_spec_context(monkeypatch):
-    """Spec-aware context is included in the prompt when SPEC_DIR is configured."""
-    monkeypatch.setattr(mod, "SPEC_DIR", "docs/specs/")
+def test_build_validation_prompt_includes_e2e_command(monkeypatch):
+    """E2E command appears in the Commands section of the prompt."""
     monkeypatch.setattr(mod, "E2E_COMMAND", "npx playwright test")
 
     task = {"id": "1.1", "name": "Test task", "description": "A task"}
@@ -1067,22 +1069,19 @@ def test_build_validation_prompt_includes_spec_context(monkeypatch):
 
     result = build_validation_prompt(task, section, task_result, "validator")
 
-    assert "This project has functional specifications in: docs/specs/" in result
     assert "npx playwright test" in result
 
 
-def test_build_validation_prompt_omits_spec_when_unconfigured(monkeypatch):
-    """Spec-aware dynamic context is absent from the prompt when SPEC_DIR is empty."""
-    monkeypatch.setattr(mod, "SPEC_DIR", "")
-
+def test_build_validation_prompt_includes_source_item_when_plan_provided(monkeypatch):
+    """Work item path is included in the prompt when a plan dict with meta.source_item is supplied."""
     task = {"id": "1.1", "name": "Test task", "description": "A task"}
     section = {"id": "phase-1", "name": "Phase 1"}
     task_result = _make_minimal_task_result()
+    plan = {"meta": {"source_item": "docs/feature-backlog/42-my-feature.md"}}
 
-    result = build_validation_prompt(task, section, task_result, "validator")
+    result = build_validation_prompt(task, section, task_result, "validator", plan=plan)
 
-    # "This project has functional specifications in:" is only injected when SPEC_DIR is set
-    assert "This project has functional specifications in:" not in result
+    assert "docs/feature-backlog/42-my-feature.md" in result
 
 
 def test_build_validation_prompt_still_has_standard_checks(monkeypatch):
@@ -1421,3 +1420,57 @@ def test_build_permission_flags_project_scoping():
     assert "--add-dir" in result
     idx = result.index("--add-dir")
     assert result[idx + 1] == os.getcwd()
+
+
+# --- should_send_step_notifications() tests ---
+
+
+def _make_plan_with_task_count(task_count: int, override: "bool | None" = None) -> dict:
+    """Build a minimal plan dict with the given total task count across one section."""
+    meta: dict = {}
+    if override is not None:
+        meta["step_notifications"] = override
+    tasks = [{"id": str(i), "name": f"Task {i}", "status": "pending"} for i in range(task_count)]
+    return {
+        "meta": meta,
+        "sections": [
+            {"id": "phase-1", "name": "Phase 1", "status": "pending", "tasks": tasks}
+        ],
+    }
+
+
+def test_should_send_step_notifications_small_plan():
+    """Plan with 5 tasks (below threshold) returns False."""
+    plan = _make_plan_with_task_count(5)
+    assert should_send_step_notifications(plan) is False
+
+
+def test_should_send_step_notifications_large_plan():
+    """Plan with 8 tasks (above threshold) returns True."""
+    plan = _make_plan_with_task_count(8)
+    assert should_send_step_notifications(plan) is True
+
+
+def test_should_send_step_notifications_threshold_boundary():
+    """Plan with exactly 6 tasks returns False; 7 tasks returns True."""
+    plan_at_threshold = _make_plan_with_task_count(STEP_NOTIFICATION_THRESHOLD)
+    plan_one_above = _make_plan_with_task_count(STEP_NOTIFICATION_THRESHOLD + 1)
+    assert should_send_step_notifications(plan_at_threshold) is False
+    assert should_send_step_notifications(plan_one_above) is True
+
+
+def test_should_send_step_notifications_override_true():
+    """Plan with 3 tasks but meta.step_notifications=True returns True."""
+    plan = _make_plan_with_task_count(3, override=True)
+    assert should_send_step_notifications(plan) is True
+
+
+def test_should_send_step_notifications_override_false():
+    """Plan with 10 tasks but meta.step_notifications=False returns False."""
+    plan = _make_plan_with_task_count(10, override=False)
+    assert should_send_step_notifications(plan) is False
+
+
+def test_step_notification_threshold_constant():
+    """STEP_NOTIFICATION_THRESHOLD equals 6."""
+    assert STEP_NOTIFICATION_THRESHOLD == 6
