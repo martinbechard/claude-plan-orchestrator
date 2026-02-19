@@ -77,7 +77,9 @@ decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the 
 2026-02-18  Opus/Sonnet design loop pattern designed for ux-designer agent
 2026-02-18  Persistent logging: per-item detail logs + pipeline.log summary
 2026-02-18  Plugin versioned to 1.1.0, RELEASE-NOTES.md, CLAUDE.md
+2026-02-18  Opus/Sonnet ux-designer loop + Slack suspension implemented (1.4.0)
+2026-02-18  Chapter 14: cognitive specialization, narrative README restructured (1.5.0)
 
-Current: ~4773 lines (orchestrator) + ~1949 lines (auto-pipeline)
-Plans executed: 23+ YAML plan files, 20+ completed plans
+Current: ~5374 lines (orchestrator) + ~2550 lines (auto-pipeline)
+Plans executed: 29 completed features/defects
 ```

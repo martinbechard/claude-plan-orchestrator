@@ -1,5 +1,21 @@
 # Release Notes
 
+## 1.5.0 (2026-02-18)
+
+### Improvements
+- **Cognitive specialization documented**: Narrative chapter 14 covers the model audit
+  across all 11 agents, the cascade multiplier reasoning behind promoting planner and
+  ux-designer to Opus, the Opus/Sonnet design loop pattern, the agent teams vs subagent
+  trade-off analysis, and the Slack suspension problem.
+- **Narrative README restructured**: "The Core Insight" section moved before the Document
+  Index so new readers encounter the architectural rationale before the chapter list.
+- **Plugin versioning policy**: `CLAUDE.md` establishes that `plugin.json` version must
+  be bumped for every meaningful change and `RELEASE-NOTES.md` kept in sync, as if the
+  plugin were published in the marketplace.
+- **Completed backlog captured**: Completion records for all 29 shipped features and
+  defects committed to `docs/completed-backlog/`, making the full delivery history
+  browsable without digging through git log.
+
 ## 1.4.0 (2026-02-18)
 
 ### New Features
