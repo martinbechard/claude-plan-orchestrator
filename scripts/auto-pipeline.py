@@ -809,7 +809,7 @@ def process_idea(idea_path: str, dry_run: bool = False) -> bool:
         processed_dir=IDEAS_PROCESSED_DIR,
     )
 
-    cmd = [*CLAUDE_CMD, "--dangerously-skip-permissions", "--print", prompt]
+    cmd = [*CLAUDE_CMD, *build_permission_flags("planner"), "--print", prompt]
 
     result = run_child_process(
         cmd,
@@ -1478,7 +1478,7 @@ def create_plan(item: BacklogItem, dry_run: bool = False) -> Optional[str]:
         test_command=TEST_COMMAND,
     )
 
-    cmd = [*CLAUDE_CMD, "--dangerously-skip-permissions", "--print", prompt]
+    cmd = [*CLAUDE_CMD, *build_permission_flags("planner"), "--print", prompt]
 
     result = run_child_process(
         cmd,
@@ -1878,7 +1878,7 @@ def verify_item(item: BacklogItem, dry_run: bool = False) -> bool:
         dev_server_command=DEV_SERVER_COMMAND,
     )
 
-    cmd = [*CLAUDE_CMD, "--dangerously-skip-permissions", "--print", prompt]
+    cmd = [*CLAUDE_CMD, *build_permission_flags("verifier"), "--print", prompt]
 
     result = run_child_process(
         cmd,

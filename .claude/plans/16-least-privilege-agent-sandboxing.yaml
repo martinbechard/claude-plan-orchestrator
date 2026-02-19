@@ -223,7 +223,7 @@ sections:
   - id: '2.2'
     name: Replace --dangerously-skip-permissions in auto-pipeline.py launch points
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '2.1'
     description: "Update all three Claude launch points in scripts/auto-pipeline.py\
@@ -247,6 +247,8 @@ sections:
       \   assert count == 0, f'Found {count} remaining dangerously-skip-permissions'\n\
       \   print('All dangerously-skip-permissions replaced in auto-pipeline.py')\n\
       \   \"\n\nFiles: scripts/auto-pipeline.py"
+    attempts: 1
+    last_attempt: '2026-02-18T22:16:42.293711'
 - id: phase-3
   name: Phase 3 - Unit Tests
   status: pending
