@@ -2120,6 +2120,185 @@ def _mark_as_verification_exhausted(item_path: str) -> None:
         log(f"WARNING: Could not update status in {item_path}: {e}")
 
 
+def process_analysis_item(
+    item: BacklogItem,
+    dry_run: bool = False,
+) -> bool:
+    """Process an analysis backlog item through the lightweight analysis workflow.
+
+    Unlike feature/defect items, analysis items:
+    - Use a single Claude session with a read-only agent
+    - Produce a report instead of code changes
+    - Skip the plan creation and verification loop
+    - Deliver results via Slack and/or markdown file
+
+    Returns True on success, False on failure.
+    """
+    slack = SlackNotifier()
+    item_start = time.time()
+    _open_item_log(item.slug, item.display_name, item.item_type)
+    _log_summary("INFO", "STARTED", item.slug, f"type={item.item_type}")
+
+    try:
+        return _process_analysis_inner(item, slack, item_start, dry_run)
+    except Exception as e:
+        log(f"UNEXPECTED ERROR in process_analysis_item: {e}")
+        _log_summary("ERROR", "CRASHED", item.slug, str(e))
+        return False
+    finally:
+        _close_item_log("done")
+
+
+def _process_analysis_inner(
+    item: BacklogItem,
+    slack: SlackNotifier,
+    item_start: float,
+    dry_run: bool,
+) -> bool:
+    """Inner implementation of process_analysis_item()."""
+    log(f"{'=' * 60}")
+    log(f"Analyzing: {item.display_name}")
+    log(f"  Type: {item.item_type}")
+    log(f"  File: {item.path}")
+    log(f"{'=' * 60}")
+
+    # Parse analysis metadata
+    metadata = parse_analysis_metadata(item.path)
+    analysis_type = metadata["analysis_type"] or "code-review"
+    output_format = metadata["output_format"] or "both"
+    scope = ", ".join(metadata["scope"]) if metadata["scope"] else "entire project"
+    instructions = metadata["instructions"] or "Perform a thorough analysis."
+
+    # Resolve agent
+    agent_name = ANALYSIS_TYPE_TO_AGENT.get(analysis_type, DEFAULT_ANALYSIS_AGENT)
+    log(f"  Analysis type: {analysis_type} -> agent: {agent_name}")
+    log(f"  Output format: {output_format}")
+    log(f"  Scope: {scope}")
+
+    slack.send_status(
+        f"*Pipeline: analyzing* {item.display_name}\n"
+        f"Agent: {agent_name} | Scope: {scope}",
+        level="info"
+    )
+
+    report_path = os.path.join(REPORTS_DIR, f"{item.slug}.md")
+
+    if dry_run:
+        log(f"[DRY RUN] Would run analysis: {item.display_name}")
+        log(f"  Agent: {agent_name}")
+        log(f"  Report: {report_path}")
+        return True
+
+    # Build the analysis prompt
+    prompt = ANALYSIS_PROMPT_TEMPLATE.format(
+        item_path=item.path,
+        analysis_type=analysis_type,
+        scope=scope,
+        instructions=instructions,
+        report_path=report_path,
+    )
+
+    # All analysis agents use the READ_ONLY permission profile.
+    # The verifier profile (Read, Grep, Glob, Bash) matches this requirement.
+    cmd = [*CLAUDE_CMD, *build_permission_flags("verifier"), "--print", prompt]
+
+    result = run_child_process(
+        cmd,
+        description=f"Analysis: {compact_plan_label(item.slug)}",
+        timeout=PLAN_CREATION_TIMEOUT_SECONDS,
+        show_output=VERBOSE,
+    )
+
+    if result.rate_limited:
+        log("Rate limited during analysis")
+        _log_summary("WARN", "RATE_LIMITED", item.slug, "analysis")
+        return False
+
+    if not result.success:
+        log(f"Analysis failed for {item.display_name} (exit {result.exit_code})")
+        if result.stderr:
+            log(f"  stderr: {result.stderr[:500]}")
+        slack.send_status(
+            f"*Pipeline: analysis failed* {item.display_name}",
+            level="error"
+        )
+        _log_summary("ERROR", "FAILED", item.slug, "phase=analysis")
+        return False
+
+    # Deliver report
+    _deliver_analysis_report(item, slack, report_path, output_format)
+
+    # Archive
+    elapsed = time.time() - item_start
+    minutes = int(elapsed // 60)
+    seconds = int(elapsed % 60)
+    log(f"Analysis complete: {item.display_name} ({minutes}m {seconds}s)")
+    archived = archive_item(item, dry_run=False)
+    if archived:
+        _log_summary("INFO", "COMPLETED", item.slug, f"duration={minutes}m{seconds}s")
+    else:
+        _log_summary("WARN", "ARCHIVE_FAILED", item.slug, f"duration={minutes}m{seconds}s")
+    return True
+
+
+def _deliver_analysis_report(
+    item: BacklogItem,
+    slack: SlackNotifier,
+    report_path: str,
+    output_format: str,
+) -> None:
+    """Deliver the analysis report via Slack and/or verify the markdown file."""
+    report_exists = os.path.exists(report_path)
+
+    if output_format in ("slack", "both"):
+        # Read the report and post a summary to Slack
+        summary = ""
+        if report_exists:
+            try:
+                with open(report_path, "r") as f:
+                    content = f.read()
+                # Extract executive summary (first section after the title)
+                lines = content.split("\n")
+                summary_lines: list[str] = []
+                in_summary = False
+                for line in lines:
+                    if "executive summary" in line.lower() or (
+                        "summary" in line.lower() and line.startswith("#")
+                    ):
+                        in_summary = True
+                        continue
+                    if in_summary and line.startswith("#"):
+                        break
+                    if in_summary and line.strip():
+                        summary_lines.append(line)
+                summary = "\n".join(summary_lines[:10])
+            except IOError:
+                pass
+        if not summary:
+            summary = f"Analysis completed for {item.display_name}"
+
+        # Post to orchestrator-reports channel
+        reports_channel = slack.get_type_channel_id("analysis")
+        if reports_channel:
+            slack.send_status(
+                f"*Analysis Report:* {item.display_name}\n{summary}",
+                level="success",
+                channel_id=reports_channel,
+            )
+        else:
+            # Fall back to notifications channel
+            slack.send_status(
+                f"*Analysis Report:* {item.display_name}\n{summary}",
+                level="success",
+            )
+
+    if output_format in ("markdown", "both"):
+        if report_exists:
+            log(f"Report saved: {report_path}")
+        else:
+            log(f"WARNING: Expected report not found at {report_path}")
+
+
 def _process_item_inner(
     item: BacklogItem,
     dry_run: bool,
