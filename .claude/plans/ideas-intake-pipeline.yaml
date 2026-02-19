@@ -48,7 +48,7 @@ sections:
   - id: '1.2'
     name: Add idea intake prompt template and process_idea function
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '1.1'
     description: "Add the Claude prompt template for idea classification and the\n\
@@ -80,6 +80,8 @@ sections:
       \ moved to processed/\n   - Returns True/False based on success\n\n4. Verify\
       \ syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py\n"
+    attempts: 1
+    last_attempt: '2026-02-18T19:55:03.050412'
   - id: '1.3'
     name: Add intake_ideas orchestration and wire into main_loop
     agent: coder

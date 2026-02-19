@@ -737,6 +737,57 @@ def scan_ideas() -> list[str]:
     return unprocessed
 
 
+def process_idea(idea_path: str, dry_run: bool = False) -> bool:
+    """Classify a raw idea file into formatted backlog items via a Claude session.
+
+    Spawns Claude with IDEA_INTAKE_PROMPT_TEMPLATE to read the idea, write
+    properly formatted backlog .md files to the correct directories, and move
+    the original to IDEAS_PROCESSED_DIR.
+
+    Returns True on success, False on failure (including rate limiting).
+    """
+    idea_filename = os.path.basename(idea_path)
+
+    if dry_run:
+        log(f"[dry-run] Would classify idea: {idea_filename}")
+        return True
+
+    prompt = IDEA_INTAKE_PROMPT_TEMPLATE.format(
+        idea_path=idea_path,
+        idea_filename=idea_filename,
+        feature_dir=FEATURE_DIR,
+        defect_dir=DEFECT_DIR,
+        processed_dir=IDEAS_PROCESSED_DIR,
+    )
+
+    cmd = [*CLAUDE_CMD, "--dangerously-skip-permissions", "--print", prompt]
+
+    result = run_child_process(
+        cmd,
+        description=f"Intake: {idea_filename}",
+        timeout=PLAN_CREATION_TIMEOUT_SECONDS,
+        show_output=VERBOSE,
+    )
+
+    if result.rate_limited:
+        log(f"Rate limited during idea intake for {idea_filename}")
+        return False
+
+    if not result.success:
+        log(f"Idea intake failed for {idea_filename} (exit {result.exit_code})")
+        if result.stderr:
+            log(f"  stderr: {result.stderr[:500]}")
+        return False
+
+    processed_path = os.path.join(IDEAS_PROCESSED_DIR, idea_filename)
+    if not os.path.exists(processed_path):
+        log(f"Idea intake completed but original not moved to processed/: {idea_filename}")
+        return False
+
+    log(f"Idea classified and archived: {idea_filename}")
+    return True
+
+
 # ─── Filesystem Watcher ──────────────────────────────────────────────
 
 
@@ -1027,6 +1078,64 @@ def run_child_process(
 # Active child process for signal handling
 _active_child_process: Optional[subprocess.Popen] = None
 
+
+# ─── Idea Intake ──────────────────────────────────────────────────────
+
+IDEA_INTAKE_PROMPT_TEMPLATE = """You are an intake classifier for a software project backlog.
+
+## Your Task
+
+Read the raw idea file at: {idea_path}
+
+Analyze the content and classify it into one or more actionable backlog items.
+
+## Classification Rules
+
+1. Determine if each item describes a **feature** (new capability or enhancement) or a
+   **defect** (something broken or not working as intended). A single idea file may produce
+   multiple items of different types.
+
+2. Assess priority based on content signals:
+   - **High**: Critical path, blocking users, data loss risk, or explicitly urgent
+   - **Medium**: Important but not blocking, clear user value
+   - **Low**: Nice-to-have, minor improvement, or vague benefit
+
+3. If the idea is too vague to act on, write a single item with `## Status: Needs Clarification`
+   instead of Open.
+
+## Output Format
+
+For each backlog item, create a markdown file with exactly these sections:
+
+```
+## Status: Open
+## Priority: <High|Medium|Low>
+## Summary
+<Clear one-paragraph description of the item — what it is and why it matters>
+
+## Scope
+<What areas of the codebase or system are affected>
+
+## Files Affected
+<Bulleted list of files likely needing changes, or "Unknown - needs investigation">
+```
+
+## Output Locations
+
+- Feature items go to: {feature_dir}/<slug>.md
+- Defect items go to: {defect_dir}/<slug>.md
+
+The slug must be derived from the idea content: lowercase, words separated by hyphens,
+descriptive of the item (e.g., `add-dark-mode-toggle.md`, `fix-login-redirect-loop.md`).
+
+## After Writing Output Files
+
+1. Move the original idea file to: {processed_dir}/{idea_filename}
+   (use `git mv` or `mv` then `git add`)
+2. Git commit with message: `intake: classify idea {idea_filename}`
+
+Commit all new backlog files and the move of the original in a single commit.
+"""
 
 # ─── Plan Creation ────────────────────────────────────────────────────
 
