@@ -283,7 +283,7 @@ sections:
       Syntax verified OK. Committed as e071af9.
 - id: phase-4
   name: Phase 4 - Pipeline Integration
-  status: in_progress
+  status: completed
   tasks:
   - id: '4.1'
     name: Update scan_all_backlogs() to include analysis items
@@ -343,7 +343,7 @@ sections:
   - id: '4.3'
     name: Update main_loop() filesystem watcher to include analysis directory
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '4.2'
     description: "Add ANALYSIS_DIR to the filesystem watcher in main_loop().\nReference:\
@@ -356,6 +356,12 @@ sections:
       \ analysis backlog:\n   log(f\"  Analysis backlog: {ANALYSIS_DIR}/\")\n\n4.\
       \ Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
+    attempts: 1
+    last_attempt: '2026-02-18T22:54:33.943358'
+    model_used: sonnet
+    completed_at: '2026-02-18T22:55:56.509893'
+    result_message: Added ANALYSIS_DIR to filesystem watcher list in main_loop() and
+      added startup log line for analysis backlog directory
 - id: phase-5
   name: Phase 5 - Unit Tests
   status: pending
