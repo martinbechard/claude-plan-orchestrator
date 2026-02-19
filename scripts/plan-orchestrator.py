@@ -643,6 +643,86 @@ CLAUDE_CMD: list[str] = ["claude"]
 # so the orchestrator can spawn Claude from within a Claude Code session.
 STRIPPED_ENV_VARS = ["CLAUDECODE"]
 
+# Sandboxing: when True, agents receive per-profile --allowedTools flags.
+# Set ORCHESTRATOR_SANDBOX_ENABLED=false to fall back to --dangerously-skip-permissions.
+SANDBOX_ENABLED = os.environ.get("ORCHESTRATOR_SANDBOX_ENABLED", "true").lower() != "false"
+
+# Per-agent permission profiles mapping profile names to allowed tools and bash policy.
+AGENT_PERMISSION_PROFILES: dict = {
+    "READ_ONLY": {
+        "tools": ["Read", "Grep", "Glob", "Bash"],
+        "bash_policy": "read_only",
+        "description": "Read-only access for review and analysis agents",
+    },
+    "WRITE": {
+        "tools": ["Read", "Grep", "Glob", "Write", "Edit", "Bash", "NotebookEdit"],
+        "bash_policy": "build_test",
+        "description": "Full write access for implementation agents",
+    },
+    "VERIFICATION": {
+        "tools": ["Read", "Grep", "Glob", "Bash"],
+        "bash_policy": "build_test",
+        "description": "Read + test/build for verification agents",
+    },
+    "DESIGN": {
+        "tools": ["Read", "Grep", "Glob", "Write", "Bash"],
+        "bash_policy": "exploration",
+        "description": "Read + write design docs for design agents",
+    },
+}
+
+# Mapping from agent name to permission profile name.
+# Agents not listed here fall back to WRITE (most permissive) to avoid breakage.
+AGENT_TO_PROFILE: dict = {
+    # Read-only agents
+    "code-reviewer": "READ_ONLY",
+    "systems-designer": "READ_ONLY",
+    "ux-reviewer": "READ_ONLY",
+    "spec-verifier": "READ_ONLY",
+    "e2e-analyzer": "READ_ONLY",
+    "qa-auditor": "READ_ONLY",
+    "code-explorer": "READ_ONLY",
+    "code-architect": "READ_ONLY",
+    # Write agents
+    "coder": "WRITE",
+    "frontend-coder": "WRITE",
+    # Verification agents
+    "validator": "VERIFICATION",
+    "issue-verifier": "VERIFICATION",
+    # Design agents
+    "ux-designer": "DESIGN",
+    "ux-implementer": "DESIGN",
+    "planner": "DESIGN",
+}
+
+
+def build_permission_flags(agent_name: str) -> list[str]:
+    """Build CLI permission flags for an agent based on its permission profile.
+
+    Returns a list of CLI arguments to pass to the Claude subprocess.
+    When SANDBOX_ENABLED is False, returns ["--dangerously-skip-permissions"].
+    When the agent name is not recognized, falls back to WRITE profile
+    for safety (most permissive profile to avoid breaking unknown agents).
+    """
+    if not SANDBOX_ENABLED:
+        verbose_log(f"Sandbox disabled, using --dangerously-skip-permissions for '{agent_name}'", "PERM")
+        return ["--dangerously-skip-permissions"]
+
+    profile_name = AGENT_TO_PROFILE.get(agent_name, "WRITE")
+    profile = AGENT_PERMISSION_PROFILES[profile_name]
+    tools = profile["tools"]
+
+    flags = ["--allowedTools"] + tools
+    # Add project directory scoping
+    flags.extend(["--add-dir", os.getcwd()])
+
+    verbose_log(
+        f"Agent '{agent_name}' -> profile '{profile_name}': "
+        f"tools={tools}",
+        "PERM"
+    )
+    return flags
+
 
 def build_child_env() -> dict[str, str]:
     """Build a clean environment for spawning Claude child processes."""
