@@ -217,7 +217,7 @@ sections:
       documented suspended skip behavior in find_next_task(). All 255 tests pass.
 - id: phase-3
   name: Phase 3 - Part 2 Suspension Infrastructure
-  status: in_progress
+  status: completed
   tasks:
   - id: '3.1'
     name: Add suspension marker file management to plan-orchestrator
@@ -373,7 +373,7 @@ sections:
   - id: '3.4'
     name: Wire suspension reply checking into Slack background poller
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '3.3'
     description: "Extend the Slack background poller to periodically check for replies\n\
@@ -404,6 +404,10 @@ sections:
       \ poller\"\n\nFiles: scripts/plan-orchestrator.py\n"
     attempts: 1
     last_attempt: '2026-02-18T21:10:32.484089'
+    model_used: sonnet
+    completed_at: '2026-02-18T21:13:27.038119'
+    result_message: Added glob import, implemented _check_all_suspensions() on SlackNotifier,
+      and wired it into _poll_loop so suspension replies are detected each poll cycle
 - id: phase-4
   name: Phase 4 - Unit Tests
   status: pending
