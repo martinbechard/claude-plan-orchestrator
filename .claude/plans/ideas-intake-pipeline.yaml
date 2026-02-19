@@ -124,12 +124,12 @@ sections:
       All 236 tests pass.
 - id: phase-2
   name: Phase 2 - Unit Tests
-  status: pending
+  status: in_progress
   tasks:
   - id: '2.1'
     name: Add unit tests for scan_ideas()
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '1.1'
     description: "Add unit tests for the scan_ideas() function in auto-pipeline.py.\n\
@@ -157,6 +157,11 @@ sections:
       \nFiles: tests/test_auto_pipeline.py\n"
     attempts: 1
     last_attempt: '2026-02-18T20:01:11.896457'
+    model_used: sonnet
+    completed_at: '2026-02-18T20:03:10.812317'
+    result_message: 'Added 5 unit tests for scan_ideas(): returns_md_files, skips_empty_files,
+      skips_already_processed, returns_empty_when_dir_missing, skips_dotfiles. All
+      41 tests pass.'
   - id: '2.2'
     name: Add unit tests for process_idea() and intake_ideas()
     agent: coder
