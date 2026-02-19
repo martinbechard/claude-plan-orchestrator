@@ -283,12 +283,12 @@ sections:
       Syntax verified OK. Committed as e071af9.
 - id: phase-4
   name: Phase 4 - Pipeline Integration
-  status: pending
+  status: in_progress
   tasks:
   - id: '4.1'
     name: Update scan_all_backlogs() to include analysis items
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '3.1'
     description: "Update the backlog scanning to include the analysis directory.\n\
@@ -304,6 +304,17 @@ sections:
       )\n       all_items = defects + features + analyses\n       ... (rest of function\
       \ unchanged)\n\n3. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
+    attempts: 2
+    last_attempt: '2026-02-18T22:50:13.519145'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: FAIL: 3 test
+      failures in test_completed_archive.py - scan_directory mock side_effect needs
+      3 values (was 2) after adding ANALYSIS_DIR scan'
+    validation_attempts: 1
+    completed_at: '2026-02-18T22:51:24.479146'
+    result_message: scan_all_backlogs() already included ANALYSIS_DIR from attempt
+      1. Fixed 3 test_completed_archive.py tests to provide 3 side_effect values for
+      scan_directory mock (was 2). All 279 tests pass.
   - id: '4.2'
     name: Update _process_item_inner() to branch on analysis type
     agent: coder
