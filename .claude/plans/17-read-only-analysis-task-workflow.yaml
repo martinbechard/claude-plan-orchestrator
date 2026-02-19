@@ -1,0 +1,376 @@
+meta:
+  name: Read-Only Analysis Task Workflow
+  description: Add a new "analysis" backlog type with a lightweight, single-pass
+    read-only workflow. Analysis items live in docs/analysis-backlog/, use read-only
+    agents (code-reviewer, code-explorer, qa-auditor, e2e-analyzer, spec-verifier),
+    skip the plan/verify cycle, and deliver structured reports via Slack and/or
+    markdown files in docs/reports/.
+  plan_doc: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md
+  created: '2026-02-18'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - validator
+    max_validation_attempts: 1
+sections:
+- id: phase-1
+  name: Phase 1 - Slack Channel and Constants Setup
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add reports channel suffix to plan-orchestrator.py
+    agent: coder
+    status: pending
+    description: "Add the 'reports' Slack channel to plan-orchestrator.py and update\
+      \ the type channel mapping.\nReference: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md\n\
+      Steps:\n1. Read scripts/plan-orchestrator.py. Find SLACK_CHANNEL_ROLE_SUFFIXES\
+      \ (around line 128).\n2. Add 'reports' entry:\n   SLACK_CHANNEL_ROLE_SUFFIXES\
+      \ = {\n       \"features\": \"feature\",\n       \"defects\": \"defect\",\n\
+      \       \"questions\": \"question\",\n       \"notifications\": \"control\",\n\
+      \       \"reports\": \"analysis\",\n   }\n\n3. Find get_type_channel_id() (around\
+      \ line 3348). Update the suffix_map to include 'analysis':\n   suffix_map =\
+      \ {\"feature\": \"features\", \"defect\": \"defects\", \"analysis\": \"reports\"\
+      }\n\n4. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py"
+  - id: '1.2'
+    name: Add analysis constants and directories to auto-pipeline.py
+    agent: coder
+    status: pending
+    description: "Add the analysis backlog constants, directories, and type mappings\
+      \ to scripts/auto-pipeline.py.\nReference: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md\n\
+      Steps:\n1. Read scripts/auto-pipeline.py. Find the directory constants section\
+      \ (around lines 66-94).\n\n2. After FEATURE_DIR (line 67), add:\n   ANALYSIS_DIR\
+      \ = \"docs/analysis-backlog\"\n\n3. After COMPLETED_FEATURES_DIR (line 69),\
+      \ add:\n   COMPLETED_ANALYSES_DIR = \"docs/completed-backlog/analyses\"\n  \
+      \ REPORTS_DIR = \"docs/reports\"\n\n4. Update COMPLETED_DIRS (around line 70)\
+      \ to include:\n   COMPLETED_DIRS = {\n       \"defect\": COMPLETED_DEFECTS_DIR,\n\
+      \       \"feature\": COMPLETED_FEATURES_DIR,\n       \"analysis\": COMPLETED_ANALYSES_DIR,\n\
+      \   }\n\n5. Add ANALYSIS_DIR, COMPLETED_ANALYSES_DIR, and REPORTS_DIR to the\
+      \ REQUIRED_DIRS list (around line 83).\n\n6. Add the ANALYSIS_TYPE_TO_AGENT\
+      \ mapping constant after the PIPELINE_PERMISSION_PROFILES dict:\n   ANALYSIS_TYPE_TO_AGENT:\
+      \ dict = {\n       \"code-review\": \"code-reviewer\",\n       \"codebase-analysis\"\
+      : \"code-explorer\",\n       \"test-coverage\": \"qa-auditor\",\n       \"test-results\"\
+      : \"e2e-analyzer\",\n       \"spec-compliance\": \"spec-verifier\",\n   }\n\
+      \   DEFAULT_ANALYSIS_AGENT = \"code-reviewer\"\n\n7. Verify syntax:\n   python3\
+      \ -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
+      \ print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
+- id: phase-2
+  name: Phase 2 - Analysis Metadata Parsing and Prompt Template
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add parse_analysis_metadata() and ANALYSIS_PROMPT_TEMPLATE
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.2'
+    description: "Add the analysis metadata parser and prompt template to scripts/auto-pipeline.py.\n\
+      Reference: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md\n\
+      Steps:\n1. Read scripts/auto-pipeline.py.\n\n2. Add parse_analysis_metadata()\
+      \ near the backlog scanning section (after scan_directory, around line 655):\n\
+      \   def parse_analysis_metadata(filepath: str) -> dict:\n       \"\"\"Parse\
+      \ analysis-specific metadata from a backlog .md file.\n\n       Extracts:\n\
+      \         - analysis_type: value from '## Analysis Type: <type>' header\n   \
+      \      - output_format: value from '## Output Format: <format>' header (default:\
+      \ 'both')\n         - scope: lines from the '## Scope' section (as a list)\n\
+      \         - instructions: text from the '## Instructions' section\n       Returns\
+      \ a dict with these keys.\n       \"\"\"\n       try:\n           with open(filepath,\
+      \ \"r\") as f:\n               content = f.read()\n       except IOError:\n \
+      \          return {\"analysis_type\": \"\", \"output_format\": \"both\", \"scope\"\
+      : [], \"instructions\": \"\"}\n\n       metadata: dict = {\n           \"analysis_type\"\
+      : \"\",\n           \"output_format\": \"both\",\n           \"scope\": [],\n\
+      \           \"instructions\": \"\",\n       }\n\n       # Extract analysis type\n\
+      \       type_match = re.search(r\"^##\\s*Analysis Type:\\s*(.+)$\", content,\
+      \ re.MULTILINE)\n       if type_match:\n           metadata[\"analysis_type\"\
+      ] = type_match.group(1).strip().lower()\n\n       # Extract output format\n\
+      \       format_match = re.search(r\"^##\\s*Output Format:\\s*(.+)$\", content,\
+      \ re.MULTILINE)\n       if format_match:\n           metadata[\"output_format\"\
+      ] = format_match.group(1).strip().lower()\n\n       # Extract scope section\n\
+      \       scope_match = re.search(r\"^##\\s*Scope\\s*\\n(.*?)(?=^##|\\Z)\", content,\
+      \ re.MULTILINE | re.DOTALL)\n       if scope_match:\n           scope_lines\
+      \ = [line.strip().lstrip(\"- \") for line in scope_match.group(1).strip().splitlines()\
+      \ if line.strip()]\n           metadata[\"scope\"] = scope_lines\n\n       #\
+      \ Extract instructions section\n       instructions_match = re.search(r\"^##\\\
+      s*Instructions\\s*\\n(.*?)(?=^##|\\Z)\", content, re.MULTILINE | re.DOTALL)\n\
+      \       if instructions_match:\n           metadata[\"instructions\"] = instructions_match.group(1).strip()\n\
+      \n       return metadata\n\n3. Add the ANALYSIS_PROMPT_TEMPLATE near the other\
+      \ prompt templates (after VERIFICATION_PROMPT_TEMPLATE, around line 1830):\n\
+      \   ANALYSIS_PROMPT_TEMPLATE = \"\"\"You are an analysis agent. Your job is\
+      \ to perform a read-only analysis\n   of the codebase and produce a structured\
+      \ report. You MUST NOT modify any files.\n\n   ## Analysis Request\n   - Item:\
+      \ {item_path}\n   - Type: {analysis_type}\n   - Scope: {scope}\n\n   ## Instructions\n\
+      \   {instructions}\n\n   ## What to produce\n\n   Write a structured markdown\
+      \ report to: {report_path}\n\n   The report must include:\n   1. An executive\
+      \ summary (3-5 bullet points)\n   2. Detailed findings organized by category\n\
+      \   3. Recommendations (if applicable)\n   4. A severity/priority classification\
+      \ for each finding\n\n   ## CRITICAL RULES\n   - Do NOT modify any project source\
+      \ files\n   - Do NOT create or modify any code\n   - ONLY read files and write\
+      \ the report to the specified path\n   - Be thorough but concise in your analysis\n\
+      \   \"\"\"\n\n4. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
+- id: phase-3
+  name: Phase 3 - Analysis Processing Function
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Add process_analysis_item() function
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.1'
+    description: "Add the process_analysis_item() function to scripts/auto-pipeline.py.\n\
+      This is the core function that runs a read-only analysis task and delivers the\
+      \ report.\nReference: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md\n\
+      Steps:\n1. Read scripts/auto-pipeline.py. Read the existing process_item() and\n\
+      \   process_idea() functions for patterns.\n\n2. Add process_analysis_item()\
+      \ near the other processing functions\n   (before _process_item_inner, around\
+      \ line 2030):\n\n   def process_analysis_item(\n       item: BacklogItem,\n\
+      \       dry_run: bool = False,\n   ) -> bool:\n       \"\"\"Process an analysis\
+      \ backlog item through the lightweight analysis workflow.\n\n       Unlike feature/defect\
+      \ items, analysis items:\n       - Use a single Claude session with a read-only\
+      \ agent\n       - Produce a report instead of code changes\n       - Skip the\
+      \ plan creation and verification loop\n       - Deliver results via Slack and/or\
+      \ markdown file\n\n       Returns True on success, False on failure.\n      \
+      \ \"\"\"\n       slack = SlackNotifier()\n       item_start = time.time()\n \
+      \      _open_item_log(item.slug, item.display_name, item.item_type)\n      \
+      \ _log_summary(\"INFO\", \"STARTED\", item.slug, f\"type={item.item_type}\"\
+      )\n\n       try:\n           return _process_analysis_inner(item, slack, item_start,\
+      \ dry_run)\n       except Exception as e:\n           log(f\"UNEXPECTED ERROR\
+      \ in process_analysis_item: {e}\")\n           _log_summary(\"ERROR\", \"CRASHED\"\
+      , item.slug, str(e))\n           return False\n       finally:\n           _close_item_log(\"\
+      done\")\n\n\n   def _process_analysis_inner(\n       item: BacklogItem,\n  \
+      \     slack: SlackNotifier,\n       item_start: float,\n       dry_run: bool,\n\
+      \   ) -> bool:\n       \"\"\"Inner implementation of process_analysis_item().\"\
+      \"\"\n       log(f\"{'=' * 60}\")\n       log(f\"Analyzing: {item.display_name}\"\
+      )\n       log(f\"  Type: {item.item_type}\")\n       log(f\"  File: {item.path}\"\
+      )\n       log(f\"{'=' * 60}\")\n\n       # Parse analysis metadata\n       metadata\
+      \ = parse_analysis_metadata(item.path)\n       analysis_type = metadata[\"analysis_type\"\
+      ] or \"code-review\"\n       output_format = metadata[\"output_format\"] or\
+      \ \"both\"\n       scope = \", \".join(metadata[\"scope\"]) if metadata[\"scope\"\
+      ] else \"entire project\"\n       instructions = metadata[\"instructions\"]\
+      \ or \"Perform a thorough analysis.\"\n\n       # Resolve agent\n       agent_name\
+      \ = ANALYSIS_TYPE_TO_AGENT.get(analysis_type, DEFAULT_ANALYSIS_AGENT)\n    \
+      \   log(f\"  Analysis type: {analysis_type} -> agent: {agent_name}\")\n    \
+      \   log(f\"  Output format: {output_format}\")\n       log(f\"  Scope: {scope}\"\
+      )\n\n       slack.send_status(\n           f\"*Pipeline: analyzing* {item.display_name}\\\
+      n\"\n           f\"Agent: {agent_name} | Scope: {scope}\",\n           level=\"\
+      info\"\n       )\n\n       report_path = os.path.join(REPORTS_DIR, f\"{item.slug}.md\"\
+      )\n\n       if dry_run:\n           log(f\"[DRY RUN] Would run analysis: {item.display_name}\"\
+      )\n           log(f\"  Agent: {agent_name}\")\n           log(f\"  Report: {report_path}\"\
+      )\n           return True\n\n       # Build the analysis prompt\n       prompt\
+      \ = ANALYSIS_PROMPT_TEMPLATE.format(\n           item_path=item.path,\n     \
+      \      analysis_type=analysis_type,\n           scope=scope,\n           instructions=instructions,\n\
+      \           report_path=report_path,\n       )\n\n       # Import build_permission_flags\
+      \ from plan-orchestrator for the agent\n       # The auto-pipeline uses its\
+      \ own build_permission_flags which only knows\n       # 'planner' and 'verifier'.\
+      \ For analysis agents, we need the orchestrator's\n       # build_permission_flags\
+      \ which knows all agent profiles.\n       # However, since all analysis agents\
+      \ are READ_ONLY, we can use the\n       # auto-pipeline's verifier profile (Read,\
+      \ Grep, Glob, Bash) which matches.\n       cmd = [*CLAUDE_CMD, *build_permission_flags(\"\
+      verifier\"), \"--print\", prompt]\n\n       result = run_child_process(\n  \
+      \         cmd,\n           description=f\"Analysis: {compact_plan_label(item.slug)}\"\
+      ,\n           timeout=PLAN_CREATION_TIMEOUT_SECONDS,\n           show_output=VERBOSE,\n\
+      \       )\n\n       if result.rate_limited:\n           log(\"Rate limited during\
+      \ analysis\")\n           _log_summary(\"WARN\", \"RATE_LIMITED\", item.slug,\
+      \ \"analysis\")\n           return False\n\n       if not result.success:\n \
+      \          log(f\"Analysis failed for {item.display_name} (exit {result.exit_code})\"\
+      )\n           if result.stderr:\n               log(f\"  stderr: {result.stderr[:500]}\"\
+      )\n           slack.send_status(\n               f\"*Pipeline: analysis failed*\
+      \ {item.display_name}\",\n               level=\"error\"\n           )\n    \
+      \       _log_summary(\"ERROR\", \"FAILED\", item.slug, \"phase=analysis\")\n\
+      \           return False\n\n       # Deliver report\n       _deliver_analysis_report(item,\
+      \ slack, report_path, output_format)\n\n       # Archive\n       elapsed = time.time()\
+      \ - item_start\n       minutes = int(elapsed // 60)\n       seconds = int(elapsed\
+      \ % 60)\n       log(f\"Analysis complete: {item.display_name} ({minutes}m {seconds}s)\"\
+      )\n       archived = archive_item(item, dry_run=False)\n       if archived:\n\
+      \           _log_summary(\"INFO\", \"COMPLETED\", item.slug, f\"duration={minutes}m{seconds}s\"\
+      )\n       else:\n           _log_summary(\"WARN\", \"ARCHIVE_FAILED\", item.slug,\
+      \ f\"duration={minutes}m{seconds}s\")\n       return True\n\n\n3. Add the _deliver_analysis_report()\
+      \ helper right after:\n\n   def _deliver_analysis_report(\n       item: BacklogItem,\n\
+      \       slack: SlackNotifier,\n       report_path: str,\n       output_format:\
+      \ str,\n   ) -> None:\n       \"\"\"Deliver the analysis report via Slack and/or\
+      \ verify the markdown file.\"\"\"\n       report_exists = os.path.exists(report_path)\n\
+      \n       if output_format in (\"slack\", \"both\"):\n           # Read the report\
+      \ and post a summary to Slack\n           summary = \"\"\n           if report_exists:\n\
+      \               try:\n                   with open(report_path, \"r\") as f:\n\
+      \                       content = f.read()\n                   # Extract executive\
+      \ summary (first section after the title)\n                   lines = content.split(\"\
+      \\n\")\n                   summary_lines: list[str] = []\n                 \
+      \  in_summary = False\n                   for line in lines:\n             \
+      \          if \"executive summary\" in line.lower() or \"summary\" in line.lower()\
+      \ and line.startswith(\"#\"):\n                           in_summary = True\n\
+      \                           continue\n                       if in_summary and\
+      \ line.startswith(\"#\"):\n                           break\n              \
+      \         if in_summary and line.strip():\n                           summary_lines.append(line)\n\
+      \                   summary = \"\\n\".join(summary_lines[:10])\n           if\
+      \ not summary:\n               summary = f\"Analysis completed for {item.display_name}\"\
+      \n\n           # Post to orchestrator-reports channel\n           reports_channel\
+      \ = slack.get_type_channel_id(\"analysis\")\n           if reports_channel:\n\
+      \               slack.send_status(\n                   f\"*Analysis Report:*\
+      \ {item.display_name}\\n{summary}\",\n                   level=\"success\",\n\
+      \                   channel_id=reports_channel,\n               )\n         \
+      \  else:\n               # Fall back to notifications channel\n            \
+      \   slack.send_status(\n                   f\"*Analysis Report:* {item.display_name}\\\
+      n{summary}\",\n                   level=\"success\",\n               )\n\n \
+      \      if output_format in (\"markdown\", \"both\"):\n           if report_exists:\n\
+      \               log(f\"Report saved: {report_path}\")\n           else:\n  \
+      \             log(f\"WARNING: Expected report not found at {report_path}\")\n\
+      \n4. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
+- id: phase-4
+  name: Phase 4 - Pipeline Integration
+  status: pending
+  tasks:
+  - id: '4.1'
+    name: Update scan_all_backlogs() to include analysis items
+    agent: coder
+    status: pending
+    depends_on:
+    - '3.1'
+    description: "Update the backlog scanning to include the analysis directory.\n\
+      Reference: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md\n\
+      Steps:\n1. Read scripts/auto-pipeline.py. Find scan_all_backlogs() (around line\
+      \ 725).\n\n2. Update scan_all_backlogs() to also scan ANALYSIS_DIR:\n   def\
+      \ scan_all_backlogs() -> list[BacklogItem]:\n       \"\"\"Scan all backlog directories\
+      \ with dependency filtering.\n\n       Returns defects first, then features,\
+      \ then analysis items.\n       Items whose dependencies are not all present in\
+      \ the completed/ directories\n       are filtered out.\n       \"\"\"\n     \
+      \  defects = scan_directory(DEFECT_DIR, \"defect\")\n       features = scan_directory(FEATURE_DIR,\
+      \ \"feature\")\n       analyses = scan_directory(ANALYSIS_DIR, \"analysis\")\n\
+      \       all_items = defects + features + analyses\n       ... (rest of function\
+      \ unchanged)\n\n3. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
+  - id: '4.2'
+    name: Update _process_item_inner() to branch on analysis type
+    agent: coder
+    status: pending
+    depends_on:
+    - '4.1'
+    description: "Update _process_item_inner() to route analysis items to the lightweight\
+      \ workflow.\nReference: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md\n\
+      Steps:\n1. Read scripts/auto-pipeline.py. Find process_item() (around line 2170)\n\
+      \   and _process_item_inner() (around line 2032).\n\n2. In process_item(), add\
+      \ an early branch BEFORE the existing try block:\n   At the start of process_item(),\
+      \ after the docstring, add:\n   if item.item_type == \"analysis\":\n       return\
+      \ process_analysis_item(item, dry_run)\n\n   This routes analysis items to the\
+      \ lightweight workflow before any\n   of the feature/defect machinery (verification\
+      \ loops, plan creation, etc.).\n\n3. Verify syntax:\n   python3 -c \"import\
+      \ py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
+      \ print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
+  - id: '4.3'
+    name: Update main_loop() filesystem watcher to include analysis directory
+    agent: coder
+    status: pending
+    depends_on:
+    - '4.2'
+    description: "Add ANALYSIS_DIR to the filesystem watcher in main_loop().\nReference:\
+      \ docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md\nSteps:\n\
+      1. Read scripts/auto-pipeline.py. Find main_loop() (around line 2313).\n\n2.\
+      \ Find the watch directory list (around line 2349):\n   for watch_dir in [DEFECT_DIR,\
+      \ FEATURE_DIR, IDEAS_DIR]:\n   Update to:\n   for watch_dir in [DEFECT_DIR,\
+      \ FEATURE_DIR, ANALYSIS_DIR, IDEAS_DIR]:\n\n3. Find the startup log lines (around\
+      \ line 2571-2572) that print the\n   monitored directories. Add a line for the\
+      \ analysis backlog:\n   log(f\"  Analysis backlog: {ANALYSIS_DIR}/\")\n\n4. Verify\
+      \ syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
+- id: phase-5
+  name: Phase 5 - Unit Tests
+  status: pending
+  tasks:
+  - id: '5.1'
+    name: Add unit tests for analysis workflow in auto-pipeline
+    agent: coder
+    status: pending
+    depends_on:
+    - '4.3'
+    description: "Add unit tests for the analysis workflow to tests/test_auto_pipeline.py.\n\
+      Reference: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md\n\
+      Steps:\n1. Read tests/test_auto_pipeline.py to understand the current test structure.\n\
+      2. Read scripts/auto-pipeline.py to see the exact implementation of the new\
+      \ functions.\n\n3. Add the following test cases:\n\n   a. test_analysis_dir_constant_exists:\n\
+      \      Assert ANALYSIS_DIR == \"docs/analysis-backlog\"\n      Assert COMPLETED_ANALYSES_DIR\
+      \ == \"docs/completed-backlog/analyses\"\n      Assert REPORTS_DIR == \"docs/reports\"\
+      \n\n   b. test_analysis_in_completed_dirs:\n      Assert \"analysis\" is a key\
+      \ in COMPLETED_DIRS.\n      Assert COMPLETED_DIRS[\"analysis\"] == COMPLETED_ANALYSES_DIR.\n\
+      \n   c. test_analysis_type_to_agent_mapping:\n      Assert ANALYSIS_TYPE_TO_AGENT\
+      \ contains expected mappings:\n      \"code-review\" -> \"code-reviewer\"\n \
+      \     \"codebase-analysis\" -> \"code-explorer\"\n      \"test-coverage\" ->\
+      \ \"qa-auditor\"\n      \"test-results\" -> \"e2e-analyzer\"\n      \"spec-compliance\"\
+      \ -> \"spec-verifier\"\n\n   d. test_parse_analysis_metadata_full:\n      Create\
+      \ a temp .md file with all analysis metadata fields:\n      ## Analysis Type:\
+      \ code-review\n      ## Output Format: both\n      ## Scope\\n- src/\\n- tests/\n\
+      \      ## Instructions\\nCheck for code quality issues.\n      Call parse_analysis_metadata()\
+      \ and assert all fields parsed correctly.\n\n   e. test_parse_analysis_metadata_defaults:\n\
+      \      Create a temp .md file with no analysis metadata fields.\n      Call parse_analysis_metadata()\
+      \ and assert defaults:\n      analysis_type=\"\", output_format=\"both\", scope=[],\
+      \ instructions=\"\"\n\n   f. test_parse_analysis_metadata_missing_file:\n   \
+      \   Call parse_analysis_metadata(\"/nonexistent/file.md\").\n      Assert it\
+      \ returns the default dict without raising.\n\n   g. test_scan_all_backlogs_includes_analysis:\n\
+      \      Create a temp analysis-backlog directory with a test .md file.\n     \
+      \ Monkeypatch ANALYSIS_DIR to point to the temp directory.\n      Call scan_all_backlogs()\
+      \ (with DEFECT_DIR and FEATURE_DIR also monkeypatched\n      to empty temp dirs).\n\
+      \      Assert the analysis item appears in the result with item_type=\"analysis\"\
+      .\n\n4. Run tests:\n   python3 -m pytest tests/test_auto_pipeline.py -v -k \"\
+      analysis\"\n   Then run ALL tests:\n   python3 -m pytest tests/ -v\n   Fix any\
+      \ failures.\n\nFiles: tests/test_auto_pipeline.py"
+  - id: '5.2'
+    name: Add unit tests for Slack reports channel in plan-orchestrator
+    agent: coder
+    status: pending
+    depends_on:
+    - '5.1'
+    description: "Add unit tests for the reports channel integration to tests/test_plan_orchestrator.py.\n\
+      Reference: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md\n\
+      Steps:\n1. Read tests/test_plan_orchestrator.py to understand the current test\
+      \ structure.\n2. Read scripts/plan-orchestrator.py to see the exact implementation.\n\
+      \n3. Add the following test cases:\n\n   a. test_slack_channel_role_suffixes_includes_reports:\n\
+      \      Assert \"reports\" is a key in SLACK_CHANNEL_ROLE_SUFFIXES.\n      Assert\
+      \ SLACK_CHANNEL_ROLE_SUFFIXES[\"reports\"] == \"analysis\".\n\n   b. test_get_type_channel_id_analysis:\n\
+      \      Create a SlackNotifier instance (with Slack disabled or mocked).\n   \
+      \   Mock _discover_channels() to return a dict that includes\n      \"orchestrator-reports\"\
+      : \"C_REPORTS_ID\".\n      Call get_type_channel_id(\"analysis\").\n      Assert\
+      \ result == \"C_REPORTS_ID\".\n\n   c. test_get_type_channel_id_unknown_type:\n\
+      \      Verify that get_type_channel_id(\"unknown\") returns \"\".\n\n4. Run tests:\n\
+      \   python3 -m pytest tests/test_plan_orchestrator.py -v -k \"reports or analysis\"\
+      \n   Then run ALL tests:\n   python3 -m pytest tests/ -v\n   Fix any failures.\n\
+      \nFiles: tests/test_plan_orchestrator.py"
+- id: phase-6
+  name: Phase 6 - Verification
+  status: pending
+  tasks:
+  - id: '6.1'
+    name: Verify syntax, tests, and analysis workflow
+    agent: code-reviewer
+    status: pending
+    depends_on:
+    - '5.2'
+    description: "Run verification checks to confirm the analysis task workflow works\
+      \ correctly.\nSteps:\n1. Check Python syntax for both scripts:\n   python3 -c\
+      \ \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
+      \ py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\n\n2. Run\
+      \ all unit tests:\n   python3 -m pytest tests/ 2>/dev/null || echo 'No test\
+      \ suite configured'\n\n3. Verify the new constants exist in auto-pipeline.py:\n\
+      \   python3 -c \"\n   import importlib.util\n   spec = importlib.util.spec_from_file_location('ap',\
+      \ 'scripts/auto-pipeline.py')\n   mod = importlib.util.module_from_spec(spec)\n\
+      \   spec.loader.exec_module(mod)\n   assert hasattr(mod, 'ANALYSIS_DIR'), 'Missing\
+      \ ANALYSIS_DIR'\n   assert hasattr(mod, 'COMPLETED_ANALYSES_DIR'), 'Missing\
+      \ COMPLETED_ANALYSES_DIR'\n   assert hasattr(mod, 'REPORTS_DIR'), 'Missing REPORTS_DIR'\n\
+      \   assert 'analysis' in mod.COMPLETED_DIRS, 'Missing analysis in COMPLETED_DIRS'\n\
+      \   assert hasattr(mod, 'ANALYSIS_TYPE_TO_AGENT'), 'Missing ANALYSIS_TYPE_TO_AGENT'\n\
+      \   assert hasattr(mod, 'parse_analysis_metadata'), 'Missing parse_analysis_metadata'\n\
+      \   assert hasattr(mod, 'process_analysis_item'), 'Missing process_analysis_item'\n\
+      \   print('Analysis workflow constants and functions verified OK')\n   \"\n\n\
+      4. Verify the Slack channel suffix is registered:\n   python3 -c \"\n   import\
+      \ importlib.util\n   spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')\n\
+      \   mod = importlib.util.module_from_spec(spec)\n   spec.loader.exec_module(mod)\n\
+      \   assert 'reports' in mod.SLACK_CHANNEL_ROLE_SUFFIXES, 'Missing reports in\
+      \ SLACK_CHANNEL_ROLE_SUFFIXES'\n   assert mod.SLACK_CHANNEL_ROLE_SUFFIXES['reports']\
+      \ == 'analysis', 'Wrong mapping for reports'\n   print('Slack reports channel\
+      \ suffix verified OK')\n   \"\n\n5. Run orchestrator dry-run to verify no startup\
+      \ errors:\n   python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml\
+      \ --dry-run\n\nIf any check fails, report the failure with specific details.\n\
+      Files: scripts/plan-orchestrator.py, scripts/auto-pipeline.py,\n       tests/test_plan_orchestrator.py,\
+      \ tests/test_auto_pipeline.py"
