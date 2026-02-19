@@ -100,12 +100,12 @@ sections:
       calls from save_usage_report() and task log write path. Syntax verified OK.
 - id: phase-2
   name: Phase 2 - Unit Tests
-  status: pending
+  status: in_progress
   tasks:
   - id: '2.1'
     name: Add unit tests for ensure_directories() in auto-pipeline.py
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.1'
     description: "Add unit tests for the ensure_directories() function in auto-pipeline.py.\n\
@@ -127,6 +127,13 @@ sections:
       \ messages appear.\n\n3. Run the tests:\n   ~/.pyenv/versions/3.11.*/bin/python\
       \ -m pytest tests/test_auto_pipeline.py -v\n   Fix any failures before marking\
       \ this task complete.\n\nFiles: tests/test_auto_pipeline.py\n"
+    attempts: 1
+    last_attempt: '2026-02-18T19:41:47.366541'
+    model_used: sonnet
+    completed_at: '2026-02-18T19:44:39.717311'
+    result_message: 'Added 3 unit tests for ensure_directories() in tests/test_auto_pipeline.py:
+      creates missing dirs, logs [INIT] per created dir, silent when dirs exist. All
+      36 tests pass.'
   - id: '2.2'
     name: Add unit tests for ensure_directories() in plan-orchestrator.py
     agent: coder
