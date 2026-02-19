@@ -5,6 +5,7 @@ meta:
     (code-reviewer, code-explorer, qa-auditor, e2e-analyzer, spec-verifier), skip
     the plan/verify cycle, and deliver structured reports via Slack and/or markdown
     files in docs/reports/.
+  source_item: docs/feature-backlog/17-read-only-analysis-task-workflow.md
   plan_doc: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md
   created: '2026-02-18'
   max_attempts_default: 3
@@ -14,7 +15,7 @@ meta:
     - coder
     validators:
     - validator
-    max_validation_attempts: 1
+    max_validation_attempts: 2
 sections:
 - id: phase-1
   name: Phase 1 - Slack Channel and Constants Setup
