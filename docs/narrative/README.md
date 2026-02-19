@@ -40,6 +40,7 @@ when the circuit breaker trips or smoke tests fail.
 | [11-verification-loop.md](11-verification-loop.md) | Independent symptom verification: verify-then-fix cycles, PID tracking, configurable commands |
 | [12-talking-back.md](12-talking-back.md) | Real question answering, 5 Whys intake analysis, the gap between acknowledging and answering |
 | [13-self-improvement.md](13-self-improvement.md) | Self-improvement: multi-project channels, intake acknowledgment, hot-reload, cost standardization |
+| [14-cognitive-specialization.md](14-cognitive-specialization.md) | Model audit across all agents, Opus/Sonnet design loop, agent teams vs subagents trade-offs, Slack suspension pattern |
 
 ## Timeline at a Glance
 
@@ -64,6 +65,10 @@ when the circuit breaker trips or smoke tests fail.
 2026-02-17  Intake acknowledgment messages for features and defects
 2026-02-17  Hot-reload self-restart for auto-pipeline
 2026-02-17  Cost formatting standardization (~$ prefix)
+2026-02-18  Model audit: SLACK_LLM_MODEL → claude-opus-4-6, planner/ux-designer → opus
+2026-02-18  Opus/Sonnet design loop pattern designed for ux-designer agent
+2026-02-18  Persistent logging: per-item detail logs + pipeline.log summary
+2026-02-18  Plugin versioned to 1.1.0, RELEASE-NOTES.md, CLAUDE.md
 
 Current: ~4773 lines (orchestrator) + ~1949 lines (auto-pipeline)
 Plans executed: 23+ YAML plan files, 20+ completed plans

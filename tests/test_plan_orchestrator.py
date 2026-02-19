@@ -28,6 +28,7 @@ git_stash_pop = mod.git_stash_pop
 ORCHESTRATOR_STASH_MESSAGE = mod.ORCHESTRATOR_STASH_MESSAGE
 STATUS_FILE_PATH = mod.STATUS_FILE_PATH
 ensure_directories = mod.ensure_directories
+parse_verification_blocks = mod.parse_verification_blocks
 
 
 # --- _truncate_for_slack tests ---
@@ -887,3 +888,118 @@ def test_ensure_directories_silent_when_dirs_exist(tmp_path, monkeypatch, capsys
 
     captured = capsys.readouterr()
     assert "[INIT]" not in captured.out
+
+
+# --- parse_verification_blocks tests ---
+
+_SINGLE_TESTABLE_SPEC = """
+## Feature
+
+Some feature description.
+
+### Verification
+
+**Type:** Testable
+**Test file(s):** tests/DG01-test.spec.ts
+**Status:** Pass
+
+**Scenario:** some description
+- Route: /admin/diagnostics
+- Steps: Sign in as admin
+"""
+
+_TWO_BLOCK_SPEC = """
+### Verification
+
+**Type:** Testable
+**Test file(s):** tests/DG01-test.spec.ts
+**Status:** Pass
+
+**Scenario:** First testable block
+
+### Verification
+
+**Type:** Non-E2E
+**Test file(s):** N/A
+**Status:** Pass
+
+**Scenario:** Second non-e2e block
+"""
+
+_MULTI_FILE_SPEC = """
+### Verification
+
+**Type:** Testable
+**Test file(s):** tests/a.spec.ts, tests/b.spec.ts
+**Status:** Pass
+
+**Scenario:** Multi file scenario
+"""
+
+_BLOCKED_SPEC = """
+### Verification
+
+**Type:** Blocked
+**Test file(s):** N/A
+**Status:** Missing
+
+**Scenario:** No UI exists yet
+"""
+
+_MISSING_FIELDS_SPEC = """
+### Verification
+
+**Type:** Testable
+"""
+
+
+def test_parse_verification_blocks_single_testable():
+    """Single Testable block is parsed into one dict with correct fields."""
+    result = parse_verification_blocks(_SINGLE_TESTABLE_SPEC)
+
+    assert len(result) == 1
+    block = result[0]
+    assert block["type"] == "Testable"
+    assert block["test_files"] == ["tests/DG01-test.spec.ts"]
+    assert block["status"] == "Pass"
+    assert "some description" in block["scenario"]
+
+
+def test_parse_verification_blocks_multiple_blocks():
+    """Two ### Verification blocks produce two dicts with correct types."""
+    result = parse_verification_blocks(_TWO_BLOCK_SPEC)
+
+    assert len(result) == 2
+    assert result[0]["type"] == "Testable"
+    assert result[1]["type"] == "Non-E2E"
+
+
+def test_parse_verification_blocks_no_blocks():
+    """Spec with no ### Verification heading returns an empty list."""
+    content = "## Overview\n\nNo verification blocks here.\n"
+    result = parse_verification_blocks(content)
+
+    assert result == []
+
+
+def test_parse_verification_blocks_multiple_test_files():
+    """Test file(s) field with comma-separated values is split into a list."""
+    result = parse_verification_blocks(_MULTI_FILE_SPEC)
+
+    assert len(result) == 1
+    assert result[0]["test_files"] == ["tests/a.spec.ts", "tests/b.spec.ts"]
+
+
+def test_parse_verification_blocks_blocked_type():
+    """Block with Type: Blocked is returned with type='Blocked'."""
+    result = parse_verification_blocks(_BLOCKED_SPEC)
+
+    assert len(result) == 1
+    assert result[0]["type"] == "Blocked"
+
+
+def test_parse_verification_blocks_missing_fields():
+    """Block with only Type field (missing others) is silently skipped."""
+    result = parse_verification_blocks(_MISSING_FIELDS_SPEC)
+
+    assert result == []
