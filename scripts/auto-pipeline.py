@@ -2320,6 +2320,8 @@ def _mark_as_verification_exhausted(item_path: str) -> None:
 def process_analysis_item(
     item: BacklogItem,
     dry_run: bool = False,
+    item_in_progress: Optional[threading.Event] = None,
+    completion_tracker: Optional[CompletionTracker] = None,
 ) -> bool:
     """Process an analysis backlog item through the lightweight analysis workflow.
 
@@ -2331,19 +2333,27 @@ def process_analysis_item(
 
     Returns True on success, False on failure.
     """
+    if item_in_progress is not None:
+        item_in_progress.set()
     slack = SlackNotifier()
     item_start = time.time()
     _open_item_log(item.slug, item.display_name, item.item_type)
     _log_summary("INFO", "STARTED", item.slug, f"type={item.item_type}")
 
     try:
-        return _process_analysis_inner(item, slack, item_start, dry_run)
+        success = _process_analysis_inner(item, slack, item_start, dry_run)
+        if success and completion_tracker is not None:
+            elapsed = time.time() - item_start
+            completion_tracker.record_completion(item.item_type, item.slug, elapsed)
+        return success
     except Exception as e:
         log(f"UNEXPECTED ERROR in process_analysis_item: {e}")
         _log_summary("ERROR", "CRASHED", item.slug, str(e))
         return False
     finally:
         _close_item_log("done")
+        if item_in_progress is not None:
+            item_in_progress.clear()
 
 
 def _process_analysis_inner(
@@ -2638,6 +2648,8 @@ def process_item(
     item: BacklogItem,
     dry_run: bool = False,
     session_tracker: Optional[SessionUsageTracker] = None,
+    item_in_progress: Optional[threading.Event] = None,
+    completion_tracker: Optional[CompletionTracker] = None,
 ) -> bool:
     """Process a single backlog item through the full pipeline.
 
@@ -2658,18 +2670,27 @@ def process_item(
 
     Returns True on success, False on failure or max cycles exceeded.
     """
+    if item_in_progress is not None:
+        item_in_progress.set()
     if item.item_type == "analysis":
-        return process_analysis_item(item, dry_run)
+        return process_analysis_item(item, dry_run, item_in_progress, completion_tracker)
+    item_start = time.time()
     _open_item_log(item.slug, item.display_name, item.item_type)
     _log_summary("INFO", "STARTED", item.slug, f"type={item.item_type}")
     try:
-        return _process_item_inner(item, dry_run, session_tracker)
+        success = _process_item_inner(item, dry_run, session_tracker)
+        if success and completion_tracker is not None:
+            elapsed = time.time() - item_start
+            completion_tracker.record_completion(item.item_type, item.slug, elapsed)
+        return success
     except Exception as e:
         log(f"UNEXPECTED ERROR in process_item: {e}")
         _log_summary("ERROR", "CRASHED", item.slug, str(e))
         return False
     finally:
         _close_item_log("done")
+        if item_in_progress is not None:
+            item_in_progress.clear()
 
 
 def _get_plan_suspended_tasks(plan_path: str) -> list[dict]:
@@ -2805,6 +2826,10 @@ def main_loop(dry_run: bool = False, once: bool = False,
     # Track usage across all work items in this session
     session_tracker = SessionUsageTracker()
 
+    # Track active processing and item completions for progress reporting
+    item_in_progress = threading.Event()
+    completion_tracker = CompletionTracker()
+
     # Event to signal new items detected
     new_item_event = threading.Event()
 
@@ -2830,6 +2855,8 @@ def main_loop(dry_run: bool = False, once: bool = False,
 
     slack = SlackNotifier()
     slack.start_background_polling()
+    reporter = ProgressReporter(slack, completion_tracker, item_in_progress)
+    reporter.start()
 
     try:
         while True:
@@ -2912,7 +2939,7 @@ def main_loop(dry_run: bool = False, once: bool = False,
                         log("Stopping pipeline due to budget constraint.")
                         break
                 log(f"Processing single item (--once mode): [{item.item_type}] {item.slug}")
-                success = process_item(item, dry_run, session_tracker)
+                success = process_item(item, dry_run, session_tracker, item_in_progress, completion_tracker)
                 if not success:
                     log(f"Item failed: {item.slug}")
                 log("Exiting (--once mode).")
@@ -2932,7 +2959,7 @@ def main_loop(dry_run: bool = False, once: bool = False,
                         log("Stopping pipeline due to budget constraint.")
                         break
 
-                success = process_item(item, dry_run, session_tracker)
+                success = process_item(item, dry_run, session_tracker, item_in_progress, completion_tracker)
                 if not success:
                     failed_items.add(item.path)
                     log(f"Item failed - will not retry in this session: {item.slug}")
@@ -2960,6 +2987,7 @@ def main_loop(dry_run: bool = False, once: bool = False,
                 log(f"[Session usage report: {session_report}]")
 
         code_monitor.stop()
+        reporter.stop()
         slack.stop_background_polling()
         if not once:
             observer.stop()
