@@ -13,6 +13,7 @@ Copyright (c) 2025 Martin Bechard [martin.bechard@DevConsult.ca]
 """
 
 import argparse
+import collections
 import hashlib
 import json
 import os
@@ -148,6 +149,9 @@ CODE_CHANGE_POLL_INTERVAL_SECONDS = 10
 DEFAULT_MAX_QUOTA_PERCENT = 100.0
 DEFAULT_QUOTA_CEILING_USD = 0.0
 DEFAULT_RESERVED_BUDGET_USD = 0.0
+PROGRESS_REPORT_INTERVAL_SECONDS = int(os.environ.get("PIPELINE_REPORT_INTERVAL", "900"))
+COMPLETION_HISTORY_WINDOW_SECONDS = 7200
+PROGRESS_REPORT_MAX_PREVIEW_ITEMS = 5
 
 # Source files to monitor for hot-reload
 HOT_RELOAD_WATCHED_FILES = [
@@ -1050,6 +1054,41 @@ class SessionUsageTracker:
         with open(report_path, "w") as f:
             json.dump(report, f, indent=2)
         return str(report_path)
+
+
+class CompletionTracker:
+    """Records work item completions for velocity and ETA calculations.
+
+    Design reference: docs/plans/2026-02-19-18-periodic-progress-reporter-design.md
+    """
+
+    def __init__(self) -> None:
+        self._entries: collections.deque[tuple[float, str, str, float]] = collections.deque()
+        self._lock = threading.Lock()
+
+    def record_completion(self, item_type: str, slug: str, duration_seconds: float) -> None:
+        """Record a completed work item with its wall-clock duration."""
+        with self._lock:
+            self._entries.append((time.time(), item_type, slug, duration_seconds))
+
+    def prune_old_entries(self) -> None:
+        """Remove entries older than COMPLETION_HISTORY_WINDOW_SECONDS."""
+        cutoff = time.time() - COMPLETION_HISTORY_WINDOW_SECONDS
+        with self._lock:
+            while self._entries and self._entries[0][0] < cutoff:
+                self._entries.popleft()
+
+    def completions_since(self, since_timestamp: float) -> list[tuple[float, str, str, float]]:
+        """Return all entries recorded after since_timestamp."""
+        with self._lock:
+            return [e for e in self._entries if e[0] >= since_timestamp]
+
+    def average_duration_seconds(self) -> float:
+        """Return the mean duration of all entries in the current window, or 0.0."""
+        with self._lock:
+            if not self._entries:
+                return 0.0
+            return sum(e[3] for e in self._entries) / len(self._entries)
 
 
 class PipelineBudgetGuard:
