@@ -153,9 +153,9 @@ def test_scan_all_backlogs_skips_completed_slugs_when_no_deps() -> None:
     from unittest.mock import Mock
     mock_completed_slugs = Mock()
 
-    # scan_directory is called twice (defects and features)
-    # Return [item] for defects, [] for features
-    with patch.object(mod, "scan_directory", side_effect=[[item], []]), \
+    # scan_directory is called three times (defects, features, analysis)
+    # Return [item] for defects, [] for features, [] for analysis
+    with patch.object(mod, "scan_directory", side_effect=[[item], [], []]), \
          patch.object(mod, "parse_dependencies", return_value=[]), \
          patch.object(mod, "completed_slugs", mock_completed_slugs):
         result = scan_all_backlogs()
@@ -177,9 +177,9 @@ def test_scan_all_backlogs_calls_completed_slugs_when_deps_exist() -> None:
     from unittest.mock import Mock
     mock_completed_slugs = Mock(return_value={"01-some-dep"})
 
-    # scan_directory is called twice (defects and features)
-    # Return [item] for defects, [] for features
-    with patch.object(mod, "scan_directory", side_effect=[[item], []]), \
+    # scan_directory is called three times (defects, features, analysis)
+    # Return [item] for defects, [] for features, [] for analysis
+    with patch.object(mod, "scan_directory", side_effect=[[item], [], []]), \
          patch.object(mod, "parse_dependencies", return_value=["01-some-dep"]), \
          patch.object(mod, "completed_slugs", mock_completed_slugs):
         result = scan_all_backlogs()
@@ -198,9 +198,9 @@ def test_scan_all_backlogs_filters_unsatisfied_deps() -> None:
         item_type="defect",
     )
 
-    # scan_directory is called twice (defects and features)
-    # Return [item] for defects, [] for features
-    with patch.object(mod, "scan_directory", side_effect=[[item], []]), \
+    # scan_directory is called three times (defects, features, analysis)
+    # Return [item] for defects, [] for features, [] for analysis
+    with patch.object(mod, "scan_directory", side_effect=[[item], [], []]), \
          patch.object(mod, "parse_dependencies", return_value=["99-not-done"]), \
          patch.object(mod, "completed_slugs", return_value=set()):
         result = scan_all_backlogs()
