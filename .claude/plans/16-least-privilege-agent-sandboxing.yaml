@@ -17,12 +17,12 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Permission Profiles in plan-orchestrator.py
-  status: in_progress
+  status: pending
   tasks:
   - id: '1.1'
     name: Add permission profile constants and build_permission_flags function
     agent: coder
-    status: completed
+    status: in_progress
     description: "Add the permission profile system to scripts/plan-orchestrator.py.\n\
       Reference: docs/plans/2026-02-18-16-least-privilege-agent-sandboxing-design.md\n\
       Steps:\n1. Read scripts/plan-orchestrator.py. Find the constants section near\
@@ -83,11 +83,6 @@ sections:
       \  print('Permission profile system verified OK')\n   \"\n\nFiles: scripts/plan-orchestrator.py"
     attempts: 1
     last_attempt: '2026-02-18T22:02:55.177039'
-    model_used: sonnet
-    completed_at: '2026-02-18T22:05:45.958978'
-    result_message: Added SANDBOX_ENABLED constant, AGENT_PERMISSION_PROFILES dict,
-      AGENT_TO_PROFILE mapping, and build_permission_flags() function to scripts/plan-orchestrator.py.
-      All 266 tests pass.
   - id: '1.2'
     name: Replace --dangerously-skip-permissions in run_claude_task
     agent: coder

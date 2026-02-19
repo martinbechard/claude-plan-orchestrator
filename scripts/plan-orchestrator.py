@@ -1489,7 +1489,7 @@ def run_validation(
         validation_model = ""
         if escalation_config and escalation_config.enabled:
             validation_model = escalation_config.validation_model
-        validator_result = run_claude_task(prompt, model=validation_model)
+        validator_result = run_claude_task(prompt, model=validation_model, agent_name=validator)
 
         # 3e. If the validator process itself failed, treat as FAIL
         if not validator_result.success:
@@ -2805,7 +2805,7 @@ def stream_json_output(pipe, collector: OutputCollector, result_capture: dict) -
             verbose_log(f"Error streaming JSON: {e}", "ERROR")
 
 
-def run_claude_task(prompt: str, dry_run: bool = False, model: str = "") -> TaskResult:
+def run_claude_task(prompt: str, dry_run: bool = False, model: str = "", agent_name: str = "") -> TaskResult:
     """Execute a task using Claude CLI."""
     if dry_run:
         print(f"[DRY RUN] Would execute:\n{prompt[:200]}...")
@@ -2814,9 +2814,10 @@ def run_claude_task(prompt: str, dry_run: bool = False, model: str = "") -> Task
     start_time = time.time()
 
     verbose_log("Building Claude CLI command", "EXEC")
+    permission_flags = build_permission_flags(agent_name or "coder")
     cmd = [
         *CLAUDE_CMD,
-        "--dangerously-skip-permissions",
+        *permission_flags,
         "--print",
         prompt
     ]
@@ -2828,7 +2829,7 @@ def run_claude_task(prompt: str, dry_run: bool = False, model: str = "") -> Task
         cmd.extend(["--output-format", "stream-json", "--verbose"])
     else:
         cmd.extend(["--output-format", "json"])
-    verbose_log(f"Command: {' '.join(CLAUDE_CMD)} --dangerously-skip-permissions --print <prompt>", "EXEC")
+    verbose_log(f"Command: {' '.join(CLAUDE_CMD)} {' '.join(permission_flags)} --print <prompt>", "EXEC")
     verbose_log(f"Prompt length: {len(prompt)} chars", "EXEC")
     if model:
         verbose_log(f"Model override: {model}", "EXEC")
@@ -5190,7 +5191,7 @@ def run_orchestrator(
             task["model_used"] = effective_model
 
             verbose_log("Executing Claude task...", "TASK")
-            task_result = run_claude_task(prompt, dry_run=dry_run, model=effective_model)
+            task_result = run_claude_task(prompt, dry_run=dry_run, model=effective_model, agent_name=agent_name)
             verbose_log(f"Task result: success={task_result.success}, message={task_result.message}", "TASK")
 
             print(f"Result: {'SUCCESS' if task_result.success else 'FAILED'}")
