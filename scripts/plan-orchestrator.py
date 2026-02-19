@@ -3085,7 +3085,7 @@ Use the admin notification system or console log if notifications aren't configu
 
     try:
         subprocess.run(
-            [*CLAUDE_CMD, "--dangerously-skip-permissions", "--print", notification_prompt],
+            [*CLAUDE_CMD, *build_permission_flags("code-reviewer"), "--print", notification_prompt],
             capture_output=True,
             text=True,
             timeout=60
@@ -4288,7 +4288,7 @@ class SlackNotifier:
             *CLAUDE_CMD, "--print", prompt,
             "--model", model,
             "--output-format", "json",
-            "--dangerously-skip-permissions",
+            *build_permission_flags("code-reviewer"),
         ]
         proc = subprocess.run(
             cmd, capture_output=True, text=True,
