@@ -38,6 +38,9 @@ is_item_suspended = mod.is_item_suspended
 get_suspension_answer = mod.get_suspension_answer
 find_next_task = mod.find_next_task
 update_section_status = mod.update_section_status
+AGENT_PERMISSION_PROFILES = mod.AGENT_PERMISSION_PROFILES
+AGENT_TO_PROFILE = mod.AGENT_TO_PROFILE
+build_permission_flags = mod.build_permission_flags
 
 
 # --- _truncate_for_slack tests ---
@@ -1315,3 +1318,75 @@ def test_section_status_with_suspended_task():
     assert section["status"] == "in_progress", (
         "Section should be in_progress when a suspended task is present, not completed"
     )
+
+
+# --- permission profile tests ---
+
+EXPECTED_PROFILE_COUNT = 4
+EXPECTED_AGENT_COUNT = 15
+
+
+def test_permission_profiles_exist():
+    """AGENT_PERMISSION_PROFILES has exactly 4 profiles, each with required keys."""
+    assert len(AGENT_PERMISSION_PROFILES) == EXPECTED_PROFILE_COUNT
+    for profile_name in ("READ_ONLY", "WRITE", "VERIFICATION", "DESIGN"):
+        assert profile_name in AGENT_PERMISSION_PROFILES
+        profile = AGENT_PERMISSION_PROFILES[profile_name]
+        assert "tools" in profile
+        assert "description" in profile
+
+
+def test_agent_to_profile_mapping():
+    """AGENT_TO_PROFILE maps exactly 15 agents with correct profile assignments."""
+    assert len(AGENT_TO_PROFILE) == EXPECTED_AGENT_COUNT
+    assert AGENT_TO_PROFILE["code-reviewer"] == "READ_ONLY"
+    assert AGENT_TO_PROFILE["coder"] == "WRITE"
+    assert AGENT_TO_PROFILE["validator"] == "VERIFICATION"
+    assert AGENT_TO_PROFILE["planner"] == "DESIGN"
+
+
+def test_build_permission_flags_read_only_agent():
+    """READ_ONLY agent gets --allowedTools with Read but not Write or Edit."""
+    result = build_permission_flags("code-reviewer")
+
+    assert "--allowedTools" in result
+    assert "Read" in result
+    assert "--add-dir" in result
+    assert "--dangerously-skip-permissions" not in result
+    assert "Write" not in result
+    assert "Edit" not in result
+
+
+def test_build_permission_flags_write_agent():
+    """WRITE agent gets --allowedTools including Write and Edit."""
+    result = build_permission_flags("coder")
+
+    assert "--allowedTools" in result
+    assert "Write" in result
+    assert "Edit" in result
+
+
+def test_build_permission_flags_unknown_agent():
+    """Unknown agent falls back to the WRITE profile (most permissive)."""
+    result = build_permission_flags("unknown-agent")
+
+    assert "Write" in result
+    assert "--allowedTools" in result
+
+
+def test_build_permission_flags_sandbox_disabled(monkeypatch):
+    """When SANDBOX_ENABLED is False, only --dangerously-skip-permissions is returned."""
+    monkeypatch.setattr(mod, "SANDBOX_ENABLED", False)
+
+    result = build_permission_flags("code-reviewer")
+
+    assert result == ["--dangerously-skip-permissions"]
+
+
+def test_build_permission_flags_project_scoping():
+    """--add-dir is followed by the current working directory."""
+    result = build_permission_flags("coder")
+
+    assert "--add-dir" in result
+    idx = result.index("--add-dir")
+    assert result[idx + 1] == os.getcwd()
