@@ -746,6 +746,25 @@ def parse_analysis_metadata(filepath: str) -> dict:
     return metadata
 
 
+def parse_step_notifications_override(filepath: str) -> Optional[bool]:
+    """Parse step_notifications: true/false from a backlog .md file.
+
+    Looks for a line matching 'step_notifications: true' or
+    'step_notifications: false' (case-insensitive) anywhere in the document.
+    Returns None if the field is absent.
+    """
+    try:
+        with open(filepath, "r") as f:
+            content = f.read()
+    except (IOError, OSError):
+        return None
+
+    match = re.search(r"^\s*step_notifications:\s*(true|false)\s*$", content, re.MULTILINE | re.IGNORECASE)
+    if match:
+        return match.group(1).lower() == "true"
+    return None
+
+
 def parse_dependencies(filepath: str) -> list[str]:
     """Parse the ## Dependencies section from a backlog .md file.
 
@@ -1760,6 +1779,19 @@ def create_plan(item: BacklogItem, dry_run: bool = False) -> Optional[str]:
     if not os.path.exists(plan_path):
         log(f"Plan file not created at expected path: {plan_path}")
         return None
+
+    # Inject step_notifications override from backlog item into plan meta
+    step_notifications_override = parse_step_notifications_override(item.path)
+    if step_notifications_override is not None:
+        try:
+            with open(plan_path, "r") as f:
+                plan = yaml.safe_load(f)
+            plan.setdefault("meta", {})["step_notifications"] = step_notifications_override
+            with open(plan_path, "w") as f:
+                yaml.dump(plan, f, default_flow_style=False, sort_keys=False)
+            log(f"Injected step_notifications={step_notifications_override} into plan meta")
+        except (IOError, OSError) as e:
+            log(f"WARNING: Could not inject step_notifications override: {e}")
 
     # Dry-run validation
     validate_result = run_child_process(
