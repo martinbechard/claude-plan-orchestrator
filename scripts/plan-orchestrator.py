@@ -10,6 +10,7 @@ Copyright (c) 2025 Martin Bechard [martin.bechard@DevConsult.ca]
 """
 
 import argparse
+import glob
 import json
 import os
 import re
@@ -3533,6 +3534,49 @@ class SlackNotifier:
             print(f"[SLACK] Failed to check thread replies: {e}")
             return None
 
+    def _check_all_suspensions(self) -> None:
+        """Check all suspended items for Slack thread replies.
+
+        Called periodically by the background poller. For each suspension
+        marker with a slack_thread_ts, checks for human replies. If found,
+        writes the answer back to the marker file.
+        """
+        pattern = os.path.join(SUSPENDED_DIR, "*.json")
+        for marker_path in glob.glob(pattern):
+            try:
+                with open(marker_path, "r", encoding="utf-8") as f:
+                    marker = json.load(f)
+
+                thread_ts = marker.get("slack_thread_ts")
+                channel_id = marker.get("slack_channel_id")
+                if not thread_ts or not channel_id:
+                    continue
+
+                if "answer" in marker:
+                    continue
+
+                reply = self.check_suspension_reply(channel_id, thread_ts)
+                if reply is None:
+                    continue
+
+                slug = marker.get("slug", os.path.basename(marker_path))
+                marker["answer"] = reply
+                with open(marker_path, "w", encoding="utf-8") as f:
+                    json.dump(marker, f, indent=2)
+
+                confirmation = (
+                    f":white_check_mark: Answer received for {slug}. "
+                    "Item will resume on next pipeline cycle."
+                )
+                self._post_message(
+                    {"text": confirmation},
+                    channel_id=channel_id,
+                )
+                print(f"[SLACK] Answer received for suspended item: {slug}")
+
+            except Exception as e:
+                print(f"[SLACK] Error checking suspension {marker_path}: {e}")
+
     def send_defect(self, title: str, description: str, file_path: str = "") -> None:
         """Send a defect report to Slack.
 
@@ -4436,6 +4480,7 @@ class SlackNotifier:
                     if msgs:
                         print(f"[SLACK] Poll: {len(msgs)} message(s)")
                         self._handle_polled_messages(msgs)
+                    self._check_all_suspensions()
                 except Exception as e:
                     print(f"[SLACK] Background poll error: {e}")
                 self._poll_stop_event.wait(timeout=SLACK_POLL_INTERVAL_SECONDS)
