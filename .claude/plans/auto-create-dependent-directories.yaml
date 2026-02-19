@@ -67,7 +67,7 @@ sections:
   - id: '1.2'
     name: Add ensure_directories() to plan-orchestrator.py
     agent: coder
-    status: pending
+    status: in_progress
     description: "Add a REQUIRED_DIRS constant and ensure_directories() function to\n\
       scripts/plan-orchestrator.py, then call it at startup.\n\nReference: docs/plans/2026-02-18-auto-create-dependent-directories-design.md\n\
       \nSteps:\n1. Read scripts/plan-orchestrator.py. Find the constants section near\
@@ -91,6 +91,8 @@ sections:
       \ like\n   worktree dirs, dst.parent.mkdir(), status_dir.mkdir(), etc.\n\n5.\
       \ Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py\n"
+    attempts: 1
+    last_attempt: '2026-02-18T19:38:46.872859'
 - id: phase-2
   name: Phase 2 - Unit Tests
   status: pending

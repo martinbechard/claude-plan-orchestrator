@@ -60,6 +60,29 @@ DEFAULT_MAX_ATTEMPTS = 3
 CLAUDE_TIMEOUT_SECONDS = 600  # 10 minutes per task
 MAX_PLAN_NAME_LENGTH = 50  # Max chars from plan name used in report filenames
 
+# Directories guaranteed to exist before any orchestrator logic runs
+REQUIRED_DIRS = [
+    ".claude/plans",
+    str(TASK_LOG_DIR),
+    ".claude/subagent-status",
+    "logs",
+    "logs/e2e",
+]
+
+
+def ensure_directories() -> None:
+    """Create all directories the orchestrator depends on.
+
+    Called once at startup so that no downstream code needs to worry
+    about missing directories. Logs a message for each directory that
+    had to be created.
+    """
+    for d in REQUIRED_DIRS:
+        if not os.path.isdir(d):
+            os.makedirs(d, exist_ok=True)
+            print(f"[INIT] Created missing directory: {d}")
+
+
 # Budget enforcement defaults
 DEFAULT_MAX_QUOTA_PERCENT = 100.0
 DEFAULT_QUOTA_CEILING_USD = 0.0
@@ -747,7 +770,6 @@ class PlanUsageTracker:
                 "duration_api_ms": u.duration_api_ms,
                 "model": self.task_models.get(tid, ""),
             })
-        TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)
         with open(report_path, "w") as f:
             json.dump(report, f, indent=2)
         return report_path
@@ -2652,7 +2674,6 @@ def run_claude_task(prompt: str, dry_run: bool = False, model: str = "") -> Task
         task_usage = parse_task_usage(result_capture) if result_capture else None
 
         # Save output to log file for debugging
-        TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)
         log_file = TASK_LOG_DIR / f"task-{datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
         with open(log_file, "w") as f:
             f.write(f"=== Claude Task Output ===\n")
@@ -4181,6 +4202,7 @@ def run_orchestrator(
     """Main orchestrator loop."""
     global VERBOSE
     VERBOSE = verbose
+    ensure_directories()
 
     verbose_log(f"Loading plan from: {plan_path}", "INIT")
     plan = load_plan(plan_path)
