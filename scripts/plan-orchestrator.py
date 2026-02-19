@@ -65,7 +65,7 @@ STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
 SUSPENDED_DIR = ".claude/suspended"
 SUSPENSION_TIMEOUT_MINUTES = 1440  # 24 hours default
 DEFAULT_MAX_ATTEMPTS = 3
-CLAUDE_TIMEOUT_SECONDS = 600  # 10 minutes per task
+CLAUDE_TIMEOUT_SECONDS = 900  # 15 minutes per task
 MAX_PLAN_NAME_LENGTH = 50  # Max chars from plan name used in report filenames
 
 # Directories guaranteed to exist before any orchestrator logic runs
@@ -1239,18 +1239,20 @@ def build_validation_prompt(
     section: dict,
     task_result: "TaskResult",
     validator_name: str,
+    plan: dict = None,
 ) -> str:
     """Build the prompt for a validation agent to verify a completed task.
 
     Loads the validator agent definition and constructs a prompt that includes
-    the agent body, original task context, task result details, and validation
-    instructions with structured output format.
+    the agent body, original task context, task result details, and the source
+    work item path so the validator can read original requirements.
 
     Args:
         task: The task dict from the plan YAML.
         section: The section dict containing this task.
         task_result: The TaskResult from the completed task execution.
         validator_name: Name of the validator agent to load (e.g. 'validator').
+        plan: The full plan dict, used to extract meta.source_item.
 
     Returns:
         The fully assembled validation prompt string.
@@ -1264,85 +1266,77 @@ def build_validation_prompt(
     result_message = task_result.message
     duration = task_result.duration_seconds
 
-    spec_context = ""
-    if SPEC_DIR:
-        spec_context = f"""
-
-## Spec-Aware Validation (E2E Tests)
-
-This project has functional specifications in: {SPEC_DIR}
-E2E test command: {E2E_COMMAND}
-
-After the standard validation checks above, perform these additional steps:
-
-1. Run: git diff --name-only HEAD~1 HEAD
-   Look for any files under {SPEC_DIR} in the diff output.
-
-2. If spec files were modified, read each changed spec file and find all
-   ### Verification blocks.
-
-3. For each block with **Type: Testable** and a **Test file(s):** reference:
-   - Run the E2E test: {E2E_COMMAND} <test_file> --reporter=json
-   - Capture the JSON output to logs/e2e/ with a timestamped filename
-     (format: YYYY-MM-DDTHHMMSS.json)
-   - Parse the JSON to determine pass/fail counts
-
-4. Include E2E test results in your findings:
-   - [PASS] E2E: <test_file> - all N tests passed
-   - [FAIL] E2E: <test_file> - M of N tests failed
-
-5. If no spec files were changed in the diff, skip E2E testing and note:
-   - [PASS] E2E: No functional spec changes detected, E2E tests skipped
-
-6. E2E failures should result in a WARN verdict (not FAIL) unless the
-   failing tests are directly related to the task's requirements.
-"""
+    source_item = ""
+    if plan:
+        path = plan.get("meta", {}).get("source_item", "")
+        if path:
+            source_item = f"\n## Work Item\n\nRead this file for requirements and validation expectations: {path}\n"
 
     return f"""{agent_body}
 
 ---
 
-You are validating the results of task {task_id}: {task_name}
-
-## Original Task Description
+You are validating task {task_id}: {task_name}
+{source_item}
+## Task Description
 
 {task_description}
 
 ## Task Result
 
-Status: completed
-
 Message: {result_message}
-
 Duration: {duration:.1f}s
 
-## Validation Checks
+## Commands
 
-1. Run: {BUILD_COMMAND}
+Build: {BUILD_COMMAND}
+Unit tests: {TEST_COMMAND}
+E2E tests: {E2E_COMMAND}
 
-2. Run: {TEST_COMMAND}
-
-3. Verify the task description requirements are met
-
-4. Check for regressions in related code
-{spec_context}
-## Output Format
-
-Produce your verdict in this exact format:
-
-**Verdict: PASS** or **Verdict: WARN** or **Verdict: FAIL**
-
-**Findings:**
-
-- [PASS|WARN|FAIL] Description with file:line references
-
-IMPORTANT: You MUST write .claude/plans/task-status.json when done.
+IMPORTANT: Write .claude/plans/task-status.json when done.
 """
 
 
 # Default verdict when parsing fails — conservative approach treats
 # an unparseable validator output as a failure.
 DEFAULT_VERDICT = "FAIL"
+
+
+def _append_validation_findings(source_path: str, task_id: str, verdict: "ValidationVerdict") -> None:
+    """Append validation findings to the work item's ## Verification Log section.
+
+    If the work item file has no ## Verification Log section, one is created.
+    Findings are appended with a timestamp so subsequent retries or pipeline
+    cycles can read what previously failed.
+
+    Args:
+        source_path: Path to the work item file (e.g. docs/feature-backlog/e2e-foo.md).
+        task_id: The task ID that was validated.
+        verdict: The ValidationVerdict with findings to persist.
+    """
+    if not source_path or not os.path.exists(source_path):
+        return
+
+    try:
+        with open(source_path, "r") as f:
+            content = f.read()
+    except IOError:
+        return
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    findings_text = "\n".join(f"  - {f}" for f in verdict.findings) if verdict.findings else "  - (no details)"
+    log_entry = f"\n### Task {task_id} - {verdict.verdict} ({timestamp})\n{findings_text}\n"
+
+    if "## Verification Log" in content:
+        content += log_entry
+    else:
+        content += f"\n## Verification Log\n{log_entry}"
+
+    try:
+        with open(source_path, "w") as f:
+            f.write(content)
+    except IOError:
+        return
 
 
 def parse_validation_verdict(output: str) -> ValidationVerdict:
@@ -1433,6 +1427,7 @@ def run_validation(
     validation_config: ValidationConfig,
     dry_run: bool = False,
     escalation_config: Optional[EscalationConfig] = None,
+    plan: dict = None,
 ) -> ValidationVerdict:
     """Execute validation on a completed task using configured validator agents.
 
@@ -1453,6 +1448,8 @@ def run_validation(
         dry_run: If True, print a prompt preview and return PASS without executing.
         escalation_config: Model escalation settings. When provided and enabled,
             uses escalation_config.validation_model for the validator CLI call.
+        plan: The full plan dict, passed through to build_validation_prompt()
+            for extracting meta.source_item.
 
     Returns:
         A ValidationVerdict with the aggregate result of all validators.
@@ -1473,7 +1470,7 @@ def run_validation(
         print(f"{VALIDATION_LOG_PREFIX} Running validator '{validator}' on task {task_id}")
 
         # 3a. Build the validation prompt
-        prompt = build_validation_prompt(task, section, task_result, validator)
+        prompt = build_validation_prompt(task, section, task_result, validator, plan=plan)
 
         # 3b. Dry-run: preview and return PASS
         if dry_run:
@@ -1509,8 +1506,22 @@ def run_validation(
             # Fallback: use the status file message as output
             validator_output = validator_result.message
 
-        # 3g. Parse the verdict
+        # 3g. Parse the verdict from stdout text
         verdict = parse_validation_verdict(validator_output)
+
+        # 3g-bis. If no verdict found in stdout, check task-status.json
+        # The validator may write structured JSON instead of text patterns
+        if verdict.verdict == DEFAULT_VERDICT:
+            status_data = read_status_file()
+            if status_data:
+                json_verdict = status_data.get("verdict", "").upper()
+                if json_verdict in ("PASS", "WARN", "FAIL"):
+                    verdict = ValidationVerdict(
+                        verdict=json_verdict,
+                        findings=verdict.findings,
+                        raw_output=verdict.raw_output,
+                    )
+
         print(f"{VALIDATION_LOG_PREFIX} Validator '{validator}' verdict: {verdict.verdict}")
 
         if verdict.findings:
@@ -1797,7 +1808,7 @@ def git_stash_working_changes() -> bool:
 def git_stash_pop() -> bool:
     """Restore stashed working-tree changes after an agent task completes.
 
-    Returns True on success, False if the pop failed (stash preserved for manual resolution).
+    Returns True on success, False if the pop failed (stash dropped, tree reset to HEAD).
     """
     # Discard task-status.json before pop to prevent merge conflict.
     # The file is ephemeral: its content was already consumed by read_status_file().
@@ -1816,9 +1827,17 @@ def git_stash_pop() -> bool:
         print("[Restored stashed working-tree changes]")
         return True
 
-    print("[WARNING] git stash pop failed - stash preserved for manual resolution")
-    if result.stderr:
-        print(result.stderr.decode(errors="replace"))
+    stderr_text = result.stderr.decode(errors="replace") if result.stderr else ""
+    print(f"[WARNING] git stash pop failed: {stderr_text.strip()}")
+
+    # Recover gracefully: reset conflicted files to HEAD, then drop the stale stash.
+    # The stash typically contains only the plan YAML with an outdated in_progress
+    # status that the agent has since committed as completed.  Keeping the stash
+    # around would block future pops and leave merge markers in the working tree.
+    print("[RECOVERY] Resetting working tree to HEAD and dropping stale stash...")
+    subprocess.run(["git", "checkout", "."], capture_output=True)
+    subprocess.run(["git", "stash", "drop"], capture_output=True)
+    print("[RECOVERY] Working tree restored to clean state")
     return False
 
 
@@ -5000,6 +5019,7 @@ def run_orchestrator(
                                 verdict = run_validation(
                                     task, section, task_result, validation_config, dry_run,
                                     escalation_config=escalation_config,
+                                    plan=plan,
                                 )
                                 if verdict.verdict == "FAIL":
                                     print(f"  [{task_id}] VALIDATION FAIL")
@@ -5011,6 +5031,9 @@ def run_orchestrator(
                                     results[task_id] = task_result
                                     task["validation_findings"] = "\n".join(verdict.findings)
                                     task["validation_attempts"] = validation_attempts + 1
+                                    source_path = plan.get("meta", {}).get("source_item", "")
+                                    if source_path:
+                                        _append_validation_findings(source_path, task_id, verdict)
                                 elif verdict.verdict == "WARN":
                                     print(f"  [{task_id}] VALIDATION WARN")
                                 else:
@@ -5150,7 +5173,11 @@ def run_orchestrator(
         task["attempts"] = current_attempts + 1
         task["last_attempt"] = datetime.now().isoformat()
         if not dry_run:
-            save_plan(plan_path, plan)  # Don't commit in_progress state
+            save_plan(
+                plan_path, plan,
+                commit=True,
+                commit_message=f"plan: Task {task_id} in progress"
+            )  # Commit in_progress to keep YAML clean before stash
 
         # Stash any uncommitted changes so the agent sees a clean working tree
         stash_created = False
@@ -5248,6 +5275,7 @@ def run_orchestrator(
                         verdict = run_validation(
                             task, section, task_result, validation_config, dry_run,
                             escalation_config=escalation_config,
+                            plan=plan,
                         )
 
                         if verdict.verdict == "FAIL":
@@ -5257,6 +5285,9 @@ def run_orchestrator(
                             task["status"] = "pending"
                             task["validation_findings"] = "\n".join(verdict.findings)
                             task["validation_attempts"] = validation_attempts + 1
+                            source_path = plan.get("meta", {}).get("source_item", "")
+                            if source_path:
+                                _append_validation_findings(source_path, task_id, verdict)
                             if not dry_run:
                                 save_plan(plan_path, plan)
                             continue  # Retry the task

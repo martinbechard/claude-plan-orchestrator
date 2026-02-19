@@ -1,5 +1,14 @@
 # Release Notes
 
+## 1.6.0 (2026-02-19)
+
+### New Features
+- **Pipeline PID file**: `auto-pipeline.py` now writes its PID to
+  `.claude/plans/.pipeline.pid` at startup and removes it on shutdown.
+  This allows external tools (and AI assistants) to identify and stop the
+  correct pipeline instance without accidentally killing pipelines running
+  in other project directories.
+
 ## 1.5.0 (2026-02-18)
 
 ### Improvements

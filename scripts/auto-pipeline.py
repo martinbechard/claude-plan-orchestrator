@@ -81,6 +81,7 @@ IDEAS_DIR = "docs/ideas"
 IDEAS_PROCESSED_DIR = "docs/ideas/processed"
 VERIFICATION_EXHAUSTED_STATUS = "Archived (verification failed)"
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
+PID_FILE_PATH = ".claude/plans/.pipeline.pid"
 LOGS_DIR = "logs"
 SUMMARY_LOG_FILENAME = "pipeline.log"
 
@@ -112,6 +113,30 @@ def ensure_directories() -> None:
         if not os.path.isdir(d):
             os.makedirs(d, exist_ok=True)
             print(f"[INIT] Created missing directory: {d}")
+
+
+def write_pid_file() -> None:
+    """Write the current process PID to the PID file.
+
+    Allows external tools to identify and stop this specific pipeline
+    instance without accidentally killing pipelines running in other
+    project directories.
+    """
+    try:
+        with open(PID_FILE_PATH, "w") as f:
+            f.write(str(os.getpid()))
+    except IOError as e:
+        log(f"Warning: could not write PID file: {e}")
+
+
+def remove_pid_file() -> None:
+    """Remove the PID file on shutdown."""
+    try:
+        os.remove(PID_FILE_PATH)
+    except FileNotFoundError:
+        pass
+    except IOError as e:
+        log(f"Warning: could not remove PID file: {e}")
 
 
 SAFETY_SCAN_INTERVAL_SECONDS = 60
@@ -1298,9 +1323,10 @@ PLAN_CREATION_PROMPT_TEMPLATE = """You are creating an implementation plan for a
    - Use the exact format: meta + sections with nested tasks
    - Each section has: id, name, status: pending, tasks: [...]
    - Each task has: id, name, description, status: pending
-   - Task descriptions should be detailed enough for a fresh Claude session to execute
-   - Include: documentation tasks, implementation tasks, unit tests, verification
-   - The verification task should run {build_command} and {test_command}
+   - The task description should reference the work item file path -- agents read it directly
+   - Do NOT rewrite or summarize the work item requirements into the task description
+   - Do NOT add separate verification, review, or code-review tasks
+   - The orchestrator runs a validator automatically after each task
 
 3. Validate the plan: python scripts/plan-orchestrator.py --plan .claude/plans/{slug}.yaml --dry-run
    - If validation fails, fix the YAML format and retry
@@ -1319,6 +1345,8 @@ Available agents are in {agents_dir}:
 - **frontend-coder**: Frontend implementation specialist for UI components,
   pages, and forms. Use for tasks mentioning frontend, component, UI
   implementation, form, dialog, or modal.
+- **e2e-test-agent**: E2E test specialist for Playwright tests. Use for ALL tasks
+  that create or fix E2E test files (.spec.ts).
 - **code-reviewer**: Read-only reviewer. Use for verification, review, and
   compliance-checking tasks.
 - **systems-designer**: Architecture and data model designer. Use for Phase 0
@@ -1362,34 +1390,37 @@ task name and description (review/verification -> code-reviewer, design/architec
 -> systems-designer, plan extension -> planner, frontend/component/UI ->
 frontend-coder, everything else -> coder).
 
-## Validation (Optional)
+## Validation
 
-Plans can enable per-task validation by adding a validation block to the meta section. When enabled, a validator agent runs after each coder task to independently verify the result.
-
-Example meta configuration:
+Plans MUST enable per-task validation and include the source work item path.
+The validator reads the work item file for validation expectations.
 
   meta:
-    judge_model: sonnet   # Optional: model for design competition judging
-    # judge_model: opus   # Default: planner agent's own model is used
+    source_item: "{item_path}"
     validation:
       enabled: true
       run_after:
         - coder
+        - e2e-test-agent
+        - frontend-coder
       validators:
         - validator
-      max_validation_attempts: 1
+      max_validation_attempts: 2
 
-The validator produces PASS/WARN/FAIL verdicts:
-- PASS: task proceeds normally
-- WARN: task completes but warnings are logged
-- FAIL: task is retried with validation findings prepended to the prompt
+Task descriptions reference the work item -- do NOT rewrite requirements:
 
-For defect fixes, use the issue-verifier validator instead of or in addition to the default validator. This validator reads the original defect file and checks whether reported symptoms are resolved.
+  - id: '1.1'
+    name: Implement work item
+    agent: coder
+    description: "Implement the work item: {item_path}"
+
+Do NOT add code-reviewer or verification tasks -- validation handles that.
 
 ## Important
-- Follow the CLAUDE.md change workflow order: docs -> code -> tests -> verification
-- For defects: include a task to verify the fix with a regression test
-- For features: include documentation, implementation, unit tests, and E2E tests as appropriate
+- Always set meta.source_item to the backlog file path
+- For E2E tests: use agent: e2e-test-agent
+- For code tasks: use agent: coder
+- Task descriptions reference the work item file, not rewrite it
 - Keep tasks focused - each task should be completable in one Claude session (under 10 minutes)
 - If the backlog item has a ## Verification Log with unresolved findings, your plan
   must specifically address those findings. The previous code fix may be correct but
@@ -2768,6 +2799,7 @@ def main_loop(dry_run: bool = False, once: bool = False,
         if not once:
             observer.stop()
             observer.join(timeout=5)
+        remove_pid_file()
         restore_terminal_settings()
         log("Auto-pipeline stopped.")
 
@@ -2791,7 +2823,8 @@ def handle_signal(signum, frame):
             _active_child_process.kill()
             _active_child_process.wait()
 
-    # Restore terminal settings (child processes like Claude CLI can corrupt them)
+    # Clean up PID file and restore terminal settings
+    remove_pid_file()
     restore_terminal_settings()
 
     sys.exit(0)
@@ -2846,6 +2879,7 @@ def main():
     log(f"  Analysis backlog: {ANALYSIS_DIR}/")
     log(f"  Mode: {'dry-run' if args.dry_run else 'once' if args.once else 'continuous watch'}")
     ensure_directories()
+    write_pid_file()
 
     budget_guard = PipelineBudgetGuard(
         max_quota_percent=args.max_budget_pct or DEFAULT_MAX_QUOTA_PERCENT,
