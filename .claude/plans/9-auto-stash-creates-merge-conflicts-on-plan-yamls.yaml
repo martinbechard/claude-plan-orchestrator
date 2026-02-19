@@ -16,12 +16,12 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Fix stash exclusion and recovery
-  status: pending
+  status: completed
   tasks:
   - id: '1.1'
     name: Exclude plan YAMLs from stash and improve recovery
     agent: coder
-    status: in_progress
+    status: completed
     description: "Implement the work item: docs/defect-backlog/9-auto-stash-creates-merge-conflicts-on-plan-yamls.md\n\
       Design reference: docs/plans/2026-02-19-9-auto-stash-creates-merge-conflicts-on-plan-yamls-design.md\n\
       Apply Option C (defense in depth) from the defect report:\n1. Add constant STASH_EXCLUDE_PLANS_PATHSPEC\
@@ -43,3 +43,8 @@ sections:
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
     validation_attempts: 2
+    completed_at: '2026-02-19T18:17:28.703313'
+    result_message: Excluded plan YAMLs from git stash using STASH_EXCLUDE_PLANS_PATHSPEC
+      constant and pathspec args in git_stash_working_changes(); added git reset --merge
+      before git checkout . in git_stash_pop() recovery path; updated/added 3 tests
+      - all 7 stash tests pass.
