@@ -66,6 +66,8 @@ COMPLETED_DIRS = {
 }
 PLANS_DIR = ".claude/plans"
 DESIGN_DIR = "docs/plans"
+IDEAS_DIR = "docs/ideas"
+IDEAS_PROCESSED_DIR = "docs/ideas/processed"
 VERIFICATION_EXHAUSTED_STATUS = "Archived (verification failed)"
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
 LOGS_DIR = "logs"
@@ -79,6 +81,8 @@ REQUIRED_DIRS = [
     FEATURE_DIR,
     COMPLETED_FEATURES_DIR,
     COMPLETED_DEFECTS_DIR,
+    IDEAS_DIR,
+    IDEAS_PROCESSED_DIR,
 ]
 
 
@@ -701,6 +705,36 @@ def scan_all_backlogs() -> list[BacklogItem]:
             ready.append(item)
 
     return ready
+
+
+def scan_ideas() -> list[str]:
+    """Scan docs/ideas/ for unprocessed .md idea files.
+
+    Returns file paths (strings) for files that:
+    - Are non-empty .md files in IDEAS_DIR (non-recursive)
+    - Have not already been processed (basename not in IDEAS_PROCESSED_DIR)
+
+    Returns an empty list if IDEAS_DIR does not exist.
+    """
+    if not os.path.isdir(IDEAS_DIR):
+        return []
+
+    unprocessed: list[str] = []
+    for entry in os.scandir(IDEAS_DIR):
+        if not entry.is_file():
+            continue
+        if entry.name.startswith("."):
+            continue
+        if not entry.name.endswith(".md"):
+            continue
+        if os.path.getsize(entry.path) == 0:
+            continue
+        processed_path = os.path.join(IDEAS_PROCESSED_DIR, entry.name)
+        if os.path.exists(processed_path):
+            continue
+        unprocessed.append(entry.path)
+
+    return unprocessed
 
 
 # ─── Filesystem Watcher ──────────────────────────────────────────────
