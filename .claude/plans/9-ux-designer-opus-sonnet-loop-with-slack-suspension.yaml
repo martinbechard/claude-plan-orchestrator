@@ -410,7 +410,7 @@ sections:
       and wired it into _poll_loop so suspension replies are detected each poll cycle
 - id: phase-4
   name: Phase 4 - Unit Tests
-  status: in_progress
+  status: completed
   tasks:
   - id: '4.1'
     name: Add unit tests for suspension marker functions
@@ -457,7 +457,7 @@ sections:
   - id: '4.2'
     name: Add unit tests for suspended task status handling
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '2.1'
     - '4.1'
@@ -480,6 +480,11 @@ sections:
       \ marking this task complete.\n\nFiles: tests/test_plan_orchestrator.py\n"
     attempts: 1
     last_attempt: '2026-02-18T21:15:55.963310'
+    model_used: sonnet
+    completed_at: '2026-02-18T21:18:28.941562'
+    result_message: 'Added 3 unit tests: test_find_next_task_skips_suspended, test_find_next_task_all_suspended,
+      test_section_status_with_suspended_task. Imported find_next_task and update_section_status
+      into the test module. All 52 tests pass.'
 - id: phase-5
   name: Phase 5 - Plugin Version Bump
   status: pending
