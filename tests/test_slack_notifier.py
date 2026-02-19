@@ -2295,14 +2295,15 @@ def test_get_channel_role_custom_prefix(tmp_path):
 
 
 def test_slack_channel_role_suffixes_constant():
-    """SLACK_CHANNEL_ROLE_SUFFIXES should have exactly 4 entries."""
+    """SLACK_CHANNEL_ROLE_SUFFIXES should have exactly 5 entries."""
     suffixes = mod.SLACK_CHANNEL_ROLE_SUFFIXES
 
-    assert len(suffixes) == 4
+    assert len(suffixes) == 5
     assert suffixes["features"] == "feature"
     assert suffixes["defects"] == "defect"
     assert suffixes["questions"] == "question"
     assert suffixes["notifications"] == "control"
+    assert suffixes["reports"] == "analysis"
 
     # Verify the old SLACK_CHANNEL_ROLES constant no longer exists
     assert getattr(mod, "SLACK_CHANNEL_ROLES", None) is None
