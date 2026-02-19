@@ -106,12 +106,12 @@ sections:
       PIPELINE_PERMISSION_PROFILES. Syntax verified OK.
 - id: phase-2
   name: Phase 2 - Analysis Metadata Parsing and Prompt Template
-  status: pending
+  status: completed
   tasks:
   - id: '2.1'
     name: Add parse_analysis_metadata() and ANALYSIS_PROMPT_TEMPLATE
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.2'
     description: "Add the analysis metadata parser and prompt template to scripts/auto-pipeline.py.\n\
@@ -158,6 +158,13 @@ sections:
       \ the report to the specified path\n   - Be thorough but concise in your analysis\n\
       \   \"\"\"\n\n4. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
+    attempts: 1
+    last_attempt: '2026-02-18T22:42:20.272792'
+    model_used: sonnet
+    completed_at: '2026-02-18T22:44:47.297792'
+    result_message: Added parse_analysis_metadata() after scan_directory() (line 673)
+      and ANALYSIS_PROMPT_TEMPLATE after VERIFICATION_PROMPT_TEMPLATE (line 1862).
+      Syntax verified OK. Committed as a1b0f35.
 - id: phase-3
   name: Phase 3 - Analysis Processing Function
   status: pending
