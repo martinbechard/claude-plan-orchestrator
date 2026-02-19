@@ -70,6 +70,31 @@ VERIFICATION_EXHAUSTED_STATUS = "Archived (verification failed)"
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
 LOGS_DIR = "logs"
 SUMMARY_LOG_FILENAME = "pipeline.log"
+
+REQUIRED_DIRS = [
+    PLANS_DIR,
+    os.path.join(PLANS_DIR, "logs"),
+    LOGS_DIR,
+    DEFECT_DIR,
+    FEATURE_DIR,
+    COMPLETED_FEATURES_DIR,
+    COMPLETED_DEFECTS_DIR,
+]
+
+
+def ensure_directories() -> None:
+    """Create all directories the pipeline depends on.
+
+    Called once at startup so that no downstream code needs to worry
+    about missing directories. Logs a message for each directory that
+    had to be created.
+    """
+    for d in REQUIRED_DIRS:
+        if not os.path.isdir(d):
+            os.makedirs(d, exist_ok=True)
+            print(f"[INIT] Created missing directory: {d}")
+
+
 SAFETY_SCAN_INTERVAL_SECONDS = 60
 PLAN_CREATION_TIMEOUT_SECONDS = 600
 CHILD_SHUTDOWN_TIMEOUT_SECONDS = 10
@@ -192,7 +217,6 @@ def _open_item_log(slug: str, item_name: str, item_type: str) -> None:
         item_type: Item type string ('defect' or 'feature').
     """
     global _item_log_file
-    os.makedirs(LOGS_DIR, exist_ok=True)
     log_path = os.path.join(LOGS_DIR, f"{slug}.log")
     _item_log_file = open(log_path, "a", encoding="utf-8", buffering=1)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -244,7 +268,6 @@ def _log_summary(level: str, event: str, slug: str, detail: str = "") -> None:
         slug: Backlog item slug.
         detail: Optional extra detail appended after the slug.
     """
-    os.makedirs(LOGS_DIR, exist_ok=True)
     summary_path = os.path.join(LOGS_DIR, SUMMARY_LOG_FILENAME)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     parts = [ts, f"[{level}]", event, slug]
@@ -765,10 +788,8 @@ class SessionUsageTracker:
         """Write a session summary JSON file."""
         if not self.work_item_costs:
             return None
-        log_dir = Path(".claude/plans/logs")
-        log_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        report_path = log_dir / f"pipeline-session-{timestamp}.json"
+        report_path = Path(PLANS_DIR) / "logs" / f"pipeline-session-{timestamp}.json"
         report = {
             "session_timestamp": datetime.now().isoformat(),
             "total_cost_usd": self.total_cost_usd,
@@ -2211,6 +2232,7 @@ def main():
     log(f"  Defect backlog: {DEFECT_DIR}/")
     log(f"  Feature backlog: {FEATURE_DIR}/")
     log(f"  Mode: {'dry-run' if args.dry_run else 'once' if args.once else 'continuous watch'}")
+    ensure_directories()
 
     budget_guard = PipelineBudgetGuard(
         max_quota_percent=args.max_budget_pct or DEFAULT_MAX_QUOTA_PERCENT,
