@@ -33,6 +33,7 @@ _close_item_log = mod._close_item_log
 _log_summary = mod._log_summary
 LOGS_DIR = mod.LOGS_DIR
 SUMMARY_LOG_FILENAME = mod.SUMMARY_LOG_FILENAME
+ensure_directories = mod.ensure_directories
 
 
 # --- compact_plan_label() tests ---
@@ -729,3 +730,46 @@ def test_open_item_log_appends_on_second_run(tmp_path, monkeypatch):
     assert "first run message" in content
     assert "second run message" in content
     assert content.count("SESSION START") == 2
+
+
+# --- ensure_directories() tests ---
+
+
+def test_ensure_directories_creates_missing_dirs(tmp_path, monkeypatch):
+    """ensure_directories() creates directories that do not yet exist."""
+    dir_a = str(tmp_path / "logs")
+    dir_b = str(tmp_path / "docs" / "defect-backlog")
+    monkeypatch.setattr(mod, "REQUIRED_DIRS", [dir_a, dir_b])
+
+    ensure_directories()
+
+    assert os.path.isdir(dir_a), f"Expected {dir_a} to be created"
+    assert os.path.isdir(dir_b), f"Expected {dir_b} to be created"
+
+
+def test_ensure_directories_logs_created_dirs(tmp_path, monkeypatch, capsys):
+    """ensure_directories() prints [INIT] for each directory it creates."""
+    dir_a = str(tmp_path / "logs")
+    dir_b = str(tmp_path / "docs" / "defect-backlog")
+    monkeypatch.setattr(mod, "REQUIRED_DIRS", [dir_a, dir_b])
+
+    ensure_directories()
+
+    captured = capsys.readouterr()
+    assert "[INIT] Created missing directory:" in captured.out
+    assert dir_a in captured.out
+    assert dir_b in captured.out
+
+
+def test_ensure_directories_silent_when_dirs_exist(tmp_path, monkeypatch, capsys):
+    """ensure_directories() produces no output when all directories already exist."""
+    dir_a = str(tmp_path / "logs")
+    dir_b = str(tmp_path / "docs" / "defect-backlog")
+    os.makedirs(dir_a, exist_ok=True)
+    os.makedirs(dir_b, exist_ok=True)
+    monkeypatch.setattr(mod, "REQUIRED_DIRS", [dir_a, dir_b])
+
+    ensure_directories()
+
+    captured = capsys.readouterr()
+    assert "[INIT]" not in captured.out
