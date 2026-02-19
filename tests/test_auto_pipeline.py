@@ -34,6 +34,7 @@ _log_summary = mod._log_summary
 LOGS_DIR = mod.LOGS_DIR
 SUMMARY_LOG_FILENAME = mod.SUMMARY_LOG_FILENAME
 ensure_directories = mod.ensure_directories
+ProcessResult = mod.ProcessResult
 
 
 # --- compact_plan_label() tests ---
@@ -868,3 +869,103 @@ def test_scan_ideas_skips_dotfiles(tmp_path, monkeypatch):
     result_names = {Path(p).name for p in result}
     assert result_names == {"normal.md"}
     assert ".hidden.md" not in result_names
+
+
+# --- process_idea() tests ---
+
+
+def test_process_idea_dry_run(tmp_path, monkeypatch):
+    """process_idea() in dry-run mode returns True without spawning a subprocess."""
+    idea_file = tmp_path / "my-idea.md"
+    idea_file.write_text("# My Idea\n")
+
+    called = []
+
+    def mock_run_child_process(*args, **kwargs):
+        called.append(args)
+        return ProcessResult(success=True, exit_code=0, stdout="", stderr="", duration_seconds=0.1)
+
+    monkeypatch.setattr(mod, "run_child_process", mock_run_child_process)
+
+    result = mod.process_idea(str(idea_file), dry_run=True)
+
+    assert result is True
+    assert len(called) == 0, "run_child_process must not be called in dry-run mode"
+    assert idea_file.exists(), "Idea file must not be moved in dry-run mode"
+
+
+def test_process_idea_success(tmp_path, monkeypatch):
+    """process_idea() returns True when subprocess succeeds and file is moved to processed/."""
+    ideas_dir = tmp_path / "ideas"
+    ideas_dir.mkdir()
+    processed_dir = ideas_dir / "processed"
+    processed_dir.mkdir()
+
+    idea_file = ideas_dir / "my-idea.md"
+    idea_file.write_text("# My Idea\n")
+    processed_file = processed_dir / "my-idea.md"
+
+    def mock_run_child_process(*args, **kwargs):
+        # Simulate the Claude session moving the original to processed/
+        processed_file.write_text("# My Idea\n")
+        return ProcessResult(success=True, exit_code=0, stdout="", stderr="", duration_seconds=1.0)
+
+    monkeypatch.setattr(mod, "run_child_process", mock_run_child_process)
+    monkeypatch.setattr(mod, "IDEAS_PROCESSED_DIR", str(processed_dir))
+
+    result = mod.process_idea(str(idea_file))
+
+    assert result is True
+
+
+def test_process_idea_rate_limited(tmp_path, monkeypatch):
+    """process_idea() returns False when subprocess reports rate limiting."""
+    ideas_dir = tmp_path / "ideas"
+    ideas_dir.mkdir()
+    idea_file = ideas_dir / "my-idea.md"
+    idea_file.write_text("# My Idea\n")
+
+    def mock_run_child_process(*args, **kwargs):
+        return ProcessResult(
+            success=False, exit_code=1, stdout="", stderr="rate limited",
+            duration_seconds=0.1, rate_limited=True,
+        )
+
+    monkeypatch.setattr(mod, "run_child_process", mock_run_child_process)
+    monkeypatch.setattr(mod, "IDEAS_PROCESSED_DIR", str(tmp_path / "processed"))
+
+    result = mod.process_idea(str(idea_file))
+
+    assert result is False
+
+
+# --- intake_ideas() tests ---
+
+
+def test_intake_ideas_processes_all(monkeypatch):
+    """intake_ideas() calls process_idea() for each idea and returns success count."""
+    fake_paths = ["/fake/ideas/idea-one.md", "/fake/ideas/idea-two.md"]
+    process_calls = []
+
+    monkeypatch.setattr(mod, "scan_ideas", lambda: fake_paths)
+
+    def mock_process_idea(path, dry_run=False):
+        process_calls.append(path)
+        return True
+
+    monkeypatch.setattr(mod, "process_idea", mock_process_idea)
+
+    result = mod.intake_ideas(dry_run=False)
+
+    assert result == 2
+    assert len(process_calls) == 2
+    assert set(process_calls) == set(fake_paths)
+
+
+def test_intake_ideas_returns_zero_when_no_ideas(monkeypatch):
+    """intake_ideas() returns 0 when scan_ideas() finds no files."""
+    monkeypatch.setattr(mod, "scan_ideas", lambda: [])
+
+    result = mod.intake_ideas(dry_run=False)
+
+    assert result == 0
