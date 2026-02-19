@@ -319,7 +319,7 @@ sections:
   - id: '3.3'
     name: Add suspension handling to auto-pipeline
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '3.2'
     description: "Modify auto-pipeline.py to handle suspended work items: skip them\
@@ -361,6 +361,15 @@ sections:
       \ print('syntax OK')\"\n\n9. Git commit:\n   git add scripts/auto-pipeline.py\n\
       \   git commit -m \"feat: add suspension handling to auto-pipeline\"\n\nFiles:\
       \ scripts/auto-pipeline.py\n"
+    attempts: 1
+    last_attempt: '2026-02-18T21:01:50.677698'
+    model_used: sonnet
+    completed_at: '2026-02-18T21:10:29.958003'
+    result_message: 'Added suspension handling to auto-pipeline.py: imported suspension
+      functions, added SUSPENDED_DIR to REQUIRED_DIRS, scan_directory() skips suspended
+      items, _check_suspended_items() polls for Slack answers each cycle, _process_item_inner()
+      detects suspended plan tasks and posts questions to Slack via _handle_suspension().
+      All 255 tests pass.'
   - id: '3.4'
     name: Wire suspension reply checking into Slack background poller
     agent: coder
