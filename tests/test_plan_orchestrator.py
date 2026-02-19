@@ -27,6 +27,7 @@ git_stash_working_changes = mod.git_stash_working_changes
 git_stash_pop = mod.git_stash_pop
 ORCHESTRATOR_STASH_MESSAGE = mod.ORCHESTRATOR_STASH_MESSAGE
 STATUS_FILE_PATH = mod.STATUS_FILE_PATH
+ensure_directories = mod.ensure_directories
 
 
 # --- _truncate_for_slack tests ---
@@ -835,3 +836,54 @@ def test_stash_pop_discards_task_status_json(tmp_path, monkeypatch):
 
     # 10. Assert the wip file was restored (confirming the stash pop applied correctly)
     assert (tmp_path / "work.txt").exists(), "Stashed WIP file should be restored"
+
+
+# --- ensure_directories tests ---
+
+
+def test_ensure_directories_creates_missing_dirs(tmp_path, monkeypatch):
+    """Verify ensure_directories() creates all directories listed in REQUIRED_DIRS."""
+    test_dirs = [
+        str(tmp_path / "dir-a"),
+        str(tmp_path / "nested" / "dir-b"),
+        str(tmp_path / "dir-c"),
+    ]
+    monkeypatch.setattr(mod, "REQUIRED_DIRS", test_dirs)
+
+    ensure_directories()
+
+    for d in test_dirs:
+        assert os.path.isdir(d), f"Expected directory to be created: {d}"
+
+
+def test_ensure_directories_logs_created_dirs(tmp_path, monkeypatch, capsys):
+    """Verify ensure_directories() prints an [INIT] message for each created directory."""
+    test_dirs = [
+        str(tmp_path / "log-dir-a"),
+        str(tmp_path / "log-dir-b"),
+    ]
+    monkeypatch.setattr(mod, "REQUIRED_DIRS", test_dirs)
+
+    ensure_directories()
+
+    captured = capsys.readouterr()
+    assert "[INIT] Created missing directory:" in captured.out
+    for d in test_dirs:
+        assert d in captured.out
+
+
+def test_ensure_directories_silent_when_dirs_exist(tmp_path, monkeypatch, capsys):
+    """Verify ensure_directories() produces no output when all directories already exist."""
+    test_dirs = [
+        str(tmp_path / "pre-existing-a"),
+        str(tmp_path / "pre-existing-b"),
+    ]
+    for d in test_dirs:
+        os.makedirs(d, exist_ok=True)
+
+    monkeypatch.setattr(mod, "REQUIRED_DIRS", test_dirs)
+
+    ensure_directories()
+
+    captured = capsys.readouterr()
+    assert "[INIT]" not in captured.out
