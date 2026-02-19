@@ -786,14 +786,15 @@ def completed_slugs() -> set[str]:
 
 
 def scan_all_backlogs() -> list[BacklogItem]:
-    """Scan both backlog directories with dependency filtering.
+    """Scan all backlog directories with dependency filtering.
 
-    Returns defects first, then features. Items whose dependencies are not
-    all present in the completed/ directories are filtered out.
+    Returns defects first, then features, then analysis items. Items whose
+    dependencies are not all present in the completed/ directories are filtered out.
     """
     defects = scan_directory(DEFECT_DIR, "defect")
     features = scan_directory(FEATURE_DIR, "feature")
-    all_items = defects + features
+    analyses = scan_directory(ANALYSIS_DIR, "analysis")
+    all_items = defects + features + analyses
 
     # Lazy: only load completed slugs when needed for dependency resolution
     done: set[str] | None = None
