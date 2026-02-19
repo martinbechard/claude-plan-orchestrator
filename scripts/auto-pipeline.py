@@ -1091,6 +1091,132 @@ class CompletionTracker:
             return sum(e[3] for e in self._entries) / len(self._entries)
 
 
+class ProgressReporter:
+    """Background thread that periodically sends pipeline progress reports to Slack.
+
+    Wakes every interval seconds and sends a snapshot of queue depth, completions
+    since the last report, velocity, ETA, and the next queued items. Stays silent
+    when the pipeline is idle (no item in progress and empty queue).
+
+    Design reference: docs/plans/2026-02-19-18-periodic-progress-reporter-design.md
+    """
+
+    def __init__(
+        self,
+        slack: SlackNotifier,
+        completion_tracker: CompletionTracker,
+        item_in_progress: threading.Event,
+        interval: float = PROGRESS_REPORT_INTERVAL_SECONDS,
+    ) -> None:
+        self._slack = slack
+        self._completion_tracker = completion_tracker
+        self._item_in_progress = item_in_progress
+        self._interval = interval
+        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+        self._last_report_time: float = time.time()
+
+    def start(self) -> None:
+        """Start the background reporting thread."""
+        self._thread = threading.Thread(
+            target=self._reporter_loop, daemon=True, name="progress-reporter"
+        )
+        self._thread.start()
+        verbose_log(f"ProgressReporter started (interval: {self._interval}s)")
+
+    def stop(self) -> None:
+        """Signal the reporting thread to stop."""
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=2)
+
+    def _reporter_loop(self) -> None:
+        """Wake every interval, check silence conditions, and send a report."""
+        while not self._stop_event.is_set():
+            self._stop_event.wait(timeout=self._interval)
+            if self._stop_event.is_set():
+                break
+            try:
+                if self._should_report():
+                    self._send_report()
+            except Exception as e:
+                verbose_log(f"ProgressReporter error: {e}")
+
+    def _should_report(self) -> bool:
+        """Return False only when no task is running and the queue is empty."""
+        if self._item_in_progress.is_set():
+            return True
+        return len(scan_all_backlogs()) > 0
+
+    def _build_report(self, queue: list[BacklogItem]) -> str:
+        """Build the formatted progress report string."""
+        self._completion_tracker.prune_old_entries()
+
+        defect_count = sum(1 for i in queue if i.item_type == "defect")
+        feature_count = sum(1 for i in queue if i.item_type == "feature")
+        analysis_count = sum(1 for i in queue if i.item_type == "analysis")
+        queue_size = len(queue)
+
+        since_entries = self._completion_tracker.completions_since(self._last_report_time)
+        completions_count = len(since_entries)
+        completed_defects = sum(1 for e in since_entries if e[1] == "defect")
+        completed_features = sum(1 for e in since_entries if e[1] == "feature")
+        completed_analyses = sum(1 for e in since_entries if e[1] == "analysis")
+
+        avg_duration = self._completion_tracker.average_duration_seconds()
+        if avg_duration > 0:
+            avg_fmt = self._format_duration(avg_duration)
+            eta_fmt = self._format_duration(queue_size * avg_duration)
+        else:
+            avg_fmt = "n/a"
+            eta_fmt = "n/a"
+
+        preview = queue[:PROGRESS_REPORT_MAX_PREVIEW_ITEMS]
+        lines = [
+            "*Pipeline Progress Report*",
+            "",
+            (
+                f"*Queue:* {queue_size} items"
+                f" — defects: {defect_count}"
+                f", features: {feature_count}"
+                f", analyses: {analysis_count}"
+            ),
+            (
+                f"*Completions since last report:* {completions_count}"
+                f" — defects: {completed_defects}"
+                f", features: {completed_features}"
+                f", analyses: {completed_analyses}"
+            ),
+            f"*Avg completion time:* {avg_fmt}",
+            f"*ETA (remaining queue):* {eta_fmt}",
+        ]
+        if preview:
+            lines.append("*Next up:*")
+            for item in preview:
+                lines.append(f"  \u2022 [{item.item_type}] {item.name}")
+        return "\n".join(lines)
+
+    def _send_report(self) -> None:
+        """Build and send the progress report to Slack."""
+        queue = scan_all_backlogs()
+        report = self._build_report(queue)
+        self._slack.send_status(report)
+        self._last_report_time = time.time()
+
+    @staticmethod
+    def _format_duration(seconds: float) -> str:
+        """Format a duration in seconds as a human-readable string."""
+        if seconds < 60:
+            return f"{int(seconds)}s"
+        if seconds < 3600:
+            minutes = int(seconds / 60)
+            secs = int(seconds % 60)
+            return f"{minutes}m {secs}s"
+        hours = int(seconds / 3600)
+        minutes = int((seconds % 3600) / 60)
+        return f"{hours}h {minutes}m"
+
+
 class PipelineBudgetGuard:
     """Checks session-level cost against budget limits before each work item."""
 
