@@ -114,6 +114,7 @@ SLACK_QUESTION_PATH = ".claude/slack-pending-question.json"
 SLACK_ANSWER_PATH = ".claude/slack-answer.json"
 SLACK_POLL_INTERVAL_SECONDS = 15  # Base polling interval
 SLACK_POLL_RATE_LIMIT_BACKOFF_SECONDS = 60  # Backoff on 429
+STEP_NOTIFICATION_THRESHOLD = 6  # Gate per-task success notifications above this task count
 SLACK_LEVEL_EMOJI = {
     "info": ":large_blue_circle:",
     "success": ":white_check_mark:",
@@ -1232,6 +1233,30 @@ def parse_escalation_config(plan: dict) -> EscalationConfig:
         validation_model=esc_meta.get("validation_model", DEFAULT_VALIDATION_MODEL),
         starting_model=esc_meta.get("starting_model", DEFAULT_STARTING_MODEL),
     )
+
+
+def should_send_step_notifications(plan: dict) -> bool:
+    """Determine whether per-task success notifications should be sent for this plan.
+
+    Checks meta.step_notifications for an explicit override first. If absent,
+    falls back to comparing the total task count against STEP_NOTIFICATION_THRESHOLD.
+    Failure notifications are always sent regardless of this result.
+
+    Args:
+        plan: The full plan dict loaded from YAML.
+
+    Returns:
+        True if per-task success notifications should be sent.
+    """
+    meta = plan.get("meta", {})
+    override = meta.get("step_notifications")
+    if override is not None:
+        return bool(override)
+    total_tasks = sum(
+        len(section.get("tasks", []))
+        for section in plan.get("sections", [])
+    )
+    return total_tasks > STEP_NOTIFICATION_THRESHOLD
 
 
 def build_validation_prompt(
@@ -4728,6 +4753,9 @@ def run_orchestrator(
         backoff_max=meta.get("backoff_max", DEFAULT_BACKOFF_MAX)
     )
 
+    # Determine whether per-task success Slack notifications should be sent
+    send_step_notifications = should_send_step_notifications(plan)
+
     # Parse per-task validation configuration from plan meta
     validation_config = parse_validation_config(plan)
 
@@ -5308,13 +5336,14 @@ def run_orchestrator(
                 tasks_completed += 1
                 circuit_breaker.record_success()
 
-                # Send Slack notification for task success
-                slack.send_status(
-                    f"*Task {task_id} completed* ({task.get('name', '')})\n"
-                    f"Attempt {task.get('attempts', 1)}, "
-                    f"{task_result.duration_seconds:.0f}s",
-                    level="success"
-                )
+                # Send Slack notification for task success (gated by plan size / override)
+                if send_step_notifications:
+                    slack.send_status(
+                        f"*Task {task_id} completed* ({task.get('name', '')})\n"
+                        f"Attempt {task.get('attempts', 1)}, "
+                        f"{task_result.duration_seconds:.0f}s",
+                        level="success"
+                    )
 
                 # Check if section is complete
                 update_section_status(section)
