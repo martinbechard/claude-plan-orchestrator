@@ -208,8 +208,9 @@ _PIPELINE_PID = os.getpid()
 def _open_item_log(slug: str, item_name: str, item_type: str) -> None:
     """Open a per-item detail log file in logs/<slug>.log (append mode).
 
-    Creates the logs/ directory if it does not exist. Writes a session-start
-    header so multiple pipeline runs are clearly separated in the log file.
+    Writes a session-start header so multiple pipeline runs are clearly
+    separated in the log file. The logs/ directory must already exist
+    (created by ensure_directories() at startup).
 
     Args:
         slug: Backlog item slug used as the log filename (e.g. '1-feature-slug').
@@ -259,8 +260,11 @@ def _close_item_log(result: str) -> None:
 def _log_summary(level: str, event: str, slug: str, detail: str = "") -> None:
     """Append a single structured line to logs/pipeline.log.
 
-    Creates logs/ if it does not exist. Each line has the format:
+    Each line has the format:
       YYYY-MM-DD HH:MM:SS [LEVEL]  EVENT  slug  detail
+
+    The logs/ directory must already exist (created by ensure_directories()
+    at startup).
 
     Args:
         level: One of 'INFO', 'WARN', 'ERROR'.

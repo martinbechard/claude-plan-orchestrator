@@ -626,6 +626,7 @@ def test_open_item_log_creates_file(tmp_path, monkeypatch):
     """_open_item_log() creates the log file with a SESSION START header."""
     monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
     monkeypatch.setattr(mod, "_PIPELINE_PID", 99999)
+    (tmp_path / "logs").mkdir()
 
     _open_item_log("test-slug", "Test Feature", "feature")
 
@@ -644,6 +645,7 @@ def test_open_item_log_creates_file(tmp_path, monkeypatch):
 def test_close_item_log_writes_footer(tmp_path, monkeypatch):
     """_close_item_log() writes SESSION END footer and releases the file handle."""
     monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+    (tmp_path / "logs").mkdir()
 
     _open_item_log("slug2", "Item", "defect")
     _close_item_log("failed")
@@ -665,6 +667,7 @@ def test_close_item_log_noop_when_not_open():
 def test_log_tees_to_item_log_file(tmp_path, monkeypatch):
     """log() output is written to the open item log file as well as stdout."""
     monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+    (tmp_path / "logs").mkdir()
 
     _open_item_log("tee-slug", "Tee Test", "feature")
     mod.log("hello from log")
@@ -678,6 +681,7 @@ def test_log_tees_to_item_log_file(tmp_path, monkeypatch):
 def test_log_summary_creates_pipeline_log(tmp_path, monkeypatch):
     """_log_summary() creates pipeline.log and writes a structured summary line."""
     monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+    (tmp_path / "logs").mkdir()
 
     _log_summary("INFO", "STARTED", "my-slug", "type=feature")
 
@@ -694,6 +698,7 @@ def test_log_summary_creates_pipeline_log(tmp_path, monkeypatch):
 def test_log_summary_appends(tmp_path, monkeypatch):
     """_log_summary() appends multiple entries; both are present in the file."""
     monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+    (tmp_path / "logs").mkdir()
 
     _log_summary("INFO", "STARTED", "slug-a")
     _log_summary("INFO", "COMPLETED", "slug-a")
@@ -708,6 +713,7 @@ def test_log_summary_appends(tmp_path, monkeypatch):
 def test_open_item_log_appends_on_second_run(tmp_path, monkeypatch):
     """_open_item_log() appends to an existing log file on subsequent runs."""
     monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+    (tmp_path / "logs").mkdir()
 
     # First run
     _open_item_log("append-slug", "Item", "feature")
