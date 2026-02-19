@@ -31,6 +31,11 @@ ensure_directories = mod.ensure_directories
 parse_verification_blocks = mod.parse_verification_blocks
 build_validation_prompt = mod.build_validation_prompt
 TaskResult = mod.TaskResult
+create_suspension_marker = mod.create_suspension_marker
+read_suspension_marker = mod.read_suspension_marker
+clear_suspension_marker = mod.clear_suspension_marker
+is_item_suspended = mod.is_item_suspended
+get_suspension_answer = mod.get_suspension_answer
 
 
 # --- _truncate_for_slack tests ---
@@ -1059,3 +1064,187 @@ def test_build_validation_prompt_still_has_standard_checks(monkeypatch):
     assert "pnpm run build" in result
     assert "pnpm test" in result
     assert "Verdict: PASS" in result
+
+
+# --- suspension marker tests ---
+
+_SUSPENSION_SLUG = "test-item-slug"
+_SUSPENSION_ITEM_TYPE = "defect"
+_SUSPENSION_ITEM_PATH = "docs/defect-backlog/1-test.md"
+_SUSPENSION_PLAN_PATH = ".claude/plans/1-test.yaml"
+_SUSPENSION_TASK_ID = "2.1"
+_SUSPENSION_QUESTION = "Which approach should we use?"
+_SUSPENSION_QUESTION_CONTEXT = "Context about the question"
+
+
+def _make_suspension_marker_dict(suspended_at: str, answer: str = "") -> dict:
+    """Build a minimal suspension marker dict for test setup."""
+    return {
+        "slug": _SUSPENSION_SLUG,
+        "item_type": _SUSPENSION_ITEM_TYPE,
+        "item_path": _SUSPENSION_ITEM_PATH,
+        "plan_path": _SUSPENSION_PLAN_PATH,
+        "task_id": _SUSPENSION_TASK_ID,
+        "question": _SUSPENSION_QUESTION,
+        "question_context": _SUSPENSION_QUESTION_CONTEXT,
+        "suspended_at": suspended_at,
+        "timeout_minutes": 1440,
+        "slack_thread_ts": "",
+        "slack_channel_id": "",
+        "answer": answer,
+    }
+
+
+def test_create_suspension_marker(tmp_path, monkeypatch):
+    """Marker file is created with all required fields and a valid ISO timestamp."""
+    import json as json_mod
+    from datetime import datetime
+
+    monkeypatch.setattr(mod, "SUSPENDED_DIR", str(tmp_path))
+
+    marker_path = create_suspension_marker(
+        slug=_SUSPENSION_SLUG,
+        item_type=_SUSPENSION_ITEM_TYPE,
+        item_path=_SUSPENSION_ITEM_PATH,
+        plan_path=_SUSPENSION_PLAN_PATH,
+        task_id=_SUSPENSION_TASK_ID,
+        question=_SUSPENSION_QUESTION,
+        question_context=_SUSPENSION_QUESTION_CONTEXT,
+    )
+
+    expected_path = tmp_path / f"{_SUSPENSION_SLUG}.json"
+    assert expected_path.exists(), "Marker file should be created"
+    assert marker_path == str(expected_path)
+
+    data = json_mod.loads(expected_path.read_text())
+    assert data["slug"] == _SUSPENSION_SLUG
+    assert data["item_type"] == _SUSPENSION_ITEM_TYPE
+    assert data["item_path"] == _SUSPENSION_ITEM_PATH
+    assert data["plan_path"] == _SUSPENSION_PLAN_PATH
+    assert data["task_id"] == _SUSPENSION_TASK_ID
+    assert data["question"] == _SUSPENSION_QUESTION
+    assert data["question_context"] == _SUSPENSION_QUESTION_CONTEXT
+    assert data["answer"] == ""
+
+    # suspended_at must be a valid ISO timestamp
+    parsed = datetime.fromisoformat(data["suspended_at"])
+    assert parsed is not None
+
+
+def test_read_suspension_marker_exists(tmp_path, monkeypatch):
+    """Returns the marker dict when the marker file is present."""
+    import json as json_mod
+    from datetime import datetime, timezone
+
+    monkeypatch.setattr(mod, "SUSPENDED_DIR", str(tmp_path))
+
+    suspended_at = datetime.now(tz=timezone.utc).isoformat()
+    marker = _make_suspension_marker_dict(suspended_at=suspended_at)
+    marker_path = tmp_path / f"{_SUSPENSION_SLUG}.json"
+    marker_path.write_text(json_mod.dumps(marker))
+
+    result = read_suspension_marker(_SUSPENSION_SLUG)
+
+    assert result is not None
+    assert result["slug"] == _SUSPENSION_SLUG
+    assert result["item_type"] == _SUSPENSION_ITEM_TYPE
+    assert result["suspended_at"] == suspended_at
+
+
+def test_read_suspension_marker_not_found(tmp_path, monkeypatch):
+    """Returns None when no marker file exists for the given slug."""
+    monkeypatch.setattr(mod, "SUSPENDED_DIR", str(tmp_path))
+
+    result = read_suspension_marker("nonexistent-slug")
+
+    assert result is None
+
+
+def test_clear_suspension_marker(tmp_path, monkeypatch):
+    """Returns True and removes the marker file."""
+    import json as json_mod
+    from datetime import datetime, timezone
+
+    monkeypatch.setattr(mod, "SUSPENDED_DIR", str(tmp_path))
+
+    suspended_at = datetime.now(tz=timezone.utc).isoformat()
+    marker = _make_suspension_marker_dict(suspended_at=suspended_at)
+    marker_path = tmp_path / f"{_SUSPENSION_SLUG}.json"
+    marker_path.write_text(json_mod.dumps(marker))
+
+    result = clear_suspension_marker(_SUSPENSION_SLUG)
+
+    assert result is True
+    assert not marker_path.exists(), "Marker file should be removed"
+
+
+def test_is_item_suspended_active(tmp_path, monkeypatch):
+    """Returns True when a marker exists and has not timed out."""
+    import json as json_mod
+    from datetime import datetime, timezone
+
+    monkeypatch.setattr(mod, "SUSPENDED_DIR", str(tmp_path))
+
+    suspended_at = datetime.now(tz=timezone.utc).isoformat()
+    marker = _make_suspension_marker_dict(suspended_at=suspended_at)
+    marker_path = tmp_path / f"{_SUSPENSION_SLUG}.json"
+    marker_path.write_text(json_mod.dumps(marker))
+
+    result = is_item_suspended(_SUSPENSION_SLUG)
+
+    assert result is True
+    assert marker_path.exists(), "Marker file should not be removed for active suspension"
+
+
+def test_is_item_suspended_timed_out(tmp_path, monkeypatch):
+    """Returns False and cleans up the marker when the suspension has timed out."""
+    import json as json_mod
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.setattr(mod, "SUSPENDED_DIR", str(tmp_path))
+
+    past_time = (datetime.now(tz=timezone.utc) - timedelta(hours=25)).isoformat()
+    marker = _make_suspension_marker_dict(suspended_at=past_time)
+    marker["timeout_minutes"] = 1
+    marker_path = tmp_path / f"{_SUSPENSION_SLUG}.json"
+    marker_path.write_text(json_mod.dumps(marker))
+
+    result = is_item_suspended(_SUSPENSION_SLUG)
+
+    assert result is False
+    assert not marker_path.exists(), "Timed-out marker file should be cleaned up"
+
+
+def test_get_suspension_answer_present(tmp_path, monkeypatch):
+    """Returns the answer string when the marker contains a non-empty answer."""
+    import json as json_mod
+    from datetime import datetime, timezone
+
+    monkeypatch.setattr(mod, "SUSPENDED_DIR", str(tmp_path))
+
+    suspended_at = datetime.now(tz=timezone.utc).isoformat()
+    answer_text = "Use approach B, it is simpler."
+    marker = _make_suspension_marker_dict(suspended_at=suspended_at, answer=answer_text)
+    marker_path = tmp_path / f"{_SUSPENSION_SLUG}.json"
+    marker_path.write_text(json_mod.dumps(marker))
+
+    result = get_suspension_answer(_SUSPENSION_SLUG)
+
+    assert result == answer_text
+
+
+def test_get_suspension_answer_absent(tmp_path, monkeypatch):
+    """Returns None when the marker's answer field is empty."""
+    import json as json_mod
+    from datetime import datetime, timezone
+
+    monkeypatch.setattr(mod, "SUSPENDED_DIR", str(tmp_path))
+
+    suspended_at = datetime.now(tz=timezone.utc).isoformat()
+    marker = _make_suspension_marker_dict(suspended_at=suspended_at, answer="")
+    marker_path = tmp_path / f"{_SUSPENSION_SLUG}.json"
+    marker_path.write_text(json_mod.dumps(marker))
+
+    result = get_suspension_answer(_SUSPENSION_SLUG)
+
+    assert result is None
