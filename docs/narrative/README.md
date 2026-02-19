@@ -49,6 +49,7 @@ decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the 
 | [12-talking-back.md](12-talking-back.md) | Real question answering, 5 Whys intake analysis, the gap between acknowledging and answering |
 | [13-self-improvement.md](13-self-improvement.md) | Self-improvement: multi-project channels, intake acknowledgment, hot-reload, cost standardization |
 | [14-cognitive-specialization.md](14-cognitive-specialization.md) | Model audit across all agents, Opus/Sonnet design loop, agent teams vs subagents trade-offs, Slack suspension pattern |
+| [15-the-loop-that-wouldnt-stop.md](15-the-loop-that-wouldnt-stop.md) | Infinite loop from stale backlog sources, archive cleanup fix, completed_items circuit breaker, force_pipeline_exit() |
 
 ## Timeline at a Glance
 
@@ -79,7 +80,9 @@ decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the 
 2026-02-18  Plugin versioned to 1.1.0, RELEASE-NOTES.md, CLAUDE.md
 2026-02-18  Opus/Sonnet ux-designer loop + Slack suspension implemented (1.4.0)
 2026-02-18  Chapter 14: cognitive specialization, narrative README restructured (1.5.0)
+2026-02-19  Pipeline PID file for safe process management (1.6.0)
+2026-02-19  Infinite loop fix: stale source cleanup, circuit breaker, force_pipeline_exit (1.6.1)
 
-Current: ~5374 lines (orchestrator) + ~2550 lines (auto-pipeline)
-Plans executed: 29 completed features/defects
+Current: ~5374 lines (orchestrator) + ~2600 lines (auto-pipeline)
+Plans executed: 31 completed features/defects
 ```
