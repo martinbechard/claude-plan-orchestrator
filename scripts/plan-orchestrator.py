@@ -53,11 +53,15 @@ DEFAULT_AGENTS_DIR = ".claude/agents/"
 DEFAULT_SPEC_DIR = ""
 DEFAULT_E2E_COMMAND = "npx playwright test"
 
+# UX design loop configuration
+UX_DESIGN_MAX_ROUNDS = 3
+
 # Configuration
 DEFAULT_PLAN_PATH = ".claude/plans/pipeline-optimization.yaml"
 STATUS_FILE_PATH = ".claude/plans/task-status.json"
 TASK_LOG_DIR = Path(".claude/plans/logs")
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
+SUSPENDED_DIR = ".claude/suspended"
 DEFAULT_MAX_ATTEMPTS = 3
 CLAUDE_TIMEOUT_SECONDS = 600  # 10 minutes per task
 MAX_PLAN_NAME_LENGTH = 50  # Max chars from plan name used in report filenames
@@ -67,6 +71,7 @@ REQUIRED_DIRS = [
     ".claude/plans",
     str(TASK_LOG_DIR),
     ".claude/subagent-status",
+    ".claude/suspended",
     "logs",
     "logs/e2e",
 ]
@@ -633,6 +638,7 @@ class TaskResult:
     duration_seconds: float
     plan_modified: bool = False
     rate_limited: bool = False
+    suspended: bool = False
     rate_limit_reset_time: Optional[datetime] = None
     usage: Optional[TaskUsage] = None
 
@@ -1692,6 +1698,10 @@ def find_next_task(plan: dict) -> Optional[tuple[dict, dict]]:
                 # Resume in-progress task
                 return (section, task)
             else:
+                # Skip completed, failed, skipped, and suspended tasks.
+                # Suspended tasks are treated like completed for sequencing:
+                # the orchestrator moves past them without re-executing, but
+                # the section remains in_progress until the item is reinstated.
                 verbose_log(f"      Skipping task with status '{task_status}'", "FIND")
 
     verbose_log("No pending or in_progress tasks found", "FIND")
@@ -2821,6 +2831,16 @@ def run_claude_task(prompt: str, dry_run: bool = False, model: str = "") -> Task
             return TaskResult(
                 success=True,
                 message=status.get("message", "Task completed"),
+                duration_seconds=duration,
+                plan_modified=plan_modified,
+                usage=task_usage
+            )
+        elif status and status.get("status") == "suspended":
+            verbose_log("Task status: SUSPENDED", "STATUS")
+            return TaskResult(
+                success=False,
+                suspended=True,
+                message=status.get("message", "Task suspended"),
                 duration_seconds=duration,
                 plan_modified=plan_modified,
                 usage=task_usage
@@ -4819,6 +4839,19 @@ def run_orchestrator(
                 task_lookup = find_task_by_id(plan, task_id)
                 if task_lookup:
                     section, task = task_lookup
+
+            if task_result.suspended:
+                print(f"[SUSPENDED] Task {task_id} suspended: {task_result.message}")
+                task["status"] = "suspended"
+                task["suspended_at"] = datetime.now().isoformat()
+                update_section_status(section)
+                if not dry_run:
+                    save_plan(
+                        plan_path, plan,
+                        commit=True,
+                        commit_message=f"plan: Task {task_id} suspended"
+                    )
+                continue
 
             if task_result.success:
                 # Run validation if enabled

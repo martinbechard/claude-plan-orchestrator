@@ -23,6 +23,14 @@ in a fresh session, avoiding the context degradation that plagues long-running L
 Design competitions with an AI judge validate plans automatically; the human only intervenes
 when the circuit breaker trips or smoke tests fail.
 
+## The Core Insight
+
+LLMs degrade on long-running tasks. Context accumulates, quality drops, implementation details
+get contradicted. The orchestrator exists to give each task a *fresh* Claude session with clean
+context, while a Python script manages the state machine of plan progression. This architectural
+decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the "manage it"
+(Python)---is the foundation everything else builds on.
+
 ## Document Index
 
 | File | Contents |
@@ -73,11 +81,3 @@ when the circuit breaker trips or smoke tests fail.
 Current: ~4773 lines (orchestrator) + ~1949 lines (auto-pipeline)
 Plans executed: 23+ YAML plan files, 20+ completed plans
 ```
-
-## The Core Insight
-
-LLMs degrade on long-running tasks. Context accumulates, quality drops, implementation details
-get contradicted. The orchestrator exists to give each task a *fresh* Claude session with clean
-context, while a Python script manages the state machine of plan progression. This architectural
-decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the "manage it"
-(Python)---is the foundation everything else builds on.
