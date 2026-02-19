@@ -2396,10 +2396,16 @@ def run_parallel_task(
         prompt = build_claude_prompt(plan, section, task, plan_path, subagent_context,
                                      attempt_number=task.get("attempts", 1))
 
+        # Resolve agent name for permission profile
+        par_agent_name = task.get("agent")
+        if par_agent_name is None:
+            par_agent_name = infer_agent_for_task(task)
+        permission_flags = build_permission_flags(par_agent_name or "coder")
+
         # Run Claude in the worktree directory
         cmd = [
             *CLAUDE_CMD,
-            "--dangerously-skip-permissions",
+            *permission_flags,
             "--print",
             prompt
         ]
