@@ -122,6 +122,7 @@ SLACK_LEVEL_EMOJI = {
 }
 SLACK_LAST_READ_PATH = ".claude/slack-last-read.json"
 SLACK_INBOUND_POLL_LIMIT = 20
+SLACK_THREAD_REPLIES_LIMIT = 5
 SLACK_CHANNEL_PREFIX = "orchestrator-"
 SLACK_CHANNEL_ROLE_SUFFIXES = {
     "features": "feature",
@@ -3166,6 +3167,47 @@ class SlackNotifier:
             print(f"[SLACK] Failed to post message: {e}")
             return False
 
+    def _post_message_get_ts(self, payload: dict,
+                             channel_id: Optional[str] = None) -> Optional[str]:
+        """POST a message to Slack and return the message timestamp.
+
+        Same as _post_message() but returns the message ts on success instead
+        of a boolean. The ts is used as thread_ts for reply correlation.
+
+        Args:
+            payload: Slack Block Kit payload dict
+            channel_id: Target channel. Falls back to self._channel_id.
+
+        Returns:
+            Message ts string if successful, None otherwise
+        """
+        target = channel_id or self._channel_id
+        if not self._bot_token or not target:
+            return None
+
+        payload["channel"] = target
+
+        try:
+            req = urllib.request.Request(
+                "https://slack.com/api/chat.postMessage",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Authorization": f"Bearer {self._bot_token}"
+                }
+            )
+
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read())
+                if result.get("ok", False):
+                    return result.get("ts")
+                print(f"[SLACK] Post message error: {result.get('error', 'unknown')}")
+                return None
+
+        except Exception as e:
+            print(f"[SLACK] Failed to post message: {e}")
+            return None
+
     def _build_status_block(self, message: str, level: str) -> dict:
         """Build a Slack Block Kit payload for a status message.
 
@@ -3375,6 +3417,121 @@ class SlackNotifier:
                 pass
 
             return fallback
+
+    def post_suspension_question(
+        self,
+        slug: str,
+        item_type: str,
+        question: str,
+        question_context: str,
+    ) -> Optional[str]:
+        """Post a suspension question to the type-specific Slack channel.
+
+        Posts a formatted Block Kit message to the features or defects channel
+        with the question details. Returns the message thread_ts for reply
+        correlation, or None on failure.
+
+        Args:
+            slug: Work item slug (e.g., "9-ux-feature")
+            item_type: "feature" or "defect"
+            question: The question text
+            question_context: Why this information is needed
+
+        Returns:
+            Message ts (thread_ts) string if successful, None otherwise
+        """
+        channel_id = self.get_type_channel_id(item_type)
+        if not channel_id:
+            print(f"[SLACK] No channel found for item_type={item_type}")
+            return None
+
+        payload = {
+            "blocks": [
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": f":question: Design Question for {slug}"
+                    }
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": self._truncate_for_slack(f"*Question:* {question}")
+                    }
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": self._truncate_for_slack(f"*Context:* {question_context}")
+                    }
+                },
+                {
+                    "type": "context",
+                    "elements": [{
+                        "type": "mrkdwn",
+                        "text": "_Reply in this thread to answer. The pipeline will resume processing automatically._"
+                    }]
+                }
+            ]
+        }
+
+        return self._post_message_get_ts(payload, channel_id=channel_id)
+
+    def check_suspension_reply(
+        self,
+        channel_id: str,
+        thread_ts: str,
+    ) -> Optional[str]:
+        """Check for a human reply in a Slack thread.
+
+        Uses conversations.replies API to check if there are replies to the
+        suspension question message. Ignores the original message and bot
+        messages.
+
+        Args:
+            channel_id: Slack channel ID containing the thread
+            thread_ts: Timestamp of the original question message (thread root)
+
+        Returns:
+            Text of the first human reply if found, None otherwise
+        """
+        if not self._bot_token or not channel_id or not thread_ts:
+            return None
+
+        try:
+            params = urllib.parse.urlencode({
+                "channel": channel_id,
+                "ts": thread_ts,
+                "limit": SLACK_THREAD_REPLIES_LIMIT,
+            })
+            req = urllib.request.Request(
+                f"https://slack.com/api/conversations.replies?{params}",
+                headers={"Authorization": f"Bearer {self._bot_token}"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read())
+
+            if not result.get("ok", False):
+                print(f"[SLACK] conversations.replies error: {result.get('error', 'unknown')}")
+                return None
+
+            for message in result.get("messages", []):
+                # Skip the original message (root of thread)
+                if message.get("ts") == thread_ts:
+                    continue
+                # Skip bot messages
+                if "bot_id" in message:
+                    continue
+                return message.get("text")
+
+            return None
+
+        except Exception as e:
+            print(f"[SLACK] Failed to check thread replies: {e}")
+            return None
 
     def send_defect(self, title: str, description: str, file_path: str = "") -> None:
         """Send a defect report to Slack.
