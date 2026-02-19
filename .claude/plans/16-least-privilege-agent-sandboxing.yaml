@@ -179,12 +179,12 @@ sections:
       READ_ONLY profile since they only generate text responses. Syntax verified OK.
 - id: phase-2
   name: Phase 2 - Permission Profiles in auto-pipeline.py
-  status: pending
+  status: in_progress
   tasks:
   - id: '2.1'
     name: Add permission profiles and build_permission_flags to auto-pipeline.py
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.4'
     description: "Add the permission profile system to scripts/auto-pipeline.py.\n\
@@ -213,6 +213,13 @@ sections:
       Permission profile '{profile_name}': tools={tools}\")\n       return flags\n\
       \n5. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
+    attempts: 1
+    last_attempt: '2026-02-18T22:13:45.928656'
+    model_used: sonnet
+    completed_at: '2026-02-18T22:16:39.632402'
+    result_message: Added SANDBOX_ENABLED constant, PIPELINE_PERMISSION_PROFILES dict
+      (planner/verifier profiles), and build_permission_flags() function to scripts/auto-pipeline.py.
+      Syntax verified clean.
   - id: '2.2'
     name: Replace --dangerously-skip-permissions in auto-pipeline.py launch points
     agent: coder
