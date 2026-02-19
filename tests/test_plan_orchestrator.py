@@ -36,6 +36,8 @@ read_suspension_marker = mod.read_suspension_marker
 clear_suspension_marker = mod.clear_suspension_marker
 is_item_suspended = mod.is_item_suspended
 get_suspension_answer = mod.get_suspension_answer
+find_next_task = mod.find_next_task
+update_section_status = mod.update_section_status
 
 
 # --- _truncate_for_slack tests ---
@@ -1248,3 +1250,68 @@ def test_get_suspension_answer_absent(tmp_path, monkeypatch):
     result = get_suspension_answer(_SUSPENSION_SLUG)
 
     assert result is None
+
+
+# --- find_next_task suspended status tests ---
+
+
+def _make_plan_with_tasks(task_dicts: list) -> dict:
+    """Build a minimal plan dict with a single section containing the given tasks."""
+    return {
+        "sections": [
+            {
+                "id": "phase-1",
+                "name": "Phase 1",
+                "status": "in_progress",
+                "tasks": task_dicts,
+            }
+        ]
+    }
+
+
+def test_find_next_task_skips_suspended():
+    """find_next_task() skips suspended tasks and returns the next pending task."""
+    tasks = [
+        {"id": "1.1", "name": "Suspended task", "status": "suspended"},
+        {"id": "1.2", "name": "Pending task", "status": "pending"},
+    ]
+    plan = _make_plan_with_tasks(tasks)
+
+    result = find_next_task(plan)
+
+    assert result is not None, "Should find the pending task"
+    section, task = result
+    assert task["id"] == "1.2", "Should skip the suspended task and return the pending one"
+    assert task["status"] == "pending"
+
+
+def test_find_next_task_all_suspended():
+    """find_next_task() returns None when all tasks are suspended."""
+    tasks = [
+        {"id": "1.1", "name": "First suspended", "status": "suspended"},
+        {"id": "1.2", "name": "Second suspended", "status": "suspended"},
+    ]
+    plan = _make_plan_with_tasks(tasks)
+
+    result = find_next_task(plan)
+
+    assert result is None, "Should return None when no actionable tasks remain"
+
+
+def test_section_status_with_suspended_task():
+    """update_section_status() sets in_progress when a completed and suspended task coexist."""
+    section = {
+        "id": "phase-1",
+        "name": "Phase 1",
+        "status": "in_progress",
+        "tasks": [
+            {"id": "1.1", "name": "Done task", "status": "completed"},
+            {"id": "1.2", "name": "Suspended task", "status": "suspended"},
+        ],
+    }
+
+    update_section_status(section)
+
+    assert section["status"] == "in_progress", (
+        "Section should be in_progress when a suspended task is present, not completed"
+    )

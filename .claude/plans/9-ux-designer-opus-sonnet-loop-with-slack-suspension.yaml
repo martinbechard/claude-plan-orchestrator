@@ -457,7 +457,7 @@ sections:
   - id: '4.2'
     name: Add unit tests for suspended task status handling
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '2.1'
     - '4.1'
@@ -478,6 +478,8 @@ sections:
       \ done)\n\n3. Run the tests:\n   ~/.pyenv/versions/3.11.*/bin/python -m pytest\
       \ tests/test_plan_orchestrator.py -v -k suspended\n   Fix any failures before\
       \ marking this task complete.\n\nFiles: tests/test_plan_orchestrator.py\n"
+    attempts: 1
+    last_attempt: '2026-02-18T21:15:55.963310'
 - id: phase-5
   name: Phase 5 - Plugin Version Bump
   status: pending
