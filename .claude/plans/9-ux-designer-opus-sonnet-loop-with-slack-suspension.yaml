@@ -16,213 +16,122 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Part 1 Documentation and Agent Definitions
-  status: pending
+  status: in_progress
   tasks:
   - id: '1.1'
     name: Create ux-implementer agent definition
     agent: coder
-    status: pending
-    description: |
-      Create the Sonnet-based ux-implementer agent that produces design documents
-      from a design brief provided by the Opus ux-designer orchestrator.
-
-      Reference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md
-
-      Steps:
-      1. Read .claude/agents/ux-designer.md for format reference (YAML frontmatter
-         + markdown body).
-      2. Create .claude/agents/ux-implementer.md with:
-
-         Frontmatter:
-         - name: ux-implementer
-         - description: "Sonnet-based design implementer. Receives a design brief
-           from the Opus ux-designer orchestrator and produces detailed UX design
-           documents. Returns STATUS: COMPLETE with the design or STATUS: QUESTION
-           when clarification is needed. Stateless -- all context must be provided
-           in each invocation."
-         - tools: [Read, Grep, Glob]
-         - model: sonnet
-
-         Body:
-
-         ## Role
-         You are a UX design implementer working under the direction of an Opus
-         orchestrator. You receive a design brief with requirements and optional
-         Q&A history from prior rounds. Your job is to produce a complete UX
-         design document OR return a structured question if you need clarification.
-
-         ## Output Protocol
-         Your response MUST begin with exactly one of these status lines:
-
-         STATUS: COMPLETE
-         ---
-         <full design document following the structure below>
-
-         STATUS: QUESTION
-         QUESTION: <one specific, answerable question>
-         CONTEXT: <why this information is needed for the design>
-
-         ## When to Ask Questions
-         Only ask a question when:
-         - The design brief is ambiguous about a critical layout or interaction choice
-         - Two valid design approaches exist and the choice significantly affects UX
-         - A requirement contradicts an existing pattern in the codebase
-
-         Do NOT ask questions about:
-         - Minor stylistic choices you can resolve by following existing patterns
-         - Implementation details (you produce designs, not code)
-         - Things already answered in the Q&A history
-
-         ## Design Document Structure (for STATUS: COMPLETE)
-         Include all sections from the standard ux-designer output:
-         - 5 Whys Analysis
-         - User Flow
-         - Wireframes (ASCII)
-         - Component Specs
-         - State Diagrams
-         - Responsive Design
-         - Accessibility
-         - Design System Integration
-
-         If the orchestrator documented any assumptions in the Q&A history, include
-         an "## Assumptions" section listing them so the judge and implementer can
-         see what was assumed.
-
-         ## Constraints
-         - You are READ-ONLY. Never use Write, Edit, or Bash tools.
-         - Only use Read, Grep, and Glob to inspect the codebase.
-         - Always start your response with STATUS: COMPLETE or STATUS: QUESTION.
-         - If you have multiple questions, pick the single most important one.
-         - Base design decisions on evidence from the existing UI codebase.
-
-      3. Git commit:
-         git add .claude/agents/ux-implementer.md
-         git commit -m "feat: add ux-implementer Sonnet agent for design loop"
-
-      Files: .claude/agents/ux-implementer.md
-
+    status: completed
+    description: "Create the Sonnet-based ux-implementer agent that produces design\
+      \ documents\nfrom a design brief provided by the Opus ux-designer orchestrator.\n\
+      \nReference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md\n\
+      \nSteps:\n1. Read .claude/agents/ux-designer.md for format reference (YAML frontmatter\n\
+      \   + markdown body).\n2. Create .claude/agents/ux-implementer.md with:\n\n\
+      \   Frontmatter:\n   - name: ux-implementer\n   - description: \"Sonnet-based\
+      \ design implementer. Receives a design brief\n     from the Opus ux-designer\
+      \ orchestrator and produces detailed UX design\n     documents. Returns STATUS:\
+      \ COMPLETE with the design or STATUS: QUESTION\n     when clarification is needed.\
+      \ Stateless -- all context must be provided\n     in each invocation.\"\n  \
+      \ - tools: [Read, Grep, Glob]\n   - model: sonnet\n\n   Body:\n\n   ## Role\n\
+      \   You are a UX design implementer working under the direction of an Opus\n\
+      \   orchestrator. You receive a design brief with requirements and optional\n\
+      \   Q&A history from prior rounds. Your job is to produce a complete UX\n  \
+      \ design document OR return a structured question if you need clarification.\n\
+      \n   ## Output Protocol\n   Your response MUST begin with exactly one of these\
+      \ status lines:\n\n   STATUS: COMPLETE\n   ---\n   <full design document following\
+      \ the structure below>\n\n   STATUS: QUESTION\n   QUESTION: <one specific, answerable\
+      \ question>\n   CONTEXT: <why this information is needed for the design>\n\n\
+      \   ## When to Ask Questions\n   Only ask a question when:\n   - The design\
+      \ brief is ambiguous about a critical layout or interaction choice\n   - Two\
+      \ valid design approaches exist and the choice significantly affects UX\n  \
+      \ - A requirement contradicts an existing pattern in the codebase\n\n   Do NOT\
+      \ ask questions about:\n   - Minor stylistic choices you can resolve by following\
+      \ existing patterns\n   - Implementation details (you produce designs, not code)\n\
+      \   - Things already answered in the Q&A history\n\n   ## Design Document Structure\
+      \ (for STATUS: COMPLETE)\n   Include all sections from the standard ux-designer\
+      \ output:\n   - 5 Whys Analysis\n   - User Flow\n   - Wireframes (ASCII)\n \
+      \  - Component Specs\n   - State Diagrams\n   - Responsive Design\n   - Accessibility\n\
+      \   - Design System Integration\n\n   If the orchestrator documented any assumptions\
+      \ in the Q&A history, include\n   an \"## Assumptions\" section listing them\
+      \ so the judge and implementer can\n   see what was assumed.\n\n   ## Constraints\n\
+      \   - You are READ-ONLY. Never use Write, Edit, or Bash tools.\n   - Only use\
+      \ Read, Grep, and Glob to inspect the codebase.\n   - Always start your response\
+      \ with STATUS: COMPLETE or STATUS: QUESTION.\n   - If you have multiple questions,\
+      \ pick the single most important one.\n   - Base design decisions on evidence\
+      \ from the existing UI codebase.\n\n3. Git commit:\n   git add .claude/agents/ux-implementer.md\n\
+      \   git commit -m \"feat: add ux-implementer Sonnet agent for design loop\"\n\
+      \nFiles: .claude/agents/ux-implementer.md\n"
+    attempts: 1
+    last_attempt: '2026-02-18T20:43:53.053534'
+    model_used: sonnet
+    completed_at: '2026-02-18T20:45:37.522841'
+    result_message: 'Created .claude/agents/ux-implementer.md — Sonnet-based design
+      implementer with STATUS: COMPLETE/QUESTION output protocol, read-only constraints,
+      and full design document structure guidance'
   - id: '1.2'
     name: Rewrite ux-designer as Opus orchestrator with loop logic
     agent: coder
     status: pending
     depends_on:
     - '1.1'
-    description: |
-      Rewrite the ux-designer agent to be an Opus-based orchestrator that produces
-      a design brief, invokes the ux-implementer Sonnet agent in a loop, and handles
-      Q&A rounds.
-
-      Reference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md
-
-      Steps:
-      1. Read .claude/agents/ux-designer.md (current version).
-      2. Read .claude/agents/ux-implementer.md (created in task 1.1).
-      3. Rewrite .claude/agents/ux-designer.md with:
-
-         Frontmatter:
-         - name: ux-designer
-         - description: "UX design orchestrator (Opus). Produces a design brief, then
-           invokes the ux-implementer (Sonnet) agent in a loop. Handles Q&A rounds
-           by answering Sonnet's questions using its own reasoning, re-injecting
-           full Q&A history on each round. Capped at 3 rounds. Read-only for codebase,
-           but writes the final design document."
-         - tools: [Read, Grep, Glob, Bash, Write]
-         - model: opus
-
-         Body:
-
-         ## Role
-         You are a UX design orchestrator. You analyze requirements, produce a
-         design brief, then delegate the detailed design work to the ux-implementer
-         agent (Sonnet) via Claude CLI. You handle clarification questions by
-         answering them yourself or, if you truly cannot answer, by reporting the
-         question to the orchestrator for human escalation.
-
-         ## Workflow
-
-         ### Step 1: Analyze and Brief
-         1. Read the task description and plan document thoroughly
-         2. Read existing UI components to understand the design system
-         3. Perform the 5 Whys analysis (same as before)
-         4. Produce a structured design brief containing:
-            - Root need from 5 Whys
-            - Requirements extracted from the task
-            - Existing patterns and components to reuse
-            - Constraints and edge cases
-
-         ### Step 2: Invoke ux-implementer Loop
-         Run a loop (max 3 rounds) where you invoke the ux-implementer Sonnet
-         agent via Claude CLI:
-
-         ```bash
-         claude --print --model sonnet --output-format json \
-           --dangerously-skip-permissions "<prompt>"
-         ```
-
-         The prompt must include:
-         - The full design brief from Step 1
-         - Any accumulated Q&A history (empty on round 1)
-         - Instructions to follow the ux-implementer protocol
-
-         ### Step 3: Handle Response
-         Parse the first line of Sonnet's response:
-
-         - **STATUS: COMPLETE** -- Extract the design document after the "---"
-           separator. Write it to the output path. Done.
-
-         - **STATUS: QUESTION** -- Extract the question and context. Decide:
-           a) If you can answer confidently from requirements + codebase: answer
-              it, add to Q&A history, loop back to Step 2.
-           b) If you cannot answer (truly ambiguous, needs human input): write
-              task-status.json with status "suspended" and include the question.
-              (Part 2 will handle the Slack posting.)
-
-         ### Step 4: Handle Max Rounds
-         If 3 rounds pass without STATUS: COMPLETE, take the best partial design
-         from the last round, add an "## Open Questions" section listing unresolved
-         questions, and write it as the output. Report as completed with a warning
-         in the status message.
-
-         ## Q&A History Format
-         Prepend this to the design brief on rounds 2+:
-
-         ## Prior Design Q&A
-         Q1: <question from round 1>
-         A1: <your answer>
-         Q2: <question from round 2>
-         A2: <your answer>
-
-         ## Assumptions
-         Document every assumption you made while answering questions:
-         - "Assumed grid layout based on existing dashboard patterns"
-         - "Assumed mobile-first based on responsive breakpoints in globals.css"
-
-         ## Evaluation Criteria (same as before)
-         - Clarity (0-10)
-         - Mobile UX (0-10)
-         - Accessibility (0-10)
-         - Consistency (0-10)
-         - Completeness (0-10)
-
-         ## Constraints
-         - Use Claude CLI (not the Task tool) to invoke ux-implementer
-         - Re-inject full Q&A history on every Sonnet call (stateless)
-         - Cap at 3 rounds maximum
-         - Document all assumptions made while answering questions
-         - If suspending: write task-status.json with status "suspended"
-
-         ## Output Protocol
-         Write status to .claude/plans/task-status.json:
-         - status: "completed" with design document written
-         - status: "suspended" with question details (for human escalation)
-         - status: "failed" if unable to produce any design
-
-      4. Git commit:
-         git add .claude/agents/ux-designer.md
-         git commit -m "feat: rewrite ux-designer as Opus orchestrator with Sonnet loop"
-
-      Files: .claude/agents/ux-designer.md
-
+    description: "Rewrite the ux-designer agent to be an Opus-based orchestrator that\
+      \ produces\na design brief, invokes the ux-implementer Sonnet agent in a loop,\
+      \ and handles\nQ&A rounds.\n\nReference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md\n\
+      \nSteps:\n1. Read .claude/agents/ux-designer.md (current version).\n2. Read\
+      \ .claude/agents/ux-implementer.md (created in task 1.1).\n3. Rewrite .claude/agents/ux-designer.md\
+      \ with:\n\n   Frontmatter:\n   - name: ux-designer\n   - description: \"UX design\
+      \ orchestrator (Opus). Produces a design brief, then\n     invokes the ux-implementer\
+      \ (Sonnet) agent in a loop. Handles Q&A rounds\n     by answering Sonnet's questions\
+      \ using its own reasoning, re-injecting\n     full Q&A history on each round.\
+      \ Capped at 3 rounds. Read-only for codebase,\n     but writes the final design\
+      \ document.\"\n   - tools: [Read, Grep, Glob, Bash, Write]\n   - model: opus\n\
+      \n   Body:\n\n   ## Role\n   You are a UX design orchestrator. You analyze requirements,\
+      \ produce a\n   design brief, then delegate the detailed design work to the\
+      \ ux-implementer\n   agent (Sonnet) via Claude CLI. You handle clarification\
+      \ questions by\n   answering them yourself or, if you truly cannot answer, by\
+      \ reporting the\n   question to the orchestrator for human escalation.\n\n \
+      \  ## Workflow\n\n   ### Step 1: Analyze and Brief\n   1. Read the task description\
+      \ and plan document thoroughly\n   2. Read existing UI components to understand\
+      \ the design system\n   3. Perform the 5 Whys analysis (same as before)\n  \
+      \ 4. Produce a structured design brief containing:\n      - Root need from 5\
+      \ Whys\n      - Requirements extracted from the task\n      - Existing patterns\
+      \ and components to reuse\n      - Constraints and edge cases\n\n   ### Step\
+      \ 2: Invoke ux-implementer Loop\n   Run a loop (max 3 rounds) where you invoke\
+      \ the ux-implementer Sonnet\n   agent via Claude CLI:\n\n   ```bash\n   claude\
+      \ --print --model sonnet --output-format json \\\n     --dangerously-skip-permissions\
+      \ \"<prompt>\"\n   ```\n\n   The prompt must include:\n   - The full design\
+      \ brief from Step 1\n   - Any accumulated Q&A history (empty on round 1)\n \
+      \  - Instructions to follow the ux-implementer protocol\n\n   ### Step 3: Handle\
+      \ Response\n   Parse the first line of Sonnet's response:\n\n   - **STATUS:\
+      \ COMPLETE** -- Extract the design document after the \"---\"\n     separator.\
+      \ Write it to the output path. Done.\n\n   - **STATUS: QUESTION** -- Extract\
+      \ the question and context. Decide:\n     a) If you can answer confidently from\
+      \ requirements + codebase: answer\n        it, add to Q&A history, loop back\
+      \ to Step 2.\n     b) If you cannot answer (truly ambiguous, needs human input):\
+      \ write\n        task-status.json with status \"suspended\" and include the\
+      \ question.\n        (Part 2 will handle the Slack posting.)\n\n   ### Step\
+      \ 4: Handle Max Rounds\n   If 3 rounds pass without STATUS: COMPLETE, take the\
+      \ best partial design\n   from the last round, add an \"## Open Questions\"\
+      \ section listing unresolved\n   questions, and write it as the output. Report\
+      \ as completed with a warning\n   in the status message.\n\n   ## Q&A History\
+      \ Format\n   Prepend this to the design brief on rounds 2+:\n\n   ## Prior Design\
+      \ Q&A\n   Q1: <question from round 1>\n   A1: <your answer>\n   Q2: <question\
+      \ from round 2>\n   A2: <your answer>\n\n   ## Assumptions\n   Document every\
+      \ assumption you made while answering questions:\n   - \"Assumed grid layout\
+      \ based on existing dashboard patterns\"\n   - \"Assumed mobile-first based\
+      \ on responsive breakpoints in globals.css\"\n\n   ## Evaluation Criteria (same\
+      \ as before)\n   - Clarity (0-10)\n   - Mobile UX (0-10)\n   - Accessibility\
+      \ (0-10)\n   - Consistency (0-10)\n   - Completeness (0-10)\n\n   ## Constraints\n\
+      \   - Use Claude CLI (not the Task tool) to invoke ux-implementer\n   - Re-inject\
+      \ full Q&A history on every Sonnet call (stateless)\n   - Cap at 3 rounds maximum\n\
+      \   - Document all assumptions made while answering questions\n   - If suspending:\
+      \ write task-status.json with status \"suspended\"\n\n   ## Output Protocol\n\
+      \   Write status to .claude/plans/task-status.json:\n   - status: \"completed\"\
+      \ with design document written\n   - status: \"suspended\" with question details\
+      \ (for human escalation)\n   - status: \"failed\" if unable to produce any design\n\
+      \n4. Git commit:\n   git add .claude/agents/ux-designer.md\n   git commit -m\
+      \ \"feat: rewrite ux-designer as Opus orchestrator with Sonnet loop\"\n\nFiles:\
+      \ .claude/agents/ux-designer.md\n"
 - id: phase-2
   name: Phase 2 - Part 1 Implementation (plan-orchestrator changes)
   status: pending
@@ -233,60 +142,32 @@ sections:
     status: pending
     depends_on:
     - '1.2'
-    description: |
-      Add configuration constants for the UX design loop and handle the new
-      "suspended" task status in plan-orchestrator.py.
-
-      Reference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md
-
-      Steps:
-      1. Read scripts/plan-orchestrator.py. Find the config constants section
-         (around lines 41-55 where DEFAULT_BUILD_COMMAND etc. are defined).
-
-      2. After DEFAULT_E2E_COMMAND, add:
-
-         # UX design loop configuration
-         UX_DESIGN_MAX_ROUNDS = 3
-
-      3. Add SUSPENDED_DIR to the REQUIRED_DIRS list (around line 66):
-
-         SUSPENDED_DIR = ".claude/suspended"
-
-         And add it to REQUIRED_DIRS:
-         ".claude/suspended",
-
-      4. Find the read_task_status() function (search for "def read_task_status"
-         or where task-status.json is read and parsed). Currently, the function
-         handles "completed", "failed", and "skipped" statuses. Add handling for
-         "suspended":
-
-         When status == "suspended":
-         - Log: "[SUSPENDED] Task {task_id} suspended: {message}"
-         - Set task status to "suspended" in the plan YAML
-         - Save the plan YAML
-         - Return early (do not retry, do not mark as failed)
-
-         Search for where the orchestrator processes task result statuses
-         (look for 'status == "completed"' or 'status == "failed"' patterns
-         in the main execution loop). Add a branch for "suspended" that:
-         - Prints a suspension notice
-         - Writes the plan with the task marked "suspended"
-         - Returns from the current task execution without error
-
-      5. In find_next_task() (around line 1656), ensure tasks with status
-         "suspended" are skipped (treated like "completed" for sequencing but
-         the section remains "in_progress"). Add "suspended" to any status
-         checks that currently skip "completed" and "skipped" tasks.
-
-      6. Verify syntax:
-         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
-
-      7. Git commit:
-         git add scripts/plan-orchestrator.py
-         git commit -m "feat: add UX loop constants and suspended task status handling"
-
-      Files: scripts/plan-orchestrator.py
-
+    description: "Add configuration constants for the UX design loop and handle the\
+      \ new\n\"suspended\" task status in plan-orchestrator.py.\n\nReference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md\n\
+      \nSteps:\n1. Read scripts/plan-orchestrator.py. Find the config constants section\n\
+      \   (around lines 41-55 where DEFAULT_BUILD_COMMAND etc. are defined).\n\n2.\
+      \ After DEFAULT_E2E_COMMAND, add:\n\n   # UX design loop configuration\n   UX_DESIGN_MAX_ROUNDS\
+      \ = 3\n\n3. Add SUSPENDED_DIR to the REQUIRED_DIRS list (around line 66):\n\n\
+      \   SUSPENDED_DIR = \".claude/suspended\"\n\n   And add it to REQUIRED_DIRS:\n\
+      \   \".claude/suspended\",\n\n4. Find the read_task_status() function (search\
+      \ for \"def read_task_status\"\n   or where task-status.json is read and parsed).\
+      \ Currently, the function\n   handles \"completed\", \"failed\", and \"skipped\"\
+      \ statuses. Add handling for\n   \"suspended\":\n\n   When status == \"suspended\"\
+      :\n   - Log: \"[SUSPENDED] Task {task_id} suspended: {message}\"\n   - Set task\
+      \ status to \"suspended\" in the plan YAML\n   - Save the plan YAML\n   - Return\
+      \ early (do not retry, do not mark as failed)\n\n   Search for where the orchestrator\
+      \ processes task result statuses\n   (look for 'status == \"completed\"' or\
+      \ 'status == \"failed\"' patterns\n   in the main execution loop). Add a branch\
+      \ for \"suspended\" that:\n   - Prints a suspension notice\n   - Writes the\
+      \ plan with the task marked \"suspended\"\n   - Returns from the current task\
+      \ execution without error\n\n5. In find_next_task() (around line 1656), ensure\
+      \ tasks with status\n   \"suspended\" are skipped (treated like \"completed\"\
+      \ for sequencing but\n   the section remains \"in_progress\"). Add \"suspended\"\
+      \ to any status\n   checks that currently skip \"completed\" and \"skipped\"\
+      \ tasks.\n\n6. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('syntax OK')\"\n\n7. Git commit:\n   git add scripts/plan-orchestrator.py\n\
+      \   git commit -m \"feat: add UX loop constants and suspended task status handling\"\
+      \n\nFiles: scripts/plan-orchestrator.py\n"
 - id: phase-3
   name: Phase 3 - Part 2 Suspension Infrastructure
   status: pending
@@ -297,285 +178,159 @@ sections:
     status: pending
     depends_on:
     - '2.1'
-    description: |
-      Add functions to plan-orchestrator.py for creating, reading, and clearing
-      suspension marker files. These are used when a ux-designer task writes
-      status "suspended" and the pipeline needs to track the pending question.
-
-      Reference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md
-
-      Steps:
-      1. Read scripts/plan-orchestrator.py.
-
-      2. After the SUSPENDED_DIR constant (added in task 2.1), add a constant:
-
-         SUSPENSION_TIMEOUT_MINUTES = 1440  # 24 hours default
-
-      3. After the parse_verification_blocks() function (or nearby utility
-         functions), add three new functions:
-
-         a. create_suspension_marker(slug, item_type, item_path, plan_path,
-            task_id, question, question_context) -> str:
-            """Create a suspension marker file for a work item.
-
-            Returns the path to the marker file.
-            """
-            - Build a dict with all args plus suspended_at (ISO timestamp),
-              timeout_minutes (SUSPENSION_TIMEOUT_MINUTES), and empty fields
-              for slack_thread_ts, slack_channel_id, answer
-            - Write to SUSPENDED_DIR/<slug>.json
-            - Return the path
-
-         b. read_suspension_marker(slug) -> Optional[dict]:
-            """Read a suspension marker file. Returns None if not found."""
-            - Read from SUSPENDED_DIR/<slug>.json
-            - Return parsed dict or None
-
-         c. clear_suspension_marker(slug) -> bool:
-            """Remove a suspension marker file. Returns True if removed."""
-            - Delete SUSPENDED_DIR/<slug>.json
-            - Return True if removed, False if not found
-
-         d. is_item_suspended(slug) -> bool:
-            """Check if an item has an active suspension marker."""
-            - Check if SUSPENDED_DIR/<slug>.json exists
-            - If it exists, check if it has timed out (suspended_at + timeout_minutes)
-            - If timed out, clear the marker and return False
-            - Otherwise return True
-
-         e. get_suspension_answer(slug) -> Optional[str]:
-            """Get the human's answer from a suspension marker, if available."""
-            - Read the marker file
-            - Return marker.get("answer") if it's a non-empty string
-            - Return None otherwise
-
-      4. Verify syntax:
-         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
-
-      5. Git commit:
-         git add scripts/plan-orchestrator.py
-         git commit -m "feat: add suspension marker file management functions"
-
-      Files: scripts/plan-orchestrator.py
-
+    description: "Add functions to plan-orchestrator.py for creating, reading, and\
+      \ clearing\nsuspension marker files. These are used when a ux-designer task\
+      \ writes\nstatus \"suspended\" and the pipeline needs to track the pending question.\n\
+      \nReference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md\n\
+      \nSteps:\n1. Read scripts/plan-orchestrator.py.\n\n2. After the SUSPENDED_DIR\
+      \ constant (added in task 2.1), add a constant:\n\n   SUSPENSION_TIMEOUT_MINUTES\
+      \ = 1440  # 24 hours default\n\n3. After the parse_verification_blocks() function\
+      \ (or nearby utility\n   functions), add three new functions:\n\n   a. create_suspension_marker(slug,\
+      \ item_type, item_path, plan_path,\n      task_id, question, question_context)\
+      \ -> str:\n      \"\"\"Create a suspension marker file for a work item.\n\n\
+      \      Returns the path to the marker file.\n      \"\"\"\n      - Build a dict\
+      \ with all args plus suspended_at (ISO timestamp),\n        timeout_minutes\
+      \ (SUSPENSION_TIMEOUT_MINUTES), and empty fields\n        for slack_thread_ts,\
+      \ slack_channel_id, answer\n      - Write to SUSPENDED_DIR/<slug>.json\n   \
+      \   - Return the path\n\n   b. read_suspension_marker(slug) -> Optional[dict]:\n\
+      \      \"\"\"Read a suspension marker file. Returns None if not found.\"\"\"\
+      \n      - Read from SUSPENDED_DIR/<slug>.json\n      - Return parsed dict or\
+      \ None\n\n   c. clear_suspension_marker(slug) -> bool:\n      \"\"\"Remove a\
+      \ suspension marker file. Returns True if removed.\"\"\"\n      - Delete SUSPENDED_DIR/<slug>.json\n\
+      \      - Return True if removed, False if not found\n\n   d. is_item_suspended(slug)\
+      \ -> bool:\n      \"\"\"Check if an item has an active suspension marker.\"\"\
+      \"\n      - Check if SUSPENDED_DIR/<slug>.json exists\n      - If it exists,\
+      \ check if it has timed out (suspended_at + timeout_minutes)\n      - If timed\
+      \ out, clear the marker and return False\n      - Otherwise return True\n\n\
+      \   e. get_suspension_answer(slug) -> Optional[str]:\n      \"\"\"Get the human's\
+      \ answer from a suspension marker, if available.\"\"\"\n      - Read the marker\
+      \ file\n      - Return marker.get(\"answer\") if it's a non-empty string\n \
+      \     - Return None otherwise\n\n4. Verify syntax:\n   python3 -c \"import py_compile;\
+      \ py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax\
+      \ OK')\"\n\n5. Git commit:\n   git add scripts/plan-orchestrator.py\n   git\
+      \ commit -m \"feat: add suspension marker file management functions\"\n\nFiles:\
+      \ scripts/plan-orchestrator.py\n"
   - id: '3.2'
     name: Add Slack question posting for suspended items
     agent: coder
     status: pending
     depends_on:
     - '3.1'
-    description: |
-      Add a method to SlackNotifier that posts a design question to the
-      appropriate Slack channel when a work item is suspended. The message
-      includes the item slug and question text, and the thread_ts is stored
-      back in the suspension marker for reply correlation.
-
-      Reference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md
-
-      Steps:
-      1. Read scripts/plan-orchestrator.py. Find the SlackNotifier class
-         (around line 2891).
-
-      2. After the send_question() method (around line 3260), add a new method:
-
-         def post_suspension_question(
-             self,
-             slug: str,
-             item_type: str,
-             question: str,
-             question_context: str,
-         ) -> Optional[str]:
-             """Post a suspension question to the type-specific Slack channel.
-
-             Posts a formatted message to the features or defects channel with
-             the question details. Returns the message thread_ts for reply
-             correlation, or None on failure.
-
-             Args:
-                 slug: Work item slug (e.g., "9-ux-feature")
-                 item_type: "feature" or "defect"
-                 question: The question text
-                 question_context: Why this information is needed
-             """
-             - Determine target channel using _get_channel_id_for_role()
-               with the item_type ("feature" -> features channel, "defect" ->
-               defects channel)
-             - Build a Block Kit message:
-               Header: ":question: *Design Question for {slug}*"
-               Section: "*Question:* {question}"
-               Section: "*Context:* {question_context}"
-               Context: "_Reply in this thread to answer. The pipeline will
-               resume processing automatically._"
-             - Post the message using _post_message() and capture the response
-             - Extract and return the message ts from the response (this is
-               the thread_ts for reply correlation)
-             - Return None on failure
-
-      3. Add a method to check for threaded replies to a suspension question:
-
-         def check_suspension_reply(
-             self,
-             channel_id: str,
-             thread_ts: str,
-         ) -> Optional[str]:
-             """Check for a human reply in a Slack thread.
-
-             Uses conversations.replies API to check if there are replies
-             to the suspension question message. Returns the reply text
-             if found, None otherwise. Ignores bot messages.
-             """
-             - Call Slack API: conversations.replies with channel, ts=thread_ts,
-               limit=5
-             - Filter messages: skip the original (ts == thread_ts), skip bot
-               messages (check for "bot_id" key)
-             - Return the text of the first human reply, or None if none found
-
-      4. Verify syntax:
-         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
-
-      5. Git commit:
-         git add scripts/plan-orchestrator.py
-         git commit -m "feat: add Slack suspension question posting and reply checking"
-
-      Files: scripts/plan-orchestrator.py
-
+    description: "Add a method to SlackNotifier that posts a design question to the\n\
+      appropriate Slack channel when a work item is suspended. The message\nincludes\
+      \ the item slug and question text, and the thread_ts is stored\nback in the\
+      \ suspension marker for reply correlation.\n\nReference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md\n\
+      \nSteps:\n1. Read scripts/plan-orchestrator.py. Find the SlackNotifier class\n\
+      \   (around line 2891).\n\n2. After the send_question() method (around line\
+      \ 3260), add a new method:\n\n   def post_suspension_question(\n       self,\n\
+      \       slug: str,\n       item_type: str,\n       question: str,\n       question_context:\
+      \ str,\n   ) -> Optional[str]:\n       \"\"\"Post a suspension question to the\
+      \ type-specific Slack channel.\n\n       Posts a formatted message to the features\
+      \ or defects channel with\n       the question details. Returns the message\
+      \ thread_ts for reply\n       correlation, or None on failure.\n\n       Args:\n\
+      \           slug: Work item slug (e.g., \"9-ux-feature\")\n           item_type:\
+      \ \"feature\" or \"defect\"\n           question: The question text\n      \
+      \     question_context: Why this information is needed\n       \"\"\"\n    \
+      \   - Determine target channel using _get_channel_id_for_role()\n         with\
+      \ the item_type (\"feature\" -> features channel, \"defect\" ->\n         defects\
+      \ channel)\n       - Build a Block Kit message:\n         Header: \":question:\
+      \ *Design Question for {slug}*\"\n         Section: \"*Question:* {question}\"\
+      \n         Section: \"*Context:* {question_context}\"\n         Context: \"\
+      _Reply in this thread to answer. The pipeline will\n         resume processing\
+      \ automatically._\"\n       - Post the message using _post_message() and capture\
+      \ the response\n       - Extract and return the message ts from the response\
+      \ (this is\n         the thread_ts for reply correlation)\n       - Return None\
+      \ on failure\n\n3. Add a method to check for threaded replies to a suspension\
+      \ question:\n\n   def check_suspension_reply(\n       self,\n       channel_id:\
+      \ str,\n       thread_ts: str,\n   ) -> Optional[str]:\n       \"\"\"Check for\
+      \ a human reply in a Slack thread.\n\n       Uses conversations.replies API\
+      \ to check if there are replies\n       to the suspension question message.\
+      \ Returns the reply text\n       if found, None otherwise. Ignores bot messages.\n\
+      \       \"\"\"\n       - Call Slack API: conversations.replies with channel,\
+      \ ts=thread_ts,\n         limit=5\n       - Filter messages: skip the original\
+      \ (ts == thread_ts), skip bot\n         messages (check for \"bot_id\" key)\n\
+      \       - Return the text of the first human reply, or None if none found\n\n\
+      4. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('syntax OK')\"\n\n5. Git commit:\n   git add scripts/plan-orchestrator.py\n\
+      \   git commit -m \"feat: add Slack suspension question posting and reply checking\"\
+      \n\nFiles: scripts/plan-orchestrator.py\n"
   - id: '3.3'
     name: Add suspension handling to auto-pipeline
     agent: coder
     status: pending
     depends_on:
     - '3.2'
-    description: |
-      Modify auto-pipeline.py to handle suspended work items: skip them during
-      normal scanning, check for answers via Slack, and reinstate answered items.
-
-      Reference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md
-
-      Steps:
-      1. Read scripts/auto-pipeline.py.
-
-      2. Import the suspension functions from plan-orchestrator. Near the top
-         where SlackNotifier is imported (around line 48), also import:
-
-         is_item_suspended = _po_mod.is_item_suspended
-         read_suspension_marker = _po_mod.read_suspension_marker
-         get_suspension_answer = _po_mod.get_suspension_answer
-         clear_suspension_marker = _po_mod.clear_suspension_marker
-         SUSPENDED_DIR = _po_mod.SUSPENDED_DIR
-
-      3. Add SUSPENDED_DIR to the REQUIRED_DIRS list in auto-pipeline.py
-         (around line 76). Add ".claude/suspended" to the list.
-
-      4. In the scan_directory() function (around line 575), after the
-         is_item_completed() check but before adding the item to the list,
-         add a suspension check:
-
-         if is_item_suspended(slug):
-             verbose_log(f"Skipping suspended item: {slug}")
-             continue
-
-      5. In the main_loop() function (around line 2152), add a new phase
-         before the normal item scanning. After the in-progress plan resumption
-         block and before the backlog scanning, add:
-
-         # Check suspended items for answers
-         _check_suspended_items(slack)
-
-      6. Create a new function _check_suspended_items(slack: SlackNotifier):
-         """Check all suspended items for Slack answers and reinstate them."""
-         - List all .json files in SUSPENDED_DIR
-         - For each file:
-           a. Read the suspension marker
-           b. If it has a slack_thread_ts and slack_channel_id:
-              Call slack.check_suspension_reply(channel_id, thread_ts)
-           c. If an answer is found:
-              - Write the answer into the marker file
-              - Log the reinstatement
-              - Clear the suspension marker
-              - The item will be picked up on the next scan cycle naturally
-           d. If timed out (check suspended_at + timeout_minutes):
-              - Clear the marker
-              - Log timeout warning
-              - The item returns to normal processing
-
-      7. In the _process_item_inner() function, after the orchestrator
-         execution (Phase 2), check if the plan has any suspended tasks.
-         If so, create a suspension marker file and post the question to Slack:
-
-         After execute_plan() returns True, check if any task in the plan
-         has status "suspended". If so:
-         - Read the suspended task's status message for the question
-         - Call create_suspension_marker() with the relevant details
-         - Call slack.post_suspension_question() and store the thread_ts
-           back in the marker file
-         - Log the suspension
-         - Return True (item is suspended, not failed)
-
-      8. Verify syntax:
-         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
-
-      9. Git commit:
-         git add scripts/auto-pipeline.py
-         git commit -m "feat: add suspension handling to auto-pipeline"
-
-      Files: scripts/auto-pipeline.py
-
+    description: "Modify auto-pipeline.py to handle suspended work items: skip them\
+      \ during\nnormal scanning, check for answers via Slack, and reinstate answered\
+      \ items.\n\nReference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md\n\
+      \nSteps:\n1. Read scripts/auto-pipeline.py.\n\n2. Import the suspension functions\
+      \ from plan-orchestrator. Near the top\n   where SlackNotifier is imported (around\
+      \ line 48), also import:\n\n   is_item_suspended = _po_mod.is_item_suspended\n\
+      \   read_suspension_marker = _po_mod.read_suspension_marker\n   get_suspension_answer\
+      \ = _po_mod.get_suspension_answer\n   clear_suspension_marker = _po_mod.clear_suspension_marker\n\
+      \   SUSPENDED_DIR = _po_mod.SUSPENDED_DIR\n\n3. Add SUSPENDED_DIR to the REQUIRED_DIRS\
+      \ list in auto-pipeline.py\n   (around line 76). Add \".claude/suspended\" to\
+      \ the list.\n\n4. In the scan_directory() function (around line 575), after\
+      \ the\n   is_item_completed() check but before adding the item to the list,\n\
+      \   add a suspension check:\n\n   if is_item_suspended(slug):\n       verbose_log(f\"\
+      Skipping suspended item: {slug}\")\n       continue\n\n5. In the main_loop()\
+      \ function (around line 2152), add a new phase\n   before the normal item scanning.\
+      \ After the in-progress plan resumption\n   block and before the backlog scanning,\
+      \ add:\n\n   # Check suspended items for answers\n   _check_suspended_items(slack)\n\
+      \n6. Create a new function _check_suspended_items(slack: SlackNotifier):\n \
+      \  \"\"\"Check all suspended items for Slack answers and reinstate them.\"\"\
+      \"\n   - List all .json files in SUSPENDED_DIR\n   - For each file:\n     a.\
+      \ Read the suspension marker\n     b. If it has a slack_thread_ts and slack_channel_id:\n\
+      \        Call slack.check_suspension_reply(channel_id, thread_ts)\n     c. If\
+      \ an answer is found:\n        - Write the answer into the marker file\n   \
+      \     - Log the reinstatement\n        - Clear the suspension marker\n     \
+      \   - The item will be picked up on the next scan cycle naturally\n     d. If\
+      \ timed out (check suspended_at + timeout_minutes):\n        - Clear the marker\n\
+      \        - Log timeout warning\n        - The item returns to normal processing\n\
+      \n7. In the _process_item_inner() function, after the orchestrator\n   execution\
+      \ (Phase 2), check if the plan has any suspended tasks.\n   If so, create a\
+      \ suspension marker file and post the question to Slack:\n\n   After execute_plan()\
+      \ returns True, check if any task in the plan\n   has status \"suspended\".\
+      \ If so:\n   - Read the suspended task's status message for the question\n \
+      \  - Call create_suspension_marker() with the relevant details\n   - Call slack.post_suspension_question()\
+      \ and store the thread_ts\n     back in the marker file\n   - Log the suspension\n\
+      \   - Return True (item is suspended, not failed)\n\n8. Verify syntax:\n   python3\
+      \ -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
+      \ print('syntax OK')\"\n\n9. Git commit:\n   git add scripts/auto-pipeline.py\n\
+      \   git commit -m \"feat: add suspension handling to auto-pipeline\"\n\nFiles:\
+      \ scripts/auto-pipeline.py\n"
   - id: '3.4'
     name: Wire suspension reply checking into Slack background poller
     agent: coder
     status: pending
     depends_on:
     - '3.3'
-    description: |
-      Extend the Slack background poller to periodically check for replies
-      to suspension questions, so answers are detected even between pipeline
-      scan cycles.
-
-      Reference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md
-
-      Steps:
-      1. Read scripts/plan-orchestrator.py. Find the _poll_loop function
-         inside start_background_polling() (around line 4158).
-
-      2. Add a new method to SlackNotifier:
-
-         def _check_all_suspensions(self) -> None:
-             """Check all suspended items for Slack thread replies.
-
-             Called periodically by the background poller. For each suspension
-             marker with a slack_thread_ts, checks for human replies. If found,
-             writes the answer back to the marker file.
-             """
-             - Import glob at top of file if not already imported
-             - List all files in SUSPENDED_DIR matching *.json
-             - For each file:
-               a. Read the marker JSON
-               b. Skip if no slack_thread_ts or slack_channel_id
-               c. Skip if already has an "answer" field
-               d. Call self.check_suspension_reply(channel_id, thread_ts)
-               e. If reply found:
-                  - Write answer into the marker dict
-                  - Save the updated marker file
-                  - Post a confirmation to the same Slack channel:
-                    ":white_check_mark: Answer received for {slug}. Item will
-                    resume on next pipeline cycle."
-                  - Log: "[SLACK] Answer received for suspended item: {slug}"
-
-      3. In the _poll_loop function (around line 4158), after the existing
-         poll_messages/handle call, add a call to _check_all_suspensions():
-
-         In the while loop body, after handling polled messages, add:
-         self._check_all_suspensions()
-
-      4. Verify syntax:
-         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
-
-      5. Git commit:
-         git add scripts/plan-orchestrator.py
-         git commit -m "feat: wire suspension reply checking into Slack background poller"
-
-      Files: scripts/plan-orchestrator.py
-
+    description: "Extend the Slack background poller to periodically check for replies\n\
+      to suspension questions, so answers are detected even between pipeline\nscan\
+      \ cycles.\n\nReference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md\n\
+      \nSteps:\n1. Read scripts/plan-orchestrator.py. Find the _poll_loop function\n\
+      \   inside start_background_polling() (around line 4158).\n\n2. Add a new method\
+      \ to SlackNotifier:\n\n   def _check_all_suspensions(self) -> None:\n      \
+      \ \"\"\"Check all suspended items for Slack thread replies.\n\n       Called\
+      \ periodically by the background poller. For each suspension\n       marker\
+      \ with a slack_thread_ts, checks for human replies. If found,\n       writes\
+      \ the answer back to the marker file.\n       \"\"\"\n       - Import glob at\
+      \ top of file if not already imported\n       - List all files in SUSPENDED_DIR\
+      \ matching *.json\n       - For each file:\n         a. Read the marker JSON\n\
+      \         b. Skip if no slack_thread_ts or slack_channel_id\n         c. Skip\
+      \ if already has an \"answer\" field\n         d. Call self.check_suspension_reply(channel_id,\
+      \ thread_ts)\n         e. If reply found:\n            - Write answer into the\
+      \ marker dict\n            - Save the updated marker file\n            - Post\
+      \ a confirmation to the same Slack channel:\n              \":white_check_mark:\
+      \ Answer received for {slug}. Item will\n              resume on next pipeline\
+      \ cycle.\"\n            - Log: \"[SLACK] Answer received for suspended item:\
+      \ {slug}\"\n\n3. In the _poll_loop function (around line 4158), after the existing\n\
+      \   poll_messages/handle call, add a call to _check_all_suspensions():\n\n \
+      \  In the while loop body, after handling polled messages, add:\n   self._check_all_suspensions()\n\
+      \n4. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('syntax OK')\"\n\n5. Git commit:\n   git add scripts/plan-orchestrator.py\n\
+      \   git commit -m \"feat: wire suspension reply checking into Slack background\
+      \ poller\"\n\nFiles: scripts/plan-orchestrator.py\n"
 - id: phase-4
   name: Phase 4 - Unit Tests
   status: pending
@@ -586,70 +341,35 @@ sections:
     status: pending
     depends_on:
     - '3.1'
-    description: |
-      Add unit tests for the suspension marker file management functions
-      added in task 3.1.
-
-      Reference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md
-
-      Steps:
-      1. Read tests/test_plan_orchestrator.py for existing test patterns.
-
-      2. Add the following tests:
-
-         a. test_create_suspension_marker():
-            - Use tmp_path fixture to create a temporary SUSPENDED_DIR
-            - Monkeypatch SUSPENDED_DIR to use tmp_path
-            - Call create_suspension_marker() with test data
-            - Assert the file exists at the expected path
-            - Read the file and assert all fields are present
-            - Assert suspended_at is a valid ISO timestamp
-            - Assert answer is empty/None
-
-         b. test_read_suspension_marker_exists():
-            - Create a marker file manually in tmp_path
-            - Monkeypatch SUSPENDED_DIR
-            - Call read_suspension_marker("test-slug")
-            - Assert returns the expected dict
-
-         c. test_read_suspension_marker_not_found():
-            - Monkeypatch SUSPENDED_DIR to an empty tmp_path
-            - Call read_suspension_marker("nonexistent")
-            - Assert returns None
-
-         d. test_clear_suspension_marker():
-            - Create a marker file in tmp_path
-            - Monkeypatch SUSPENDED_DIR
-            - Call clear_suspension_marker("test-slug")
-            - Assert returns True
-            - Assert file no longer exists
-
-         e. test_is_item_suspended_active():
-            - Create a marker with recent suspended_at
-            - Monkeypatch SUSPENDED_DIR
-            - Assert is_item_suspended("test-slug") returns True
-
-         f. test_is_item_suspended_timed_out():
-            - Create a marker with suspended_at far in the past (>24h ago)
-            - Set timeout_minutes to 1
-            - Monkeypatch SUSPENDED_DIR
-            - Assert is_item_suspended("test-slug") returns False
-            - Assert the marker file was cleaned up
-
-         g. test_get_suspension_answer_present():
-            - Create a marker with answer field set
-            - Assert get_suspension_answer() returns the answer
-
-         h. test_get_suspension_answer_absent():
-            - Create a marker without answer field
-            - Assert get_suspension_answer() returns None
-
-      3. Run the tests:
-         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_plan_orchestrator.py -v -k suspension
-         Fix any failures before marking this task complete.
-
-      Files: tests/test_plan_orchestrator.py
-
+    description: "Add unit tests for the suspension marker file management functions\n\
+      added in task 3.1.\n\nReference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md\n\
+      \nSteps:\n1. Read tests/test_plan_orchestrator.py for existing test patterns.\n\
+      \n2. Add the following tests:\n\n   a. test_create_suspension_marker():\n  \
+      \    - Use tmp_path fixture to create a temporary SUSPENDED_DIR\n      - Monkeypatch\
+      \ SUSPENDED_DIR to use tmp_path\n      - Call create_suspension_marker() with\
+      \ test data\n      - Assert the file exists at the expected path\n      - Read\
+      \ the file and assert all fields are present\n      - Assert suspended_at is\
+      \ a valid ISO timestamp\n      - Assert answer is empty/None\n\n   b. test_read_suspension_marker_exists():\n\
+      \      - Create a marker file manually in tmp_path\n      - Monkeypatch SUSPENDED_DIR\n\
+      \      - Call read_suspension_marker(\"test-slug\")\n      - Assert returns\
+      \ the expected dict\n\n   c. test_read_suspension_marker_not_found():\n    \
+      \  - Monkeypatch SUSPENDED_DIR to an empty tmp_path\n      - Call read_suspension_marker(\"\
+      nonexistent\")\n      - Assert returns None\n\n   d. test_clear_suspension_marker():\n\
+      \      - Create a marker file in tmp_path\n      - Monkeypatch SUSPENDED_DIR\n\
+      \      - Call clear_suspension_marker(\"test-slug\")\n      - Assert returns\
+      \ True\n      - Assert file no longer exists\n\n   e. test_is_item_suspended_active():\n\
+      \      - Create a marker with recent suspended_at\n      - Monkeypatch SUSPENDED_DIR\n\
+      \      - Assert is_item_suspended(\"test-slug\") returns True\n\n   f. test_is_item_suspended_timed_out():\n\
+      \      - Create a marker with suspended_at far in the past (>24h ago)\n    \
+      \  - Set timeout_minutes to 1\n      - Monkeypatch SUSPENDED_DIR\n      - Assert\
+      \ is_item_suspended(\"test-slug\") returns False\n      - Assert the marker\
+      \ file was cleaned up\n\n   g. test_get_suspension_answer_present():\n     \
+      \ - Create a marker with answer field set\n      - Assert get_suspension_answer()\
+      \ returns the answer\n\n   h. test_get_suspension_answer_absent():\n      -\
+      \ Create a marker without answer field\n      - Assert get_suspension_answer()\
+      \ returns None\n\n3. Run the tests:\n   ~/.pyenv/versions/3.11.*/bin/python\
+      \ -m pytest tests/test_plan_orchestrator.py -v -k suspension\n   Fix any failures\
+      \ before marking this task complete.\n\nFiles: tests/test_plan_orchestrator.py\n"
   - id: '4.2'
     name: Add unit tests for suspended task status handling
     agent: coder
@@ -657,41 +377,23 @@ sections:
     depends_on:
     - '2.1'
     - '4.1'
-    description: |
-      Add unit tests verifying that find_next_task() correctly skips suspended
-      tasks and that the task status handling works for the "suspended" status.
-
-      Reference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md
-
-      Steps:
-      1. Read tests/test_plan_orchestrator.py for existing test patterns,
-         especially tests for find_next_task().
-
-      2. Add the following tests:
-
-         a. test_find_next_task_skips_suspended():
-            - Create a plan dict with two tasks: first is "suspended", second
-              is "pending"
-            - Call find_next_task(plan)
-            - Assert it returns the second task (skips suspended)
-
-         b. test_find_next_task_all_suspended():
-            - Create a plan with all tasks "suspended"
-            - Call find_next_task(plan)
-            - Assert returns None (no actionable tasks)
-
-         c. test_section_status_with_suspended_task():
-            - Create a section with one completed task and one suspended task
-            - Call update_section_status(section)
-            - Assert section status is "in_progress" (not "completed" because
-              suspended task is not done)
-
-      3. Run the tests:
-         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_plan_orchestrator.py -v -k suspended
-         Fix any failures before marking this task complete.
-
-      Files: tests/test_plan_orchestrator.py
-
+    description: "Add unit tests verifying that find_next_task() correctly skips suspended\n\
+      tasks and that the task status handling works for the \"suspended\" status.\n\
+      \nReference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md\n\
+      \nSteps:\n1. Read tests/test_plan_orchestrator.py for existing test patterns,\n\
+      \   especially tests for find_next_task().\n\n2. Add the following tests:\n\n\
+      \   a. test_find_next_task_skips_suspended():\n      - Create a plan dict with\
+      \ two tasks: first is \"suspended\", second\n        is \"pending\"\n      -\
+      \ Call find_next_task(plan)\n      - Assert it returns the second task (skips\
+      \ suspended)\n\n   b. test_find_next_task_all_suspended():\n      - Create a\
+      \ plan with all tasks \"suspended\"\n      - Call find_next_task(plan)\n   \
+      \   - Assert returns None (no actionable tasks)\n\n   c. test_section_status_with_suspended_task():\n\
+      \      - Create a section with one completed task and one suspended task\n \
+      \     - Call update_section_status(section)\n      - Assert section status is\
+      \ \"in_progress\" (not \"completed\" because\n        suspended task is not\
+      \ done)\n\n3. Run the tests:\n   ~/.pyenv/versions/3.11.*/bin/python -m pytest\
+      \ tests/test_plan_orchestrator.py -v -k suspended\n   Fix any failures before\
+      \ marking this task complete.\n\nFiles: tests/test_plan_orchestrator.py\n"
 - id: phase-5
   name: Phase 5 - Plugin Version Bump
   status: pending
@@ -702,32 +404,22 @@ sections:
     status: pending
     depends_on:
     - '3.4'
-    description: |
-      Bump the plugin version in plugin.json and update RELEASE-NOTES.md
-      for the UX designer Opus/Sonnet loop feature.
-
-      Steps:
-      1. Read plugin.json. Find the current version number.
-      2. Bump the minor version (this is a new feature).
-      3. Read RELEASE-NOTES.md. Add a new entry at the top for the new
-         version with a summary:
-         - **Opus/Sonnet design loop**: UX designer agent now runs as Opus
-           orchestrator invoking Sonnet subagent for design generation. Handles
-           Q&A rounds automatically, capped at 3 rounds.
-         - **ux-implementer agent**: New Sonnet-based agent that produces
-           design documents from design briefs with structured STATUS protocol.
-         - **Slack-based question suspension**: Work items can be suspended
-           when a design question requires human input. Questions posted to
-           Slack; pipeline continues other work; answers resume the item
-           automatically.
-         - **Suspension marker files**: New .claude/suspended/ directory for
-           tracking suspended items with timeout and Slack thread correlation.
-      4. Git commit both files:
-         git add plugin.json RELEASE-NOTES.md
-         git commit -m "chore: bump version for ux-designer-opus-sonnet-loop feature"
-
-      Files: plugin.json, RELEASE-NOTES.md
-
+    description: "Bump the plugin version in plugin.json and update RELEASE-NOTES.md\n\
+      for the UX designer Opus/Sonnet loop feature.\n\nSteps:\n1. Read plugin.json.\
+      \ Find the current version number.\n2. Bump the minor version (this is a new\
+      \ feature).\n3. Read RELEASE-NOTES.md. Add a new entry at the top for the new\n\
+      \   version with a summary:\n   - **Opus/Sonnet design loop**: UX designer agent\
+      \ now runs as Opus\n     orchestrator invoking Sonnet subagent for design generation.\
+      \ Handles\n     Q&A rounds automatically, capped at 3 rounds.\n   - **ux-implementer\
+      \ agent**: New Sonnet-based agent that produces\n     design documents from\
+      \ design briefs with structured STATUS protocol.\n   - **Slack-based question\
+      \ suspension**: Work items can be suspended\n     when a design question requires\
+      \ human input. Questions posted to\n     Slack; pipeline continues other work;\
+      \ answers resume the item\n     automatically.\n   - **Suspension marker files**:\
+      \ New .claude/suspended/ directory for\n     tracking suspended items with timeout\
+      \ and Slack thread correlation.\n4. Git commit both files:\n   git add plugin.json\
+      \ RELEASE-NOTES.md\n   git commit -m \"chore: bump version for ux-designer-opus-sonnet-loop\
+      \ feature\"\n\nFiles: plugin.json, RELEASE-NOTES.md\n"
 - id: phase-6
   name: Phase 6 - Final Verification
   status: pending
@@ -740,49 +432,29 @@ sections:
     - '4.1'
     - '4.2'
     - '5.1'
-    description: |
-      Run all verification checks to confirm the feature is correctly
-      implemented and all tests pass.
-
-      Steps:
-      1. Check Python syntax for both scripts:
-         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
-
-      2. Run the full test suite:
-         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ -v
-
-      3. Verify the new agent definitions exist:
-         test -f .claude/agents/ux-implementer.md && echo "ux-implementer.md exists"
-         test -f .claude/agents/ux-designer.md && echo "ux-designer.md exists"
-
-      4. Verify ux-designer has Opus model:
-         grep -c "model: opus" .claude/agents/ux-designer.md
-
-      5. Verify ux-implementer has Sonnet model:
-         grep -c "model: sonnet" .claude/agents/ux-implementer.md
-
-      6. Verify suspension constants exist:
-         python3 -c "
-         import importlib.util
-         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
-         mod = importlib.util.module_from_spec(spec)
-         spec.loader.exec_module(mod)
-         assert hasattr(mod, 'UX_DESIGN_MAX_ROUNDS'), 'UX_DESIGN_MAX_ROUNDS not found'
-         assert hasattr(mod, 'SUSPENDED_DIR'), 'SUSPENDED_DIR not found'
-         assert hasattr(mod, 'SUSPENSION_TIMEOUT_MINUTES'), 'SUSPENSION_TIMEOUT_MINUTES not found'
-         assert callable(mod.create_suspension_marker), 'create_suspension_marker not callable'
-         assert callable(mod.is_item_suspended), 'is_item_suspended not callable'
-         print('All new constants and functions verified OK')
-         "
-
-      7. Run orchestrator dry-run to confirm no startup errors:
-         python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
-
-      8. Run the fallback test command:
-         python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'
-
-      If any check fails, report the specific failure with details.
-
-      Files: scripts/plan-orchestrator.py, scripts/auto-pipeline.py,
-        .claude/agents/ux-designer.md, .claude/agents/ux-implementer.md,
-        tests/test_plan_orchestrator.py, plugin.json, RELEASE-NOTES.md
+    description: "Run all verification checks to confirm the feature is correctly\n\
+      implemented and all tests pass.\n\nSteps:\n1. Check Python syntax for both scripts:\n\
+      \   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\
+      \n\n2. Run the full test suite:\n   ~/.pyenv/versions/3.11.*/bin/python -m pytest\
+      \ tests/ -v\n\n3. Verify the new agent definitions exist:\n   test -f .claude/agents/ux-implementer.md\
+      \ && echo \"ux-implementer.md exists\"\n   test -f .claude/agents/ux-designer.md\
+      \ && echo \"ux-designer.md exists\"\n\n4. Verify ux-designer has Opus model:\n\
+      \   grep -c \"model: opus\" .claude/agents/ux-designer.md\n\n5. Verify ux-implementer\
+      \ has Sonnet model:\n   grep -c \"model: sonnet\" .claude/agents/ux-implementer.md\n\
+      \n6. Verify suspension constants exist:\n   python3 -c \"\n   import importlib.util\n\
+      \   spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')\n\
+      \   mod = importlib.util.module_from_spec(spec)\n   spec.loader.exec_module(mod)\n\
+      \   assert hasattr(mod, 'UX_DESIGN_MAX_ROUNDS'), 'UX_DESIGN_MAX_ROUNDS not found'\n\
+      \   assert hasattr(mod, 'SUSPENDED_DIR'), 'SUSPENDED_DIR not found'\n   assert\
+      \ hasattr(mod, 'SUSPENSION_TIMEOUT_MINUTES'), 'SUSPENSION_TIMEOUT_MINUTES not\
+      \ found'\n   assert callable(mod.create_suspension_marker), 'create_suspension_marker\
+      \ not callable'\n   assert callable(mod.is_item_suspended), 'is_item_suspended\
+      \ not callable'\n   print('All new constants and functions verified OK')\n \
+      \  \"\n\n7. Run orchestrator dry-run to confirm no startup errors:\n   python3\
+      \ scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run\n\
+      \n8. Run the fallback test command:\n   python3 -m pytest tests/ 2>/dev/null\
+      \ || echo 'No test suite configured'\n\nIf any check fails, report the specific\
+      \ failure with details.\n\nFiles: scripts/plan-orchestrator.py, scripts/auto-pipeline.py,\n\
+      \  .claude/agents/ux-designer.md, .claude/agents/ux-implementer.md,\n  tests/test_plan_orchestrator.py,\
+      \ plugin.json, RELEASE-NOTES.md\n"
