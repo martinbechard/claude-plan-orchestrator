@@ -1,5 +1,17 @@
 # Release Notes
 
+## 1.3.0 (2026-02-18)
+
+### New Features
+- **Spec-aware validator**: Validator agent reads functional spec verification blocks and
+  runs referenced E2E tests when spec files are changed. Results are captured as
+  timestamped JSON files in `logs/e2e/` for later analysis.
+- **E2E analyzer agent**: New on-demand agent (`e2e-analyzer`) for reviewing accumulated
+  E2E test logs to identify flaky tests, detect regressions, and summarize pass/fail trends
+  across runs.
+- **Verification block template**: Reference format for annotating functional specs with
+  structured, machine-readable verification blocks that link specs to their test suites.
+
 ## 1.2.0 (2026-02-18)
 
 ### New Features

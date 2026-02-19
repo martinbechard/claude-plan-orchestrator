@@ -308,7 +308,7 @@ sections:
   - id: '4.1'
     name: Bump plugin version and update release notes
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '2.4'
     description: "Bump the plugin version in plugin.json and update RELEASE-NOTES.md\n\
@@ -324,6 +324,8 @@ sections:
       \ specs with testable verification blocks.\n4. Git commit both files:\n   git\
       \ add plugin.json RELEASE-NOTES.md\n   git commit -m \"chore: bump version for\
       \ spec-aware-validator feature\"\n\nFiles: plugin.json, RELEASE-NOTES.md\n"
+    attempts: 1
+    last_attempt: '2026-02-18T20:34:30.258989'
 - id: phase-5
   name: Phase 5 - Final Verification
   status: pending
