@@ -46,6 +46,13 @@ _po_spec = importlib.util.spec_from_file_location(
 _po_mod = importlib.util.module_from_spec(_po_spec)
 _po_spec.loader.exec_module(_po_mod)
 SlackNotifier = _po_mod.SlackNotifier
+is_item_suspended = _po_mod.is_item_suspended
+read_suspension_marker = _po_mod.read_suspension_marker
+get_suspension_answer = _po_mod.get_suspension_answer
+clear_suspension_marker = _po_mod.clear_suspension_marker
+create_suspension_marker = _po_mod.create_suspension_marker
+SUSPENDED_DIR = _po_mod.SUSPENDED_DIR
+SUSPENSION_TIMEOUT_MINUTES = _po_mod.SUSPENSION_TIMEOUT_MINUTES
 
 # ─── Configuration ────────────────────────────────────────────────────
 
@@ -83,6 +90,7 @@ REQUIRED_DIRS = [
     COMPLETED_DEFECTS_DIR,
     IDEAS_DIR,
     IDEAS_PROCESSED_DIR,
+    ".claude/suspended",
 ]
 
 
@@ -595,6 +603,9 @@ def scan_directory(directory: str, item_type: str) -> list[BacklogItem]:
             continue
 
         slug = md_file.stem  # filename without .md
+        if is_item_suspended(slug):
+            verbose_log(f"Skipping suspended item: {slug}")
+            continue
         items.append(BacklogItem(
             path=str(md_file),
             name=md_file.stem.replace("-", " ").title(),
@@ -2075,6 +2086,11 @@ def _process_item_inner(
                 _log_summary("ERROR", "FAILED", item.slug, "phase=orchestrator")
                 return False
 
+            # Check if any task was suspended by an agent (e.g. ux-designer)
+            suspended_tasks = _get_plan_suspended_tasks(plan_path)
+            if suspended_tasks:
+                return _handle_suspension(item, plan_path, slack)
+
         # Phase 3: Verify symptoms
         log("Phase 3: Verifying symptoms...")
         verified = verify_item(item, dry_run)
@@ -2147,6 +2163,113 @@ def process_item(
         return False
     finally:
         _close_item_log("done")
+
+
+def _get_plan_suspended_tasks(plan_path: str) -> list[dict]:
+    """Return all tasks with status 'suspended' from a plan YAML."""
+    try:
+        with open(plan_path, "r") as f:
+            plan = yaml.safe_load(f)
+        suspended = []
+        for section in plan.get("sections", []):
+            for task in section.get("tasks", []):
+                if task.get("status") == "suspended":
+                    suspended.append(task)
+        return suspended
+    except (IOError, yaml.YAMLError):
+        return []
+
+
+def _handle_suspension(item: BacklogItem, plan_path: str, slack: SlackNotifier) -> bool:
+    """Handle a work item whose orchestrator suspended a task.
+
+    Reads or creates the suspension marker, posts the question to Slack if not
+    already posted, and returns True (suspended is not a failure).
+    """
+    slug = item.slug
+    marker = read_suspension_marker(slug)
+
+    if marker is None:
+        create_suspension_marker(
+            slug=slug,
+            item_type=item.item_type,
+            item_path=item.path,
+            plan_path=plan_path,
+            task_id="",
+            question="Please provide additional information to continue processing.",
+            question_context=f"Work item {slug} is suspended pending human input.",
+        )
+        marker = read_suspension_marker(slug)
+
+    if marker and not marker.get("slack_thread_ts"):
+        thread_ts = slack.post_suspension_question(
+            slug=slug,
+            item_type=item.item_type,
+            question=marker.get("question", "No question available."),
+            question_context=marker.get("question_context", ""),
+        )
+        if thread_ts:
+            marker["slack_thread_ts"] = thread_ts
+            marker["slack_channel_id"] = slack.get_type_channel_id(item.item_type) or ""
+            marker_path = os.path.join(SUSPENDED_DIR, f"{slug}.json")
+            with open(marker_path, "w") as f:
+                json.dump(marker, f, indent=2)
+            log(f"[SUSPENDED] Question posted to Slack for {slug}")
+
+    log(f"[SUSPENDED] {slug} is suspended - checking for answers on next cycle")
+    _log_summary("INFO", "SUSPENDED", slug, "waiting-for-human-input")
+    return True
+
+
+def _check_suspended_items(slack: SlackNotifier) -> None:
+    """Check all suspended items for Slack answers and reinstate them.
+
+    Lists all marker files in SUSPENDED_DIR, checks each for a threaded Slack
+    reply, and clears the marker when an answer is found (allowing the item to
+    be picked up on the next scan cycle). Times out markers that have exceeded
+    their timeout window.
+    """
+    suspended_dir = Path(SUSPENDED_DIR)
+    if not suspended_dir.exists():
+        return
+
+    for marker_file in sorted(suspended_dir.glob("*.json")):
+        slug = marker_file.stem
+        marker = read_suspension_marker(slug)
+        if marker is None:
+            continue
+
+        # Timeout check (clear and reinstate without waiting for an answer)
+        try:
+            suspended_at = datetime.fromisoformat(marker["suspended_at"])
+            timeout = timedelta(minutes=marker.get("timeout_minutes", SUSPENSION_TIMEOUT_MINUTES))
+            if datetime.now(tz=ZoneInfo("UTC")) >= suspended_at + timeout:
+                log(f"WARNING: Suspension timed out for {slug} - reinstating")
+                clear_suspension_marker(slug)
+                continue
+        except (KeyError, ValueError):
+            pass
+
+        # If the marker already carries an answer (from a prior partial run),
+        # reinstate immediately without another Slack round-trip.
+        if marker.get("answer", "").strip():
+            log(f"[REINSTATE] {slug} already has an answer - clearing suspension")
+            clear_suspension_marker(slug)
+            continue
+
+        thread_ts = marker.get("slack_thread_ts", "")
+        channel_id = marker.get("slack_channel_id", "")
+        if not thread_ts or not channel_id:
+            verbose_log(f"Suspended item {slug} has no Slack thread yet - skipping")
+            continue
+
+        answer = slack.check_suspension_reply(channel_id, thread_ts)
+        if answer:
+            log(f"[REINSTATE] Answer received for {slug}: {answer[:80]}")
+            marker["answer"] = answer
+            with open(str(marker_file), "w") as f:
+                json.dump(marker, f, indent=2)
+            clear_suspension_marker(slug)
 
 
 def main_loop(dry_run: bool = False, once: bool = False,
@@ -2236,6 +2359,9 @@ def main_loop(dry_run: bool = False, once: bool = False,
                         )
                     # After resuming, re-scan (completed plans may unblock new items)
                     continue
+
+            # Check suspended items for Slack answers and reinstate them
+            _check_suspended_items(slack)
 
             # Process any raw ideas before scanning backlogs
             intake_count = intake_ideas(dry_run)
