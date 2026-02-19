@@ -225,12 +225,12 @@ sections:
       test log analysis.'
 - id: phase-3
   name: Phase 3 - Unit Tests
-  status: pending
+  status: in_progress
   tasks:
   - id: '3.1'
     name: Add unit tests for parse_verification_blocks
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '2.1'
     description: "Add unit tests for the parse_verification_blocks() helper function.\n\
@@ -259,6 +259,11 @@ sections:
       \ any failures before marking this task complete.\n\nFiles: tests/test_plan_orchestrator.py\n"
     attempts: 1
     last_attempt: '2026-02-18T20:26:51.813579'
+    model_used: sonnet
+    completed_at: '2026-02-18T20:29:47.864729'
+    result_message: Added 6 unit tests for parse_verification_blocks() covering single
+      testable block, multiple blocks, no blocks, multiple test files, blocked type,
+      and missing fields. All 38 tests pass.
   - id: '3.2'
     name: Add unit tests for spec-aware build_validation_prompt
     agent: coder
