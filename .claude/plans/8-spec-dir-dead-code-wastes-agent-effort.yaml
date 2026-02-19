@@ -1,0 +1,30 @@
+meta:
+  name: Remove SPEC_DIR dead code
+  description: Delete unused DEFAULT_SPEC_DIR constant, SPEC_DIR config loading, and
+    related test monkeypatch to prevent agents from wasting effort on dead code.
+  source_item: docs/defect-backlog/8-spec-dir-dead-code-wastes-agent-effort.md
+  plan_doc: docs/plans/2026-02-19-8-spec-dir-dead-code-wastes-agent-effort-design.md
+  created: '2026-02-19'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: phase-1
+  name: Phase 1 - Remove dead code and fix tests
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Remove DEFAULT_SPEC_DIR, SPEC_DIR, and test references
+    agent: coder
+    status: pending
+    description: "Implement the work item: docs/defect-backlog/8-spec-dir-dead-code-wastes-agent-effort.md\n\
+      Design reference: docs/plans/2026-02-19-8-spec-dir-dead-code-wastes-agent-effort-design.md\n\
+      Delete DEFAULT_SPEC_DIR constant (line 54), SPEC_DIR config loading (line 293),\
+      \ and the SPEC_DIR monkeypatch in tests/test_plan_orchestrator.py (line 1089).\n\
+      Run existing tests to confirm nothing breaks.\n\
+      Files: scripts/plan-orchestrator.py, tests/test_plan_orchestrator.py\n"
