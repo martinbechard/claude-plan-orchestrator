@@ -364,12 +364,12 @@ sections:
       added startup log line for analysis backlog directory
 - id: phase-5
   name: Phase 5 - Unit Tests
-  status: pending
+  status: in_progress
   tasks:
   - id: '5.1'
     name: Add unit tests for analysis workflow in auto-pipeline
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '4.3'
     description: "Add unit tests for the analysis workflow to tests/test_auto_pipeline.py.\n\
@@ -404,6 +404,12 @@ sections:
       \ failures.\n\nFiles: tests/test_auto_pipeline.py"
     attempts: 1
     last_attempt: '2026-02-18T22:55:59.315414'
+    model_used: sonnet
+    completed_at: '2026-02-18T23:00:02.086732'
+    result_message: 'Added 7 unit tests for analysis workflow to tests/test_auto_pipeline.py:
+      constants (ANALYSIS_DIR, COMPLETED_ANALYSES_DIR, REPORTS_DIR, COMPLETED_DIRS,
+      ANALYSIS_TYPE_TO_AGENT), parse_analysis_metadata() (full, defaults, missing
+      file), and scan_all_backlogs() analysis integration. All 286 tests pass.'
   - id: '5.2'
     name: Add unit tests for Slack reports channel in plan-orchestrator
     agent: coder
