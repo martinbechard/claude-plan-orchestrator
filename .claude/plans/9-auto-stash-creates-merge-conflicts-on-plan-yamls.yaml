@@ -21,31 +21,21 @@ sections:
   - id: '1.1'
     name: Exclude plan YAMLs from stash and improve recovery
     agent: coder
-    status: pending
-    description: >
-      Implement the work item: docs/defect-backlog/9-auto-stash-creates-merge-conflicts-on-plan-yamls.md
-
-      Design reference: docs/plans/2026-02-19-9-auto-stash-creates-merge-conflicts-on-plan-yamls-design.md
-
-      Apply Option C (defense in depth) from the defect report:
-
-      1. Add constant STASH_EXCLUDE_PLANS_PATHSPEC = ":(exclude).claude/plans/"
-         near the existing ORCHESTRATOR_STASH_MESSAGE constant.
-
-      2. In git_stash_working_changes(), change the stash push command to use
-         pathspec exclusion so plan YAMLs are never stashed:
-         ["git", "stash", "push", "--include-untracked", "-m", ORCHESTRATOR_STASH_MESSAGE,
-          "--", ".", STASH_EXCLUDE_PLANS_PATHSPEC]
-
-      3. In git_stash_pop(), add git reset --merge before git checkout . in
-         the recovery path to properly clear merge state.
-
-      4. Update existing tests in tests/test_plan_orchestrator.py:
-         - test_git_stash_working_changes_dirty_tree: verify pathspec args
-         - test_git_stash_pop_conflict: verify reset --merge in recovery
-         - Add test_git_stash_pop_conflict_calls_reset_merge for exact sequence
-
-      5. Run tests: ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ -v
-         Fix any failures.
-
-      Files: scripts/plan-orchestrator.py, tests/test_plan_orchestrator.py
+    status: in_progress
+    description: "Implement the work item: docs/defect-backlog/9-auto-stash-creates-merge-conflicts-on-plan-yamls.md\n\
+      Design reference: docs/plans/2026-02-19-9-auto-stash-creates-merge-conflicts-on-plan-yamls-design.md\n\
+      Apply Option C (defense in depth) from the defect report:\n1. Add constant STASH_EXCLUDE_PLANS_PATHSPEC\
+      \ = \":(exclude).claude/plans/\"\n   near the existing ORCHESTRATOR_STASH_MESSAGE\
+      \ constant.\n\n2. In git_stash_working_changes(), change the stash push command\
+      \ to use\n   pathspec exclusion so plan YAMLs are never stashed:\n   [\"git\"\
+      , \"stash\", \"push\", \"--include-untracked\", \"-m\", ORCHESTRATOR_STASH_MESSAGE,\n\
+      \    \"--\", \".\", STASH_EXCLUDE_PLANS_PATHSPEC]\n\n3. In git_stash_pop(),\
+      \ add git reset --merge before git checkout . in\n   the recovery path to properly\
+      \ clear merge state.\n\n4. Update existing tests in tests/test_plan_orchestrator.py:\n\
+      \   - test_git_stash_working_changes_dirty_tree: verify pathspec args\n   -\
+      \ test_git_stash_pop_conflict: verify reset --merge in recovery\n   - Add test_git_stash_pop_conflict_calls_reset_merge\
+      \ for exact sequence\n\n5. Run tests: ~/.pyenv/versions/3.11.*/bin/python -m\
+      \ pytest tests/ -v\n   Fix any failures.\n\nFiles: scripts/plan-orchestrator.py,\
+      \ tests/test_plan_orchestrator.py\n"
+    attempts: 1
+    last_attempt: '2026-02-19T18:09:04.619552'
