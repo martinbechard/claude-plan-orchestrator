@@ -307,7 +307,7 @@ sections:
   - id: '3.2'
     name: Test permission profiles in auto-pipeline
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '3.1'
     description: "Add unit tests for the permission profile system in auto-pipeline\
@@ -334,6 +334,8 @@ sections:
       \ build_permission_flags).\n\n4. Run tests:\n   python3 -m pytest tests/test_auto_pipeline.py\
       \ -v -k \"permission\"\n   Then run ALL tests:\n   python3 -m pytest tests/\
       \ -v\n   Fix any failures.\n\nFiles: tests/test_auto_pipeline.py"
+    attempts: 1
+    last_attempt: '2026-02-18T22:22:39.127056'
 - id: phase-4
   name: Phase 4 - Verification
   status: pending

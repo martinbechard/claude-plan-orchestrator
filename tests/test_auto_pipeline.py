@@ -2,6 +2,7 @@
 # Unit tests for auto-pipeline.py helper functions.
 # Design ref: docs/plans/2026-02-17-03-noisy-log-output-from-long-plan-filenames-design.md
 # Design ref: docs/plans/2026-02-17-6-new-feature-when-modifying-the-code-for-the-auto-pipeline-you-need-to-have-som-design.md
+# Design ref: docs/plans/2026-02-18-16-least-privilege-agent-sandboxing-design.md
 
 import importlib.util
 import tempfile
@@ -19,6 +20,8 @@ spec.loader.exec_module(mod)
 
 compact_plan_label = mod.compact_plan_label
 MAX_LOG_PREFIX_LENGTH = mod.MAX_LOG_PREFIX_LENGTH
+PIPELINE_PERMISSION_PROFILES = mod.PIPELINE_PERMISSION_PROFILES
+build_permission_flags = mod.build_permission_flags
 _compute_file_hash = mod._compute_file_hash
 snapshot_source_hashes = mod.snapshot_source_hashes
 check_code_changed = mod.check_code_changed
@@ -969,3 +972,66 @@ def test_intake_ideas_returns_zero_when_no_ideas(monkeypatch):
     result = mod.intake_ideas(dry_run=False)
 
     assert result == 0
+
+
+# --- Permission profile tests ---
+
+
+def test_pipeline_permission_profiles_exist():
+    """PIPELINE_PERMISSION_PROFILES has planner and verifier keys with required fields."""
+    assert "planner" in PIPELINE_PERMISSION_PROFILES
+    assert "verifier" in PIPELINE_PERMISSION_PROFILES
+    for profile in PIPELINE_PERMISSION_PROFILES.values():
+        assert "tools" in profile
+        assert "description" in profile
+
+
+def test_pipeline_build_permission_flags_planner():
+    """build_permission_flags('planner') returns allowedTools flags including Write."""
+    result = build_permission_flags("planner")
+
+    assert "--allowedTools" in result
+    assert "Write" in result
+    assert "--add-dir" in result
+    assert "--dangerously-skip-permissions" not in result
+
+
+def test_pipeline_build_permission_flags_verifier():
+    """build_permission_flags('verifier') returns allowedTools flags with Bash but not Write."""
+    result = build_permission_flags("verifier")
+
+    assert "--allowedTools" in result
+    assert "Bash" in result
+    assert "Write" not in result
+    assert "--dangerously-skip-permissions" not in result
+
+
+def test_pipeline_build_permission_flags_unknown():
+    """build_permission_flags with an unknown profile falls back to --dangerously-skip-permissions."""
+    result = build_permission_flags("nonexistent")
+
+    assert result == ["--dangerously-skip-permissions"]
+
+
+def test_pipeline_build_permission_flags_sandbox_disabled(monkeypatch):
+    """When SANDBOX_ENABLED is False, build_permission_flags returns --dangerously-skip-permissions."""
+    monkeypatch.setattr(mod, "SANDBOX_ENABLED", False)
+
+    result = build_permission_flags("planner")
+
+    assert result == ["--dangerously-skip-permissions"]
+
+
+def test_no_dangerously_skip_permissions_in_source():
+    """No cmd construction in auto-pipeline uses --dangerously-skip-permissions at call sites."""
+    source = Path("scripts/auto-pipeline.py").read_text()
+    lines = source.splitlines()
+    # Call sites construct commands using CLAUDE_CMD; none should embed the flag directly.
+    call_site_violations = [
+        line.strip() for line in lines
+        if "CLAUDE_CMD" in line and "dangerously-skip-permissions" in line
+    ]
+    assert call_site_violations == [], (
+        f"Found {len(call_site_violations)} call site(s) directly using "
+        f"--dangerously-skip-permissions: {call_site_violations}"
+    )
