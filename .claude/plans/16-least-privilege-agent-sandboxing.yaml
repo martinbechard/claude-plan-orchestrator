@@ -1,9 +1,9 @@
 meta:
   name: Least-Privilege Agent Sandboxing
-  description: 'Replace --dangerously-skip-permissions with per-agent permission profiles
-    using Claude CLI --allowedTools flags. Define READ_ONLY, WRITE, VERIFICATION, and
-    DESIGN profiles. Map each agent type to a profile. Scope all agents to the project
-    directory. Log permission profile selection for auditability.'
+  description: Replace --dangerously-skip-permissions with per-agent permission profiles
+    using Claude CLI --allowedTools flags. Define READ_ONLY, WRITE, VERIFICATION,
+    and DESIGN profiles. Map each agent type to a profile. Scope all agents to the
+    project directory. Log permission profile selection for auditability.
   plan_doc: docs/plans/2026-02-18-16-least-privilege-agent-sandboxing-design.md
   created: '2026-02-18'
   max_attempts_default: 3
@@ -17,31 +17,31 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Permission Profiles in plan-orchestrator.py
-  status: pending
+  status: in_progress
   tasks:
   - id: '1.1'
     name: Add permission profile constants and build_permission_flags function
     agent: coder
-    status: pending
+    status: completed
     description: "Add the permission profile system to scripts/plan-orchestrator.py.\n\
       Reference: docs/plans/2026-02-18-16-least-privilege-agent-sandboxing-design.md\n\
       Steps:\n1. Read scripts/plan-orchestrator.py. Find the constants section near\
       \ the top (around line 620-650 where CLAUDE_CMD and other constants are defined).\n\
       2. After the existing constants, add a SANDBOX_ENABLED constant:\n   SANDBOX_ENABLED\
-      \ = os.environ.get(\"ORCHESTRATOR_SANDBOX_ENABLED\", \"true\").lower() != \"false\"\
-      \n\n3. Add the AGENT_PERMISSION_PROFILES dict. This maps profile names to their\
-      \ allowed tools and bash policy:\n   AGENT_PERMISSION_PROFILES: dict = {\n  \
-      \     \"READ_ONLY\": {\n           \"tools\": [\"Read\", \"Grep\", \"Glob\",\
-      \ \"Bash\"],\n           \"bash_policy\": \"read_only\",\n           \"description\"\
-      : \"Read-only access for review and analysis agents\",\n       },\n       \"\
-      WRITE\": {\n           \"tools\": [\"Read\", \"Grep\", \"Glob\", \"Write\",\
-      \ \"Edit\", \"Bash\", \"NotebookEdit\"],\n           \"bash_policy\": \"build_test\"\
-      ,\n           \"description\": \"Full write access for implementation agents\"\
-      ,\n       },\n       \"VERIFICATION\": {\n           \"tools\": [\"Read\", \"\
-      Grep\", \"Glob\", \"Bash\"],\n           \"bash_policy\": \"build_test\",\n\
-      \           \"description\": \"Read + test/build for verification agents\",\n\
-      \       },\n       \"DESIGN\": {\n           \"tools\": [\"Read\", \"Grep\",\
-      \ \"Glob\", \"Write\", \"Bash\"],\n           \"bash_policy\": \"exploration\"\
+      \ = os.environ.get(\"ORCHESTRATOR_SANDBOX_ENABLED\", \"true\").lower() != \"\
+      false\"\n\n3. Add the AGENT_PERMISSION_PROFILES dict. This maps profile names\
+      \ to their allowed tools and bash policy:\n   AGENT_PERMISSION_PROFILES: dict\
+      \ = {\n       \"READ_ONLY\": {\n           \"tools\": [\"Read\", \"Grep\", \"\
+      Glob\", \"Bash\"],\n           \"bash_policy\": \"read_only\",\n           \"\
+      description\": \"Read-only access for review and analysis agents\",\n      \
+      \ },\n       \"WRITE\": {\n           \"tools\": [\"Read\", \"Grep\", \"Glob\"\
+      , \"Write\", \"Edit\", \"Bash\", \"NotebookEdit\"],\n           \"bash_policy\"\
+      : \"build_test\",\n           \"description\": \"Full write access for implementation\
+      \ agents\",\n       },\n       \"VERIFICATION\": {\n           \"tools\": [\"\
+      Read\", \"Grep\", \"Glob\", \"Bash\"],\n           \"bash_policy\": \"build_test\"\
+      ,\n           \"description\": \"Read + test/build for verification agents\"\
+      ,\n       },\n       \"DESIGN\": {\n           \"tools\": [\"Read\", \"Grep\"\
+      , \"Glob\", \"Write\", \"Bash\"],\n           \"bash_policy\": \"exploration\"\
       ,\n           \"description\": \"Read + write design docs for design agents\"\
       ,\n       },\n   }\n\n4. Add the AGENT_TO_PROFILE mapping that maps each agent\
       \ name to a profile:\n   AGENT_TO_PROFILE: dict = {\n       # Read-only agents\n\
@@ -53,20 +53,20 @@ sections:
       : \"WRITE\",\n       # Verification agents\n       \"validator\": \"VERIFICATION\"\
       ,\n       \"issue-verifier\": \"VERIFICATION\",\n       # Design agents\n  \
       \     \"ux-designer\": \"DESIGN\",\n       \"ux-implementer\": \"DESIGN\",\n\
-      \       \"planner\": \"DESIGN\",\n   }\n\n5. Add the build_permission_flags function:\n\
-      \   def build_permission_flags(agent_name: str) -> list[str]:\n       \"\"\"Build\
-      \ CLI permission flags for an agent based on its permission profile.\n\n    \
-      \   Returns a list of CLI arguments to pass to the Claude subprocess.\n     \
-      \  When SANDBOX_ENABLED is False, returns [\"--dangerously-skip-permissions\"\
+      \       \"planner\": \"DESIGN\",\n   }\n\n5. Add the build_permission_flags\
+      \ function:\n   def build_permission_flags(agent_name: str) -> list[str]:\n\
+      \       \"\"\"Build CLI permission flags for an agent based on its permission\
+      \ profile.\n\n       Returns a list of CLI arguments to pass to the Claude subprocess.\n\
+      \       When SANDBOX_ENABLED is False, returns [\"--dangerously-skip-permissions\"\
       ].\n       When the agent name is not recognized, falls back to WRITE profile\n\
       \       for safety (most permissive profile to avoid breaking unknown agents).\n\
       \       \"\"\"\n       if not SANDBOX_ENABLED:\n           verbose_log(f\"Sandbox\
       \ disabled, using --dangerously-skip-permissions for '{agent_name}'\", \"PERM\"\
       )\n           return [\"--dangerously-skip-permissions\"]\n\n       profile_name\
       \ = AGENT_TO_PROFILE.get(agent_name, \"WRITE\")\n       profile = AGENT_PERMISSION_PROFILES[profile_name]\n\
-      \       tools = profile[\"tools\"]\n\n       flags = [\"--allowedTools\"] + tools\n\
-      \       # Add project directory scoping\n       flags.extend([\"--add-dir\",\
-      \ os.getcwd()])\n\n       verbose_log(\n           f\"Agent '{agent_name}' ->\
+      \       tools = profile[\"tools\"]\n\n       flags = [\"--allowedTools\"] +\
+      \ tools\n       # Add project directory scoping\n       flags.extend([\"--add-dir\"\
+      , os.getcwd()])\n\n       verbose_log(\n           f\"Agent '{agent_name}' ->\
       \ profile '{profile_name}': \"\n           f\"tools={tools}\",\n           \"\
       PERM\"\n       )\n       return flags\n\n6. Verify syntax:\n   python3 -c \"\
       import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True);\
@@ -81,6 +81,13 @@ sections:
       \   assert '--allowedTools' in flags, f'Expected --allowedTools in flags: {flags}'\n\
       \   assert '--add-dir' in flags, f'Expected --add-dir in flags: {flags}'\n \
       \  print('Permission profile system verified OK')\n   \"\n\nFiles: scripts/plan-orchestrator.py"
+    attempts: 1
+    last_attempt: '2026-02-18T22:02:55.177039'
+    model_used: sonnet
+    completed_at: '2026-02-18T22:05:45.958978'
+    result_message: Added SANDBOX_ENABLED constant, AGENT_PERMISSION_PROFILES dict,
+      AGENT_TO_PROFILE mapping, and build_permission_flags() function to scripts/plan-orchestrator.py.
+      All 266 tests pass.
   - id: '1.2'
     name: Replace --dangerously-skip-permissions in run_claude_task
     agent: coder
@@ -94,18 +101,18 @@ sections:
       \ str, dry_run: bool = False, model: str = \"\") -> TaskResult:\n   Add an optional\
       \ agent_name parameter:\n   def run_claude_task(prompt: str, dry_run: bool =\
       \ False, model: str = \"\", agent_name: str = \"\") -> TaskResult:\n\n3. In\
-      \ the command construction (around line 2737-2741), replace:\n   cmd = [\n  \
-      \     *CLAUDE_CMD,\n       \"--dangerously-skip-permissions\",\n       \"--print\"\
+      \ the command construction (around line 2737-2741), replace:\n   cmd = [\n \
+      \      *CLAUDE_CMD,\n       \"--dangerously-skip-permissions\",\n       \"--print\"\
       ,\n       prompt\n   ]\n   With:\n   permission_flags = build_permission_flags(agent_name\
       \ or \"coder\")\n   cmd = [\n       *CLAUDE_CMD,\n       *permission_flags,\n\
-      \       \"--print\",\n       prompt\n   ]\n\n4. Update the verbose_log line that\
-      \ mentions --dangerously-skip-permissions\n   (around line 2751) to log the actual\
-      \ permission flags used instead.\n\n5. Find ALL callers of run_claude_task in\
-      \ plan-orchestrator.py.\n   Search for \"run_claude_task(\" to find them. For\
-      \ each caller, pass the\n   agent_name parameter. The main execution loop (around\
-      \ line 5090-5100)\n   already resolves agent_name for each task -- pass it through.\n\
-      \   For the validation calls, pass the validator agent name.\n\n6. Verify syntax:\n\
-      \   python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \       \"--print\",\n       prompt\n   ]\n\n4. Update the verbose_log line\
+      \ that mentions --dangerously-skip-permissions\n   (around line 2751) to log\
+      \ the actual permission flags used instead.\n\n5. Find ALL callers of run_claude_task\
+      \ in plan-orchestrator.py.\n   Search for \"run_claude_task(\" to find them.\
+      \ For each caller, pass the\n   agent_name parameter. The main execution loop\
+      \ (around line 5090-5100)\n   already resolves agent_name for each task -- pass\
+      \ it through.\n   For the validation calls, pass the validator agent name.\n\
+      \n6. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py"
   - id: '1.3'
     name: Replace --dangerously-skip-permissions in run_parallel_task
@@ -117,8 +124,8 @@ sections:
       \ permission flags.\nReference: docs/plans/2026-02-18-16-least-privilege-agent-sandboxing-design.md\n\
       Steps:\n1. Read scripts/plan-orchestrator.py. Find run_parallel_task (around\
       \ line 2270).\n2. The function builds a command around line 2320-2325:\n   cmd\
-      \ = [\n       *CLAUDE_CMD,\n       \"--dangerously-skip-permissions\",\n    \
-      \   \"--print\",\n       prompt\n   ]\n   Replace with:\n   # Resolve agent\
+      \ = [\n       *CLAUDE_CMD,\n       \"--dangerously-skip-permissions\",\n   \
+      \    \"--print\",\n       prompt\n   ]\n   Replace with:\n   # Resolve agent\
       \ name for permission profile\n   par_agent_name = task.get(\"agent\")\n   if\
       \ par_agent_name is None:\n       par_agent_name = infer_agent_for_task(task)\n\
       \   permission_flags = build_permission_flags(par_agent_name or \"coder\")\n\
@@ -135,8 +142,8 @@ sections:
     description: "Update send_notification() and SlackQuestionHandler._call_claude_print()\
       \ to use permission flags.\nReference: docs/plans/2026-02-18-16-least-privilege-agent-sandboxing-design.md\n\
       Steps:\n1. Read scripts/plan-orchestrator.py.\n\n2. Find send_notification (around\
-      \ line 2985). Replace:\n   [*CLAUDE_CMD, \"--dangerously-skip-permissions\",\
-      \ \"--print\", notification_prompt]\n   With:\n   [*CLAUDE_CMD, *build_permission_flags(\"\
+      \ line 2985). Replace:\n   [*CLAUDE_CMD, \"--dangerously-skip-permissions\"\
+      , \"--print\", notification_prompt]\n   With:\n   [*CLAUDE_CMD, *build_permission_flags(\"\
       coder\"), \"--print\", notification_prompt]\n   Note: notification sends use\
       \ the \"coder\" profile because they need\n   general CLI access. Alternatively,\
       \ since notification is a simple text\n   generation task, READ_ONLY would suffice.\
@@ -172,14 +179,14 @@ sections:
       Symptom verification (read + test commands)\",\n       },\n   }\n\n4. Add a\
       \ build_permission_flags function (same pattern as orchestrator):\n   def build_permission_flags(profile_name:\
       \ str) -> list[str]:\n       \"\"\"Build CLI permission flags for a pipeline\
-      \ task profile.\n\n       Returns a list of CLI arguments. Falls back to\n  \
-      \     --dangerously-skip-permissions when SANDBOX_ENABLED is False.\n       \"\
-      \"\"\n       if not SANDBOX_ENABLED:\n           return [\"--dangerously-skip-permissions\"\
+      \ task profile.\n\n       Returns a list of CLI arguments. Falls back to\n \
+      \      --dangerously-skip-permissions when SANDBOX_ENABLED is False.\n     \
+      \  \"\"\"\n       if not SANDBOX_ENABLED:\n           return [\"--dangerously-skip-permissions\"\
       ]\n\n       profile = PIPELINE_PERMISSION_PROFILES.get(profile_name)\n     \
       \  if not profile:\n           log(f\"Unknown permission profile '{profile_name}',\
       \ using --dangerously-skip-permissions\")\n           return [\"--dangerously-skip-permissions\"\
-      ]\n\n       tools = profile[\"tools\"]\n       flags = [\"--allowedTools\"] +\
-      \ tools\n       flags.extend([\"--add-dir\", os.getcwd()])\n\n       log(f\"\
+      ]\n\n       tools = profile[\"tools\"]\n       flags = [\"--allowedTools\"]\
+      \ + tools\n       flags.extend([\"--add-dir\", os.getcwd()])\n\n       log(f\"\
       Permission profile '{profile_name}': tools={tools}\")\n       return flags\n\
       \n5. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
@@ -227,30 +234,31 @@ sections:
       \ implementation of\n   build_permission_flags, AGENT_PERMISSION_PROFILES, and\
       \ AGENT_TO_PROFILE.\n\n3. Add the following test cases:\n\n   a. test_permission_profiles_exist:\n\
       \      Assert AGENT_PERMISSION_PROFILES has exactly 4 profiles:\n      READ_ONLY,\
-      \ WRITE, VERIFICATION, DESIGN.\n      Assert each profile has \"tools\" and \"\
-      description\" keys.\n\n   b. test_agent_to_profile_mapping:\n      Assert all\
-      \ 15 agents are mapped in AGENT_TO_PROFILE.\n      Assert \"code-reviewer\"\
+      \ WRITE, VERIFICATION, DESIGN.\n      Assert each profile has \"tools\" and\
+      \ \"description\" keys.\n\n   b. test_agent_to_profile_mapping:\n      Assert\
+      \ all 15 agents are mapped in AGENT_TO_PROFILE.\n      Assert \"code-reviewer\"\
       \ maps to \"READ_ONLY\".\n      Assert \"coder\" maps to \"WRITE\".\n      Assert\
-      \ \"validator\" maps to \"VERIFICATION\".\n      Assert \"planner\" maps to \"\
-      DESIGN\".\n\n   c. test_build_permission_flags_read_only_agent:\n      Call build_permission_flags(\"\
-      code-reviewer\").\n      Assert \"--allowedTools\" is in the result.\n      Assert\
-      \ \"Read\" is in the result.\n      Assert \"--add-dir\" is in the result.\n\
-      \      Assert \"--dangerously-skip-permissions\" is NOT in the result.\n     \
-      \ Assert \"Write\" is NOT in the result.\n      Assert \"Edit\" is NOT in the\
-      \ result.\n\n   d. test_build_permission_flags_write_agent:\n      Call build_permission_flags(\"\
-      coder\").\n      Assert \"Write\" is in the result.\n      Assert \"Edit\" is\
-      \ in the result.\n      Assert \"--allowedTools\" is in the result.\n\n   e.\
-      \ test_build_permission_flags_unknown_agent:\n      Call build_permission_flags(\"\
-      unknown-agent\").\n      Assert it falls back to WRITE profile (most permissive).\n\
-      \      Assert \"Write\" is in the result.\n\n   f. test_build_permission_flags_sandbox_disabled:\n\
-      \      Use monkeypatch to set SANDBOX_ENABLED = False on the module.\n      Call\
-      \ build_permission_flags(\"code-reviewer\").\n      Assert result == [\"--dangerously-skip-permissions\"\
+      \ \"validator\" maps to \"VERIFICATION\".\n      Assert \"planner\" maps to\
+      \ \"DESIGN\".\n\n   c. test_build_permission_flags_read_only_agent:\n      Call\
+      \ build_permission_flags(\"code-reviewer\").\n      Assert \"--allowedTools\"\
+      \ is in the result.\n      Assert \"Read\" is in the result.\n      Assert \"\
+      --add-dir\" is in the result.\n      Assert \"--dangerously-skip-permissions\"\
+      \ is NOT in the result.\n      Assert \"Write\" is NOT in the result.\n    \
+      \  Assert \"Edit\" is NOT in the result.\n\n   d. test_build_permission_flags_write_agent:\n\
+      \      Call build_permission_flags(\"coder\").\n      Assert \"Write\" is in\
+      \ the result.\n      Assert \"Edit\" is in the result.\n      Assert \"--allowedTools\"\
+      \ is in the result.\n\n   e. test_build_permission_flags_unknown_agent:\n  \
+      \    Call build_permission_flags(\"unknown-agent\").\n      Assert it falls\
+      \ back to WRITE profile (most permissive).\n      Assert \"Write\" is in the\
+      \ result.\n\n   f. test_build_permission_flags_sandbox_disabled:\n      Use\
+      \ monkeypatch to set SANDBOX_ENABLED = False on the module.\n      Call build_permission_flags(\"\
+      code-reviewer\").\n      Assert result == [\"--dangerously-skip-permissions\"\
       ].\n      Restore SANDBOX_ENABLED = True after test.\n\n   g. test_build_permission_flags_project_scoping:\n\
       \      Call build_permission_flags(\"coder\").\n      Assert \"--add-dir\" is\
       \ in the result.\n      idx = result.index(\"--add-dir\")\n      Assert result[idx\
       \ + 1] == os.getcwd().\n\n4. Run tests:\n   python3 -m pytest tests/test_plan_orchestrator.py\
-      \ -v -k \"permission\"\n   Then run ALL tests:\n   python3 -m pytest tests/ -v\n\
-      \   Fix any failures.\n\nFiles: tests/test_plan_orchestrator.py"
+      \ -v -k \"permission\"\n   Then run ALL tests:\n   python3 -m pytest tests/\
+      \ -v\n   Fix any failures.\n\nFiles: tests/test_plan_orchestrator.py"
   - id: '3.2'
     name: Test permission profiles in auto-pipeline
     agent: coder
@@ -260,26 +268,27 @@ sections:
     description: "Add unit tests for the permission profile system in auto-pipeline\
       \ to tests/test_auto_pipeline.py.\nReference: docs/plans/2026-02-18-16-least-privilege-agent-sandboxing-design.md\n\
       Steps:\n1. Read tests/test_auto_pipeline.py to understand the current test structure.\n\
-      2. Read scripts/auto-pipeline.py to see the exact implementation.\n\n3. Add the\
-      \ following test cases:\n\n   a. test_pipeline_permission_profiles_exist:\n  \
-      \    Assert PIPELINE_PERMISSION_PROFILES has \"planner\" and \"verifier\" keys.\n\
-      \      Assert each profile has \"tools\" and \"description\" keys.\n\n   b. test_pipeline_build_permission_flags_planner:\n\
-      \      Call build_permission_flags(\"planner\").\n      Assert \"--allowedTools\"\
-      \ is in the result.\n      Assert \"Write\" is in the result (planner needs to\
-      \ write plans).\n      Assert \"--add-dir\" is in the result.\n\n   c. test_pipeline_build_permission_flags_verifier:\n\
+      2. Read scripts/auto-pipeline.py to see the exact implementation.\n\n3. Add\
+      \ the following test cases:\n\n   a. test_pipeline_permission_profiles_exist:\n\
+      \      Assert PIPELINE_PERMISSION_PROFILES has \"planner\" and \"verifier\"\
+      \ keys.\n      Assert each profile has \"tools\" and \"description\" keys.\n\
+      \n   b. test_pipeline_build_permission_flags_planner:\n      Call build_permission_flags(\"\
+      planner\").\n      Assert \"--allowedTools\" is in the result.\n      Assert\
+      \ \"Write\" is in the result (planner needs to write plans).\n      Assert \"\
+      --add-dir\" is in the result.\n\n   c. test_pipeline_build_permission_flags_verifier:\n\
       \      Call build_permission_flags(\"verifier\").\n      Assert \"--allowedTools\"\
       \ is in the result.\n      Assert \"Write\" is NOT in the result.\n      Assert\
       \ \"Bash\" is in the result (verifier needs to run tests).\n\n   d. test_pipeline_build_permission_flags_unknown:\n\
-      \      Call build_permission_flags(\"nonexistent\").\n      Assert it falls back\
-      \ to [\"--dangerously-skip-permissions\"].\n\n   e. test_pipeline_build_permission_flags_sandbox_disabled:\n\
-      \      Use monkeypatch to set SANDBOX_ENABLED = False on the module.\n      Call\
-      \ build_permission_flags(\"planner\").\n      Assert result == [\"--dangerously-skip-permissions\"\
+      \      Call build_permission_flags(\"nonexistent\").\n      Assert it falls\
+      \ back to [\"--dangerously-skip-permissions\"].\n\n   e. test_pipeline_build_permission_flags_sandbox_disabled:\n\
+      \      Use monkeypatch to set SANDBOX_ENABLED = False on the module.\n     \
+      \ Call build_permission_flags(\"planner\").\n      Assert result == [\"--dangerously-skip-permissions\"\
       ].\n      Restore SANDBOX_ENABLED = True after test.\n\n   f. test_no_dangerously_skip_permissions_in_source:\n\
-      \      Read scripts/auto-pipeline.py as text.\n      Count occurrences of \"dangerously-skip-permissions\"\
-      .\n      Assert count == 0 (all replaced with build_permission_flags).\n\n4.\
-      \ Run tests:\n   python3 -m pytest tests/test_auto_pipeline.py -v -k \"permission\"\
-      \n   Then run ALL tests:\n   python3 -m pytest tests/ -v\n   Fix any failures.\n\
-      \nFiles: tests/test_auto_pipeline.py"
+      \      Read scripts/auto-pipeline.py as text.\n      Count occurrences of \"\
+      dangerously-skip-permissions\".\n      Assert count == 0 (all replaced with\
+      \ build_permission_flags).\n\n4. Run tests:\n   python3 -m pytest tests/test_auto_pipeline.py\
+      \ -v -k \"permission\"\n   Then run ALL tests:\n   python3 -m pytest tests/\
+      \ -v\n   Fix any failures.\n\nFiles: tests/test_auto_pipeline.py"
 - id: phase-4
   name: Phase 4 - Verification
   status: pending
@@ -294,26 +303,26 @@ sections:
       \ works correctly.\nSteps:\n1. Check Python syntax for both scripts:\n   python3\
       \ -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
       \ py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\n\n2. Run\
-      \ all unit tests:\n   python3 -m pytest tests/ 2>/dev/null || echo 'No test suite\
-      \ configured'\n\n3. Verify no remaining --dangerously-skip-permissions in auto-pipeline.py:\n\
-      \   python3 -c \"\n   with open('scripts/auto-pipeline.py') as f:\n       content\
-      \ = f.read()\n   count = content.count('dangerously-skip-permissions')\n   assert\
-      \ count == 0, f'auto-pipeline.py still has {count} dangerously-skip-permissions'\n\
-      \   print('auto-pipeline.py: all dangerously-skip-permissions replaced')\n  \
-      \ \"\n\n4. Verify plan-orchestrator.py has replaced --dangerously-skip-permissions\
+      \ all unit tests:\n   python3 -m pytest tests/ 2>/dev/null || echo 'No test\
+      \ suite configured'\n\n3. Verify no remaining --dangerously-skip-permissions\
+      \ in auto-pipeline.py:\n   python3 -c \"\n   with open('scripts/auto-pipeline.py')\
+      \ as f:\n       content = f.read()\n   count = content.count('dangerously-skip-permissions')\n\
+      \   assert count == 0, f'auto-pipeline.py still has {count} dangerously-skip-permissions'\n\
+      \   print('auto-pipeline.py: all dangerously-skip-permissions replaced')\n \
+      \  \"\n\n4. Verify plan-orchestrator.py has replaced --dangerously-skip-permissions\
       \ in\n   the main task execution paths (run_claude_task, run_parallel_task).\n\
-      \   It is acceptable to have the string \"dangerously-skip-permissions\" in the\n\
-      \   build_permission_flags fallback code and the SANDBOX_ENABLED=false path.\n\
-      \   python3 -c \"\n   with open('scripts/plan-orchestrator.py') as f:\n     \
-      \  lines = f.readlines()\n   # Check that run_claude_task and run_parallel_task\
+      \   It is acceptable to have the string \"dangerously-skip-permissions\" in\
+      \ the\n   build_permission_flags fallback code and the SANDBOX_ENABLED=false\
+      \ path.\n   python3 -c \"\n   with open('scripts/plan-orchestrator.py') as f:\n\
+      \       lines = f.readlines()\n   # Check that run_claude_task and run_parallel_task\
       \ no longer have\n   # hardcoded --dangerously-skip-permissions\n   in_run_claude_task\
       \ = False\n   in_run_parallel_task = False\n   issues = []\n   for i, line in\
-      \ enumerate(lines, 1):\n       if 'def run_claude_task(' in line:\n         \
-      \  in_run_claude_task = True\n       elif 'def run_parallel_task(' in line:\n\
-      \           in_run_parallel_task = True\n       elif line.startswith('def ') and\
-      \ in_run_claude_task:\n           in_run_claude_task = False\n       elif line.startswith('def\
-      \ ') and in_run_parallel_task:\n           in_run_parallel_task = False\n   \
-      \    if (in_run_claude_task or in_run_parallel_task) and 'dangerously-skip-permissions'\
+      \ enumerate(lines, 1):\n       if 'def run_claude_task(' in line:\n        \
+      \   in_run_claude_task = True\n       elif 'def run_parallel_task(' in line:\n\
+      \           in_run_parallel_task = True\n       elif line.startswith('def ')\
+      \ and in_run_claude_task:\n           in_run_claude_task = False\n       elif\
+      \ line.startswith('def ') and in_run_parallel_task:\n           in_run_parallel_task\
+      \ = False\n       if (in_run_claude_task or in_run_parallel_task) and 'dangerously-skip-permissions'\
       \ in line and 'build_permission_flags' not in line:\n           issues.append(f'Line\
       \ {i}: {line.strip()}')\n   if issues:\n       print('FAIL: Found hardcoded\
       \ --dangerously-skip-permissions in task functions:')\n       for issue in issues:\n\
@@ -329,8 +338,8 @@ sections:
       \ mod.AGENT_TO_PROFILE['validator'] == 'VERIFICATION'\n   assert mod.AGENT_TO_PROFILE['planner']\
       \ == 'DESIGN'\n   # Check flag building\n   flags = mod.build_permission_flags('code-reviewer')\n\
       \   assert '--allowedTools' in flags\n   assert 'Write' not in flags\n   assert\
-      \ 'Edit' not in flags\n   print('Permission profile system verified OK')\n  \
-      \ \"\n\n6. Run orchestrator dry-run to verify no startup errors:\n   python3 scripts/plan-orchestrator.py\
-      \ --plan .claude/plans/sample-plan.yaml --dry-run\n\nIf any check fails, report\
-      \ the failure with specific details.\nFiles: scripts/plan-orchestrator.py, scripts/auto-pipeline.py,\n\
-      \       tests/test_plan_orchestrator.py, tests/test_auto_pipeline.py"
+      \ 'Edit' not in flags\n   print('Permission profile system verified OK')\n \
+      \  \"\n\n6. Run orchestrator dry-run to verify no startup errors:\n   python3\
+      \ scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run\n\
+      \nIf any check fails, report the failure with specific details.\nFiles: scripts/plan-orchestrator.py,\
+      \ scripts/auto-pipeline.py,\n       tests/test_plan_orchestrator.py, tests/test_auto_pipeline.py"
