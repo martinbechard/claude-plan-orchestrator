@@ -257,7 +257,7 @@ sections:
       clean. Resolved pre-existing YAML merge conflict.'
 - id: phase-3
   name: Phase 3 - Unit Tests
-  status: in_progress
+  status: completed
   tasks:
   - id: '3.1'
     name: Test permission profiles and build_permission_flags in plan-orchestrator
@@ -307,7 +307,7 @@ sections:
   - id: '3.2'
     name: Test permission profiles in auto-pipeline
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '3.1'
     description: "Add unit tests for the permission profile system in auto-pipeline\
@@ -336,6 +336,12 @@ sections:
       \ -v\n   Fix any failures.\n\nFiles: tests/test_auto_pipeline.py"
     attempts: 1
     last_attempt: '2026-02-18T22:22:39.127056'
+    model_used: sonnet
+    completed_at: '2026-02-18T22:27:18.048718'
+    result_message: 'Added 6 permission profile unit tests to tests/test_auto_pipeline.py:
+      profiles exist, planner flags (Write+--add-dir), verifier flags (Bash, no Write),
+      unknown profile fallback, sandbox-disabled monkeypatch, and no call-site dangerously-skip-permissions.
+      All 279 tests pass.'
 - id: phase-4
   name: Phase 4 - Verification
   status: pending
