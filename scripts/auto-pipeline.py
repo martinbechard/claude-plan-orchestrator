@@ -788,6 +788,29 @@ def process_idea(idea_path: str, dry_run: bool = False) -> bool:
     return True
 
 
+def intake_ideas(dry_run: bool = False) -> int:
+    """Process all raw idea files from IDEAS_DIR into formatted backlog items.
+
+    Scans IDEAS_DIR for unprocessed .md files, processes each one sequentially
+    via process_idea(), and returns the count of successfully processed ideas.
+    """
+    idea_paths = scan_ideas()
+    if not idea_paths:
+        return 0
+
+    log(f"Found {len(idea_paths)} idea(s) to process")
+    success_count = 0
+    for idea_path in idea_paths:
+        idea_filename = os.path.basename(idea_path)
+        success = process_idea(idea_path, dry_run)
+        if success:
+            log(f"Idea processed successfully: {idea_filename}")
+            success_count += 1
+        else:
+            log(f"Idea processing failed: {idea_filename}")
+    return success_count
+
+
 # ─── Filesystem Watcher ──────────────────────────────────────────────
 
 
@@ -2162,7 +2185,7 @@ def main_loop(dry_run: bool = False, once: bool = False,
     observer = Observer()
     watcher = BacklogWatcher(on_new_item)
 
-    for watch_dir in [DEFECT_DIR, FEATURE_DIR]:
+    for watch_dir in [DEFECT_DIR, FEATURE_DIR, IDEAS_DIR]:
         if os.path.isdir(watch_dir):
             observer.schedule(watcher, watch_dir, recursive=False)
             verbose_log(f"Watching directory: {watch_dir}")
@@ -2213,6 +2236,11 @@ def main_loop(dry_run: bool = False, once: bool = False,
                         )
                     # After resuming, re-scan (completed plans may unblock new items)
                     continue
+
+            # Process any raw ideas before scanning backlogs
+            intake_count = intake_ideas(dry_run)
+            if intake_count > 0:
+                log(f"Intake: processed {intake_count} idea(s) into backlog items")
 
             # Scan for items (with dependency filtering)
             items = scan_all_backlogs()
