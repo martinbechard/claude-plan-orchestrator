@@ -670,6 +670,53 @@ def scan_directory(directory: str, item_type: str) -> list[BacklogItem]:
     return items
 
 
+def parse_analysis_metadata(filepath: str) -> dict:
+    """Parse analysis-specific metadata from a backlog .md file.
+
+    Extracts:
+      - analysis_type: value from '## Analysis Type: <type>' header
+      - output_format: value from '## Output Format: <format>' header (default: 'both')
+      - scope: lines from the '## Scope' section (as a list)
+      - instructions: text from the '## Instructions' section
+    Returns a dict with these keys.
+    """
+    try:
+        with open(filepath, "r") as f:
+            content = f.read()
+    except IOError:
+        return {"analysis_type": "", "output_format": "both", "scope": [], "instructions": ""}
+
+    metadata: dict = {
+        "analysis_type": "",
+        "output_format": "both",
+        "scope": [],
+        "instructions": "",
+    }
+
+    # Extract analysis type
+    type_match = re.search(r"^##\s*Analysis Type:\s*(.+)$", content, re.MULTILINE)
+    if type_match:
+        metadata["analysis_type"] = type_match.group(1).strip().lower()
+
+    # Extract output format
+    format_match = re.search(r"^##\s*Output Format:\s*(.+)$", content, re.MULTILINE)
+    if format_match:
+        metadata["output_format"] = format_match.group(1).strip().lower()
+
+    # Extract scope section
+    scope_match = re.search(r"^##\s*Scope\s*\n(.*?)(?=^##|\Z)", content, re.MULTILINE | re.DOTALL)
+    if scope_match:
+        scope_lines = [line.strip().lstrip("- ") for line in scope_match.group(1).strip().splitlines() if line.strip()]
+        metadata["scope"] = scope_lines
+
+    # Extract instructions section
+    instructions_match = re.search(r"^##\s*Instructions\s*\n(.*?)(?=^##|\Z)", content, re.MULTILINE | re.DOTALL)
+    if instructions_match:
+        metadata["instructions"] = instructions_match.group(1).strip()
+
+    return metadata
+
+
 def parse_dependencies(filepath: str) -> list[str]:
     """Parse the ## Dependencies section from a backlog .md file.
 
@@ -1835,6 +1882,34 @@ Use this exact format (the count MUST increment from the last entry, or start at
 - If you need the dev server running for a check, start it with `{dev_server_command}`, wait for it,
   run your check, then stop it
 - Git commit the updated defect file with message: "verify: {slug} verification #{count}"
+"""
+
+ANALYSIS_PROMPT_TEMPLATE = """You are an analysis agent. Your job is to perform a read-only analysis
+of the codebase and produce a structured report. You MUST NOT modify any files.
+
+## Analysis Request
+- Item: {item_path}
+- Type: {analysis_type}
+- Scope: {scope}
+
+## Instructions
+{instructions}
+
+## What to produce
+
+Write a structured markdown report to: {report_path}
+
+The report must include:
+1. An executive summary (3-5 bullet points)
+2. Detailed findings organized by category
+3. Recommendations (if applicable)
+4. A severity/priority classification for each finding
+
+## CRITICAL RULES
+- Do NOT modify any project source files
+- Do NOT create or modify any code
+- ONLY read files and write the report to the specified path
+- Be thorough but concise in your analysis
 """
 
 # Maximum number of verify-then-fix cycles before giving up
