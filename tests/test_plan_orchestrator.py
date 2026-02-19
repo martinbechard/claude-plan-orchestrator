@@ -29,6 +29,8 @@ ORCHESTRATOR_STASH_MESSAGE = mod.ORCHESTRATOR_STASH_MESSAGE
 STATUS_FILE_PATH = mod.STATUS_FILE_PATH
 ensure_directories = mod.ensure_directories
 parse_verification_blocks = mod.parse_verification_blocks
+build_validation_prompt = mod.build_validation_prompt
+TaskResult = mod.TaskResult
 
 
 # --- _truncate_for_slack tests ---
@@ -1003,3 +1005,57 @@ def test_parse_verification_blocks_missing_fields():
     result = parse_verification_blocks(_MISSING_FIELDS_SPEC)
 
     assert result == []
+
+
+# --- build_validation_prompt tests ---
+
+
+def _make_minimal_task_result() -> "TaskResult":
+    """Return a minimal TaskResult for use in build_validation_prompt tests."""
+    return TaskResult(success=True, message="Task completed", duration_seconds=5.0)
+
+
+def test_build_validation_prompt_includes_spec_context(monkeypatch):
+    """Spec-aware context is included in the prompt when SPEC_DIR is configured."""
+    monkeypatch.setattr(mod, "SPEC_DIR", "docs/specs/")
+    monkeypatch.setattr(mod, "E2E_COMMAND", "npx playwright test")
+
+    task = {"id": "1.1", "name": "Test task", "description": "A task"}
+    section = {"id": "phase-1", "name": "Phase 1"}
+    task_result = _make_minimal_task_result()
+
+    result = build_validation_prompt(task, section, task_result, "validator")
+
+    assert "This project has functional specifications in: docs/specs/" in result
+    assert "npx playwright test" in result
+
+
+def test_build_validation_prompt_omits_spec_when_unconfigured(monkeypatch):
+    """Spec-aware dynamic context is absent from the prompt when SPEC_DIR is empty."""
+    monkeypatch.setattr(mod, "SPEC_DIR", "")
+
+    task = {"id": "1.1", "name": "Test task", "description": "A task"}
+    section = {"id": "phase-1", "name": "Phase 1"}
+    task_result = _make_minimal_task_result()
+
+    result = build_validation_prompt(task, section, task_result, "validator")
+
+    # "This project has functional specifications in:" is only injected when SPEC_DIR is set
+    assert "This project has functional specifications in:" not in result
+
+
+def test_build_validation_prompt_still_has_standard_checks(monkeypatch):
+    """Standard build/test checks and verdict format remain when spec context is added."""
+    monkeypatch.setattr(mod, "SPEC_DIR", "docs/specs/")
+    monkeypatch.setattr(mod, "BUILD_COMMAND", "pnpm run build")
+    monkeypatch.setattr(mod, "TEST_COMMAND", "pnpm test")
+
+    task = {"id": "1.1", "name": "Test task", "description": "A task"}
+    section = {"id": "phase-1", "name": "Phase 1"}
+    task_result = _make_minimal_task_result()
+
+    result = build_validation_prompt(task, section, task_result, "validator")
+
+    assert "pnpm run build" in result
+    assert "pnpm test" in result
+    assert "Verdict: PASS" in result
