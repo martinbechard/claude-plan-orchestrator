@@ -106,12 +106,12 @@ sections:
       PIPELINE_PERMISSION_PROFILES. Syntax verified OK.
 - id: phase-2
   name: Phase 2 - Analysis Metadata Parsing and Prompt Template
-  status: pending
+  status: completed
   tasks:
   - id: '2.1'
     name: Add parse_analysis_metadata() and ANALYSIS_PROMPT_TEMPLATE
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '1.2'
     description: "Add the analysis metadata parser and prompt template to scripts/auto-pipeline.py.\n\
@@ -160,14 +160,19 @@ sections:
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
     attempts: 1
     last_attempt: '2026-02-18T22:42:20.272792'
+    model_used: sonnet
+    completed_at: '2026-02-18T22:44:47.297792'
+    result_message: Added parse_analysis_metadata() after scan_directory() (line 673)
+      and ANALYSIS_PROMPT_TEMPLATE after VERIFICATION_PROMPT_TEMPLATE (line 1862).
+      Syntax verified OK. Committed as a1b0f35.
 - id: phase-3
   name: Phase 3 - Analysis Processing Function
-  status: pending
+  status: completed
   tasks:
   - id: '3.1'
     name: Add process_analysis_item() function
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.1'
     description: "Add the process_analysis_item() function to scripts/auto-pipeline.py.\n\
@@ -269,6 +274,13 @@ sections:
       \             log(f\"WARNING: Expected report not found at {report_path}\")\n\
       \n4. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
+    attempts: 1
+    last_attempt: '2026-02-18T22:44:49.965226'
+    model_used: sonnet
+    completed_at: '2026-02-18T22:48:22.518125'
+    result_message: Added process_analysis_item(), _process_analysis_inner(), and
+      _deliver_analysis_report() to scripts/auto-pipeline.py. All 279 tests pass.
+      Syntax verified OK. Committed as e071af9.
 - id: phase-4
   name: Phase 4 - Pipeline Integration
   status: pending
