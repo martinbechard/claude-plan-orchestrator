@@ -369,7 +369,7 @@ sections:
   - id: '5.1'
     name: Add unit tests for analysis workflow in auto-pipeline
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '4.3'
     description: "Add unit tests for the analysis workflow to tests/test_auto_pipeline.py.\n\
@@ -402,6 +402,8 @@ sections:
       .\n\n4. Run tests:\n   python3 -m pytest tests/test_auto_pipeline.py -v -k \"\
       analysis\"\n   Then run ALL tests:\n   python3 -m pytest tests/ -v\n   Fix any\
       \ failures.\n\nFiles: tests/test_auto_pipeline.py"
+    attempts: 1
+    last_attempt: '2026-02-18T22:55:59.315414'
   - id: '5.2'
     name: Add unit tests for Slack reports channel in plan-orchestrator
     agent: coder

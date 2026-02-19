@@ -3,6 +3,7 @@
 # Design ref: docs/plans/2026-02-17-03-noisy-log-output-from-long-plan-filenames-design.md
 # Design ref: docs/plans/2026-02-17-6-new-feature-when-modifying-the-code-for-the-auto-pipeline-you-need-to-have-som-design.md
 # Design ref: docs/plans/2026-02-18-16-least-privilege-agent-sandboxing-design.md
+# Design ref: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md
 
 import importlib.util
 import tempfile
@@ -38,6 +39,13 @@ LOGS_DIR = mod.LOGS_DIR
 SUMMARY_LOG_FILENAME = mod.SUMMARY_LOG_FILENAME
 ensure_directories = mod.ensure_directories
 ProcessResult = mod.ProcessResult
+ANALYSIS_DIR = mod.ANALYSIS_DIR
+COMPLETED_ANALYSES_DIR = mod.COMPLETED_ANALYSES_DIR
+REPORTS_DIR = mod.REPORTS_DIR
+COMPLETED_DIRS = mod.COMPLETED_DIRS
+ANALYSIS_TYPE_TO_AGENT = mod.ANALYSIS_TYPE_TO_AGENT
+parse_analysis_metadata = mod.parse_analysis_metadata
+scan_all_backlogs = mod.scan_all_backlogs
 
 
 # --- compact_plan_label() tests ---
@@ -1035,3 +1043,99 @@ def test_no_dangerously_skip_permissions_in_source():
         f"Found {len(call_site_violations)} call site(s) directly using "
         f"--dangerously-skip-permissions: {call_site_violations}"
     )
+
+
+# --- Analysis workflow constants and metadata tests ---
+
+
+def test_analysis_dir_constant_exists():
+    """ANALYSIS_DIR, COMPLETED_ANALYSES_DIR, and REPORTS_DIR have expected values."""
+    assert ANALYSIS_DIR == "docs/analysis-backlog"
+    assert COMPLETED_ANALYSES_DIR == "docs/completed-backlog/analyses"
+    assert REPORTS_DIR == "docs/reports"
+
+
+def test_analysis_in_completed_dirs():
+    """COMPLETED_DIRS contains the analysis key mapped to COMPLETED_ANALYSES_DIR."""
+    assert "analysis" in COMPLETED_DIRS
+    assert COMPLETED_DIRS["analysis"] == COMPLETED_ANALYSES_DIR
+
+
+def test_analysis_type_to_agent_mapping():
+    """ANALYSIS_TYPE_TO_AGENT maps each expected analysis type to the correct agent."""
+    assert ANALYSIS_TYPE_TO_AGENT["code-review"] == "code-reviewer"
+    assert ANALYSIS_TYPE_TO_AGENT["codebase-analysis"] == "code-explorer"
+    assert ANALYSIS_TYPE_TO_AGENT["test-coverage"] == "qa-auditor"
+    assert ANALYSIS_TYPE_TO_AGENT["test-results"] == "e2e-analyzer"
+    assert ANALYSIS_TYPE_TO_AGENT["spec-compliance"] == "spec-verifier"
+
+
+def test_parse_analysis_metadata_full(tmp_path):
+    """parse_analysis_metadata() extracts all fields from a fully annotated file."""
+    md_file = tmp_path / "01-review.md"
+    md_file.write_text(
+        "# Review\n"
+        "## Analysis Type: code-review\n"
+        "## Output Format: both\n"
+        "## Scope\n"
+        "- src/\n"
+        "- tests/\n"
+        "## Instructions\n"
+        "Check for code quality issues.\n"
+    )
+
+    result = parse_analysis_metadata(str(md_file))
+
+    assert result["analysis_type"] == "code-review"
+    assert result["output_format"] == "both"
+    assert "src/" in result["scope"]
+    assert "tests/" in result["scope"]
+    assert result["instructions"] == "Check for code quality issues."
+
+
+def test_parse_analysis_metadata_defaults(tmp_path):
+    """parse_analysis_metadata() returns defaults when no analysis fields are present."""
+    md_file = tmp_path / "01-plain.md"
+    md_file.write_text("# Plain File\nNo metadata here.\n")
+
+    result = parse_analysis_metadata(str(md_file))
+
+    assert result["analysis_type"] == ""
+    assert result["output_format"] == "both"
+    assert result["scope"] == []
+    assert result["instructions"] == ""
+
+
+def test_parse_analysis_metadata_missing_file():
+    """parse_analysis_metadata() returns defaults without raising for a missing file."""
+    result = parse_analysis_metadata("/nonexistent/file.md")
+
+    assert result["analysis_type"] == ""
+    assert result["output_format"] == "both"
+    assert result["scope"] == []
+    assert result["instructions"] == ""
+
+
+def test_scan_all_backlogs_includes_analysis(tmp_path, monkeypatch):
+    """scan_all_backlogs() includes items from ANALYSIS_DIR with item_type='analysis'."""
+    analysis_dir = tmp_path / "analysis-backlog"
+    analysis_dir.mkdir()
+    defect_dir = tmp_path / "defect-backlog"
+    defect_dir.mkdir()
+    feature_dir = tmp_path / "feature-backlog"
+    feature_dir.mkdir()
+
+    # Create a simple analysis item without completion status
+    (analysis_dir / "01-test-analysis.md").write_text(
+        "# Test Analysis\n## Analysis Type: code-review\n"
+    )
+
+    monkeypatch.setattr(mod, "ANALYSIS_DIR", str(analysis_dir))
+    monkeypatch.setattr(mod, "DEFECT_DIR", str(defect_dir))
+    monkeypatch.setattr(mod, "FEATURE_DIR", str(feature_dir))
+
+    result = scan_all_backlogs()
+
+    assert len(result) == 1
+    assert result[0].item_type == "analysis"
+    assert result[0].slug == "01-test-analysis"
