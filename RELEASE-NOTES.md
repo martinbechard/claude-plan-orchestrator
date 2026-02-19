@@ -1,5 +1,18 @@
 # Release Notes
 
+## 1.6.1 (2026-02-19)
+
+### Fixes
+- **Infinite loop on archived items**: `archive_item()` now removes the source
+  file from the backlog when the destination already exists, preventing the
+  scanner from re-discovering completed items every cycle.
+- **Circuit breaker for completed items**: Main pipeline loop tracks
+  `completed_items` alongside `failed_items` so successfully processed items
+  are never re-processed within the same session, even if archive cleanup fails.
+- **`force_pipeline_exit()` central exit function**: Unrecoverable errors
+  (e.g. stale source removal failure) now call a single function that creates
+  the stop semaphore, sends a Slack error notification, and exits the process.
+
 ## 1.6.0 (2026-02-19)
 
 ### New Features

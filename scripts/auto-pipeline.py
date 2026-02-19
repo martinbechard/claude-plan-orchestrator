@@ -540,7 +540,12 @@ def check_rate_limit(output: str) -> Optional[float]:
     return float(RATE_LIMIT_DEFAULT_WAIT_SECONDS)
 
 
-# ─── Stop Semaphore ──────────────────────────────────────────────────
+# ─── Stop Semaphore & Emergency Exit ─────────────────────────────────
+
+# Module-level reference to the active SlackNotifier (set by entry points).
+# Allows force_pipeline_exit() to send a notification without threading
+# a slack parameter through every call site.
+_active_slack: Optional["SlackNotifier"] = None
 
 
 def check_stop_requested() -> bool:
@@ -553,6 +558,34 @@ def clear_stop_semaphore() -> None:
     if os.path.exists(STOP_SEMAPHORE_PATH):
         os.remove(STOP_SEMAPHORE_PATH)
         log(f"Cleared stale stop semaphore: {STOP_SEMAPHORE_PATH}")
+
+
+def force_pipeline_exit(reason: str, exit_code: int = 1) -> None:
+    """Create the stop semaphore, notify Slack, log, and exit.
+
+    This is the single exit point for unrecoverable errors such as
+    infinite-loop detection or archive failures that would otherwise
+    spin the pipeline forever.
+    """
+    log(f"FORCED EXIT: {reason}")
+
+    # Create stop file so a concurrent or restarted pipeline also stops
+    try:
+        Path(STOP_SEMAPHORE_PATH).parent.mkdir(parents=True, exist_ok=True)
+        Path(STOP_SEMAPHORE_PATH).touch()
+    except OSError as e:
+        log(f"WARNING: Could not create stop semaphore: {e}")
+
+    # Notify Slack if available
+    if _active_slack is not None:
+        try:
+            _active_slack.send_status(
+                f"*Pipeline forced exit:* {reason}", level="error"
+            )
+        except Exception as e:
+            log(f"WARNING: Slack notification failed during forced exit: {e}")
+
+    sys.exit(exit_code)
 
 
 # ─── Hot-Reload Detection ────────────────────────────────────────────
@@ -2032,7 +2065,26 @@ def archive_item(item: BacklogItem, dry_run: bool = False) -> bool:
         return True
 
     if os.path.exists(dest):
-        log(f"[ARCHIVE] Already archived, skipping: {dest}")
+        # Destination exists but source may still be in backlog (e.g. prior archive
+        # copied but failed to remove source, or manual copy).  Remove the source
+        # to prevent the scanner from re-discovering the item in an infinite loop.
+        source = _resolve_item_path(item)
+        if source is not None and os.path.exists(source):
+            try:
+                os.remove(source)
+                subprocess.run(["git", "add", source], capture_output=True, check=True)
+                subprocess.run(
+                    ["git", "commit", "-m", f"chore: remove stale backlog source for {item.slug}"],
+                    capture_output=True, check=True,
+                )
+                log(f"[ARCHIVE] Already archived, removed stale source: {source}")
+            except (OSError, subprocess.CalledProcessError) as e:
+                force_pipeline_exit(
+                    f"Cannot remove stale backlog source {source} "
+                    f"(already archived at {dest}): {e}"
+                )
+        else:
+            log(f"[ARCHIVE] Already archived, skipping: {dest}")
         return True
 
     source = _resolve_item_path(item)
@@ -2855,6 +2907,12 @@ def main_loop(dry_run: bool = False, once: bool = False,
     # Track items that failed in this session (don't retry)
     failed_items: set[str] = set()
 
+    # Circuit breaker: track items that completed successfully this session.
+    # Prevents infinite loops when archive fails to remove the source file
+    # from the backlog directory -- without this, the scanner re-discovers
+    # the item and process_item returns True again endlessly.
+    completed_items: set[str] = set()
+
     # Track usage across all work items in this session
     session_tracker = SessionUsageTracker()
 
@@ -2885,7 +2943,9 @@ def main_loop(dry_run: bool = False, once: bool = False,
     code_monitor = CodeChangeMonitor()
     code_monitor.start()
 
+    global _active_slack
     slack = SlackNotifier()
+    _active_slack = slack
     slack.start_background_polling()
     reporter = ProgressReporter(slack, completion_tracker, item_in_progress)
     reporter.start()
@@ -2937,8 +2997,9 @@ def main_loop(dry_run: bool = False, once: bool = False,
             # Scan for items (with dependency filtering)
             items = scan_all_backlogs()
 
-            # Filter out previously failed items
-            items = [i for i in items if i.path not in failed_items]
+            # Filter out previously failed or already-completed items
+            items = [i for i in items if i.path not in failed_items
+                     and i.path not in completed_items]
 
             if items:
                 log(f"Found {len(items)} item(s) to process")
@@ -2992,7 +3053,9 @@ def main_loop(dry_run: bool = False, once: bool = False,
                         break
 
                 success = process_item(item, dry_run, session_tracker, item_in_progress, completion_tracker)
-                if not success:
+                if success:
+                    completed_items.add(item.path)
+                else:
                     failed_items.add(item.path)
                     log(f"Item failed - will not retry in this session: {item.slug}")
 
