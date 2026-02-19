@@ -17,129 +17,80 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Implementation
-  status: pending
+  status: in_progress
   tasks:
   - id: '1.1'
     name: Add ensure_directories() to auto-pipeline.py
     agent: coder
-    status: pending
-    description: |
-      Add a REQUIRED_DIRS constant and ensure_directories() function to
-      scripts/auto-pipeline.py, then call it at startup.
-
-      Reference: docs/plans/2026-02-18-auto-create-dependent-directories-design.md
-
-      Steps:
-      1. Read scripts/auto-pipeline.py. Find the constants section near the top
-         (around lines 50-80, where DEFECT_DIR, FEATURE_DIR, COMPLETED_DIRS,
-         PLANS_DIR, LOGS_DIR etc. are defined).
-
-      2. After the existing constants (after LOGS_DIR and SUMMARY_LOG_FILENAME
-         definitions), add:
-
-         REQUIRED_DIRS = [
-             PLANS_DIR,
-             os.path.join(PLANS_DIR, "logs"),
-             LOGS_DIR,
-             DEFECT_DIR,
-             FEATURE_DIR,
-             COMPLETED_FEATURES_DIR,
-             COMPLETED_DEFECTS_DIR,
-         ]
-
-
-         def ensure_directories() -> None:
-             """Create all directories the pipeline depends on.
-
-             Called once at startup so that no downstream code needs to worry
-             about missing directories. Logs a message for each directory that
-             had to be created.
-             """
-             for d in REQUIRED_DIRS:
-                 if not os.path.isdir(d):
-                     os.makedirs(d, exist_ok=True)
-                     print(f"[INIT] Created missing directory: {d}")
-
-      3. Find main() (around line 2170). After "log("Starting auto-pipeline")"
-         and the log lines that follow it (the mode log line), but BEFORE the
-         budget_guard construction, insert:
-
-             ensure_directories()
-
-      4. Remove the redundant mkdir calls that are now unnecessary:
-         - In _open_item_log() (around line 195): remove the line
-           "os.makedirs(LOGS_DIR, exist_ok=True)"
-         - In _log_summary() (around line 247): remove the line
-           "os.makedirs(LOGS_DIR, exist_ok=True)"
-         - In PipelineCostTracker.write_session_report() (around line 769):
-           remove the two lines "log_dir = Path(".claude/plans/logs")" and
-           "log_dir.mkdir(parents=True, exist_ok=True)".
-           The report_path line should use TASK_LOG_DIR or
-           Path(".claude/plans/logs") directly (it is already defined
-           at module level as PLANS_DIR + "/logs" in REQUIRED_DIRS).
-         NOTE: Keep the os.makedirs(dest_dir, ...) in _archive_and_report()
-         because dest_dir is dynamically resolved.
-
-      5. Verify syntax:
-         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); print('syntax OK')"
-
-      Files: scripts/auto-pipeline.py
+    status: completed
+    description: "Add a REQUIRED_DIRS constant and ensure_directories() function to\n\
+      scripts/auto-pipeline.py, then call it at startup.\n\nReference: docs/plans/2026-02-18-auto-create-dependent-directories-design.md\n\
+      \nSteps:\n1. Read scripts/auto-pipeline.py. Find the constants section near\
+      \ the top\n   (around lines 50-80, where DEFECT_DIR, FEATURE_DIR, COMPLETED_DIRS,\n\
+      \   PLANS_DIR, LOGS_DIR etc. are defined).\n\n2. After the existing constants\
+      \ (after LOGS_DIR and SUMMARY_LOG_FILENAME\n   definitions), add:\n\n   REQUIRED_DIRS\
+      \ = [\n       PLANS_DIR,\n       os.path.join(PLANS_DIR, \"logs\"),\n      \
+      \ LOGS_DIR,\n       DEFECT_DIR,\n       FEATURE_DIR,\n       COMPLETED_FEATURES_DIR,\n\
+      \       COMPLETED_DEFECTS_DIR,\n   ]\n\n\n   def ensure_directories() -> None:\n\
+      \       \"\"\"Create all directories the pipeline depends on.\n\n       Called\
+      \ once at startup so that no downstream code needs to worry\n       about missing\
+      \ directories. Logs a message for each directory that\n       had to be created.\n\
+      \       \"\"\"\n       for d in REQUIRED_DIRS:\n           if not os.path.isdir(d):\n\
+      \               os.makedirs(d, exist_ok=True)\n               print(f\"[INIT]\
+      \ Created missing directory: {d}\")\n\n3. Find main() (around line 2170). After\
+      \ \"log(\"Starting auto-pipeline\")\"\n   and the log lines that follow it (the\
+      \ mode log line), but BEFORE the\n   budget_guard construction, insert:\n\n\
+      \       ensure_directories()\n\n4. Remove the redundant mkdir calls that are\
+      \ now unnecessary:\n   - In _open_item_log() (around line 195): remove the line\n\
+      \     \"os.makedirs(LOGS_DIR, exist_ok=True)\"\n   - In _log_summary() (around\
+      \ line 247): remove the line\n     \"os.makedirs(LOGS_DIR, exist_ok=True)\"\n\
+      \   - In PipelineCostTracker.write_session_report() (around line 769):\n   \
+      \  remove the two lines \"log_dir = Path(\".claude/plans/logs\")\" and\n   \
+      \  \"log_dir.mkdir(parents=True, exist_ok=True)\".\n     The report_path line\
+      \ should use TASK_LOG_DIR or\n     Path(\".claude/plans/logs\") directly (it\
+      \ is already defined\n     at module level as PLANS_DIR + \"/logs\" in REQUIRED_DIRS).\n\
+      \   NOTE: Keep the os.makedirs(dest_dir, ...) in _archive_and_report()\n   because\
+      \ dest_dir is dynamically resolved.\n\n5. Verify syntax:\n   python3 -c \"import\
+      \ py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
+      \ print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py\n"
+    attempts: 2
+    last_attempt: '2026-02-18T19:36:33.306312'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: FAIL: 6 test
+      regressions in test_auto_pipeline.py (FileNotFoundError from removed makedirs),
+      2 stale docstrings. All functional requirements met, syntax OK.'
+    validation_attempts: 1
+    completed_at: '2026-02-18T19:38:44.149755'
+    result_message: Fixed 6 test regressions (tests now create temp logs/ dir themselves
+      since ensure_directories() handles startup dir creation) and updated 2 stale
+      docstrings in _open_item_log() and _log_summary(). All 33 tests pass.
   - id: '1.2'
     name: Add ensure_directories() to plan-orchestrator.py
     agent: coder
     status: pending
-    description: |
-      Add a REQUIRED_DIRS constant and ensure_directories() function to
-      scripts/plan-orchestrator.py, then call it at startup.
-
-      Reference: docs/plans/2026-02-18-auto-create-dependent-directories-design.md
-
-      Steps:
-      1. Read scripts/plan-orchestrator.py. Find the constants section near the
-         top (around lines 40-80, where TASK_LOG_DIR, STOP_SEMAPHORE_PATH,
-         etc. are defined).
-
-      2. After the existing constants in that section, add:
-
-         REQUIRED_DIRS = [
-             ".claude/plans",
-             str(TASK_LOG_DIR),
-             ".claude/subagent-status",
-             "logs",
-             "logs/e2e",
-         ]
-
-
-         def ensure_directories() -> None:
-             """Create all directories the orchestrator depends on.
-
-             Called once at startup so that no downstream code needs to worry
-             about missing directories. Logs a message for each directory that
-             had to be created.
-             """
-             for d in REQUIRED_DIRS:
-                 if not os.path.isdir(d):
-                     os.makedirs(d, exist_ok=True)
-                     print(f"[INIT] Created missing directory: {d}")
-
-      3. Find run_orchestrator() (around line 4171). At the very beginning of
-         the function body, right after "VERBOSE = verbose" and BEFORE
-         verbose_log("Loading plan from: ..."), insert:
-
-             ensure_directories()
-
-      4. Remove the redundant mkdir calls:
-         - In save_usage_report() (around line 750):
-           remove "TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)"
-         - In the task logging section (around line 2655):
-           remove "TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)"
-         NOTE: Keep mkdir calls for dynamically constructed paths like
-         worktree dirs, dst.parent.mkdir(), status_dir.mkdir(), etc.
-
-      5. Verify syntax:
-         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
-
-      Files: scripts/plan-orchestrator.py
+    description: "Add a REQUIRED_DIRS constant and ensure_directories() function to\n\
+      scripts/plan-orchestrator.py, then call it at startup.\n\nReference: docs/plans/2026-02-18-auto-create-dependent-directories-design.md\n\
+      \nSteps:\n1. Read scripts/plan-orchestrator.py. Find the constants section near\
+      \ the\n   top (around lines 40-80, where TASK_LOG_DIR, STOP_SEMAPHORE_PATH,\n\
+      \   etc. are defined).\n\n2. After the existing constants in that section, add:\n\
+      \n   REQUIRED_DIRS = [\n       \".claude/plans\",\n       str(TASK_LOG_DIR),\n\
+      \       \".claude/subagent-status\",\n       \"logs\",\n       \"logs/e2e\"\
+      ,\n   ]\n\n\n   def ensure_directories() -> None:\n       \"\"\"Create all directories\
+      \ the orchestrator depends on.\n\n       Called once at startup so that no downstream\
+      \ code needs to worry\n       about missing directories. Logs a message for\
+      \ each directory that\n       had to be created.\n       \"\"\"\n       for\
+      \ d in REQUIRED_DIRS:\n           if not os.path.isdir(d):\n               os.makedirs(d,\
+      \ exist_ok=True)\n               print(f\"[INIT] Created missing directory:\
+      \ {d}\")\n\n3. Find run_orchestrator() (around line 4171). At the very beginning\
+      \ of\n   the function body, right after \"VERBOSE = verbose\" and BEFORE\n \
+      \  verbose_log(\"Loading plan from: ...\"), insert:\n\n       ensure_directories()\n\
+      \n4. Remove the redundant mkdir calls:\n   - In save_usage_report() (around\
+      \ line 750):\n     remove \"TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)\"\
+      \n   - In the task logging section (around line 2655):\n     remove \"TASK_LOG_DIR.mkdir(parents=True,\
+      \ exist_ok=True)\"\n   NOTE: Keep mkdir calls for dynamically constructed paths\
+      \ like\n   worktree dirs, dst.parent.mkdir(), status_dir.mkdir(), etc.\n\n5.\
+      \ Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py\n"
 - id: phase-2
   name: Phase 2 - Unit Tests
   status: pending
@@ -150,80 +101,45 @@ sections:
     status: pending
     depends_on:
     - '1.1'
-    description: |
-      Add unit tests for the ensure_directories() function in auto-pipeline.py.
-
-      Reference: docs/plans/2026-02-18-auto-create-dependent-directories-design.md
-
-      Steps:
-      1. Read tests/test_auto_pipeline.py to understand existing test patterns.
-         Note how the module is imported (likely via importlib).
-
-      2. Add the following tests:
-
-         a. test_ensure_directories_creates_missing_dirs():
-            - Use tmp_path fixture to create a temporary directory.
-            - Monkeypatch os.getcwd() or change directory to tmp_path.
-            - Monkeypatch the REQUIRED_DIRS constant in the auto-pipeline module
-              to use paths relative to tmp_path (e.g., [str(tmp_path / "logs"),
-              str(tmp_path / "docs/defect-backlog")]).
-            - Call ensure_directories().
-            - Assert all directories in the patched REQUIRED_DIRS exist.
-
-         b. test_ensure_directories_logs_created_dirs(capsys):
-            - Same setup as above with non-existing dirs.
-            - Call ensure_directories().
-            - Capture stdout and assert "[INIT] Created missing directory:" appears
-              for each directory.
-
-         c. test_ensure_directories_silent_when_dirs_exist(capsys):
-            - Same setup but pre-create all directories before calling.
-            - Call ensure_directories().
-            - Capture stdout and assert no "[INIT]" messages appear.
-
-      3. Run the tests:
-         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_auto_pipeline.py -v
-         Fix any failures before marking this task complete.
-
-      Files: tests/test_auto_pipeline.py
+    description: "Add unit tests for the ensure_directories() function in auto-pipeline.py.\n\
+      \nReference: docs/plans/2026-02-18-auto-create-dependent-directories-design.md\n\
+      \nSteps:\n1. Read tests/test_auto_pipeline.py to understand existing test patterns.\n\
+      \   Note how the module is imported (likely via importlib).\n\n2. Add the following\
+      \ tests:\n\n   a. test_ensure_directories_creates_missing_dirs():\n      - Use\
+      \ tmp_path fixture to create a temporary directory.\n      - Monkeypatch os.getcwd()\
+      \ or change directory to tmp_path.\n      - Monkeypatch the REQUIRED_DIRS constant\
+      \ in the auto-pipeline module\n        to use paths relative to tmp_path (e.g.,\
+      \ [str(tmp_path / \"logs\"),\n        str(tmp_path / \"docs/defect-backlog\"\
+      )]).\n      - Call ensure_directories().\n      - Assert all directories in\
+      \ the patched REQUIRED_DIRS exist.\n\n   b. test_ensure_directories_logs_created_dirs(capsys):\n\
+      \      - Same setup as above with non-existing dirs.\n      - Call ensure_directories().\n\
+      \      - Capture stdout and assert \"[INIT] Created missing directory:\" appears\n\
+      \        for each directory.\n\n   c. test_ensure_directories_silent_when_dirs_exist(capsys):\n\
+      \      - Same setup but pre-create all directories before calling.\n      -\
+      \ Call ensure_directories().\n      - Capture stdout and assert no \"[INIT]\"\
+      \ messages appear.\n\n3. Run the tests:\n   ~/.pyenv/versions/3.11.*/bin/python\
+      \ -m pytest tests/test_auto_pipeline.py -v\n   Fix any failures before marking\
+      \ this task complete.\n\nFiles: tests/test_auto_pipeline.py\n"
   - id: '2.2'
     name: Add unit tests for ensure_directories() in plan-orchestrator.py
     agent: coder
     status: pending
     depends_on:
     - '1.2'
-    description: |
-      Add unit tests for the ensure_directories() function in plan-orchestrator.py.
-
-      Reference: docs/plans/2026-02-18-auto-create-dependent-directories-design.md
-
-      Steps:
-      1. Read tests/test_plan_orchestrator.py to understand existing test patterns.
-
-      2. Add the following tests:
-
-         a. test_ensure_directories_creates_missing_dirs():
-            - Use tmp_path fixture.
-            - Monkeypatch the REQUIRED_DIRS constant in the plan-orchestrator
-              module to use paths under tmp_path.
-            - Call ensure_directories().
-            - Assert all directories exist.
-
-         b. test_ensure_directories_logs_created_dirs(capsys):
-            - Same setup with non-existing dirs.
-            - Call ensure_directories().
-            - Assert "[INIT] Created missing directory:" appears in stdout.
-
-         c. test_ensure_directories_silent_when_dirs_exist(capsys):
-            - Pre-create all directories.
-            - Call ensure_directories().
-            - Assert no "[INIT]" messages in stdout.
-
-      3. Run the tests:
-         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_plan_orchestrator.py -v
-         Fix any failures before marking this task complete.
-
-      Files: tests/test_plan_orchestrator.py
+    description: "Add unit tests for the ensure_directories() function in plan-orchestrator.py.\n\
+      \nReference: docs/plans/2026-02-18-auto-create-dependent-directories-design.md\n\
+      \nSteps:\n1. Read tests/test_plan_orchestrator.py to understand existing test\
+      \ patterns.\n\n2. Add the following tests:\n\n   a. test_ensure_directories_creates_missing_dirs():\n\
+      \      - Use tmp_path fixture.\n      - Monkeypatch the REQUIRED_DIRS constant\
+      \ in the plan-orchestrator\n        module to use paths under tmp_path.\n  \
+      \    - Call ensure_directories().\n      - Assert all directories exist.\n\n\
+      \   b. test_ensure_directories_logs_created_dirs(capsys):\n      - Same setup\
+      \ with non-existing dirs.\n      - Call ensure_directories().\n      - Assert\
+      \ \"[INIT] Created missing directory:\" appears in stdout.\n\n   c. test_ensure_directories_silent_when_dirs_exist(capsys):\n\
+      \      - Pre-create all directories.\n      - Call ensure_directories().\n \
+      \     - Assert no \"[INIT]\" messages in stdout.\n\n3. Run the tests:\n   ~/.pyenv/versions/3.11.*/bin/python\
+      \ -m pytest tests/test_plan_orchestrator.py -v\n   Fix any failures before marking\
+      \ this task complete.\n\nFiles: tests/test_plan_orchestrator.py\n"
 - id: phase-3
   name: Phase 3 - Verification
   status: pending
@@ -235,58 +151,33 @@ sections:
     depends_on:
     - '2.1'
     - '2.2'
-    description: |
-      Run all verification checks to confirm the feature is correctly
-      implemented and all tests pass.
-
-      Steps:
-      1. Check Python syntax for both scripts:
-         python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
-
-      2. Run the full test suite:
-         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ -v
-
-      3. Verify ensure_directories() exists and is callable in both modules:
-         python3 -c "
-         import importlib.util
-         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
-         mod = importlib.util.module_from_spec(spec)
-         spec.loader.exec_module(mod)
-         assert callable(mod.ensure_directories), 'ensure_directories not in auto-pipeline'
-         assert hasattr(mod, 'REQUIRED_DIRS'), 'REQUIRED_DIRS not in auto-pipeline'
-         print(f'auto-pipeline: REQUIRED_DIRS = {mod.REQUIRED_DIRS}')
-         print('auto-pipeline.py verified OK')
-         "
-
-         python3 -c "
-         import importlib.util
-         spec = importlib.util.spec_from_file_location('po', 'scripts/plan-orchestrator.py')
-         mod = importlib.util.module_from_spec(spec)
-         spec.loader.exec_module(mod)
-         assert callable(mod.ensure_directories), 'ensure_directories not in plan-orchestrator'
-         assert hasattr(mod, 'REQUIRED_DIRS'), 'REQUIRED_DIRS not in plan-orchestrator'
-         print(f'plan-orchestrator: REQUIRED_DIRS = {mod.REQUIRED_DIRS}')
-         print('plan-orchestrator.py verified OK')
-         "
-
-      4. Verify redundant mkdir calls were removed:
-         python3 -c "
-         import inspect, importlib.util
-         # Check auto-pipeline
-         spec = importlib.util.spec_from_file_location('ap', 'scripts/auto-pipeline.py')
-         mod = importlib.util.module_from_spec(spec)
-         spec.loader.exec_module(mod)
-         src_open = inspect.getsource(mod._open_item_log)
-         assert 'makedirs' not in src_open, 'Redundant makedirs still in _open_item_log'
-         src_summary = inspect.getsource(mod._log_summary)
-         assert 'makedirs' not in src_summary, 'Redundant makedirs still in _log_summary'
-         print('Redundant mkdir removals verified OK')
-         "
-
-      5. Run orchestrator dry-run to confirm no startup errors:
-         python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml --dry-run
-
-      If any check fails, report the specific failure with details.
-
-      Files: scripts/auto-pipeline.py, scripts/plan-orchestrator.py,
-        tests/test_auto_pipeline.py, tests/test_plan_orchestrator.py
+    description: "Run all verification checks to confirm the feature is correctly\n\
+      implemented and all tests pass.\n\nSteps:\n1. Check Python syntax for both scripts:\n\
+      \   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\
+      \n\n2. Run the full test suite:\n   ~/.pyenv/versions/3.11.*/bin/python -m pytest\
+      \ tests/ -v\n\n3. Verify ensure_directories() exists and is callable in both\
+      \ modules:\n   python3 -c \"\n   import importlib.util\n   spec = importlib.util.spec_from_file_location('ap',\
+      \ 'scripts/auto-pipeline.py')\n   mod = importlib.util.module_from_spec(spec)\n\
+      \   spec.loader.exec_module(mod)\n   assert callable(mod.ensure_directories),\
+      \ 'ensure_directories not in auto-pipeline'\n   assert hasattr(mod, 'REQUIRED_DIRS'),\
+      \ 'REQUIRED_DIRS not in auto-pipeline'\n   print(f'auto-pipeline: REQUIRED_DIRS\
+      \ = {mod.REQUIRED_DIRS}')\n   print('auto-pipeline.py verified OK')\n   \"\n\
+      \n   python3 -c \"\n   import importlib.util\n   spec = importlib.util.spec_from_file_location('po',\
+      \ 'scripts/plan-orchestrator.py')\n   mod = importlib.util.module_from_spec(spec)\n\
+      \   spec.loader.exec_module(mod)\n   assert callable(mod.ensure_directories),\
+      \ 'ensure_directories not in plan-orchestrator'\n   assert hasattr(mod, 'REQUIRED_DIRS'),\
+      \ 'REQUIRED_DIRS not in plan-orchestrator'\n   print(f'plan-orchestrator: REQUIRED_DIRS\
+      \ = {mod.REQUIRED_DIRS}')\n   print('plan-orchestrator.py verified OK')\n  \
+      \ \"\n\n4. Verify redundant mkdir calls were removed:\n   python3 -c \"\n  \
+      \ import inspect, importlib.util\n   # Check auto-pipeline\n   spec = importlib.util.spec_from_file_location('ap',\
+      \ 'scripts/auto-pipeline.py')\n   mod = importlib.util.module_from_spec(spec)\n\
+      \   spec.loader.exec_module(mod)\n   src_open = inspect.getsource(mod._open_item_log)\n\
+      \   assert 'makedirs' not in src_open, 'Redundant makedirs still in _open_item_log'\n\
+      \   src_summary = inspect.getsource(mod._log_summary)\n   assert 'makedirs'\
+      \ not in src_summary, 'Redundant makedirs still in _log_summary'\n   print('Redundant\
+      \ mkdir removals verified OK')\n   \"\n\n5. Run orchestrator dry-run to confirm\
+      \ no startup errors:\n   python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml\
+      \ --dry-run\n\nIf any check fails, report the specific failure with details.\n\
+      \nFiles: scripts/auto-pipeline.py, scripts/plan-orchestrator.py,\n  tests/test_auto_pipeline.py,\
+      \ tests/test_plan_orchestrator.py\n"
