@@ -16,12 +16,12 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Remove dead code and fix tests
-  status: pending
+  status: completed
   tasks:
   - id: '1.1'
     name: Remove DEFAULT_SPEC_DIR, SPEC_DIR, and test references
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: docs/defect-backlog/8-spec-dir-dead-code-wastes-agent-effort.md
 
       Design reference: docs/plans/2026-02-19-8-spec-dir-dead-code-wastes-agent-effort-design.md
@@ -40,3 +40,7 @@ sections:
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
     validation_attempts: 2
+    completed_at: '2026-02-19T17:52:52.847436'
+    result_message: Removed DEFAULT_SPEC_DIR constant and SPEC_DIR config loading
+      from plan-orchestrator.py; removed SPEC_DIR monkeypatch from tests/test_plan_orchestrator.py.
+      All 68 tests pass. Code was committed in 20a5f3e.
