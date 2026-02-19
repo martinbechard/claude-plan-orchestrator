@@ -99,7 +99,7 @@ sections:
   - id: '2.2'
     name: Update build_validation_prompt to include spec-aware context
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.1'
     description: "Update the build_validation_prompt() function in plan-orchestrator.py\
@@ -132,6 +132,13 @@ sections:
       \ doraise=True); print('syntax OK')\"\n\n4. Git commit:\n   git add scripts/plan-orchestrator.py\n\
       \   git commit -m \"feat: include spec-aware E2E context in validation prompt\"\
       \n\nFiles: scripts/plan-orchestrator.py\n"
+    attempts: 1
+    last_attempt: '2026-02-18T20:20:46.739291'
+    model_used: sonnet
+    completed_at: '2026-02-18T20:22:34.985094'
+    result_message: Updated build_validation_prompt() to conditionally include spec-aware
+      E2E validation context when SPEC_DIR is configured. The spec_context block is
+      injected between the standard validation checks and the output format section.
   - id: '2.3'
     name: Update validator agent with spec-aware instructions
     agent: coder
