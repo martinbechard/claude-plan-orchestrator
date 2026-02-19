@@ -1,10 +1,10 @@
 meta:
   name: Read-Only Analysis Task Workflow
-  description: Add a new "analysis" backlog type with a lightweight, single-pass
-    read-only workflow. Analysis items live in docs/analysis-backlog/, use read-only
-    agents (code-reviewer, code-explorer, qa-auditor, e2e-analyzer, spec-verifier),
-    skip the plan/verify cycle, and deliver structured reports via Slack and/or
-    markdown files in docs/reports/.
+  description: Add a new "analysis" backlog type with a lightweight, single-pass read-only
+    workflow. Analysis items live in docs/analysis-backlog/, use read-only agents
+    (code-reviewer, code-explorer, qa-auditor, e2e-analyzer, spec-verifier), skip
+    the plan/verify cycle, and deliver structured reports via Slack and/or markdown
+    files in docs/reports/.
   plan_doc: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md
   created: '2026-02-18'
   max_attempts_default: 3
@@ -18,23 +18,62 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Slack Channel and Constants Setup
-  status: pending
+  status: in_progress
   tasks:
   - id: '1.1'
     name: Add reports channel suffix to plan-orchestrator.py
     agent: coder
-    status: pending
+    status: completed
     description: "Add the 'reports' Slack channel to plan-orchestrator.py and update\
       \ the type channel mapping.\nReference: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md\n\
       Steps:\n1. Read scripts/plan-orchestrator.py. Find SLACK_CHANNEL_ROLE_SUFFIXES\
       \ (around line 128).\n2. Add 'reports' entry:\n   SLACK_CHANNEL_ROLE_SUFFIXES\
       \ = {\n       \"features\": \"feature\",\n       \"defects\": \"defect\",\n\
-      \       \"questions\": \"question\",\n       \"notifications\": \"control\",\n\
-      \       \"reports\": \"analysis\",\n   }\n\n3. Find get_type_channel_id() (around\
-      \ line 3348). Update the suffix_map to include 'analysis':\n   suffix_map =\
-      \ {\"feature\": \"features\", \"defect\": \"defects\", \"analysis\": \"reports\"\
+      \       \"questions\": \"question\",\n       \"notifications\": \"control\"\
+      ,\n       \"reports\": \"analysis\",\n   }\n\n3. Find get_type_channel_id()\
+      \ (around line 3348). Update the suffix_map to include 'analysis':\n   suffix_map\
+      \ = {\"feature\": \"features\", \"defect\": \"defects\", \"analysis\": \"reports\"\
       }\n\n4. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/plan-orchestrator.py"
+    attempts: 2
+    last_attempt: '2026-02-18T22:39:22.253585'
+    model_used: sonnet
+    validation_findings: '[PASS] `SLACK_CHANNEL_ROLE_SUFFIXES` correctly includes
+      `\"reports\": \"analysis\"` — `scripts/plan-orchestrator.py:133`\n- [PASS] `get_type_channel_id()`
+      suffix_map correctly includes `\"analysis\": \"reports\"` — `scripts/plan-orchestrator.py:3360`\n-
+      [PASS] Syntax check passes for both `plan-orchestrator.py` and `auto-pipeline.py`\n-
+      [PASS] 278 of 279 tests pass\n- [FAIL] Test `test_slack_channel_role_suffixes_constant`
+      fails — `tests/test_slack_notifier.py:2301` — asserts `len(suffixes) == 4` but
+      the dict now has 5 entries after adding \"reports\"\n\n**Evidence:**\n\n- Finding
+      5: Test at `tests/test_slack_notifier.py:2301` hardcodes `assert len(suffixes)
+      == 4`. Adding the \"reports\" entry increases the count to 5. The test also
+      lacks an assertion for `suffixes[\"reports\"] == \"analysis\"`. Both the count
+      and the missing assertion need to be updated.\n\n`★ Insight ─────────────────────────────────────`\nThis
+      is a classic regression pattern: when adding a new entry to a dict/enum, existing
+      tests that assert on the collection''s size will break. The coder task should
+      have updated the test to expect 5 entries and added a check for the new `\"reports\":
+      \"analysis\"` mapping. Always search for tests that reference modified constants.\n`─────────────────────────────────────────────────`"}],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":324,"cache_read_input_tokens":34823,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":324},"output_tokens":1,"service_tier":"standard","inference_geo":"not_available"},"context_management":null},"parent_tool_use_id":null,"session_id":"a25c570f-9a71-4fe4-a7fa-60832f2cee7d","uuid":"c1dd3f7d-85a4-42ee-8ab4-0586d2c441bd"}
+
+      [PASS] `SLACK_CHANNEL_ROLE_SUFFIXES` correctly includes `\"reports\": \"analysis\"`
+      — `scripts/plan-orchestrator.py:133`\n- [PASS] `get_type_channel_id()` suffix_map
+      correctly includes `\"analysis\": \"reports\"` — `scripts/plan-orchestrator.py:3360`\n-
+      [PASS] Syntax check passes for both `plan-orchestrator.py` and `auto-pipeline.py`\n-
+      [PASS] 278 of 279 tests pass\n- [FAIL] Test `test_slack_channel_role_suffixes_constant`
+      fails — `tests/test_slack_notifier.py:2301` — asserts `len(suffixes) == 4` but
+      the dict now has 5 entries after adding \"reports\"\n\n**Evidence:**\n\n- Finding
+      5: Test at `tests/test_slack_notifier.py:2301` hardcodes `assert len(suffixes)
+      == 4`. Adding the \"reports\" entry increases the count to 5. The test also
+      lacks an assertion for `suffixes[\"reports\"] == \"analysis\"`. Both the count
+      and the missing assertion need to be updated.\n\n`★ Insight ─────────────────────────────────────`\nThis
+      is a classic regression pattern: when adding a new entry to a dict/enum, existing
+      tests that assert on the collection''s size will break. The coder task should
+      have updated the test to expect 5 entries and added a check for the new `\"reports\":
+      \"analysis\"` mapping. Always search for tests that reference modified constants.\n`─────────────────────────────────────────────────`","stop_reason":null,"session_id":"a25c570f-9a71-4fe4-a7fa-60832f2cee7d","total_cost_usd":0.19745999999999997,"usage":{"input_tokens":5,"cache_creation_input_tokens":14010,"cache_read_input_tokens":122025,"output_tokens":1661,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":14010,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-haiku-4-5-20251001":{"inputTokens":6595,"outputTokens":148,"cacheReadInputTokens":0,"cacheCreationInputTokens":0,"webSearchRequests":0,"costUSD":0.007335,"contextWindow":200000,"maxOutputTokens":32000},"claude-opus-4-6":{"inputTokens":5,"outputTokens":1661,"cacheReadInputTokens":122025,"cacheCreationInputTokens":14010,"webSearchRequests":0,"costUSD":0.19012500000000004,"contextWindow":200000,"maxOutputTokens":32000}},"permission_denials":[],"uuid":"2571a0aa-f3b1-49e7-af3c-be745f556674"}'
+    validation_attempts: 1
+    completed_at: '2026-02-18T22:40:06.857641'
+    result_message: 'Fixed failing test test_slack_channel_role_suffixes_constant:
+      updated len assertion from 4 to 5 and added assertion for reports==''analysis''.
+      All 279 tests pass.'
   - id: '1.2'
     name: Add analysis constants and directories to auto-pipeline.py
     agent: coder
@@ -73,25 +112,25 @@ sections:
       \ near the backlog scanning section (after scan_directory, around line 655):\n\
       \   def parse_analysis_metadata(filepath: str) -> dict:\n       \"\"\"Parse\
       \ analysis-specific metadata from a backlog .md file.\n\n       Extracts:\n\
-      \         - analysis_type: value from '## Analysis Type: <type>' header\n   \
-      \      - output_format: value from '## Output Format: <format>' header (default:\
+      \         - analysis_type: value from '## Analysis Type: <type>' header\n  \
+      \       - output_format: value from '## Output Format: <format>' header (default:\
       \ 'both')\n         - scope: lines from the '## Scope' section (as a list)\n\
       \         - instructions: text from the '## Instructions' section\n       Returns\
       \ a dict with these keys.\n       \"\"\"\n       try:\n           with open(filepath,\
-      \ \"r\") as f:\n               content = f.read()\n       except IOError:\n \
-      \          return {\"analysis_type\": \"\", \"output_format\": \"both\", \"scope\"\
-      : [], \"instructions\": \"\"}\n\n       metadata: dict = {\n           \"analysis_type\"\
-      : \"\",\n           \"output_format\": \"both\",\n           \"scope\": [],\n\
-      \           \"instructions\": \"\",\n       }\n\n       # Extract analysis type\n\
-      \       type_match = re.search(r\"^##\\s*Analysis Type:\\s*(.+)$\", content,\
-      \ re.MULTILINE)\n       if type_match:\n           metadata[\"analysis_type\"\
-      ] = type_match.group(1).strip().lower()\n\n       # Extract output format\n\
-      \       format_match = re.search(r\"^##\\s*Output Format:\\s*(.+)$\", content,\
-      \ re.MULTILINE)\n       if format_match:\n           metadata[\"output_format\"\
-      ] = format_match.group(1).strip().lower()\n\n       # Extract scope section\n\
-      \       scope_match = re.search(r\"^##\\s*Scope\\s*\\n(.*?)(?=^##|\\Z)\", content,\
-      \ re.MULTILINE | re.DOTALL)\n       if scope_match:\n           scope_lines\
-      \ = [line.strip().lstrip(\"- \") for line in scope_match.group(1).strip().splitlines()\
+      \ \"r\") as f:\n               content = f.read()\n       except IOError:\n\
+      \           return {\"analysis_type\": \"\", \"output_format\": \"both\", \"\
+      scope\": [], \"instructions\": \"\"}\n\n       metadata: dict = {\n        \
+      \   \"analysis_type\": \"\",\n           \"output_format\": \"both\",\n    \
+      \       \"scope\": [],\n           \"instructions\": \"\",\n       }\n\n   \
+      \    # Extract analysis type\n       type_match = re.search(r\"^##\\s*Analysis\
+      \ Type:\\s*(.+)$\", content, re.MULTILINE)\n       if type_match:\n        \
+      \   metadata[\"analysis_type\"] = type_match.group(1).strip().lower()\n\n  \
+      \     # Extract output format\n       format_match = re.search(r\"^##\\s*Output\
+      \ Format:\\s*(.+)$\", content, re.MULTILINE)\n       if format_match:\n    \
+      \       metadata[\"output_format\"] = format_match.group(1).strip().lower()\n\
+      \n       # Extract scope section\n       scope_match = re.search(r\"^##\\s*Scope\\\
+      s*\\n(.*?)(?=^##|\\Z)\", content, re.MULTILINE | re.DOTALL)\n       if scope_match:\n\
+      \           scope_lines = [line.strip().lstrip(\"- \") for line in scope_match.group(1).strip().splitlines()\
       \ if line.strip()]\n           metadata[\"scope\"] = scope_lines\n\n       #\
       \ Extract instructions section\n       instructions_match = re.search(r\"^##\\\
       s*Instructions\\s*\\n(.*?)(?=^##|\\Z)\", content, re.MULTILINE | re.DOTALL)\n\
@@ -133,10 +172,10 @@ sections:
       \ items, analysis items:\n       - Use a single Claude session with a read-only\
       \ agent\n       - Produce a report instead of code changes\n       - Skip the\
       \ plan creation and verification loop\n       - Deliver results via Slack and/or\
-      \ markdown file\n\n       Returns True on success, False on failure.\n      \
-      \ \"\"\"\n       slack = SlackNotifier()\n       item_start = time.time()\n \
-      \      _open_item_log(item.slug, item.display_name, item.item_type)\n      \
-      \ _log_summary(\"INFO\", \"STARTED\", item.slug, f\"type={item.item_type}\"\
+      \ markdown file\n\n       Returns True on success, False on failure.\n     \
+      \  \"\"\"\n       slack = SlackNotifier()\n       item_start = time.time()\n\
+      \       _open_item_log(item.slug, item.display_name, item.item_type)\n     \
+      \  _log_summary(\"INFO\", \"STARTED\", item.slug, f\"type={item.item_type}\"\
       )\n\n       try:\n           return _process_analysis_inner(item, slack, item_start,\
       \ dry_run)\n       except Exception as e:\n           log(f\"UNEXPECTED ERROR\
       \ in process_analysis_item: {e}\")\n           _log_summary(\"ERROR\", \"CRASHED\"\
@@ -161,8 +200,8 @@ sections:
       )\n\n       if dry_run:\n           log(f\"[DRY RUN] Would run analysis: {item.display_name}\"\
       )\n           log(f\"  Agent: {agent_name}\")\n           log(f\"  Report: {report_path}\"\
       )\n           return True\n\n       # Build the analysis prompt\n       prompt\
-      \ = ANALYSIS_PROMPT_TEMPLATE.format(\n           item_path=item.path,\n     \
-      \      analysis_type=analysis_type,\n           scope=scope,\n           instructions=instructions,\n\
+      \ = ANALYSIS_PROMPT_TEMPLATE.format(\n           item_path=item.path,\n    \
+      \       analysis_type=analysis_type,\n           scope=scope,\n           instructions=instructions,\n\
       \           report_path=report_path,\n       )\n\n       # Import build_permission_flags\
       \ from plan-orchestrator for the agent\n       # The auto-pipeline uses its\
       \ own build_permission_flags which only knows\n       # 'planner' and 'verifier'.\
@@ -175,12 +214,12 @@ sections:
       ,\n           timeout=PLAN_CREATION_TIMEOUT_SECONDS,\n           show_output=VERBOSE,\n\
       \       )\n\n       if result.rate_limited:\n           log(\"Rate limited during\
       \ analysis\")\n           _log_summary(\"WARN\", \"RATE_LIMITED\", item.slug,\
-      \ \"analysis\")\n           return False\n\n       if not result.success:\n \
-      \          log(f\"Analysis failed for {item.display_name} (exit {result.exit_code})\"\
+      \ \"analysis\")\n           return False\n\n       if not result.success:\n\
+      \           log(f\"Analysis failed for {item.display_name} (exit {result.exit_code})\"\
       )\n           if result.stderr:\n               log(f\"  stderr: {result.stderr[:500]}\"\
       )\n           slack.send_status(\n               f\"*Pipeline: analysis failed*\
-      \ {item.display_name}\",\n               level=\"error\"\n           )\n    \
-      \       _log_summary(\"ERROR\", \"FAILED\", item.slug, \"phase=analysis\")\n\
+      \ {item.display_name}\",\n               level=\"error\"\n           )\n   \
+      \        _log_summary(\"ERROR\", \"FAILED\", item.slug, \"phase=analysis\")\n\
       \           return False\n\n       # Deliver report\n       _deliver_analysis_report(item,\
       \ slack, report_path, output_format)\n\n       # Archive\n       elapsed = time.time()\
       \ - item_start\n       minutes = int(elapsed // 60)\n       seconds = int(elapsed\
@@ -211,9 +250,9 @@ sections:
       \ = slack.get_type_channel_id(\"analysis\")\n           if reports_channel:\n\
       \               slack.send_status(\n                   f\"*Analysis Report:*\
       \ {item.display_name}\\n{summary}\",\n                   level=\"success\",\n\
-      \                   channel_id=reports_channel,\n               )\n         \
-      \  else:\n               # Fall back to notifications channel\n            \
-      \   slack.send_status(\n                   f\"*Analysis Report:* {item.display_name}\\\
+      \                   channel_id=reports_channel,\n               )\n        \
+      \   else:\n               # Fall back to notifications channel\n           \
+      \    slack.send_status(\n                   f\"*Analysis Report:* {item.display_name}\\\
       n{summary}\",\n                   level=\"success\",\n               )\n\n \
       \      if output_format in (\"markdown\", \"both\"):\n           if report_exists:\n\
       \               log(f\"Report saved: {report_path}\")\n           else:\n  \
@@ -236,11 +275,11 @@ sections:
       \ 725).\n\n2. Update scan_all_backlogs() to also scan ANALYSIS_DIR:\n   def\
       \ scan_all_backlogs() -> list[BacklogItem]:\n       \"\"\"Scan all backlog directories\
       \ with dependency filtering.\n\n       Returns defects first, then features,\
-      \ then analysis items.\n       Items whose dependencies are not all present in\
-      \ the completed/ directories\n       are filtered out.\n       \"\"\"\n     \
-      \  defects = scan_directory(DEFECT_DIR, \"defect\")\n       features = scan_directory(FEATURE_DIR,\
-      \ \"feature\")\n       analyses = scan_directory(ANALYSIS_DIR, \"analysis\")\n\
-      \       all_items = defects + features + analyses\n       ... (rest of function\
+      \ then analysis items.\n       Items whose dependencies are not all present\
+      \ in the completed/ directories\n       are filtered out.\n       \"\"\"\n \
+      \      defects = scan_directory(DEFECT_DIR, \"defect\")\n       features = scan_directory(FEATURE_DIR,\
+      \ \"feature\")\n       analyses = scan_directory(ANALYSIS_DIR, \"analysis\"\
+      )\n       all_items = defects + features + analyses\n       ... (rest of function\
       \ unchanged)\n\n3. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
   - id: '4.2'
@@ -273,8 +312,8 @@ sections:
       \ FEATURE_DIR, IDEAS_DIR]:\n   Update to:\n   for watch_dir in [DEFECT_DIR,\
       \ FEATURE_DIR, ANALYSIS_DIR, IDEAS_DIR]:\n\n3. Find the startup log lines (around\
       \ line 2571-2572) that print the\n   monitored directories. Add a line for the\
-      \ analysis backlog:\n   log(f\"  Analysis backlog: {ANALYSIS_DIR}/\")\n\n4. Verify\
-      \ syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
+      \ analysis backlog:\n   log(f\"  Analysis backlog: {ANALYSIS_DIR}/\")\n\n4.\
+      \ Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
 - id: phase-5
   name: Phase 5 - Unit Tests
@@ -296,21 +335,21 @@ sections:
       \n\n   b. test_analysis_in_completed_dirs:\n      Assert \"analysis\" is a key\
       \ in COMPLETED_DIRS.\n      Assert COMPLETED_DIRS[\"analysis\"] == COMPLETED_ANALYSES_DIR.\n\
       \n   c. test_analysis_type_to_agent_mapping:\n      Assert ANALYSIS_TYPE_TO_AGENT\
-      \ contains expected mappings:\n      \"code-review\" -> \"code-reviewer\"\n \
-      \     \"codebase-analysis\" -> \"code-explorer\"\n      \"test-coverage\" ->\
+      \ contains expected mappings:\n      \"code-review\" -> \"code-reviewer\"\n\
+      \      \"codebase-analysis\" -> \"code-explorer\"\n      \"test-coverage\" ->\
       \ \"qa-auditor\"\n      \"test-results\" -> \"e2e-analyzer\"\n      \"spec-compliance\"\
       \ -> \"spec-verifier\"\n\n   d. test_parse_analysis_metadata_full:\n      Create\
       \ a temp .md file with all analysis metadata fields:\n      ## Analysis Type:\
       \ code-review\n      ## Output Format: both\n      ## Scope\\n- src/\\n- tests/\n\
       \      ## Instructions\\nCheck for code quality issues.\n      Call parse_analysis_metadata()\
       \ and assert all fields parsed correctly.\n\n   e. test_parse_analysis_metadata_defaults:\n\
-      \      Create a temp .md file with no analysis metadata fields.\n      Call parse_analysis_metadata()\
-      \ and assert defaults:\n      analysis_type=\"\", output_format=\"both\", scope=[],\
-      \ instructions=\"\"\n\n   f. test_parse_analysis_metadata_missing_file:\n   \
-      \   Call parse_analysis_metadata(\"/nonexistent/file.md\").\n      Assert it\
-      \ returns the default dict without raising.\n\n   g. test_scan_all_backlogs_includes_analysis:\n\
-      \      Create a temp analysis-backlog directory with a test .md file.\n     \
-      \ Monkeypatch ANALYSIS_DIR to point to the temp directory.\n      Call scan_all_backlogs()\
+      \      Create a temp .md file with no analysis metadata fields.\n      Call\
+      \ parse_analysis_metadata() and assert defaults:\n      analysis_type=\"\",\
+      \ output_format=\"both\", scope=[], instructions=\"\"\n\n   f. test_parse_analysis_metadata_missing_file:\n\
+      \      Call parse_analysis_metadata(\"/nonexistent/file.md\").\n      Assert\
+      \ it returns the default dict without raising.\n\n   g. test_scan_all_backlogs_includes_analysis:\n\
+      \      Create a temp analysis-backlog directory with a test .md file.\n    \
+      \  Monkeypatch ANALYSIS_DIR to point to the temp directory.\n      Call scan_all_backlogs()\
       \ (with DEFECT_DIR and FEATURE_DIR also monkeypatched\n      to empty temp dirs).\n\
       \      Assert the analysis item appears in the result with item_type=\"analysis\"\
       .\n\n4. Run tests:\n   python3 -m pytest tests/test_auto_pipeline.py -v -k \"\
@@ -329,14 +368,14 @@ sections:
       \n3. Add the following test cases:\n\n   a. test_slack_channel_role_suffixes_includes_reports:\n\
       \      Assert \"reports\" is a key in SLACK_CHANNEL_ROLE_SUFFIXES.\n      Assert\
       \ SLACK_CHANNEL_ROLE_SUFFIXES[\"reports\"] == \"analysis\".\n\n   b. test_get_type_channel_id_analysis:\n\
-      \      Create a SlackNotifier instance (with Slack disabled or mocked).\n   \
-      \   Mock _discover_channels() to return a dict that includes\n      \"orchestrator-reports\"\
+      \      Create a SlackNotifier instance (with Slack disabled or mocked).\n  \
+      \    Mock _discover_channels() to return a dict that includes\n      \"orchestrator-reports\"\
       : \"C_REPORTS_ID\".\n      Call get_type_channel_id(\"analysis\").\n      Assert\
       \ result == \"C_REPORTS_ID\".\n\n   c. test_get_type_channel_id_unknown_type:\n\
-      \      Verify that get_type_channel_id(\"unknown\") returns \"\".\n\n4. Run tests:\n\
-      \   python3 -m pytest tests/test_plan_orchestrator.py -v -k \"reports or analysis\"\
-      \n   Then run ALL tests:\n   python3 -m pytest tests/ -v\n   Fix any failures.\n\
-      \nFiles: tests/test_plan_orchestrator.py"
+      \      Verify that get_type_channel_id(\"unknown\") returns \"\".\n\n4. Run\
+      \ tests:\n   python3 -m pytest tests/test_plan_orchestrator.py -v -k \"reports\
+      \ or analysis\"\n   Then run ALL tests:\n   python3 -m pytest tests/ -v\n  \
+      \ Fix any failures.\n\nFiles: tests/test_plan_orchestrator.py"
 - id: phase-6
   name: Phase 6 - Verification
   status: pending
