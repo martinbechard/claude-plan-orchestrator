@@ -21,6 +21,7 @@ spec.loader.exec_module(mod)
 
 SlackNotifier = mod.SlackNotifier
 SLACK_BLOCK_TEXT_MAX_LENGTH = mod.SLACK_BLOCK_TEXT_MAX_LENGTH
+SLACK_CHANNEL_ROLE_SUFFIXES = mod.SLACK_CHANNEL_ROLE_SUFFIXES
 IntakeState = mod.IntakeState
 REQUIRED_FIVE_WHYS_COUNT = mod.REQUIRED_FIVE_WHYS_COUNT
 git_stash_working_changes = mod.git_stash_working_changes
@@ -795,6 +796,36 @@ def test_get_type_channel_id_custom_prefix():
     result = notifier.get_type_channel_id("feature")
 
     assert result == "C_CUSTOM_FEATURES"
+
+
+def test_slack_channel_role_suffixes_includes_reports():
+    """Verify 'reports' key maps to 'analysis' in SLACK_CHANNEL_ROLE_SUFFIXES."""
+    assert "reports" in SLACK_CHANNEL_ROLE_SUFFIXES
+    assert SLACK_CHANNEL_ROLE_SUFFIXES["reports"] == "analysis"
+
+
+def test_get_type_channel_id_analysis():
+    """Verify 'analysis' item type resolves to the orchestrator-reports channel ID."""
+    notifier = SlackNotifier()
+    notifier._channel_prefix = "orchestrator-"
+
+    with unittest.mock.patch.object(
+        notifier,
+        '_discover_channels',
+        return_value={"orchestrator-reports": "C_REPORTS_ID"},
+    ):
+        result = notifier.get_type_channel_id("analysis")
+
+    assert result == "C_REPORTS_ID"
+
+
+def test_get_type_channel_id_unknown_type():
+    """Verify an unrecognized item type returns empty string without making an API call."""
+    notifier = SlackNotifier()
+
+    result = notifier.get_type_channel_id("unknown")
+
+    assert result == ""
 
 
 def test_stash_pop_discards_task_status_json(tmp_path, monkeypatch):
