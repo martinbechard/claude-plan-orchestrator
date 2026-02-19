@@ -28,6 +28,7 @@ REQUIRED_FIVE_WHYS_COUNT = mod.REQUIRED_FIVE_WHYS_COUNT
 git_stash_working_changes = mod.git_stash_working_changes
 git_stash_pop = mod.git_stash_pop
 ORCHESTRATOR_STASH_MESSAGE = mod.ORCHESTRATOR_STASH_MESSAGE
+STASH_EXCLUDE_PLANS_PATHSPEC = mod.STASH_EXCLUDE_PLANS_PATHSPEC
 STATUS_FILE_PATH = mod.STATUS_FILE_PATH
 ensure_directories = mod.ensure_directories
 parse_verification_blocks = mod.parse_verification_blocks
@@ -703,6 +704,9 @@ def test_git_stash_working_changes_dirty_tree():
     assert "--include-untracked" in stash_cmd
     assert "-m" in stash_cmd
     assert ORCHESTRATOR_STASH_MESSAGE in stash_cmd
+    assert "--" in stash_cmd
+    assert "." in stash_cmd
+    assert STASH_EXCLUDE_PLANS_PATHSPEC in stash_cmd
 
 
 def test_git_stash_working_changes_stash_fails():
@@ -722,11 +726,38 @@ def test_git_stash_pop_success():
 
 
 def test_git_stash_pop_conflict():
-    """Returns False when git stash pop fails (e.g. merge conflict)."""
-    with unittest.mock.patch("subprocess.run", return_value=_make_run_result(returncode=1, stderr=b"conflict")):
+    """Returns False when git stash pop fails; recovery calls reset --merge before checkout."""
+    with unittest.mock.patch("subprocess.run", return_value=_make_run_result(returncode=1, stderr=b"conflict")) as mock_run:
         result = git_stash_pop()
 
     assert result is False
+
+    all_cmds = [call.args[0] for call in mock_run.call_args_list]
+    assert ["git", "reset", "--merge"] in all_cmds
+    reset_idx = all_cmds.index(["git", "reset", "--merge"])
+    checkout_idx = next(i for i, c in enumerate(all_cmds) if c == ["git", "checkout", "."])
+    assert reset_idx < checkout_idx
+
+
+def test_git_stash_pop_conflict_calls_reset_merge():
+    """Recovery sequence after pop failure is exactly: reset --merge, checkout ., stash drop."""
+    def _pop_fails_side_effect(cmd, **kwargs):
+        if cmd[:3] == ["git", "stash", "pop"]:
+            return _make_run_result(returncode=1, stderr=b"conflict")
+        return _make_run_result(returncode=0)
+
+    with unittest.mock.patch("subprocess.run", side_effect=_pop_fails_side_effect) as mock_run:
+        git_stash_pop()
+
+    recovery_cmds = [
+        call.args[0] for call in mock_run.call_args_list
+        if call.args[0] == ["git", "reset", "--merge"]
+        or call.args[0] == ["git", "checkout", "."]
+        or call.args[0] == ["git", "stash", "drop"]
+    ]
+    assert recovery_cmds[0] == ["git", "reset", "--merge"]
+    assert recovery_cmds[1] == ["git", "checkout", "."]
+    assert recovery_cmds[2] == ["git", "stash", "drop"]
 
 
 # --- get_type_channel_id tests ---

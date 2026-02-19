@@ -43,6 +43,7 @@ WORKTREE_BASE_DIR = ".worktrees"
 
 # Git stash management
 ORCHESTRATOR_STASH_MESSAGE = "orchestrator-auto-stash"
+STASH_EXCLUDE_PLANS_PATHSPEC = ":(exclude).claude/plans/"
 
 # Orchestrator project config
 ORCHESTRATOR_CONFIG_PATH = ".claude/orchestrator-config.yaml"
@@ -1816,7 +1817,8 @@ def git_stash_working_changes() -> bool:
         return False
 
     stash_result = subprocess.run(
-        ["git", "stash", "push", "--include-untracked", "-m", ORCHESTRATOR_STASH_MESSAGE],
+        ["git", "stash", "push", "--include-untracked", "-m", ORCHESTRATOR_STASH_MESSAGE,
+         "--", ".", STASH_EXCLUDE_PLANS_PATHSPEC],
         capture_output=True
     )
 
@@ -1857,7 +1859,10 @@ def git_stash_pop() -> bool:
     # The stash typically contains only the plan YAML with an outdated in_progress
     # status that the agent has since committed as completed.  Keeping the stash
     # around would block future pops and leave merge markers in the working tree.
+    # git reset --merge must precede git checkout . to clear UU (unmerged) index state;
+    # git checkout . alone cannot restore files in unresolved conflict status.
     print("[RECOVERY] Resetting working tree to HEAD and dropping stale stash...")
+    subprocess.run(["git", "reset", "--merge"], capture_output=True)
     subprocess.run(["git", "checkout", "."], capture_output=True)
     subprocess.run(["git", "stash", "drop"], capture_output=True)
     print("[RECOVERY] Working tree restored to clean state")
