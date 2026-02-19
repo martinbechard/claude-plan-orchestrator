@@ -773,3 +773,98 @@ def test_ensure_directories_silent_when_dirs_exist(tmp_path, monkeypatch, capsys
 
     captured = capsys.readouterr()
     assert "[INIT]" not in captured.out
+
+
+# --- scan_ideas() tests ---
+
+
+def test_scan_ideas_returns_md_files(tmp_path, monkeypatch):
+    """scan_ideas() returns paths for non-empty .md files in IDEAS_DIR."""
+    ideas_dir = tmp_path / "ideas"
+    ideas_dir.mkdir()
+    processed_dir = ideas_dir / "processed"
+    processed_dir.mkdir()
+
+    (ideas_dir / "idea-one.md").write_text("# Idea One\n")
+    (ideas_dir / "idea-two.md").write_text("# Idea Two\n")
+
+    monkeypatch.setattr(mod, "IDEAS_DIR", str(ideas_dir))
+    monkeypatch.setattr(mod, "IDEAS_PROCESSED_DIR", str(processed_dir))
+
+    result = mod.scan_ideas()
+
+    result_names = {Path(p).name for p in result}
+    assert result_names == {"idea-one.md", "idea-two.md"}
+
+
+def test_scan_ideas_skips_empty_files(tmp_path, monkeypatch):
+    """scan_ideas() skips zero-byte .md files and returns only non-empty ones."""
+    ideas_dir = tmp_path / "ideas"
+    ideas_dir.mkdir()
+    processed_dir = ideas_dir / "processed"
+    processed_dir.mkdir()
+
+    (ideas_dir / "empty.md").write_text("")
+    (ideas_dir / "nonempty.md").write_text("# Not empty\n")
+
+    monkeypatch.setattr(mod, "IDEAS_DIR", str(ideas_dir))
+    monkeypatch.setattr(mod, "IDEAS_PROCESSED_DIR", str(processed_dir))
+
+    result = mod.scan_ideas()
+
+    result_names = {Path(p).name for p in result}
+    assert result_names == {"nonempty.md"}
+    assert "empty.md" not in result_names
+
+
+def test_scan_ideas_skips_already_processed(tmp_path, monkeypatch):
+    """scan_ideas() omits files whose basename already exists in IDEAS_PROCESSED_DIR."""
+    ideas_dir = tmp_path / "ideas"
+    ideas_dir.mkdir()
+    processed_dir = ideas_dir / "processed"
+    processed_dir.mkdir()
+
+    (ideas_dir / "done.md").write_text("# Done\n")
+    (ideas_dir / "pending.md").write_text("# Pending\n")
+    # Mark 'done.md' as already processed
+    (processed_dir / "done.md").write_text("# Done\n")
+
+    monkeypatch.setattr(mod, "IDEAS_DIR", str(ideas_dir))
+    monkeypatch.setattr(mod, "IDEAS_PROCESSED_DIR", str(processed_dir))
+
+    result = mod.scan_ideas()
+
+    result_names = {Path(p).name for p in result}
+    assert result_names == {"pending.md"}
+    assert "done.md" not in result_names
+
+
+def test_scan_ideas_returns_empty_when_dir_missing(tmp_path, monkeypatch):
+    """scan_ideas() returns an empty list when IDEAS_DIR does not exist."""
+    nonexistent = str(tmp_path / "does-not-exist")
+    monkeypatch.setattr(mod, "IDEAS_DIR", nonexistent)
+    monkeypatch.setattr(mod, "IDEAS_PROCESSED_DIR", str(tmp_path / "processed"))
+
+    result = mod.scan_ideas()
+
+    assert result == []
+
+
+def test_scan_ideas_skips_dotfiles(tmp_path, monkeypatch):
+    """scan_ideas() skips hidden (dot-prefixed) files even when they have a .md suffix."""
+    ideas_dir = tmp_path / "ideas"
+    ideas_dir.mkdir()
+    processed_dir = ideas_dir / "processed"
+    processed_dir.mkdir()
+
+    (ideas_dir / ".hidden.md").write_text("# Hidden\n")
+    (ideas_dir / "normal.md").write_text("# Normal\n")
+
+    monkeypatch.setattr(mod, "IDEAS_DIR", str(ideas_dir))
+    monkeypatch.setattr(mod, "IDEAS_PROCESSED_DIR", str(processed_dir))
+
+    result = mod.scan_ideas()
+
+    result_names = {Path(p).name for p in result}
+    assert result_names == {"normal.md"}
+    assert ".hidden.md" not in result_names
