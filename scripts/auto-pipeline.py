@@ -2619,7 +2619,7 @@ def main_loop(dry_run: bool = False, once: bool = False,
     observer = Observer()
     watcher = BacklogWatcher(on_new_item)
 
-    for watch_dir in [DEFECT_DIR, FEATURE_DIR, IDEAS_DIR]:
+    for watch_dir in [DEFECT_DIR, FEATURE_DIR, ANALYSIS_DIR, IDEAS_DIR]:
         if os.path.isdir(watch_dir):
             observer.schedule(watcher, watch_dir, recursive=False)
             verbose_log(f"Watching directory: {watch_dir}")
@@ -2843,6 +2843,7 @@ def main():
     log("Starting auto-pipeline")
     log(f"  Defect backlog: {DEFECT_DIR}/")
     log(f"  Feature backlog: {FEATURE_DIR}/")
+    log(f"  Analysis backlog: {ANALYSIS_DIR}/")
     log(f"  Mode: {'dry-run' if args.dry_run else 'once' if args.once else 'continuous watch'}")
     ensure_directories()
 
