@@ -267,7 +267,7 @@ sections:
   - id: '3.2'
     name: Add Slack question posting for suspended items
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '3.1'
     description: "Add a method to SlackNotifier that posts a design question to the\n\
@@ -310,6 +310,12 @@ sections:
       \n\nFiles: scripts/plan-orchestrator.py\n"
     attempts: 1
     last_attempt: '2026-02-18T20:57:40.741075'
+    model_used: sonnet
+    completed_at: '2026-02-18T21:01:47.953992'
+    result_message: Added SLACK_THREAD_REPLIES_LIMIT constant, _post_message_get_ts()
+      private helper, post_suspension_question() for posting Block Kit questions to
+      type-specific Slack channels, and check_suspension_reply() for polling conversations.replies
+      for human thread responses
   - id: '3.3'
     name: Add suspension handling to auto-pipeline
     agent: coder
