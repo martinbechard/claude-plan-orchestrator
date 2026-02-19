@@ -130,6 +130,7 @@ SLACK_CHANNEL_ROLE_SUFFIXES = {
     "defects": "defect",
     "questions": "question",
     "notifications": "control",
+    "reports": "analysis",
 }
 SLACK_CHANNEL_CACHE_SECONDS = 300
 SLACK_BLOCK_TEXT_MAX_LENGTH = 2900
@@ -3356,7 +3357,7 @@ class SlackNotifier:
         Returns empty string if the channel is not found or Slack
         is disabled.
         """
-        suffix_map = {"feature": "features", "defect": "defects"}
+        suffix_map = {"feature": "features", "defect": "defects", "analysis": "reports"}
         suffix = suffix_map.get(item_type, "")
         if not suffix:
             return ""
