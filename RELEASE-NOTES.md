@@ -1,5 +1,19 @@
 # Release Notes
 
+## 1.4.0 (2026-02-18)
+
+### New Features
+- **Opus/Sonnet design loop**: UX designer agent now runs as Opus orchestrator invoking
+  a Sonnet subagent for design generation. Handles Q&A rounds automatically, capped at
+  3 rounds.
+- **ux-implementer agent**: New Sonnet-based agent that produces design documents from
+  design briefs using a structured STATUS protocol (STATUS: COMPLETE or STATUS: QUESTION).
+- **Slack-based question suspension**: Work items can be suspended when a design question
+  requires human input. Questions are posted to Slack; the pipeline continues processing
+  other work items; answers resume the suspended item automatically.
+- **Suspension marker files**: New `.claude/suspended/` directory for tracking suspended
+  items with timeout and Slack thread correlation.
+
 ## 1.3.0 (2026-02-18)
 
 ### New Features

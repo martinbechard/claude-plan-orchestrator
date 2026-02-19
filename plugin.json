@@ -1,6 +1,6 @@
 {
   "name": "plan-orchestrator",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Automate multi-step implementation plans with Claude Code. Break complex projects into discrete tasks executed in fresh Claude sessions, avoiding context degradation.",
   "author": "martinbechard",
   "repository": "https://github.com/martinbechard/claude-plan-orchestrator",
