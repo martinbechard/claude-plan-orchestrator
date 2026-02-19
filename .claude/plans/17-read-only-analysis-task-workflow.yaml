@@ -77,7 +77,7 @@ sections:
   - id: '1.2'
     name: Add analysis constants and directories to auto-pipeline.py
     agent: coder
-    status: pending
+    status: in_progress
     description: "Add the analysis backlog constants, directories, and type mappings\
       \ to scripts/auto-pipeline.py.\nReference: docs/plans/2026-02-18-17-read-only-analysis-task-workflow-design.md\n\
       Steps:\n1. Read scripts/auto-pipeline.py. Find the directory constants section\
@@ -96,6 +96,8 @@ sections:
       \   DEFAULT_ANALYSIS_AGENT = \"code-reviewer\"\n\n7. Verify syntax:\n   python3\
       \ -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True);\
       \ print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py"
+    attempts: 1
+    last_attempt: '2026-02-18T22:40:09.425637'
 - id: phase-2
   name: Phase 2 - Analysis Metadata Parsing and Prompt Template
   status: pending

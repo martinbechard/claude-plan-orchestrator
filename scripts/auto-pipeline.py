@@ -65,11 +65,15 @@ DEFAULT_AGENTS_DIR = ".claude/agents/"
 
 DEFECT_DIR = "docs/defect-backlog"
 FEATURE_DIR = "docs/feature-backlog"
+ANALYSIS_DIR = "docs/analysis-backlog"
 COMPLETED_DEFECTS_DIR = "docs/completed-backlog/defects"
 COMPLETED_FEATURES_DIR = "docs/completed-backlog/features"
+COMPLETED_ANALYSES_DIR = "docs/completed-backlog/analyses"
+REPORTS_DIR = "docs/reports"
 COMPLETED_DIRS = {
     "defect": COMPLETED_DEFECTS_DIR,
     "feature": COMPLETED_FEATURES_DIR,
+    "analysis": COMPLETED_ANALYSES_DIR,
 }
 PLANS_DIR = ".claude/plans"
 DESIGN_DIR = "docs/plans"
@@ -86,8 +90,11 @@ REQUIRED_DIRS = [
     LOGS_DIR,
     DEFECT_DIR,
     FEATURE_DIR,
+    ANALYSIS_DIR,
     COMPLETED_FEATURES_DIR,
     COMPLETED_DEFECTS_DIR,
+    COMPLETED_ANALYSES_DIR,
+    REPORTS_DIR,
     IDEAS_DIR,
     IDEAS_PROCESSED_DIR,
     ".claude/suspended",
@@ -189,6 +196,15 @@ PIPELINE_PERMISSION_PROFILES: dict = {
         "description": "Symptom verification (read + test commands)",
     },
 }
+
+ANALYSIS_TYPE_TO_AGENT: dict = {
+    "code-review": "code-reviewer",
+    "codebase-analysis": "code-explorer",
+    "test-coverage": "qa-auditor",
+    "test-results": "e2e-analyzer",
+    "spec-compliance": "spec-verifier",
+}
+DEFAULT_ANALYSIS_AGENT = "code-reviewer"
 
 # Global state
 VERBOSE = False
