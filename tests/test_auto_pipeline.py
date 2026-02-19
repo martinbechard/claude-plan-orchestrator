@@ -9,7 +9,9 @@ import importlib.util
 import tempfile
 import os
 import time
+import threading
 from pathlib import Path
+from unittest.mock import MagicMock
 
 # auto-pipeline.py has a hyphen in the filename, so we must use importlib
 # to load it as a module under a valid Python identifier.
@@ -18,6 +20,11 @@ spec = importlib.util.spec_from_file_location(
 )
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
+
+CompletionTracker = mod.CompletionTracker
+ProgressReporter = mod.ProgressReporter
+PROGRESS_REPORT_INTERVAL_SECONDS = mod.PROGRESS_REPORT_INTERVAL_SECONDS
+COMPLETION_HISTORY_WINDOW_SECONDS = mod.COMPLETION_HISTORY_WINDOW_SECONDS
 
 compact_plan_label = mod.compact_plan_label
 MAX_LOG_PREFIX_LENGTH = mod.MAX_LOG_PREFIX_LENGTH
@@ -1139,3 +1146,127 @@ def test_scan_all_backlogs_includes_analysis(tmp_path, monkeypatch):
     assert len(result) == 1
     assert result[0].item_type == "analysis"
     assert result[0].slug == "01-test-analysis"
+
+
+# --- CompletionTracker tests ---
+
+
+def test_completion_tracker_record_and_retrieve():
+    """Record items and verify completions_since() returns them correctly."""
+    tracker = CompletionTracker()
+    before = time.time()
+    tracker.record_completion("defect", "bug-1", 120.0)
+    tracker.record_completion("feature", "feat-1", 300.0)
+
+    entries = tracker.completions_since(before)
+    assert len(entries) == 2
+    item_types = [e[1] for e in entries]
+    assert "defect" in item_types
+    assert "feature" in item_types
+
+    future_entries = tracker.completions_since(time.time() + 10)
+    assert len(future_entries) == 0
+
+
+def test_completion_tracker_prune_old():
+    """Old entries beyond the history window are removed by prune_old_entries()."""
+    tracker = CompletionTracker()
+    old_ts = time.time() - COMPLETION_HISTORY_WINDOW_SECONDS - 1
+    tracker._entries.append((old_ts, "defect", "old-item", 100.0))
+    tracker.record_completion("feature", "new-item", 50.0)
+    assert len(tracker._entries) == 2
+
+    tracker.prune_old_entries()
+
+    assert len(tracker._entries) == 1
+    assert tracker._entries[0][2] == "new-item"
+
+
+def test_completion_tracker_average_duration():
+    """average_duration_seconds() returns the mean of all durations in the window."""
+    tracker = CompletionTracker()
+    tracker.record_completion("defect", "bug-1", 100.0)
+    tracker.record_completion("feature", "feat-1", 200.0)
+
+    avg = tracker.average_duration_seconds()
+    assert avg == 150.0
+
+
+def test_completion_tracker_empty():
+    """A fresh CompletionTracker returns 0.0 for average and empty list for completions."""
+    tracker = CompletionTracker()
+
+    assert tracker.average_duration_seconds() == 0.0
+    assert tracker.completions_since(0.0) == []
+
+
+def test_completion_tracker_constants():
+    """PROGRESS_REPORT_INTERVAL_SECONDS and COMPLETION_HISTORY_WINDOW_SECONDS have correct defaults."""
+    assert mod.COMPLETION_HISTORY_WINDOW_SECONDS == 7200
+    if "PIPELINE_REPORT_INTERVAL" not in os.environ:
+        assert mod.PROGRESS_REPORT_INTERVAL_SECONDS == 900
+
+
+# --- ProgressReporter tests ---
+
+
+def test_progress_reporter_silent_when_idle(monkeypatch):
+    """_should_report() returns False when no task is running and the queue is empty."""
+    slack = MagicMock()
+    tracker = CompletionTracker()
+    item_in_progress = threading.Event()
+
+    monkeypatch.setattr(mod, "scan_all_backlogs", lambda: [])
+
+    reporter = ProgressReporter(slack, tracker, item_in_progress)
+    assert reporter._should_report() is False
+
+
+def test_progress_reporter_reports_when_active(monkeypatch):
+    """_should_report() returns True when item_in_progress event is set."""
+    slack = MagicMock()
+    tracker = CompletionTracker()
+    item_in_progress = threading.Event()
+    item_in_progress.set()
+
+    monkeypatch.setattr(mod, "scan_all_backlogs", lambda: [])
+
+    reporter = ProgressReporter(slack, tracker, item_in_progress)
+    assert reporter._should_report() is True
+
+
+def test_progress_reporter_reports_when_queued(monkeypatch):
+    """_should_report() returns True when the queue has items even with no task running."""
+    slack = MagicMock()
+    tracker = CompletionTracker()
+    item_in_progress = threading.Event()
+
+    fake_item = BacklogItem(path="bug.md", item_type="defect", slug="bug-1", name="Bug 1")
+    monkeypatch.setattr(mod, "scan_all_backlogs", lambda: [fake_item])
+
+    reporter = ProgressReporter(slack, tracker, item_in_progress)
+    assert reporter._should_report() is True
+
+
+def test_progress_reporter_build_report_format(monkeypatch):
+    """_build_report() returns a string with all expected sections."""
+    slack = MagicMock()
+    tracker = CompletionTracker()
+    tracker.record_completion("defect", "bug-1", 120.0)
+    item_in_progress = threading.Event()
+
+    reporter = ProgressReporter(slack, tracker, item_in_progress)
+
+    queue = [
+        BacklogItem(path="a.md", item_type="defect", slug="bug-2", name="Bug 2"),
+        BacklogItem(path="b.md", item_type="feature", slug="feat-1", name="Feature 1"),
+    ]
+    report = reporter._build_report(queue)
+
+    assert isinstance(report, str)
+    assert "Queue" in report
+    assert "Avg completion time" in report
+    assert "ETA" in report
+    assert "Next up" in report
+    assert "defect" in report
+    assert "feature" in report
