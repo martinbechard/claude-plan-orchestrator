@@ -51,7 +51,6 @@ DEFAULT_BUILD_COMMAND = "pnpm run build"
 DEFAULT_TEST_COMMAND = "pnpm test"
 DEFAULT_DEV_SERVER_COMMAND = "pnpm dev"
 DEFAULT_AGENTS_DIR = ".claude/agents/"
-DEFAULT_SPEC_DIR = ""
 DEFAULT_E2E_COMMAND = "npx playwright test"
 
 # UX design loop configuration
@@ -290,7 +289,6 @@ BUILD_COMMAND = _config.get("build_command", DEFAULT_BUILD_COMMAND)
 TEST_COMMAND = _config.get("test_command", DEFAULT_TEST_COMMAND)
 DEV_SERVER_COMMAND = _config.get("dev_server_command", DEFAULT_DEV_SERVER_COMMAND)
 AGENTS_DIR = _config.get("agents_dir", DEFAULT_AGENTS_DIR)
-SPEC_DIR = _config.get("spec_dir", DEFAULT_SPEC_DIR)
 E2E_COMMAND = _config.get("e2e_command", DEFAULT_E2E_COMMAND)
 
 def parse_agent_frontmatter(content: str) -> tuple[dict, str]:

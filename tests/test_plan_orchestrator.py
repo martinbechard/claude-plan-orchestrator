@@ -1086,7 +1086,6 @@ def test_build_validation_prompt_includes_source_item_when_plan_provided(monkeyp
 
 def test_build_validation_prompt_still_has_standard_checks(monkeypatch):
     """Standard build/test checks and verdict format remain when spec context is added."""
-    monkeypatch.setattr(mod, "SPEC_DIR", "docs/specs/")
     monkeypatch.setattr(mod, "BUILD_COMMAND", "pnpm run build")
     monkeypatch.setattr(mod, "TEST_COMMAND", "pnpm test")
 
