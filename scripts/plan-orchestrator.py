@@ -50,6 +50,8 @@ DEFAULT_BUILD_COMMAND = "pnpm run build"
 DEFAULT_TEST_COMMAND = "pnpm test"
 DEFAULT_DEV_SERVER_COMMAND = "pnpm dev"
 DEFAULT_AGENTS_DIR = ".claude/agents/"
+DEFAULT_SPEC_DIR = ""
+DEFAULT_E2E_COMMAND = "npx playwright test"
 
 # Configuration
 DEFAULT_PLAN_PATH = ".claude/plans/pipeline-optimization.yaml"
@@ -278,6 +280,8 @@ BUILD_COMMAND = _config.get("build_command", DEFAULT_BUILD_COMMAND)
 TEST_COMMAND = _config.get("test_command", DEFAULT_TEST_COMMAND)
 DEV_SERVER_COMMAND = _config.get("dev_server_command", DEFAULT_DEV_SERVER_COMMAND)
 AGENTS_DIR = _config.get("agents_dir", DEFAULT_AGENTS_DIR)
+SPEC_DIR = _config.get("spec_dir", DEFAULT_SPEC_DIR)
+E2E_COMMAND = _config.get("e2e_command", DEFAULT_E2E_COMMAND)
 
 def parse_agent_frontmatter(content: str) -> tuple[dict, str]:
     """Parse YAML frontmatter from an agent definition markdown file.
@@ -303,6 +307,48 @@ def parse_agent_frontmatter(content: str) -> tuple[dict, str]:
         return (frontmatter, body)
     except yaml.YAMLError:
         return ({}, content)
+
+
+_RE_BLOCK_TYPE = re.compile(r'\*\*Type:\*\*\s*(.+)')
+_RE_BLOCK_TEST_FILES = re.compile(r'\*\*Test file\(s\):\*\*\s*(.+)')
+_RE_BLOCK_STATUS = re.compile(r'\*\*Status:\*\*\s*(.+)')
+_RE_BLOCK_SCENARIO = re.compile(r'\*\*Scenario:\*\*\s*(.+)')
+
+
+def parse_verification_blocks(content: str) -> list[dict]:
+    """Parse verification blocks from a functional spec markdown file.
+
+    Splits the content on '### Verification' headings and extracts structured
+    data from each block. Each returned dict contains:
+      - type: str (e.g. 'Testable', 'Non-E2E', 'Blocked')
+      - test_files: list[str] (split on comma and stripped)
+      - status: str (e.g. 'Pass', 'Fail', 'Missing')
+      - scenario: str (the scenario description text)
+
+    Blocks that are missing any required field are silently skipped.
+    Returns an empty list if no verification blocks are found.
+    """
+    segments = content.split("### Verification")
+    blocks = []
+    for segment in segments[1:]:
+        type_match = _RE_BLOCK_TYPE.search(segment)
+        test_files_match = _RE_BLOCK_TEST_FILES.search(segment)
+        status_match = _RE_BLOCK_STATUS.search(segment)
+        scenario_match = _RE_BLOCK_SCENARIO.search(segment)
+
+        if not (type_match and test_files_match and status_match and scenario_match):
+            continue
+
+        raw_files = test_files_match.group(1).strip()
+        test_files = [f.strip() for f in raw_files.split(",")]
+
+        blocks.append({
+            "type": type_match.group(1).strip(),
+            "test_files": test_files,
+            "status": status_match.group(1).strip(),
+            "scenario": scenario_match.group(1).strip(),
+        })
+    return blocks
 
 
 def load_agent_definition(agent_name: str) -> Optional[dict]:
