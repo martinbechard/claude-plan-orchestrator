@@ -47,6 +47,9 @@ _po_spec = importlib.util.spec_from_file_location(
 _po_mod = importlib.util.module_from_spec(_po_spec)
 _po_spec.loader.exec_module(_po_mod)
 SlackNotifier = _po_mod.SlackNotifier
+AgentIdentity = _po_mod.AgentIdentity
+load_agent_identity = _po_mod.load_agent_identity
+AGENT_ROLE_PIPELINE = _po_mod.AGENT_ROLE_PIPELINE
 is_item_suspended = _po_mod.is_item_suspended
 read_suspension_marker = _po_mod.read_suspension_marker
 get_suspension_answer = _po_mod.get_suspension_answer
@@ -2420,6 +2423,7 @@ def process_analysis_item(
     if item_in_progress is not None:
         item_in_progress.set()
     slack = SlackNotifier()
+    slack.set_identity(load_agent_identity(_config), AGENT_ROLE_PIPELINE)
     item_start = time.time()
     _open_item_log(item.slug, item.display_name, item.item_type)
     _log_summary("INFO", "STARTED", item.slug, f"type={item.item_type}")
@@ -2601,6 +2605,7 @@ def _process_item_inner(
     The outer wrapper guarantees _close_item_log() runs regardless of outcome.
     """
     slack = SlackNotifier()
+    slack.set_identity(load_agent_identity(_config), AGENT_ROLE_PIPELINE)
     item_start = time.time()
     log(f"{'=' * 60}")
     log(f"Processing {item.display_name}")
@@ -2945,6 +2950,7 @@ def main_loop(dry_run: bool = False, once: bool = False,
 
     global _active_slack
     slack = SlackNotifier()
+    slack.set_identity(load_agent_identity(_config), AGENT_ROLE_PIPELINE)
     _active_slack = slack
     slack.start_background_polling()
     reporter = ProgressReporter(slack, completion_tracker, item_in_progress)

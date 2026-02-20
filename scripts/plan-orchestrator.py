@@ -136,6 +136,18 @@ SLACK_CHANNEL_ROLE_SUFFIXES = {
 SLACK_CHANNEL_CACHE_SECONDS = 300
 SLACK_BLOCK_TEXT_MAX_LENGTH = 2900
 
+# Agent identity role constants
+AGENT_ROLE_PIPELINE = "pipeline"
+AGENT_ROLE_ORCHESTRATOR = "orchestrator"
+AGENT_ROLE_INTAKE = "intake"
+AGENT_ROLE_QA = "qa"
+AGENT_ROLES = [AGENT_ROLE_PIPELINE, AGENT_ROLE_ORCHESTRATOR, AGENT_ROLE_INTAKE, AGENT_ROLE_QA]
+
+# Regex: em-dash + bold agent name at end of message (multiline)
+AGENT_SIGNATURE_PATTERN = re.compile(r" \u2014 \*(.+?)\*\s*$", re.MULTILINE)
+# Regex: @AgentName, negative lookbehind avoids Slack native <@U...> mentions
+AGENT_ADDRESS_PATTERN = re.compile(r"(?<![<])@([\w-]+)")
+
 # Question-answering prompt for LLM-powered responses
 QUESTION_ANSWER_PROMPT = """You are an AI pipeline orchestrator answering a human's question via Slack.
 
@@ -1209,6 +1221,66 @@ class IntakeState:
     item_type: str  # "feature" or "defect"
     status: str = "analyzing"  # "analyzing", "creating", "done", "failed"
     analysis: str = ""  # LLM 5-Whys output
+
+
+@dataclass
+class AgentIdentity:
+    """Identity for agent messages in shared Slack channels.
+
+    Each project chooses display names for its agents. Messages are signed
+    with the active agent name, and inbound messages are filtered by address.
+    """
+    project: str
+    agents: dict[str, str] = field(default_factory=dict)
+
+    def name_for_role(self, role: str) -> str:
+        """Return the display name for a given agent role.
+
+        Falls back to '{Project}-{Role}' if the role is not explicitly mapped.
+        """
+        if role in self.agents:
+            return self.agents[role]
+        project_title = self.project.replace("-", " ").title().replace(" ", "-")
+        return f"{project_title}-{role.title()}"
+
+    def all_names(self) -> set[str]:
+        """Return the set of all configured agent display names."""
+        names = set(self.agents.values())
+        # Include derived defaults for any roles not explicitly configured
+        for role in AGENT_ROLES:
+            names.add(self.name_for_role(role))
+        return names
+
+    def is_own_signature(self, signature: str) -> bool:
+        """Check if a parsed signature belongs to one of our agents."""
+        return signature in self.all_names()
+
+
+def load_agent_identity(config: dict) -> AgentIdentity:
+    """Load agent identity from the orchestrator config dict.
+
+    Reads the optional 'identity' section. If absent, derives defaults
+    from the current working directory basename.
+
+    Args:
+        config: The parsed orchestrator-config.yaml dict.
+
+    Returns:
+        An AgentIdentity populated from config or derived defaults.
+    """
+    identity_config = config.get("identity", {})
+    if not isinstance(identity_config, dict):
+        identity_config = {}
+
+    project = identity_config.get("project", "")
+    if not project:
+        project = Path.cwd().name
+
+    agents_map = identity_config.get("agents", {})
+    if not isinstance(agents_map, dict):
+        agents_map = {}
+
+    return AgentIdentity(project=project, agents=agents_map)
 
 
 def parse_escalation_config(plan: dict) -> EscalationConfig:
@@ -3203,6 +3275,8 @@ class SlackNotifier:
         self._qa_history: list[tuple[str, str]] = []
         self._qa_history_enabled: bool = True
         self._qa_history_max_turns: int = QA_HISTORY_DEFAULT_MAX_TURNS
+        self._agent_identity: Optional[AgentIdentity] = None
+        self._active_role: str = ""
 
         try:
             with open(config_path, "r") as f:
@@ -3250,6 +3324,52 @@ class SlackNotifier:
             True if enabled and configured, False otherwise
         """
         return self._enabled
+
+    def set_identity(self, identity: AgentIdentity, role: str) -> None:
+        """Configure agent identity and active role for message signing.
+
+        Args:
+            identity: The AgentIdentity for this project
+            role: The agent role constant (e.g., AGENT_ROLE_ORCHESTRATOR)
+        """
+        self._agent_identity = identity
+        self._active_role = role
+
+    def _as_role(self, role: str):
+        """Context manager for temporary role switching.
+
+        Saves the current role, switches to the given role for the duration
+        of the block, and restores the original role on exit.
+
+        Args:
+            role: The agent role to switch to temporarily
+        """
+        import contextlib
+
+        @contextlib.contextmanager
+        def _switch():
+            previous = self._active_role
+            self._active_role = role
+            try:
+                yield
+            finally:
+                self._active_role = previous
+
+        return _switch()
+
+    def _sign_text(self, text: str) -> str:
+        """Append agent signature to raw text if identity is configured.
+
+        Args:
+            text: The message text to sign
+
+        Returns:
+            Text with ' --- *AgentName*' appended, or unchanged if no identity
+        """
+        if not self._agent_identity or not self._active_role:
+            return text
+        name = self._agent_identity.name_for_role(self._active_role)
+        return f"{text} \u2014 *{name}*"
 
     def _should_notify(self, event: str) -> bool:
         """Check if a specific event type is enabled in config.
@@ -3380,7 +3500,13 @@ class SlackNotifier:
             Slack Block Kit payload dict
         """
         emoji = SLACK_LEVEL_EMOJI.get(level, ":large_blue_circle:")
-        full_text = self._truncate_for_slack(f"{emoji} {message}")
+        signature = ""
+        if self._agent_identity and self._active_role:
+            name = self._agent_identity.name_for_role(self._active_role)
+            signature = f" \u2014 *{name}*"
+        # Truncate body first, then append signature so it is never truncated
+        body_max = SLACK_BLOCK_TEXT_MAX_LENGTH - len(signature)
+        full_text = self._truncate_for_slack(f"{emoji} {message}", body_max) + signature
         return {
             "blocks": [{
                 "type": "section",
@@ -3500,7 +3626,7 @@ class SlackNotifier:
                 "blocks": [
                     {
                         "type": "section",
-                        "text": {"type": "mrkdwn", "text": f":question: *{question}*"}
+                        "text": {"type": "mrkdwn", "text": self._sign_text(f":question: *{question}*")}
                     },
                     {
                         "type": "actions",
@@ -3633,7 +3759,7 @@ class SlackNotifier:
                     "type": "context",
                     "elements": [{
                         "type": "mrkdwn",
-                        "text": "_Reply in this thread to answer. The pipeline will resume processing automatically._"
+                        "text": self._sign_text("_Reply in this thread to answer. The pipeline will resume processing automatically._")
                     }]
                 }
             ]
@@ -3724,7 +3850,7 @@ class SlackNotifier:
                 with open(marker_path, "w", encoding="utf-8") as f:
                     json.dump(marker, f, indent=2)
 
-                confirmation = (
+                confirmation = self._sign_text(
                     f":white_check_mark: Answer received for {slug}. "
                     "Item will resume on next pipeline cycle."
                 )
@@ -4384,6 +4510,12 @@ class SlackNotifier:
             question: The question text
             channel_id: Reply to this channel. Falls back to default.
         """
+        with self._as_role(AGENT_ROLE_QA):
+            self._answer_question_inner(question, channel_id)
+
+    def _answer_question_inner(self, question: str,
+                               channel_id: Optional[str] = None) -> None:
+        """Inner implementation of answer_question, called under QA role."""
         print(f"[SLACK] Answering question: {question[:80]}")
 
         # Build conversation history context for the prompt
@@ -4479,6 +4611,11 @@ class SlackNotifier:
         Args:
             intake: The IntakeState tracking this analysis
         """
+        with self._as_role(AGENT_ROLE_INTAKE):
+            self._run_intake_analysis_inner(intake)
+
+    def _run_intake_analysis_inner(self, intake: IntakeState) -> None:
+        """Inner implementation of _run_intake_analysis, called under Intake role."""
         intake_key = f"{intake.channel_name}:{intake.ts}"
         fallback_title = intake.original_text.split("\n", 1)[0][:80]
 
@@ -4683,6 +4820,25 @@ class SlackNotifier:
             if not text:
                 continue
 
+            # Agent identity filtering (before any routing/processing)
+            if self._agent_identity:
+                # Rule 1: Skip messages signed by one of our own agents
+                sig_match = AGENT_SIGNATURE_PATTERN.search(text)
+                if sig_match and self._agent_identity.is_own_signature(sig_match.group(1)):
+                    continue
+
+                # Rules 2-4: Check @AgentName addressing
+                addresses = set(AGENT_ADDRESS_PATTERN.findall(text))
+                our_names = self._agent_identity.all_names()
+                if addresses:
+                    addressed_to_us = bool(addresses & our_names)
+                    addressed_to_others = bool(addresses - our_names)
+                    # Rule 2: Addressed only to others, not us → skip
+                    if addressed_to_others and not addressed_to_us:
+                        continue
+                    # Rule 3: Addressed to us → fall through to process
+                # Rule 4: No addresses (broadcast) → fall through to process
+
             user = msg.get("user", "unknown")
             ts = msg.get("ts", "")
             channel_name = msg.get("_channel_name", "")
@@ -4813,8 +4969,9 @@ def run_orchestrator(
     budget_config = parse_budget_config(plan, cli_args) if cli_args else BudgetConfig()
     budget_guard = BudgetGuard(budget_config, usage_tracker)
 
-    # Initialize Slack notifier
+    # Initialize Slack notifier with agent identity
     slack = SlackNotifier()
+    slack.set_identity(load_agent_identity(_config), AGENT_ROLE_ORCHESTRATOR)
 
     print(f"=== Plan Orchestrator (PID {os.getpid()}) ===")
     print(f"Plan: {meta.get('name', 'Unknown')}")

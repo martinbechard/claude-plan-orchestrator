@@ -1,5 +1,19 @@
 # Release Notes
 
+## 1.7.0 (2026-02-19)
+
+### New Features
+- **Agent Identity Protocol**: When multiple projects share Slack channels, each
+  agent now signs outbound messages with its display name (e.g., `CPO-Orchestrator`)
+  and filters inbound messages by address. Self-loop prevention, directed `@Agent`
+  addressing, and broadcast routing are all handled automatically.
+- **Configurable identity**: Add an `identity` section to `orchestrator-config.yaml`
+  to set project name and per-role display names. Defaults are derived from the
+  current directory name when not configured.
+- **Role switching**: Intake analysis and QA answering run under their own agent
+  roles (`CPO-Intake`, `CPO-QA`), so messages are signed with the correct identity
+  for the operation being performed.
+
 ## 1.6.3 (2026-02-19)
 
 ### New Features

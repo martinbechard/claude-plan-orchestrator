@@ -23,6 +23,17 @@ test_command: "python3 -m pytest tests/ 2>/dev/null || echo 'No test suite confi
 # Each agent is a .md file with YAML frontmatter (name, description, tools, model).
 # agents_dir: ".claude/agents/"
 
+# Agent identity for shared Slack channels.
+# Display names are appended to outbound messages and used for inbound filtering.
+# If omitted, defaults are derived from the current directory name.
+identity:
+  project: claude-plan-orchestrator
+  agents:
+    pipeline: CPO-Pipeline
+    orchestrator: CPO-Orchestrator
+    intake: CPO-Intake
+    qa: CPO-QA
+
 # Per-task validation configuration.
 # When enabled, the orchestrator spawns a validator agent after each
 # implementation task to independently verify the result.

@@ -473,6 +473,34 @@ This turns the Slack channels into a lightweight coordination bus where orchestr
 
 **Setup:** Each instance uses its own channel prefix (e.g., `myproject-notifications`), but can be invited to monitor another instance's channels as a read/write participant. The inbound message processing handles messages from any source identically --- whether from a human or another orchestrator instance.
 
+### Agent Identity Protocol
+
+When multiple projects share Slack channels, the agent identity protocol distinguishes who sent each message and who it is intended for.
+
+**Configuration** in `orchestrator-config.yaml`:
+
+```yaml
+identity:
+  project: claude-plan-orchestrator
+  agents:
+    pipeline: CPO-Pipeline
+    orchestrator: CPO-Orchestrator
+    intake: CPO-Intake
+    qa: CPO-QA
+```
+
+If not configured, display names are derived from the current directory name (e.g., directory `cheapoville` produces `Cheapoville-Pipeline`, `Cheapoville-Orchestrator`, etc.).
+
+**Outbound signing**: Every Slack message is appended with ` --- *AgentName*` (em-dash, bold), where the agent name reflects the active role (orchestrator, pipeline, intake, or QA). The signature is appended after truncation so it is never cut off.
+
+**Inbound filtering** applies four rules in order:
+1. Messages signed by one of our own agents are skipped (self-loop prevention)
+2. Messages addressed to another agent (`@OtherAgent`) but not to us are skipped
+3. Messages addressed to one of our agents (`@OurAgent`) are processed
+4. Messages without any `@` addressing (broadcasts) are processed
+
+**Directed messages**: Use `@AgentName` in the message body to address a specific agent. Slack native `<@U...>` user mentions are not confused with agent addresses.
+
 ### Hot-Reload
 
 The auto-pipeline monitors its own source files for changes. When a modification is detected between work items, it performs a graceful self-restart using `os.execv()` to pick up the new code without disrupting the Slack polling thread:
