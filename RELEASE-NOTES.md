@@ -1,5 +1,13 @@
 # Release Notes
 
+## 1.6.2 (2026-02-19)
+
+### Improvements
+- **Mid-task stop semaphore check**: The orchestrator now checks for the stop
+  semaphore every second during Claude subprocess execution, not just between
+  tasks. A stop request mid-task terminates the subprocess within 1 second
+  instead of waiting for the full task to complete (which could take 30+ minutes).
+
 ## 1.6.1 (2026-02-19)
 
 ### Fixes

@@ -771,9 +771,10 @@ def resolve_claude_binary() -> list[str]:
 def check_stop_requested() -> bool:
     """Check if a graceful stop has been requested via semaphore file.
 
-    The orchestrator checks for the file at .claude/plans/.stop before
-    starting each new task. If the file exists, the orchestrator will
-    finish the current task but not start any new ones.
+    The orchestrator checks for .claude/plans/.stop both between tasks
+    (in the main loop) and during task execution (every second while
+    the Claude subprocess is running). A mid-task detection terminates
+    the subprocess and returns a failure result.
 
     To request a stop:  touch .claude/plans/.stop
     The file is auto-cleaned when the orchestrator starts.
@@ -2932,16 +2933,48 @@ def run_claude_task(prompt: str, dry_run: bool = False, model: str = "", agent_n
         stdout_thread.start()
         stderr_thread.start()
 
-        # In regular mode, show progress updates
+        # Poll loop: wait for process, checking stop semaphore and timeout each second.
+        # Both verbose and non-verbose modes share this loop.
         if not VERBOSE:
             print("[Claude] Working", end="", flush=True)
-            last_bytes = 0
-            dots = 0
-            while process.poll() is None:
-                time.sleep(1)
+        last_bytes = 0
+        dots = 0
+        stopped_by_semaphore = False
+
+        while process.poll() is None:
+            time.sleep(1)
+
+            # Check stop semaphore every second
+            if check_stop_requested():
+                msg = "Stop requested mid-task — terminating Claude subprocess"
+                if not VERBOSE:
+                    print(f" [{msg}]", flush=True)
+                else:
+                    verbose_log(msg, "EXEC")
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+                stopped_by_semaphore = True
+                break
+
+            # Check timeout
+            elapsed = time.time() - start_time
+            if elapsed > CLAUDE_TIMEOUT_SECONDS:
+                if not VERBOSE:
+                    print(" [TIMEOUT]", flush=True)
+                else:
+                    verbose_log("Process timed out, terminating...", "EXEC")
+                process.terminate()
+                process.wait(timeout=5)
+                raise subprocess.TimeoutExpired(cmd, CLAUDE_TIMEOUT_SECONDS)
+
+            # Progress dots (non-verbose only)
+            if not VERBOSE:
                 current_bytes = stdout_collector.bytes_received + stderr_collector.bytes_received
                 if current_bytes > last_bytes:
-                    # Show a dot for each 1KB received
                     new_kb = (current_bytes - last_bytes) // 1024
                     if new_kb > 0:
                         print("." * min(new_kb, 5), end="", flush=True)
@@ -2951,31 +2984,23 @@ def run_claude_task(prompt: str, dry_run: bool = False, model: str = "", agent_n
                         dots += 1
                     last_bytes = current_bytes
 
-                # Check timeout
-                elapsed = time.time() - start_time
-                if elapsed > CLAUDE_TIMEOUT_SECONDS:
-                    print(" [TIMEOUT]", flush=True)
-                    process.terminate()
-                    process.wait(timeout=5)
-                    raise subprocess.TimeoutExpired(cmd, CLAUDE_TIMEOUT_SECONDS)
-
+        if not VERBOSE and not stopped_by_semaphore:
             print(f" done ({stdout_collector.line_count} lines, {stdout_collector.bytes_received:,} bytes)", flush=True)
 
-        # Wait for process with timeout (verbose mode)
-        if VERBOSE:
-            try:
-                returncode = process.wait(timeout=CLAUDE_TIMEOUT_SECONDS)
-            except subprocess.TimeoutExpired:
-                verbose_log("Process timed out, terminating...", "EXEC")
-                process.terminate()
-                process.wait(timeout=5)
-                raise
-        else:
-            returncode = process.returncode
+        returncode = process.returncode
 
         # Wait for threads to finish
         stdout_thread.join(timeout=5)
         stderr_thread.join(timeout=5)
+
+        if stopped_by_semaphore:
+            duration = time.time() - start_time
+            print(f"[Task terminated by stop semaphore after {duration:.0f}s]")
+            return TaskResult(
+                success=False,
+                message="Stopped by semaphore — task terminated mid-execution",
+                duration_seconds=duration,
+            )
 
         if VERBOSE:
             print("=" * 60, flush=True)
