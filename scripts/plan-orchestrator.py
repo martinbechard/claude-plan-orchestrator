@@ -4053,9 +4053,12 @@ class SlackNotifier:
                 # Update last-read for this channel (newest first)
                 updated_last_read[channel_id] = messages[0].get("ts", last_ts)
 
-                # Filter out bot messages, tag with channel name
+                # Filter out system/subtype messages, tag with channel info.
+                # Bot messages are allowed through — the identity filter in
+                # _handle_polled_messages handles self-loop prevention via
+                # agent signatures, which also works for cross-project bots.
                 for m in messages:
-                    if not m.get("bot_id") and m.get("subtype") is None:
+                    if m.get("subtype") is None:
                         m["_channel_name"] = channel_name
                         m["_channel_id"] = channel_id
                         all_messages.append(m)

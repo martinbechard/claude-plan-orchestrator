@@ -14,6 +14,12 @@
   roles (`CPO-Intake`, `CPO-QA`), so messages are signed with the correct identity
   for the operation being performed.
 
+### Fixes
+- **Bot messages no longer blanket-filtered**: The poll filter previously rejected
+  all messages with a `bot_id`, which silently dropped messages from other
+  projects' orchestrator bots. Now only system/subtype messages are filtered;
+  self-loop prevention is handled by the agent identity signature check.
+
 ## 1.6.3 (2026-02-19)
 
 ### New Features

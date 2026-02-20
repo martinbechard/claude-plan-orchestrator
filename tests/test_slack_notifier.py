@@ -720,7 +720,12 @@ def test_poll_messages_first_run_sets_timestamp(tmp_path):
 
 
 def test_poll_messages_filters_bots(tmp_path):
-    """poll_messages should filter out bot messages and messages with subtypes."""
+    """poll_messages should filter out subtype messages but allow bot messages through.
+
+    Bot messages are allowed because the agent identity filter in
+    _handle_polled_messages handles self-loop prevention via signatures,
+    which also works for cross-project bots.
+    """
     import urllib.request
 
     config_file = tmp_path / "slack.yaml"
@@ -774,13 +779,15 @@ def test_poll_messages_filters_bots(tmp_path):
 
     try:
         result = notifier.poll_messages()
-        # Should return only the human message
-        assert len(result) == 1
-        assert result[0]["text"] == "hello"
-        assert result[0]["user"] == "U123"
+        # Should return bot message + human message (subtype filtered out)
+        assert len(result) == 2
+        assert result[0]["text"] == "status update"  # bot message allowed
+        assert result[0].get("bot_id") == "B123"
+        assert result[1]["text"] == "hello"
+        assert result[1]["user"] == "U123"
         # Should have channel metadata tags
         assert result[0]["_channel_name"] == "orchestrator-questions"
-        assert result[0]["_channel_id"] == "C0123456789"
+        assert result[1]["_channel_id"] == "C0123456789"
     finally:
         urllib.request.urlopen = original_urlopen
         mod.SLACK_LAST_READ_PATH = original_path
