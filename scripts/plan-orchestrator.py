@@ -4825,9 +4825,17 @@ class SlackNotifier:
 
             # Agent identity filtering (before any routing/processing)
             if self._agent_identity:
+                channel_name_for_log = msg.get("_channel_name", "")
+                text_preview = text[:60]
+
                 # Rule 1: Skip messages signed by one of our own agents
                 sig_match = AGENT_SIGNATURE_PATTERN.search(text)
                 if sig_match and self._agent_identity.is_own_signature(sig_match.group(1)):
+                    verbose_log(
+                        f'Skip own-agent: sig="{sig_match.group(1)}" '
+                        f"channel=#{channel_name_for_log} text={text_preview!r}",
+                        "FILTER",
+                    )
                     continue
 
                 # Rules 2-4: Check @AgentName addressing
@@ -4838,9 +4846,26 @@ class SlackNotifier:
                     addressed_to_others = bool(addresses - our_names)
                     # Rule 2: Addressed only to others, not us → skip
                     if addressed_to_others and not addressed_to_us:
+                        verbose_log(
+                            f"Skip addressed-to-others: addressees={addresses} "
+                            f"ours={our_names} channel=#{channel_name_for_log} "
+                            f"text={text_preview!r}",
+                            "FILTER",
+                        )
                         continue
                     # Rule 3: Addressed to us → fall through to process
-                # Rule 4: No addresses (broadcast) → fall through to process
+                    verbose_log(
+                        f"Accept addressed-to-us: addressees={addresses & our_names} "
+                        f"channel=#{channel_name_for_log} text={text_preview!r}",
+                        "FILTER",
+                    )
+                else:
+                    # Rule 4: No addresses (broadcast) → fall through to process
+                    verbose_log(
+                        f"Accept broadcast: no-addressees "
+                        f"channel=#{channel_name_for_log} text={text_preview!r}",
+                        "FILTER",
+                    )
 
             user = msg.get("user", "unknown")
             ts = msg.get("ts", "")
