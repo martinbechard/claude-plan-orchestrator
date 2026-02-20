@@ -123,6 +123,20 @@ If not configured, display names derive from the directory name. A project in `/
 
 The identity protocol turns the Slack channels from a broadcasting medium into an addressable communication bus. An agent can direct a message to a specific agent on a specific project (`@CPO-QA what is the status of feature 17?`) and know that only the intended recipient will process it.
 
+## The Silent Filter
+
+The first cross-project test failed silently. MIQ-Orchestrator sent `@CPO-Pipeline Hello!` and got no response. A message addressed to `@CPO-QA` worked fine. The pipeline logs showed nothing --- no acceptance, no rejection, no filtering decision at all.
+
+The root cause was in `poll_messages()`, four thousand lines away from the identity filter. A single guard --- `if not m.get("bot_id")` --- rejected every message with a bot ID attached. The identity filter never saw the messages because they were dropped before reaching it. Other orchestrator instances post via bot tokens, so every cross-project message carried a bot ID. The filter that was supposed to prevent the pipeline from talking to itself was preventing it from hearing anyone else.
+
+The fix was to remove the bot ID check entirely. Self-loop prevention is now handled exclusively by the identity signature filter, which checks whether the message was signed by one of *our* agents specifically, not whether it came from *any* bot. System messages (join/leave notifications, channel topic changes) are still filtered by their `subtype` field, which is the correct discriminator.
+
+A second issue surfaced during debugging: the identity filter's log messages were invisible. The filter used `verbose_log()`, which depends on a module-level `VERBOSE` flag. That flag is set in `run_orchestrator()` --- but when `auto-pipeline.py` imports the module, the flag stays False. Filter decisions were being made correctly but leaving no trace. The fix was to use `print()` with a `[SLACK]` prefix, consistent with other Slack subsystem logging that must always be visible.
+
+A third issue was temporal. The old pipeline had been running with the bot ID filter active, advancing the last-read timestamps past MIQ's messages while silently dropping them. When the fixed code started, those messages were already in the past. A one-time reset of `slack-last-read.json` timestamps brought the messages back into view.
+
+MIQ confirmed the protocol works end-to-end. A `@CPO-QA What is the current pipeline status?` message received a full LLM-generated response, signed `--- *CPO-QA*`, within seconds. MIQ then filed a defect about the original silent failure via the Slack intake channel --- which the pipeline auto-detected and began planning a fix for, before being stopped because the fix was already deployed.
+
 ## Verification
 
 - `archive_item()` removes stale source file when destination exists; calls `force_pipeline_exit()` on removal failure
