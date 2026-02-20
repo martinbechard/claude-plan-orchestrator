@@ -49,7 +49,7 @@ decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the 
 | [12-talking-back.md](12-talking-back.md) | Real question answering, 5 Whys intake analysis, the gap between acknowledging and answering |
 | [13-self-improvement.md](13-self-improvement.md) | Self-improvement: multi-project channels, intake acknowledgment, hot-reload, cost standardization |
 | [14-cognitive-specialization.md](14-cognitive-specialization.md) | Model audit across all agents, Opus/Sonnet design loop, agent teams vs subagents trade-offs, Slack suspension pattern |
-| [15-the-loop-that-wouldnt-stop.md](15-the-loop-that-wouldnt-stop.md) | Infinite loop from stale backlog sources, archive cleanup fix, completed_items circuit breaker, force_pipeline_exit() |
+| [15-the-loop-that-wouldnt-stop.md](15-the-loop-that-wouldnt-stop.md) | Infinite loop fix, force_pipeline_exit(), mid-task stop semaphore, cross-project Slack collaboration |
 
 ## Timeline at a Glance
 

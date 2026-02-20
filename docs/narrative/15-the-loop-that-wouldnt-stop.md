@@ -1,7 +1,7 @@
 # Chapter 15: The Loop That Wouldn't Stop
 
 **Period:** 2026-02-19
-**Size:** ~30 lines changed in `auto-pipeline.py`, new `force_pipeline_exit()` function, `completed_items` circuit breaker
+**Size:** ~30 lines in `auto-pipeline.py` (archive fix, circuit breaker, `force_pipeline_exit()`), ~30 lines in `plan-orchestrator.py` (unified poll loop with mid-task stop), cross-instance Slack collaboration
 
 ## Three Seconds Per Cycle
 
@@ -65,11 +65,36 @@ But "only arises when something else has already gone wrong" is exactly the cond
 
 The deeper lesson is about the relationship between success and cleanup. `process_item` returning True means "I finished processing this item." It does not mean "the item will never appear in the backlog again." Conflating task completion with state cleanup is a category error, and the infinite loop is the symptom. The circuit breaker makes the distinction explicit: completion is tracked independently of whether the filesystem reflects it.
 
+## Stop Means Stop
+
+The infinite loop exposed a second problem: stopping the pipeline was slower than it needed to be. The stop semaphore was checked only between tasks, at the top of the main loop. If a Claude subprocess was running --- and some tasks run for thirty minutes --- the semaphore sat on disk, ignored, until the task finished.
+
+The fix: both verbose and non-verbose execution paths now share a unified poll loop that checks the stop semaphore every second while the subprocess runs. When detected mid-task, the subprocess is terminated with SIGTERM (with a SIGKILL fallback after ten seconds), and `run_claude_task` returns a failure result immediately. No more waiting for a long task to finish before the pipeline notices it's been asked to stop.
+
+A subtlety worth noting: the orchestrator clears any existing stop semaphore on startup, to prevent a stale file from a previous crash from blocking a fresh run. This creates a theoretical race condition --- if you create the semaphore after the pipeline launches the orchestrator but before the orchestrator reaches its startup clear, the semaphore disappears. In practice the window is milliseconds (process startup time), and the auto-pipeline checks the semaphore before spawning the orchestrator at all. But SIGTERM via the PID file remains the most reliable way to stop a running pipeline, and a comment in the code now documents this reasoning.
+
+## The Slack Channel as a Coordination Bus
+
+An unexpected development: other projects using the orchestrator were invited to listen to the upstream `orchestrator-*` Slack channels. This turned a notification system into a lightweight collaboration mechanism.
+
+The Slack inbound message handler processes messages from any source identically --- it doesn't distinguish between a human typing a defect report and another project's pipeline posting one. This means other projects using the orchestrator can:
+
+- See release notifications and know when they're running outdated code
+- Submit defects they've encountered back to the upstream channels
+- Request features by posting to the features channel
+- Ask questions that get answered by the LLM with full pipeline context
+
+No new code was needed. The inbound processing infrastructure --- 5 Whys intake analysis, question answering, defect/feature classification --- handles cross-project messages the same way it handles human messages. The architecture was accidentally correct for a use case nobody had designed for.
+
+What makes this interesting is the asymmetry. Each project runs its own orchestrator with its own channel prefix (e.g., `myproject-notifications`). The upstream orchestrator's channels are shared read/write. A downstream project can report a bug it hit; the upstream pipeline picks it up as a backlog item, creates a plan, fixes it, and pushes a new version --- all without any human coordination beyond the initial channel invitation.
+
 ## Verification
 
-- `archive_item()` removes stale source file when destination exists; returns False on removal failure
+- `archive_item()` removes stale source file when destination exists; calls `force_pipeline_exit()` on removal failure
 - `completed_items` set filters scan results alongside `failed_items`
 - `force_pipeline_exit()` creates stop semaphore, sends Slack notification, calls `sys.exit(1)`
 - `_active_slack` module-level reference set by main entry point
+- Mid-task stop semaphore check every second in unified poll loop
+- Cross-instance Slack collaboration documented in README
 - All 309 tests pass
-- `plugin.json` bumped to 1.6.1
+- `plugin.json` bumped to 1.6.3
