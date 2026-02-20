@@ -1,0 +1,67 @@
+meta:
+  name: Add verbose logging for agent identity message filtering
+  description: Add verbose_log() calls to each branch of the agent identity
+    filtering block in _process_inbound_messages() so operators can diagnose
+    cross-instance message routing decisions when --verbose is enabled.
+  plan_doc: docs/plans/2026-02-19-1-cpo-pipeline-feature-request-improve-verbose-mode-logging-for-inbound-slack-me-design.md
+  source_item: docs/feature-backlog/1-cpo-pipeline-feature-request-improve-verbose-mode-logging-for-inbound-slack-me.md
+  created: '2026-02-19'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+
+sections:
+- id: phase-1
+  name: Phase 1 - Add verbose logging to agent identity filtering
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add verbose_log() calls to agent identity filtering block
+    agent: coder
+    status: pending
+    description: >
+      Implement the work item:
+      docs/feature-backlog/1-cpo-pipeline-feature-request-improve-verbose-mode-logging-for-inbound-slack-me.md
+
+      Design doc:
+      docs/plans/2026-02-19-1-cpo-pipeline-feature-request-improve-verbose-mode-logging-for-inbound-slack-me-design.md
+
+      Add verbose_log() calls with prefix "FILTER" to each of the four
+      decision branches in the agent identity filtering block of
+      _process_inbound_messages() in scripts/plan-orchestrator.py
+      (around lines 4826-4843). Each log line should include the channel
+      name, decision outcome, relevant parsed data (signature/addressees),
+      and a truncated message preview.
+
+      Files: scripts/plan-orchestrator.py
+
+- id: phase-2
+  name: Phase 2 - Unit tests for verbose logging
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add unit tests for identity filtering verbose logging
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.1'
+    description: >
+      Implement tests for the work item:
+      docs/feature-backlog/1-cpo-pipeline-feature-request-improve-verbose-mode-logging-for-inbound-slack-me.md
+
+      Design doc:
+      docs/plans/2026-02-19-1-cpo-pipeline-feature-request-improve-verbose-mode-logging-for-inbound-slack-me-design.md
+
+      Add unit tests to tests/test_plan_orchestrator.py that verify
+      verbose_log() is called with the correct "FILTER" prefix and
+      content for each of the four filtering decisions (skip-own-agent,
+      skip-addressed-to-others, accept-addressed-to-us, accept-broadcast).
+      Use unittest.mock.patch on verbose_log. Run the full test suite
+      and fix any failures.
+
+      Files: tests/test_plan_orchestrator.py
