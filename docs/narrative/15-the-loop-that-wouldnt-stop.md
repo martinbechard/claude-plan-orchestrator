@@ -1,7 +1,7 @@
 # Chapter 15: The Loop That Wouldn't Stop
 
 **Period:** 2026-02-19
-**Size:** ~30 lines in `auto-pipeline.py` (archive fix, circuit breaker, `force_pipeline_exit()`), ~30 lines in `plan-orchestrator.py` (unified poll loop with mid-task stop), cross-instance Slack collaboration
+**Size:** ~30 lines in `auto-pipeline.py` (archive fix, circuit breaker, `force_pipeline_exit()`), ~30 lines in `plan-orchestrator.py` (unified poll loop with mid-task stop), cross-instance Slack collaboration, agent identity protocol (~220 lines)
 
 ## Three Seconds Per Cycle
 
@@ -88,6 +88,41 @@ No new code was needed. The inbound processing infrastructure --- 5 Whys intake 
 
 What makes this interesting is the asymmetry. Each project runs its own orchestrator with its own channel prefix (e.g., `myproject-notifications`). The upstream orchestrator's channels are shared read/write. A downstream project can report a bug it hit; the upstream pipeline picks it up as a backlog item, creates a plan, fixes it, and pushes a new version --- all without any human coordination beyond the initial channel invitation.
 
+## Knowing Who's Talking
+
+The cross-project collaboration surfaced an immediate problem: when multiple agents post to the same channel, nobody can tell who sent what. A status update from `CPO-Pipeline` looks identical to one from `Cheapoville-Pipeline`. An agent polling for inbound messages sees its own echoes and processes them as new work. Two agents answering the same question talk over each other.
+
+The agent identity protocol solves this with three mechanisms:
+
+**Outbound signing.** Every Slack message is appended with ` --- *AgentName*` in bold. The name reflects the active role --- the orchestrator signs as `CPO-Orchestrator`, the QA answering thread signs as `CPO-QA`, the intake analysis thread signs as `CPO-Intake`. The signature is appended *after* truncation so it is never cut off by Slack's block text limit.
+
+**Inbound filtering.** Four rules, evaluated in order at the top of the message loop before any routing or processing occurs:
+
+1. Message signed by one of our own agents --- skip (self-loop prevention)
+2. Message contains `@OtherAgent` but not `@OurAgent` --- skip (not for us)
+3. Message contains `@OurAgent` --- process (directed to us)
+4. No `@` addressing --- process (broadcast)
+
+The `@` address pattern uses a negative lookbehind to avoid matching Slack's native `<@U12345>` user mentions, which would cause false positives.
+
+**Role switching.** Intake analysis and QA answering run in daemon threads. A context manager switches the active role for the duration of each operation, so the correct identity signs each message. The context manager restores the previous role on exit, even if the thread throws.
+
+The configuration lives in `orchestrator-config.yaml`:
+
+```yaml
+identity:
+  project: claude-plan-orchestrator
+  agents:
+    pipeline: CPO-Pipeline
+    orchestrator: CPO-Orchestrator
+    intake: CPO-Intake
+    qa: CPO-QA
+```
+
+If not configured, display names derive from the directory name. A project in `/home/user/cheapoville` produces `Cheapoville-Pipeline`, `Cheapoville-Orchestrator`, etc. This means the protocol works out of the box without any configuration --- the derived defaults are unique per directory.
+
+The identity protocol turns the Slack channels from a broadcasting medium into an addressable communication bus. An agent can direct a message to a specific agent on a specific project (`@CPO-QA what is the status of feature 17?`) and know that only the intended recipient will process it.
+
 ## Verification
 
 - `archive_item()` removes stale source file when destination exists; calls `force_pipeline_exit()` on removal failure
@@ -96,5 +131,10 @@ What makes this interesting is the asymmetry. Each project runs its own orchestr
 - `_active_slack` module-level reference set by main entry point
 - Mid-task stop semaphore check every second in unified poll loop
 - Cross-instance Slack collaboration documented in README
-- All 309 tests pass
-- `plugin.json` bumped to 1.6.3
+- Agent identity protocol: outbound signing, inbound 4-rule filtering, role switching via context manager
+- `AgentIdentity` dataclass with `name_for_role()`, `all_names()`, `is_own_signature()`
+- `load_agent_identity()` reads config with graceful cwd-derived defaults
+- Identity wired in `run_orchestrator()` and all 3 `SlackNotifier()` sites in auto-pipeline
+- 34 agent identity tests covering load, signing, filtering, role switching, regex patterns
+- All 343 tests pass
+- `plugin.json` bumped to 1.7.0

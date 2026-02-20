@@ -49,7 +49,7 @@ decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the 
 | [12-talking-back.md](12-talking-back.md) | Real question answering, 5 Whys intake analysis, the gap between acknowledging and answering |
 | [13-self-improvement.md](13-self-improvement.md) | Self-improvement: multi-project channels, intake acknowledgment, hot-reload, cost standardization |
 | [14-cognitive-specialization.md](14-cognitive-specialization.md) | Model audit across all agents, Opus/Sonnet design loop, agent teams vs subagents trade-offs, Slack suspension pattern |
-| [15-the-loop-that-wouldnt-stop.md](15-the-loop-that-wouldnt-stop.md) | Infinite loop fix, force_pipeline_exit(), mid-task stop semaphore, cross-project Slack collaboration |
+| [15-the-loop-that-wouldnt-stop.md](15-the-loop-that-wouldnt-stop.md) | Infinite loop fix, force_pipeline_exit(), mid-task stop semaphore, cross-project Slack collaboration, agent identity protocol |
 
 ## Timeline at a Glance
 
@@ -82,7 +82,9 @@ decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the 
 2026-02-18  Chapter 14: cognitive specialization, narrative README restructured (1.5.0)
 2026-02-19  Pipeline PID file for safe process management (1.6.0)
 2026-02-19  Infinite loop fix: stale source cleanup, circuit breaker, force_pipeline_exit (1.6.1)
+2026-02-19  Mid-task stop semaphore check, cross-instance Slack collaboration (1.6.2-1.6.3)
+2026-02-19  Agent identity protocol: outbound signing, inbound filtering, role switching (1.7.0)
 
-Current: ~5374 lines (orchestrator) + ~2600 lines (auto-pipeline)
+Current: ~5600 lines (orchestrator) + ~2600 lines (auto-pipeline)
 Plans executed: 31 completed features/defects
 ```

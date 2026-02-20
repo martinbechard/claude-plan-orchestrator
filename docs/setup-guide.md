@@ -101,6 +101,28 @@ dev_server_command: "pnpm dev"
 dev_server_port: 3000
 ```
 
+### Agent Identity (recommended for shared Slack channels)
+
+If multiple projects share Slack channels, add an identity section so each
+project's agents sign their messages and filter inbound addressing:
+
+```yaml
+identity:
+  project: myproject
+  agents:
+    pipeline: MyProj-Pipeline
+    orchestrator: MyProj-Orchestrator
+    intake: MyProj-Intake
+    qa: MyProj-QA
+```
+
+If omitted, display names are derived from the directory name automatically.
+Identity enables:
+- Outbound messages signed with the agent's display name
+- Self-loop prevention (agents skip their own echoes)
+- Directed messaging with @AgentName (e.g., @MyProj-Pipeline)
+- Broadcast messages (no @) are processed by all listeners
+
 Skip this step if the defaults work for your project.
 
 ## 5. Create backlog directories
@@ -245,6 +267,33 @@ rmdir docs/defect-backlog/completed docs/feature-backlog/completed
 ```bash
 python scripts/setup-slack.py --prefix your-existing-prefix
 ```
+
+### To v1.7.0 (agent identity protocol)
+
+v1.7.0 adds the agent identity protocol for shared Slack channels. No action
+is required --- the system works without configuration. But if multiple projects
+share Slack channels, you should add identity configuration:
+
+1. Add an identity section to .claude/orchestrator-config.yaml:
+
+```yaml
+identity:
+  project: myproject
+  agents:
+    pipeline: MyProj-Pipeline
+    orchestrator: MyProj-Orchestrator
+    intake: MyProj-Intake
+    qa: MyProj-QA
+```
+
+2. Choose short, distinctive names. They appear at the end of every Slack
+   message (e.g., "Task completed --- *MyProj-Orchestrator*").
+
+3. Use @AgentName in Slack messages to direct them to a specific agent.
+   Messages without @addressing are broadcast to all listeners.
+
+If you skip this step, agent names default to {DirName}-Pipeline,
+{DirName}-Orchestrator, etc., derived from the current directory name.
 
 ### From webhook-based Slack to app-based Slack
 
