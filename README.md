@@ -17,7 +17,7 @@ The Plan Orchestrator executes structured YAML plans through Claude Code, provid
 - **Defect Verification Loop**: Independent symptom verification with verify-then-fix retry cycles
 - **Configurable Commands**: Build, test, and dev-server commands configurable per project
 - **Agent Framework**: 11 specialized agents (coder, frontend-coder, code-reviewer, systems-designer, ux-designer, ux-reviewer, spec-verifier, qa-auditor, planner, issue-verifier, validator) with YAML frontmatter definitions
-- **Slack Integration**: Real-time notifications, inbound message processing, LLM-powered question answering, and 5 Whys intake analysis via Slack
+- **Slack Integration**: Real-time notifications, inbound message processing, LLM-powered question answering, 5 Whys intake analysis, and cross-instance collaboration via Slack
 - **Budget Management**: Token usage tracking, API-equivalent cost estimates, and quota-aware execution with configurable limits
 - **Model Escalation**: Tiered model selection (haiku -> sonnet -> opus) with automatic escalation after consecutive failures
 - **Per-Task Validation**: Independent validator agent that runs after each task with PASS/WARN/FAIL verdicts and retry logic
@@ -258,13 +258,17 @@ When Claude CLI output contains rate limit messages ("You've hit your limit"), t
 
 ### Graceful Stop
 
-To stop the orchestrator between tasks without killing it:
+To stop the orchestrator cleanly:
 
 ```bash
 touch .claude/plans/.stop
 ```
 
-The orchestrator checks for this semaphore before each new task and exits cleanly. Remove it to allow future runs.
+The orchestrator checks for this semaphore every second during task execution and between tasks. A mid-task stop terminates the running Claude subprocess within 1 second and exits cleanly. For immediate process termination, use the PID file:
+
+```bash
+kill $(cat .claude/plans/.pipeline.pid)
+```
 
 ### Post-Plan Smoke Tests
 
@@ -455,6 +459,19 @@ The auto-pipeline integrates with Slack for real-time notifications and inbound 
 **Setup:** Run `python scripts/setup-slack.py --prefix myproject` to create a Slack app, channels, and config automatically. For a second project reusing an existing app, pass `--bot-token` and `--app-token` with a different `--prefix`. See the [Setup Guide](docs/setup-guide.md) for the full walkthrough including required bot scopes, manual setup alternative, and migration from webhook-based Slack to app-based Slack.
 
 The background polling thread checks for new messages every 15 seconds, independent of task execution.
+
+### Cross-Instance Collaboration via Slack
+
+Multiple orchestrator instances running in different projects can collaborate through shared Slack channels. By inviting other instances to listen to your `orchestrator-*` channels, they gain the ability to:
+
+- **Discover new versions**: Instances see release notifications and can flag when they are running outdated code
+- **Submit defects**: An instance that encounters a bug in the orchestrator itself can post a structured defect report to the `orchestrator-defects` channel, which the upstream instance picks up as a backlog item
+- **Submit features**: Instances can request new capabilities by posting to `orchestrator-features`
+- **Ask questions**: Cross-instance questions are answered by the LLM with full pipeline context via `orchestrator-questions`
+
+This turns the Slack channels into a lightweight coordination bus where orchestrator instances running across different codebases can report issues, request improvements, and stay informed about upstream changes --- without any direct coupling between the projects.
+
+**Setup:** Each instance uses its own channel prefix (e.g., `myproject-notifications`), but can be invited to monitor another instance's channels as a read/write participant. The inbound message processing handles messages from any source identically --- whether from a human or another orchestrator instance.
 
 ### Hot-Reload
 
@@ -696,7 +713,8 @@ your-project/
 
 **Graceful stop not working:**
 - Ensure the `.stop` file is in `.claude/plans/.stop` (not the project root)
-- The check happens before each new task, not during execution
+- The check happens every second during task execution and between tasks
+- For immediate termination, use `kill $(cat .claude/plans/.pipeline.pid)` instead
 
 **Stale worktrees after crash:**
 - Run `git worktree list` and `git worktree remove <path>` for orphans

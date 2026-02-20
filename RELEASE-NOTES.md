@@ -1,5 +1,19 @@
 # Release Notes
 
+## 1.6.3 (2026-02-19)
+
+### New Features
+- **Cross-instance Slack collaboration**: Multiple orchestrator instances can
+  listen to each other's Slack channels to discover new versions, submit defects
+  and features, and ask questions across projects.
+
+### Improvements
+- **README updated**: Graceful stop docs reflect mid-task semaphore checking,
+  PID-based termination documented, cross-instance collaboration section added.
+- **Race condition documented**: Comment in plan-orchestrator.py explains the
+  stop semaphore startup-clear timing and why SIGTERM via PID file is the most
+  reliable stop method.
+
 ## 1.6.2 (2026-02-19)
 
 ### Improvements

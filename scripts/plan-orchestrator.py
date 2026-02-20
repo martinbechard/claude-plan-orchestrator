@@ -4794,7 +4794,16 @@ def run_orchestrator(
     global CLAUDE_CMD
     CLAUDE_CMD = resolve_claude_binary()
 
-    # Clear any stale stop semaphore from a previous run
+    # Clear any stale stop semaphore from a previous run.
+    # NOTE ON RACE CONDITION: The auto-pipeline checks the stop semaphore
+    # *before* spawning the orchestrator, so the window between the pipeline
+    # creating the semaphore and the orchestrator clearing it here is only
+    # milliseconds (process startup time). The mid-task poll loop in
+    # run_claude_task() also checks every second, so even if a semaphore is
+    # created after this clear, it will be caught within 1 second.
+    # SIGTERM via the PID file remains the most reliable way to stop a
+    # running pipeline; the semaphore is a convenience for "stop after the
+    # next check" semantics.
     clear_stop_semaphore()
 
     # Initialize usage tracking and budget guard before header prints
