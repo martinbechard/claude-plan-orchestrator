@@ -1,0 +1,119 @@
+meta:
+  name: Include Root Cause and Fix Summary in Defect Completion Slack Notifications
+  description: Extract a concise root cause and fix summary from completed defect
+    markdown files and append it to the Slack notification messages in both the
+    notifications channel and the type-specific defects channel.
+  plan_doc: docs/plans/2026-02-21-1-include-root-cause-and-fix-summary-in-defect-completion-slack-notifications-design.md
+  source_item: docs/feature-backlog/1-include-root-cause-and-fix-summary-in-defect-completion-slack-notifications.md
+  created: '2026-02-21'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: phase-1
+  name: Phase 1 - Implementation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add _extract_completion_summary() and integrate into _archive_and_report()
+    agent: coder
+    status: pending
+    description: >
+      Implement the work item: docs/feature-backlog/1-include-root-cause-and-fix-summary-in-defect-completion-slack-notifications.md
+
+      Design doc: docs/plans/2026-02-21-1-include-root-cause-and-fix-summary-in-defect-completion-slack-notifications-design.md
+
+      In scripts/auto-pipeline.py:
+
+      1. Add a constant MAX_SUMMARY_LENGTH = 300 near the other constants at the
+         top of the file.
+
+      2. Add a new module-level function _extract_completion_summary(item_path: str) -> str
+         placed immediately before _archive_and_report(). The function should:
+         - Read the markdown file at item_path
+         - Extract "what was wrong" from (in priority order):
+           a. First sentence of ## Root Cause section
+           b. The **Root Need:** line from 5 Whys analysis
+           c. First sentence of ## Summary section
+         - Extract "what was fixed" from the last ## Verification Log entry:
+           a. Lines from **Findings:** that mention "fix" or "commit"
+           b. Fall back to the **Verdict:** line
+         - Combine into a concise string, truncated to MAX_SUMMARY_LENGTH
+         - Return empty string on any read error or if no sections found
+         - Use the existing regex patterns in the codebase (re.search with
+           re.MULTILINE | re.DOTALL for section extraction)
+
+      3. Modify _archive_and_report() to:
+         - Call _extract_completion_summary(item.path) BEFORE archive_item()
+           (the file is moved during archive, making item.path stale after)
+         - Store the result in a local variable summary
+         - Build summary_block = f"\n{summary}" if summary else ""
+         - Append summary_block to both existing send_status() message strings
+           (the notifications channel message and the type-specific channel
+           cross-post message)
+
+      4. Verify syntax: python3 -c "import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)"
+
+      Files: scripts/auto-pipeline.py
+- id: phase-2
+  name: Phase 2 - Unit Tests
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add unit tests for _extract_completion_summary()
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.1'
+    description: >
+      Implement the work item: docs/feature-backlog/1-include-root-cause-and-fix-summary-in-defect-completion-slack-notifications.md
+
+      Design doc: docs/plans/2026-02-21-1-include-root-cause-and-fix-summary-in-defect-completion-slack-notifications-design.md
+
+      Add unit tests for _extract_completion_summary() to tests/test_auto_pipeline.py.
+      Follow the existing test patterns in that file (use tmp_path fixture for
+      creating temporary markdown files).
+
+      Tests to add:
+
+      1. test_extract_completion_summary_with_root_cause_section:
+         - Create a markdown file with ## Root Cause section containing a
+           multi-sentence paragraph
+         - Verify the first sentence of Root Cause is included in the result
+
+      2. test_extract_completion_summary_with_root_need_line:
+         - Create a markdown file with **Root Need:** line but no ## Root Cause
+         - Verify the Root Need content is included
+
+      3. test_extract_completion_summary_with_summary_only:
+         - Create a markdown file with only ## Summary section
+         - Verify the first sentence of Summary is used as fallback
+
+      4. test_extract_completion_summary_with_verification_findings:
+         - Create a markdown file with ## Verification Log containing findings
+           that mention "fix" or "commit"
+         - Verify the fix-related findings are included
+
+      5. test_extract_completion_summary_truncation:
+         - Create a markdown file with very long Root Cause and findings
+         - Verify the result is truncated to MAX_SUMMARY_LENGTH
+
+      6. test_extract_completion_summary_file_not_found:
+         - Call with a nonexistent path
+         - Verify empty string is returned (no exception raised)
+
+      7. test_extract_completion_summary_empty_file:
+         - Create an empty markdown file
+         - Verify empty string is returned
+
+      Run tests: ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_auto_pipeline.py -v
+      Fix any failures.
+
+      Files: tests/test_auto_pipeline.py
