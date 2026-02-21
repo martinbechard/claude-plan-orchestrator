@@ -1738,12 +1738,17 @@ def is_plan_fully_completed(plan_path: str) -> bool:
     """Check if all tasks in a YAML plan are completed (no pending tasks remain).
 
     Returns True only if the plan has at least one completed task and zero
-    pending/in_progress tasks. Returns False for invalid or missing plans.
+    pending/in_progress tasks. Returns False for invalid, missing, or failed plans.
+    A plan with meta.status: "failed" is not considered fully completed -- it is
+    deadlocked and must not proceed to archiving.
     """
     try:
         with open(plan_path, "r") as f:
             plan = yaml.safe_load(f)
         if not plan or "sections" not in plan:
+            return False
+        meta = plan.get("meta", {})
+        if isinstance(meta, dict) and meta.get("status") == "failed":
             return False
         done = 0
         for section in plan.get("sections", []):
@@ -2019,6 +2024,10 @@ def find_in_progress_plans() -> list[str]:
             continue
 
         if not plan or "sections" not in plan:
+            continue
+
+        meta = plan.get("meta", {})
+        if isinstance(meta, dict) and meta.get("status") == "failed":
             continue
 
         has_completed = False

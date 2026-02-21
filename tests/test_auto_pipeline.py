@@ -1428,3 +1428,162 @@ def test_extract_completion_summary_empty_file(tmp_path):
     result = _extract_completion_summary(str(md_file))
 
     assert result == ""
+
+
+# --- is_plan_fully_completed() meta.status tests ---
+
+is_plan_fully_completed = mod.is_plan_fully_completed
+
+
+def _write_plan(path: Path, meta: dict, tasks: list[dict]) -> None:
+    """Write a minimal YAML plan file to path for testing."""
+    import yaml as _yaml
+    plan = {
+        "meta": meta,
+        "sections": [
+            {
+                "id": "phase-1",
+                "name": "Phase 1",
+                "tasks": tasks,
+            }
+        ],
+    }
+    path.write_text(_yaml.dump(plan))
+
+
+def test_is_plan_fully_completed_all_completed(tmp_path):
+    """Returns True when all tasks are completed and meta.status is absent."""
+    plan_file = tmp_path / "plan.yaml"
+    _write_plan(
+        plan_file,
+        meta={"name": "Test Plan"},
+        tasks=[
+            {"id": "1.1", "name": "Task A", "status": "completed"},
+            {"id": "1.2", "name": "Task B", "status": "completed"},
+        ],
+    )
+
+    assert is_plan_fully_completed(str(plan_file)) is True
+
+
+def test_is_plan_fully_completed_has_pending(tmp_path):
+    """Returns False when a pending task remains."""
+    plan_file = tmp_path / "plan.yaml"
+    _write_plan(
+        plan_file,
+        meta={"name": "Test Plan"},
+        tasks=[
+            {"id": "1.1", "name": "Task A", "status": "completed"},
+            {"id": "1.2", "name": "Task B", "status": "pending"},
+        ],
+    )
+
+    assert is_plan_fully_completed(str(plan_file)) is False
+
+
+def test_is_plan_fully_completed_meta_status_failed(tmp_path):
+    """Returns False when meta.status is 'failed', even if all tasks show completed."""
+    plan_file = tmp_path / "plan.yaml"
+    _write_plan(
+        plan_file,
+        meta={"name": "Test Plan", "status": "failed"},
+        tasks=[
+            {"id": "1.1", "name": "Task A", "status": "completed"},
+            {"id": "1.2", "name": "Task B", "status": "pending"},
+        ],
+    )
+
+    assert is_plan_fully_completed(str(plan_file)) is False
+
+
+def test_is_plan_fully_completed_meta_status_other(tmp_path):
+    """Returns True when meta.status is a non-failed value and all tasks are done."""
+    plan_file = tmp_path / "plan.yaml"
+    _write_plan(
+        plan_file,
+        meta={"name": "Test Plan", "status": "paused_quota"},
+        tasks=[
+            {"id": "1.1", "name": "Task A", "status": "completed"},
+        ],
+    )
+
+    # paused_quota is not "failed", so completion check falls through to task scan
+    assert is_plan_fully_completed(str(plan_file)) is True
+
+
+# --- find_in_progress_plans() meta.status tests ---
+
+find_in_progress_plans = mod.find_in_progress_plans
+
+
+def test_find_in_progress_plans_skips_failed_meta_status(tmp_path, monkeypatch):
+    """Plans with meta.status 'failed' are excluded from the in-progress list."""
+    plans_dir = tmp_path / "plans"
+    plans_dir.mkdir()
+    monkeypatch.setattr(mod, "PLANS_DIR", str(plans_dir))
+
+    plan_file = plans_dir / "deadlocked.yaml"
+    _write_plan(
+        plan_file,
+        meta={"name": "Deadlocked Plan", "status": "failed"},
+        tasks=[
+            {"id": "1.1", "name": "Task A", "status": "completed"},
+            {"id": "1.2", "name": "Task B", "status": "pending"},
+        ],
+    )
+
+    result = find_in_progress_plans()
+
+    assert result == [], "Deadlocked (meta.status: failed) plan must not appear as in-progress"
+
+
+def test_find_in_progress_plans_includes_normal_in_progress(tmp_path, monkeypatch):
+    """Plans without meta.status 'failed' that have pending tasks are included."""
+    plans_dir = tmp_path / "plans"
+    plans_dir.mkdir()
+    monkeypatch.setattr(mod, "PLANS_DIR", str(plans_dir))
+
+    plan_file = plans_dir / "active.yaml"
+    _write_plan(
+        plan_file,
+        meta={"name": "Active Plan"},
+        tasks=[
+            {"id": "1.1", "name": "Task A", "status": "completed"},
+            {"id": "1.2", "name": "Task B", "status": "pending"},
+        ],
+    )
+
+    result = find_in_progress_plans()
+
+    assert len(result) == 1
+    assert "active.yaml" in result[0]
+
+
+def test_find_in_progress_plans_mixed_failed_and_active(tmp_path, monkeypatch):
+    """Only non-failed in-progress plans are returned when both types exist."""
+    plans_dir = tmp_path / "plans"
+    plans_dir.mkdir()
+    monkeypatch.setattr(mod, "PLANS_DIR", str(plans_dir))
+
+    _write_plan(
+        plans_dir / "deadlocked.yaml",
+        meta={"name": "Dead", "status": "failed"},
+        tasks=[
+            {"id": "1.1", "name": "Task A", "status": "completed"},
+            {"id": "1.2", "name": "Task B", "status": "pending"},
+        ],
+    )
+    _write_plan(
+        plans_dir / "active.yaml",
+        meta={"name": "Active"},
+        tasks=[
+            {"id": "1.1", "name": "Task A", "status": "completed"},
+            {"id": "1.2", "name": "Task B", "status": "pending"},
+        ],
+    )
+
+    result = find_in_progress_plans()
+
+    assert len(result) == 1
+    assert any("active.yaml" in r for r in result)
+    assert not any("deadlocked.yaml" in r for r in result)
