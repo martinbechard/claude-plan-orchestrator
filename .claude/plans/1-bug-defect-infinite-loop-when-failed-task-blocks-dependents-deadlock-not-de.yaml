@@ -47,12 +47,12 @@ sections:
       to tests/test_plan_orchestrator.py, all passing.
 - id: phase-2
   name: Phase 2 - Pipeline Deadlock Awareness
-  status: pending
+  status: completed
   tasks:
   - id: '2.1'
     name: Update find_in_progress_plans() and is_plan_fully_completed() for meta.status
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '1.1'
     description: "Implement the pipeline-side fix in scripts/auto-pipeline.py as described\
@@ -69,3 +69,7 @@ sections:
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
     validation_attempts: 2
+    completed_at: '2026-02-21T11:24:10.548884'
+    result_message: 'Updated find_in_progress_plans() and is_plan_fully_completed()
+      to skip plans with meta.status: ''failed''. Added 7 unit tests covering all
+      cases. All 86 tests pass.'
