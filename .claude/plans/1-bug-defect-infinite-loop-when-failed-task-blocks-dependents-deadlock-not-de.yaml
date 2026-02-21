@@ -52,7 +52,7 @@ sections:
   - id: '2.1'
     name: Update find_in_progress_plans() and is_plan_fully_completed() for meta.status
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '1.1'
     description: "Implement the pipeline-side fix in scripts/auto-pipeline.py as described\
@@ -63,3 +63,5 @@ sections:
       \ is \"failed\"\n   (a failed plan is not \"fully completed\").\n3. Add unit\
       \ tests to tests/test_auto_pipeline.py for both changes.\n\nFiles: scripts/auto-pipeline.py,\
       \ tests/test_auto_pipeline.py\n"
+    attempts: 1
+    last_attempt: '2026-02-21T11:16:33.174192'
