@@ -1,0 +1,111 @@
+meta:
+  name: Fix False-Positive Agent Inference for Reviewer Keywords
+  description: 'Replace single-word REVIEWER_KEYWORDS and DESIGNER_KEYWORDS with
+    multi-word phrases to prevent false-positive classification of implementation
+    tasks as code-reviewer (READ_ONLY), which strips Edit/Write permissions and
+    causes task failures.'
+  plan_doc: docs/plans/2026-02-20-1-theres-something-odd---i-see-the-cheapoville-pipeline-agent-complaining-that-th-design.md
+  source_item: docs/defect-backlog/1-theres-something-odd---i-see-the-cheapoville-pipeline-agent-complaining-that-th.md
+  created: '2026-02-20'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+      - coder
+      - e2e-test-agent
+      - frontend-coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+
+sections:
+  - id: phase-1
+    name: Phase 1 - Fix Keyword Constants and Inference Logic
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: Replace single-word REVIEWER_KEYWORDS and DESIGNER_KEYWORDS with multi-word phrases
+        agent: coder
+        status: pending
+        description: |
+          Implement the work item: docs/defect-backlog/1-theres-something-odd---i-see-the-cheapoville-pipeline-agent-complaining-that-th.md
+
+          Design doc: docs/plans/2026-02-20-1-theres-something-odd---i-see-the-cheapoville-pipeline-agent-complaining-that-th-design.md
+
+          In scripts/plan-orchestrator.py:
+
+          1. Replace REVIEWER_KEYWORDS (around line 509) with multi-word phrases:
+             ["code review", "review code", "review implementation",
+              "review changes", "verify implementation", "verify changes",
+              "run verification", "check compliance", "compliance check",
+              "regression test", "regression check"]
+
+          2. Replace DESIGNER_KEYWORDS (around line 515) with multi-word phrases:
+             ["system design", "design document", "architecture design",
+              "wireframe", "layout design", "mockup",
+              "data model design", "api design"]
+
+          3. Update the docstring for infer_agent_for_task() to reflect the new
+             multi-word phrase approach for these keyword lists.
+
+          4. Update the comments above REVIEWER_KEYWORDS and DESIGNER_KEYWORDS to
+             note they use multi-word phrases (consistent with other keyword lists).
+
+          5. Run syntax check: python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True)"
+
+          6. Run tests: ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ -v
+             Fix any failures caused by the keyword changes.
+
+          Files: scripts/plan-orchestrator.py
+
+  - id: phase-2
+    name: Phase 2 - Update and Add Regression Tests
+    status: pending
+    tasks:
+      - id: '2.1'
+        name: Update existing tests and add false-positive regression tests
+        agent: coder
+        status: pending
+        depends_on:
+          - '1.1'
+        description: |
+          Implement the work item: docs/defect-backlog/1-theres-something-odd---i-see-the-cheapoville-pipeline-agent-complaining-that-th.md
+
+          Design doc: docs/plans/2026-02-20-1-theres-something-odd---i-see-the-cheapoville-pipeline-agent-complaining-that-th-design.md
+
+          Update tests in tests/test_spec_verifier_ux_reviewer.py:
+
+          1. Update test_infer_agent_frontend_does_not_collide_with_reviewer (line ~204)
+             which uses task name "Verify component" - this single-word match no longer
+             triggers code-reviewer. Change the test to use "Verify implementation of component"
+             or similar multi-word phrase, and assert code-reviewer.
+
+          2. Add false-positive regression tests to prevent the original bug:
+             - test_infer_coder_for_implementation_with_check_keyword:
+               Task: name="Add content moderation check", desc="Implement input checking"
+               Expected: "coder" (NOT "code-reviewer")
+
+             - test_infer_coder_for_implementation_with_review_keyword:
+               Task: name="Build review UI", desc="Implement the review interface for moderators"
+               Expected: "coder" (NOT "code-reviewer")
+
+             - test_infer_coder_for_implementation_with_validate_keyword:
+               Task: name="Add form validation", desc="Validate user input in the registration form"
+               Expected: "coder" (NOT "code-reviewer")
+
+             - test_infer_reviewer_for_code_review_phrase:
+               Task: name="Code review", desc="Perform code review of the implementation"
+               Expected: "code-reviewer"
+
+             - test_infer_designer_for_system_design_phrase:
+               Task: name="System design", desc="Create system design for the auth module"
+               Expected: "systems-designer"
+
+             - test_infer_coder_for_design_in_implementation_context:
+               Task: name="Implement design system", desc="Build the design tokens and theme"
+               Expected: "coder" (NOT "systems-designer")
+
+          3. Run full test suite: ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ -v
+             All tests must pass.
+
+          Files: tests/test_spec_verifier_ux_reviewer.py
