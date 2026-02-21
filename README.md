@@ -458,6 +458,14 @@ The auto-pipeline integrates with Slack for real-time notifications and inbound 
 
 **Setup:** Run `python scripts/setup-slack.py --prefix myproject` to create a Slack app, channels, and config automatically. For a second project reusing an existing app, pass `--bot-token` and `--app-token` with a different `--prefix`. See the [Setup Guide](docs/setup-guide.md) for the full walkthrough including required bot scopes, manual setup alternative, and migration from webhook-based Slack to app-based Slack.
 
+**Adding a Second Project to an Existing Workspace:** If you already have a Slack app running for another project, you can add the orchestrator to a second project with a single command — no browser required:
+
+```bash
+python scripts/setup-slack.py --prefix newproject --bot-token xoxb-your-existing-token --app-token xapp-your-existing-token --non-interactive
+```
+
+Find your existing tokens in the other project's `.claude/slack.local.yaml`. The command creates new `newproject-*` channels and writes `.claude/slack.local.yaml` in the current directory. See [Adding to an Existing Workspace](docs/setup-guide.md#adding-to-an-existing-workspace) in the Setup Guide for full details.
+
 The background polling thread checks for new messages every 15 seconds, independent of task execution.
 
 ### Cross-Instance Collaboration via Slack

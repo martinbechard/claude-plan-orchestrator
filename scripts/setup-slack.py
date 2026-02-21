@@ -461,6 +461,16 @@ def main():
               "--app-token")
         sys.exit(1)
 
+    # Validate token formats when provided via command line
+    if args.bot_token and not args.bot_token.startswith("xoxb-"):
+        print(f"ERROR: --bot-token must start with 'xoxb-' "
+              f"(did you swap bot and app tokens?)")
+        sys.exit(1)
+    if args.app_token and not args.app_token.startswith("xapp-"):
+        print(f"ERROR: --app-token must start with 'xapp-' "
+              f"(did you swap bot and app tokens?)")
+        sys.exit(1)
+
     is_private = not args.public
     prefix = args.prefix.rstrip("-") + "-"
     app_name = args.app_name or f"{args.prefix.title()} Orchestrator"

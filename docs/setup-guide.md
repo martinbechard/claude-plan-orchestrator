@@ -90,6 +90,61 @@ manually, the bot needs these OAuth scopes:
 - users:read (look up user IDs for --invite-user)
 - users:read.email (look up users by email for --invite-user)
 
+## Adding to an Existing Workspace
+
+Use this path when you already have a Slack app running for another project and
+want to add the orchestrator to a second project. You can reuse the same Slack app
+— just give the new project a unique channel prefix.
+
+**When to use this path:**
+- You ran the interactive setup for a first project and it created a Slack app
+- You now want to set up a second project in the same Slack workspace
+- You want fully automated setup with no browser prompts
+
+**Where to find your existing tokens:**
+
+Look in the other project's `.claude/slack.local.yaml`:
+
+```yaml
+slack:
+  bot_token: xoxb-your-existing-token   # copy this
+  app_token: xapp-your-existing-token   # copy this
+```
+
+**Run this command** in your new project directory:
+
+```bash
+python scripts/setup-slack.py \
+  --prefix newproject \
+  --bot-token xoxb-your-existing-token \
+  --app-token xapp-your-existing-token \
+  --non-interactive
+```
+
+Flags explained:
+
+| Flag | Purpose |
+|------|---------|
+| --prefix | Unique name for this project's channels (e.g. myteam, payments) |
+| --bot-token | Bot OAuth token from your existing Slack app (xoxb-...) |
+| --app-token | App-level token from your existing Slack app (xapp-...) |
+| --non-interactive | Skip browser and all input prompts; runs fully automated |
+
+Each project must use a unique prefix. Two projects with the same prefix will
+share channels and interfere with each other.
+
+**What the command creates:**
+
+- Four private channels: `newproject-notifications`, `newproject-defects`,
+  `newproject-features`, `newproject-questions`
+- `.claude/slack.local.yaml` in the current directory with your tokens and prefix
+
+To create public channels instead, add `--public`. To invite a team member to
+all channels, add `--invite-user user@example.com`.
+
+**Next steps:** Once the command completes, proceed to step 4 to configure
+project-specific settings (build commands, test commands, etc.).
+
 ## 4. Configure the project
 
 Create .claude/orchestrator-config.yaml if your project uses non-default commands:
