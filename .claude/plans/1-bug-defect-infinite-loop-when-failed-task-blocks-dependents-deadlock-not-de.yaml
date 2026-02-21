@@ -1,0 +1,67 @@
+meta:
+  name: Fix Infinite Loop When Failed Task Blocks Dependents (Deadlock Detection)
+  description: 'Add deadlock detection: when find_next_task() returns None but pending
+    tasks exist (blocked by failed/suspended dependencies), set meta.status: failed
+    and exit non-zero. Update auto-pipeline.py to check meta.status in
+    find_in_progress_plans() and is_plan_fully_completed() to stop resuming
+    deadlocked plans.'
+  source_item: docs/defect-backlog/1-bug-defect-infinite-loop-when-failed-task-blocks-dependents-deadlock-not-de.md
+  plan_doc: docs/plans/2026-02-21-1-bug-defect-infinite-loop-when-failed-task-blocks-dependents-deadlock-not-de-design.md
+  created: '2026-02-21'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+
+sections:
+- id: phase-1
+  name: Phase 1 - Deadlock Detection in Orchestrator
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add detect_plan_deadlock() and update main loop exit logic
+    agent: coder
+    status: pending
+    description: |
+      Implement the deadlock detection fix in scripts/plan-orchestrator.py as described in
+      the work item: docs/defect-backlog/1-bug-defect-infinite-loop-when-failed-task-blocks-dependents-deadlock-not-de.md
+
+      Design doc: docs/plans/2026-02-21-1-bug-defect-infinite-loop-when-failed-task-blocks-dependents-deadlock-not-de-design.md
+
+      Key changes:
+      1. Add detect_plan_deadlock(plan) function that checks if pending tasks are blocked
+         by failed/suspended dependencies.
+      2. Update the main loop where find_next_task() returns None (around line 5336):
+         distinguish "genuinely complete" from "deadlocked".
+      3. On deadlock: set meta.status: "failed" in YAML, send Slack notification, exit non-zero.
+      4. Add unit tests to tests/test_plan_orchestrator.py for the new function.
+
+      Files: scripts/plan-orchestrator.py, tests/test_plan_orchestrator.py
+
+- id: phase-2
+  name: Phase 2 - Pipeline Deadlock Awareness
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Update find_in_progress_plans() and is_plan_fully_completed() for meta.status
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.1'
+    description: |
+      Implement the pipeline-side fix in scripts/auto-pipeline.py as described in
+      the work item: docs/defect-backlog/1-bug-defect-infinite-loop-when-failed-task-blocks-dependents-deadlock-not-de.md
+
+      Design doc: docs/plans/2026-02-21-1-bug-defect-infinite-loop-when-failed-task-blocks-dependents-deadlock-not-de-design.md
+
+      Key changes:
+      1. Update find_in_progress_plans() to skip plans where meta.status is "failed".
+      2. Update is_plan_fully_completed() to return False when meta.status is "failed"
+         (a failed plan is not "fully completed").
+      3. Add unit tests to tests/test_auto_pipeline.py for both changes.
+
+      Files: scripts/auto-pipeline.py, tests/test_auto_pipeline.py
