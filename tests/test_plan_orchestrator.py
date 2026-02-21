@@ -40,6 +40,9 @@ clear_suspension_marker = mod.clear_suspension_marker
 is_item_suspended = mod.is_item_suspended
 get_suspension_answer = mod.get_suspension_answer
 find_next_task = mod.find_next_task
+detect_plan_deadlock = mod.detect_plan_deadlock
+NON_TERMINAL_TASK_STATUSES = mod.NON_TERMINAL_TASK_STATUSES
+DEADLOCK_BLOCKING_STATUSES = mod.DEADLOCK_BLOCKING_STATUSES
 update_section_status = mod.update_section_status
 AGENT_PERMISSION_PROFILES = mod.AGENT_PERMISSION_PROFILES
 AGENT_TO_PROFILE = mod.AGENT_TO_PROFILE
@@ -1504,3 +1507,145 @@ def test_should_send_step_notifications_override_false():
 def test_step_notification_threshold_constant():
     """STEP_NOTIFICATION_THRESHOLD equals 6."""
     assert STEP_NOTIFICATION_THRESHOLD == 6
+
+
+# --- detect_plan_deadlock() tests ---
+
+
+def _make_plan_with_two_sections(section1_tasks: list, section2_tasks: list) -> dict:
+    """Build a plan dict with two sections."""
+    return {
+        "sections": [
+            {"id": "phase-1", "name": "Phase 1", "status": "in_progress", "tasks": section1_tasks},
+            {"id": "phase-2", "name": "Phase 2", "status": "pending", "tasks": section2_tasks},
+        ]
+    }
+
+
+def test_detect_plan_deadlock_constants():
+    """NON_TERMINAL_TASK_STATUSES and DEADLOCK_BLOCKING_STATUSES contain expected values."""
+    assert "pending" in NON_TERMINAL_TASK_STATUSES
+    assert "in_progress" in NON_TERMINAL_TASK_STATUSES
+    assert "failed" in DEADLOCK_BLOCKING_STATUSES
+    assert "suspended" in DEADLOCK_BLOCKING_STATUSES
+
+
+def test_detect_plan_deadlock_no_tasks():
+    """Empty plan returns None (genuinely complete)."""
+    plan = {"sections": []}
+    result = detect_plan_deadlock(plan)
+    assert result is None
+
+
+def test_detect_plan_deadlock_all_completed():
+    """Plan with all completed tasks returns None (genuinely complete)."""
+    tasks = [
+        {"id": "1.1", "name": "Task A", "status": "completed"},
+        {"id": "1.2", "name": "Task B", "status": "completed"},
+    ]
+    plan = _make_plan_with_tasks(tasks)
+    result = detect_plan_deadlock(plan)
+    assert result is None
+
+
+def test_detect_plan_deadlock_pending_task_no_deps():
+    """Pending task with no dependencies is runnable - no deadlock."""
+    tasks = [
+        {"id": "1.1", "name": "Failed", "status": "failed"},
+        {"id": "1.2", "name": "Pending no deps", "status": "pending"},
+    ]
+    plan = _make_plan_with_tasks(tasks)
+    result = detect_plan_deadlock(plan)
+    assert result is None
+
+
+def test_detect_plan_deadlock_blocked_by_failed_dep():
+    """Single pending task blocked by a failed dependency triggers deadlock."""
+    tasks = [
+        {"id": "1.1", "name": "Failed task", "status": "failed"},
+        {"id": "1.2", "name": "Blocked task", "status": "pending", "depends_on": ["1.1"]},
+    ]
+    plan = _make_plan_with_tasks(tasks)
+    result = detect_plan_deadlock(plan)
+    assert result is not None
+    assert len(result) == 1
+    assert result[0]["task_id"] == "1.2"
+    assert "1.1" in result[0]["blocked_by"]
+
+
+def test_detect_plan_deadlock_blocked_by_suspended_dep():
+    """Single pending task blocked by a suspended dependency triggers deadlock."""
+    tasks = [
+        {"id": "1.1", "name": "Suspended task", "status": "suspended"},
+        {"id": "1.2", "name": "Blocked task", "status": "pending", "depends_on": ["1.1"]},
+    ]
+    plan = _make_plan_with_tasks(tasks)
+    result = detect_plan_deadlock(plan)
+    assert result is not None
+    assert result[0]["task_id"] == "1.2"
+    assert "1.1" in result[0]["blocked_by"]
+
+
+def test_detect_plan_deadlock_mixed_runnable_and_blocked():
+    """When one task is runnable and another is blocked, no deadlock is reported."""
+    tasks = [
+        {"id": "1.1", "name": "Failed task", "status": "failed"},
+        {"id": "1.2", "name": "Blocked task", "status": "pending", "depends_on": ["1.1"]},
+        {"id": "1.3", "name": "Runnable task", "status": "pending"},
+    ]
+    plan = _make_plan_with_tasks(tasks)
+    result = detect_plan_deadlock(plan)
+    assert result is None
+
+
+def test_detect_plan_deadlock_multiple_blocked_tasks():
+    """All pending tasks blocked by same failed dep all appear in result."""
+    tasks = [
+        {"id": "1.1", "name": "Failed", "status": "failed"},
+        {"id": "1.2", "name": "Blocked A", "status": "pending", "depends_on": ["1.1"]},
+        {"id": "1.3", "name": "Blocked B", "status": "pending", "depends_on": ["1.1"]},
+    ]
+    plan = _make_plan_with_tasks(tasks)
+    result = detect_plan_deadlock(plan)
+    assert result is not None
+    assert len(result) == 2
+    task_ids = {item["task_id"] for item in result}
+    assert task_ids == {"1.2", "1.3"}
+
+
+def test_detect_plan_deadlock_dep_not_in_failure_state():
+    """Pending task whose dependency is also pending is NOT a deadlock."""
+    tasks = [
+        {"id": "1.1", "name": "Still pending", "status": "pending"},
+        {"id": "1.2", "name": "Waiting", "status": "pending", "depends_on": ["1.1"]},
+    ]
+    plan = _make_plan_with_tasks(tasks)
+    result = detect_plan_deadlock(plan)
+    assert result is None
+
+
+def test_detect_plan_deadlock_cross_section():
+    """Deadlock spanning two sections is detected correctly."""
+    section1_tasks = [
+        {"id": "1.1", "name": "Failed task", "status": "failed"},
+    ]
+    section2_tasks = [
+        {"id": "2.1", "name": "Blocked task", "status": "pending", "depends_on": ["1.1"]},
+    ]
+    plan = _make_plan_with_two_sections(section1_tasks, section2_tasks)
+    result = detect_plan_deadlock(plan)
+    assert result is not None
+    assert result[0]["task_id"] == "2.1"
+    assert "1.1" in result[0]["blocked_by"]
+
+
+def test_detect_plan_deadlock_in_progress_task_blocked():
+    """An in_progress task that depends on a failed task also counts as deadlocked."""
+    tasks = [
+        {"id": "1.1", "name": "Failed", "status": "failed"},
+        {"id": "1.2", "name": "In progress blocked", "status": "in_progress", "depends_on": ["1.1"]},
+    ]
+    plan = _make_plan_with_tasks(tasks)
+    result = detect_plan_deadlock(plan)
+    assert result is not None
+    assert result[0]["task_id"] == "1.2"

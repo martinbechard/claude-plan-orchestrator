@@ -65,6 +65,10 @@ STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
 SUSPENDED_DIR = ".claude/suspended"
 SUSPENSION_TIMEOUT_MINUTES = 1440  # 24 hours default
 DEFAULT_MAX_ATTEMPTS = 3
+
+# Task status classification for deadlock detection
+NON_TERMINAL_TASK_STATUSES = {"pending", "in_progress"}
+DEADLOCK_BLOCKING_STATUSES = {"failed", "suspended"}
 CLAUDE_TIMEOUT_SECONDS = 900  # 15 minutes per task
 MAX_PLAN_NAME_LENGTH = 50  # Max chars from plan name used in report filenames
 
@@ -2030,6 +2034,48 @@ def check_dependencies_satisfied(plan: dict, depends_on: list) -> bool:
         if dep_status != "completed":
             return False
     return True
+
+
+def detect_plan_deadlock(plan: dict) -> Optional[list[dict]]:
+    """Detect whether all remaining non-terminal tasks are blocked by failed/suspended deps.
+
+    Returns a list of blocked-task dicts (each with 'task_id' and 'blocked_by') when
+    every non-terminal task has at least one dependency in a terminal-failure state.
+    Returns None when the plan is genuinely complete (no non-terminal tasks) or when
+    at least one non-terminal task is still runnable.
+    """
+    non_terminal_tasks = [
+        task
+        for section in plan.get("sections", [])
+        for task in section.get("tasks", [])
+        if task.get("status", "pending") in NON_TERMINAL_TASK_STATUSES
+    ]
+
+    if not non_terminal_tasks:
+        return None
+
+    blocked_tasks = []
+    for task in non_terminal_tasks:
+        blocking_deps = _find_blocking_dependencies(plan, task.get("depends_on", []))
+        if blocking_deps:
+            blocked_tasks.append({"task_id": task.get("id"), "blocked_by": blocking_deps})
+
+    if len(blocked_tasks) == len(non_terminal_tasks):
+        return blocked_tasks
+
+    return None
+
+
+def _find_blocking_dependencies(plan: dict, depends_on: list) -> list[str]:
+    """Return the subset of depends_on IDs whose tasks are in a terminal-failure state."""
+    blocking = []
+    for dep_id in depends_on:
+        result = find_task_by_id(plan, dep_id)
+        if result is not None:
+            _, dep_task = result
+            if dep_task.get("status", "pending") in DEADLOCK_BLOCKING_STATUSES:
+                blocking.append(dep_id)
+    return blocking
 
 
 def find_task_by_id(plan: dict, task_id: str) -> Optional[tuple[dict, dict]]:
@@ -5334,6 +5380,28 @@ def run_orchestrator(
         verbose_log(f"find_next_task returned: {result is not None}", "LOOP")
 
         if not result:
+            deadlocked_tasks = detect_plan_deadlock(plan)
+            if deadlocked_tasks:
+                blocked_summary = "; ".join(
+                    f"{item['task_id']} blocked by {item['blocked_by']}"
+                    for item in deadlocked_tasks
+                )
+                print(f"\n=== Plan deadlocked: {blocked_summary} ===")
+
+                plan.setdefault("meta", {})["status"] = "failed"
+                plan["meta"]["failure_reason"] = f"Deadlock: {blocked_summary}"
+                if not dry_run:
+                    save_plan(plan_path, plan, commit=True,
+                              commit_message="plan: Deadlock detected - marking as failed")
+
+                slack.send_status(
+                    f"*Plan deadlocked:* {meta.get('name', 'Unknown')}\n"
+                    f"Blocked tasks: {blocked_summary}\n"
+                    f"Completed: {tasks_completed}, Failed: {tasks_failed}",
+                    level="error"
+                )
+                sys.exit(1)
+
             print("\n=== All tasks completed! ===")
 
             # Send Slack notification before smoke tests
