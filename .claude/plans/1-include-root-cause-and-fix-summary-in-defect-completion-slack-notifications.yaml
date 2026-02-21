@@ -48,8 +48,12 @@ sections:
       \ the type-specific channel\n     cross-post message)\n\n4. Verify syntax: python3\
       \ -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)\"\
       \nFiles: scripts/auto-pipeline.py\n"
-    attempts: 1
-    last_attempt: '2026-02-21T00:26:51.370045'
+    attempts: 2
+    last_attempt: '2026-02-21T00:31:13.436525'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: No status file
+      written by Claude'
+    validation_attempts: 1
 - id: phase-2
   name: Phase 2 - Unit Tests
   status: pending
