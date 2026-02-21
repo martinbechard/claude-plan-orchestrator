@@ -222,6 +222,174 @@ To confirm everything is working:
 | docs/feature-backlog/ | Drop feature .md files here |
 | docs/completed-backlog/ | Archived completed items |
 
+## Cross-Project Reporting
+
+These steps let your project post defect reports and feature requests to an upstream
+orchestrator running in a different codebase. The upstream treats inbound messages
+from your bot exactly like messages from a human --- running 5 Whys intake analysis
+and adding structured items to its backlog.
+
+### Prerequisites
+
+- Your Slack bot is already set up (step 3 above)
+- You have the upstream team's channel prefix (ask them)
+- You share a Slack workspace with the upstream project
+
+### Step 1: Identify the upstream channels
+
+Upstream orchestrators create four channels named after their prefix:
+
+| Channel | Purpose |
+|---------|---------|
+| {prefix}-notifications | Status updates and release announcements |
+| {prefix}-defects | Defect reports --- post here to file a bug |
+| {prefix}-features | Feature requests --- post here to request a capability |
+| {prefix}-questions | Questions answered by the upstream LLM with full pipeline context |
+
+Ask the upstream team for their prefix (e.g., orchestrator-) and verify that
+those channels exist in your shared Slack workspace.
+
+### Step 2: Invite your bot to the upstream channels
+
+In each upstream channel you want to post to, open that channel in Slack and run:
+
+```
+/invite @YourBotName
+```
+
+Repeat for {prefix}-defects and {prefix}-features at minimum. Your bot needs:
+
+- chat:write (post messages to the channel)
+- channels:history or groups:history (read history for polling, if monitoring
+  upstream notifications)
+
+To verify the invitation worked, run:
+
+```bash
+python3 -c "
+import yaml, urllib.request, json
+cfg = yaml.safe_load(open('.claude/slack.local.yaml'))['slack']
+token = cfg['bot_token']
+req = urllib.request.Request(
+    'https://slack.com/api/users.conversations?types=public_channel,private_channel',
+    headers={'Authorization': f'Bearer {token}'}
+)
+with urllib.request.urlopen(req) as r:
+    data = json.loads(r.read())
+    for ch in data.get('channels', []):
+        print(ch['name'])
+"
+```
+
+The upstream's channels (e.g., orchestrator-defects) should appear in the output.
+
+### Step 3: Configure the upstream channel prefix
+
+In your .claude/slack.local.yaml, set channel_prefix to the upstream project's prefix:
+
+```yaml
+slack:
+  enabled: true
+  bot_token: xoxb-your-bot-token
+  app_token: xapp-your-app-token
+  channel_prefix: "orchestrator-"
+```
+
+This tells the orchestrator to discover and monitor channels named orchestrator-*.
+Because your bot was invited in step 2, those channels appear in the discovery
+results and are polled for inbound messages (release notifications, replies, etc.).
+Outbound send_defect and send_idea calls also route to these channels.
+
+### Step 4: Configure agent identity
+
+Add an identity section to your .claude/orchestrator-config.yaml so the upstream
+orchestrator can identify your messages:
+
+```yaml
+identity:
+  project: myproject
+  agents:
+    pipeline: MyProj-Pipeline
+    orchestrator: MyProj-Orchestrator
+    intake: MyProj-Intake
+    qa: MyProj-QA
+```
+
+Without explicit identity, display names are derived from your directory name
+(e.g., Myproject-Pipeline). Either way, the upstream's self-loop filter skips
+messages signed by its own agents, so your messages will always be processed.
+
+### How the agent identity protocol prevents self-loops
+
+When two orchestrators share channels, the identity protocol ensures neither
+processes its own echoes:
+
+1. Every outbound message is signed: message text --- *AgentName*
+2. On inbound, messages signed by one of our own agents are skipped
+3. Messages with @OtherAgent but not @OurAgent are skipped (not addressed to us)
+4. Messages with @OurAgent or no @ addressing are processed
+
+This means when your consumer orchestrator posts to orchestrator-defects, the
+upstream processes it (not signed by its own agents). Your own orchestrator ignores
+the echo because it recognizes its own signature.
+
+Use @AgentName in the message body to address a specific upstream agent directly
+(e.g., @CPO-Pipeline what is the status of feature 17?).
+
+### Quick-start example
+
+Scenario: Your project (prefix cheapoville-) found a bug in the upstream
+claude-plan-orchestrator (prefix orchestrator-).
+
+1. Ask the CPO team to run /invite @Cheapoville-Bot in #orchestrator-defects
+   and #orchestrator-features.
+
+2. In your .claude/slack.local.yaml:
+
+```yaml
+slack:
+  enabled: true
+  bot_token: xoxb-cheapoville-token
+  channel_prefix: "orchestrator-"
+```
+
+3. In your .claude/orchestrator-config.yaml:
+
+```yaml
+identity:
+  project: cheapoville
+  agents:
+    pipeline: CHV-Pipeline
+    orchestrator: CHV-Orchestrator
+    intake: CHV-Intake
+    qa: CHV-QA
+```
+
+4. Post to #orchestrator-defects (or let your pipeline post via send_defect):
+
+```
+The plan archiving step fails when a backlog file is moved mid-pipeline.
+Steps to reproduce: ...
+--- *CHV-Pipeline*
+```
+
+The CPO orchestrator's inbound polling picks up the message within 15 seconds,
+runs 5 Whys intake analysis, and adds a structured defect item to its backlog.
+No manual coordination is required beyond the initial bot invitation.
+
+### Notes
+
+- Your own project channels (e.g., cheapoville-defects) are unaffected. To run
+  your own orchestrator for your own work simultaneously, keep a separate
+  slack.local.yaml instance pointing to your own prefix. Only one orchestrator
+  process should run against a given prefix at a time.
+- The upstream's questions channel ({prefix}-questions) is answered by the
+  upstream LLM with full pipeline context. Use it to check upstream status or
+  ask about a bug before filing a duplicate defect.
+- To send a directed question to a specific upstream agent, include @AgentName
+  in your message body (e.g., @CPO-Orchestrator is there already a fix in progress
+  for the archiving issue?).
+
 ## Upgrading
 
 ### From plugin install

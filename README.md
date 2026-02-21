@@ -473,6 +473,20 @@ This turns the Slack channels into a lightweight coordination bus where orchestr
 
 **Setup:** Each instance uses its own channel prefix (e.g., `myproject-notifications`), but can be invited to monitor another instance's channels as a read/write participant. The inbound message processing handles messages from any source identically --- whether from a human or another orchestrator instance.
 
+### Setting Up Cross-Project Reporting (Consumer Side)
+
+If your project wants to report defects or request features to an upstream orchestrator, three things must be in place:
+
+1. **Know the upstream channel prefix** --- The upstream project's channels follow the naming pattern `{prefix}-defects`, `{prefix}-features`, `{prefix}-notifications`, and `{prefix}-questions`. Get this prefix from the upstream team.
+
+2. **Invite your bot to the upstream channels** --- In each upstream Slack channel you want to post to, open the channel and run `/invite @YourBotName`. Your bot needs `chat:write` access on those channels to post and `channels:history` (or `groups:history` for private channels) to poll them.
+
+3. **Configure agent identity** --- Add an `identity` section to your `orchestrator-config.yaml` (see [Agent Identity Protocol](#agent-identity-protocol) below) so the upstream orchestrator can identify your messages and skip self-echoes.
+
+Once invited and configured, set `channel_prefix` in your `.claude/slack.local.yaml` to the upstream's prefix. Your orchestrator will then discover the upstream channels, poll them for release notifications, and route outbound `send_defect` and `send_idea` calls there.
+
+For the full step-by-step procedure including a quick-start example, see [Cross-Project Reporting](docs/setup-guide.md#cross-project-reporting) in the Setup Guide.
+
 ### Agent Identity Protocol
 
 When multiple projects share Slack channels, the agent identity protocol distinguishes who sent each message and who it is intended for.
