@@ -59,7 +59,7 @@ sections:
   - id: '2.1'
     name: Update existing tests and add false-positive regression tests
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '1.1'
     description: "Implement the work item: docs/defect-backlog/1-theres-something-odd---i-see-the-cheapoville-pipeline-agent-complaining-that-th.md\n\
@@ -85,3 +85,5 @@ sections:
       \ and theme\"\n     Expected: \"coder\" (NOT \"systems-designer\")\n\n3. Run\
       \ full test suite: ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ -v\n\
       \   All tests must pass.\n\nFiles: tests/test_spec_verifier_ux_reviewer.py\n"
+    attempts: 1
+    last_attempt: '2026-02-20T23:02:04.580585'
