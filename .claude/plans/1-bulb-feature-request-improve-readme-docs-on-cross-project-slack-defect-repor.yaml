@@ -40,5 +40,9 @@ sections:
       \ protocol that prevents self-loop messages\n   - A quick-start example showing\
       \ a consumer project reporting a defect to an upstream project\n\nFiles: README.md,\
       \ docs/setup-guide.md\n"
-    attempts: 1
-    last_attempt: '2026-02-21T10:45:44.721110'
+    attempts: 2
+    last_attempt: '2026-02-21T10:55:30.113895'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: No status file
+      written by Claude'
+    validation_attempts: 1
