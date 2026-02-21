@@ -2199,6 +2199,9 @@ The report must include:
 # Maximum number of verify-then-fix cycles before giving up
 MAX_VERIFICATION_CYCLES = 3
 
+# Maximum characters for the completion summary appended to Slack notifications
+MAX_SUMMARY_LENGTH = 300
+
 
 def count_verification_attempts(item_path: str) -> int:
     """Count how many verification entries exist in the defect file."""
@@ -2341,12 +2344,84 @@ def _try_record_usage(
         session_tracker.record_from_report(str(report_path), work_item_name)
 
 
+def _extract_completion_summary(item_path: str) -> str:
+    """Extract a concise root cause and fix summary from a completed item file.
+
+    Reads the markdown file and extracts up to 2 sentences covering what was
+    wrong and what was changed. Returns empty string if the file cannot be read
+    or has no extractable sections.
+
+    Priority for "what was wrong":
+    1. First sentence of ## Root Cause section
+    2. **Root Need:** line from 5 Whys analysis
+    3. First sentence of ## Summary section
+
+    Priority for "what was fixed":
+    1. Lines from last ## Verification Log entry's **Findings:** that mention "fix" or "commit"
+    2. **Verdict:** line from last verification entry
+    """
+    try:
+        with open(item_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except IOError:
+        return ""
+
+    cause = ""
+
+    root_cause_match = re.search(
+        r"##\s+Root Cause\s*\n+(.*?)(?:\n\n|\n##|\Z)",
+        content, re.MULTILINE | re.DOTALL
+    )
+    if root_cause_match:
+        first_sentence = root_cause_match.group(1).strip().split(".")[0]
+        cause = first_sentence.strip() + "." if first_sentence else ""
+
+    if not cause:
+        root_need_match = re.search(r"\*\*Root Need:\*\*\s*(.+)", content)
+        if root_need_match:
+            cause = root_need_match.group(1).strip()
+
+    if not cause:
+        summary_match = re.search(
+            r"##\s+Summary\s*\n+(.*?)(?:\n\n|\n##|\Z)",
+            content, re.MULTILINE | re.DOTALL
+        )
+        if summary_match:
+            first_sentence = summary_match.group(1).strip().split(".")[0]
+            cause = first_sentence.strip() + "." if first_sentence else ""
+
+    fix = ""
+
+    all_verifications = list(re.finditer(
+        r"###\s+Verification\s+#\d+.*?(?=###\s+Verification\s+#|\Z)",
+        content, re.MULTILINE | re.DOTALL
+    ))
+    if all_verifications:
+        last_entry = all_verifications[-1].group(0)
+        findings_match = re.search(r"\*\*Findings:\*\*\s*(.*?)(?=\*\*|\Z)", last_entry, re.DOTALL)
+        if findings_match:
+            findings_text = findings_match.group(1).strip()
+            for line in findings_text.splitlines():
+                if re.search(r"\bfix\b|\bcommit\b", line, re.IGNORECASE):
+                    fix = line.strip().lstrip("- ").strip()
+                    break
+        if not fix:
+            verdict_match = re.search(r"\*\*Verdict:\s*(PASS|FAIL)\*\*", last_entry, re.IGNORECASE)
+            if verdict_match:
+                fix = f"Verdict: {verdict_match.group(1).upper()}"
+
+    parts = [p for p in [cause, fix] if p]
+    summary = " ".join(parts)
+    return summary[:MAX_SUMMARY_LENGTH] if summary else ""
+
+
 def _archive_and_report(
     item: BacklogItem, slack: "SlackNotifier",
     item_start: float, dry_run: bool,
 ) -> bool:
     """Archive a completed item and send Slack status. Returns True on success."""
     log("Phase 4: Archiving...")
+    summary = _extract_completion_summary(item.path)
     archived = archive_item(item, dry_run)
 
     elapsed = time.time() - item_start
@@ -2366,9 +2441,10 @@ def _archive_and_report(
         return False
 
     log(f"Item complete: {item.display_name} ({minutes}m {seconds}s)")
+    summary_block = f"\n{summary}" if summary else ""
     slack.send_status(
         f"*Pipeline: completed* {item.display_name}\n"
-        f"Duration: {minutes}m {seconds}s",
+        f"Duration: {minutes}m {seconds}s{summary_block}",
         level="success"
     )
     # Cross-post to type-specific channel (orchestrator-features or orchestrator-defects)
@@ -2376,7 +2452,7 @@ def _archive_and_report(
     if type_channel_id:
         slack.send_status(
             f"*Completed:* {item.display_name}\n"
-            f"Duration: {minutes}m {seconds}s",
+            f"Duration: {minutes}m {seconds}s{summary_block}",
             level="success",
             channel_id=type_channel_id,
         )
