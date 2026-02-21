@@ -1,0 +1,42 @@
+meta:
+  name: Improve README Docs on Cross-Project Slack Defect Reporting
+  description: Add consumer-facing setup instructions for cross-project Slack
+    defect/feature reporting to the README and setup guide, turning the existing
+    architectural description into an actionable how-to for downstream projects.
+  plan_doc: docs/plans/2026-02-21-1-bulb-feature-request-improve-readme-docs-on-cross-project-slack-defect-repor-design.md
+  source_item: docs/feature-backlog/1-bulb-feature-request-improve-readme-docs-on-cross-project-slack-defect-repor.md
+  created: '2026-02-21'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: phase-1
+  name: Phase 1 - Documentation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add consumer-facing cross-project reporting docs to README and setup guide
+    agent: coder
+    status: pending
+    description: "Implement the work item: docs/feature-backlog/1-bulb-feature-request-improve-readme-docs-on-cross-project-slack-defect-repor.md\n\
+      Design doc: docs/plans/2026-02-21-1-bulb-feature-request-improve-readme-docs-on-cross-project-slack-defect-repor-design.md\n\
+      \nUpdate two files with consumer-facing cross-project reporting documentation:\n\
+      \n1. README.md: Expand the existing \"Cross-Instance Collaboration via Slack\"\
+      \ section (around line 463) with a new subsection \"Setting Up Cross-Project\
+      \ Reporting (Consumer Side)\" that provides:\n   - A brief overview of what\
+      \ a consumer project needs to do\n   - A pointer to the detailed setup guide\n\
+      \n2. docs/setup-guide.md: Add a new section \"Cross-Project Reporting\" that\
+      \ walks through:\n   - Which upstream Slack channels must exist and their naming\
+      \ convention (prefix-defects, prefix-features, etc.)\n   - How to invite the\
+      \ consumer bot to the upstream channels\n   - How send_defect/send_idea route\
+      \ messages via channel_prefix in orchestrator-config.yaml\n   - The agent identity\
+      \ protocol that prevents self-loop messages\n   - A quick-start example showing\
+      \ a consumer project reporting a defect to an upstream project\n\nFiles: README.md,\
+      \ docs/setup-guide.md\n"
