@@ -503,17 +503,26 @@ def load_agent_definition(agent_name: str) -> Optional[dict]:
         return None
 
 
-# Keywords in task descriptions that indicate a review/verification task.
+# Multi-word phrases in task descriptions that indicate a review/verification task.
 # When infer_agent_for_task() matches any of these in the description,
 # it selects the "code-reviewer" agent instead of the default "coder".
+# Uses multi-word phrases to avoid false positives on implementation tasks
+# that happen to mention "check", "verify", or "review".
 REVIEWER_KEYWORDS = [
-    "verify", "review", "check", "validate", "regression", "compliance"
+    "code review", "review code", "review implementation",
+    "review changes", "verify implementation", "verify changes",
+    "run verification", "check compliance", "compliance check",
+    "regression test", "regression check",
 ]
 
-# Keywords indicating a design/architecture task.
+# Multi-word phrases indicating a design/architecture task.
 # When infer_agent_for_task() matches any of these, it selects "systems-designer".
+# Uses multi-word phrases to avoid false positives on implementation tasks
+# that happen to mention "design" or "layout".
 DESIGNER_KEYWORDS = [
-    "design", "wireframe", "layout", "architecture", "mockup"
+    "system design", "design document", "architecture design",
+    "wireframe", "layout design", "mockup",
+    "data model design", "api design",
 ]
 
 # Keywords indicating a plan-generation task.
@@ -569,17 +578,17 @@ def infer_agent_for_task(task: dict) -> Optional[str]:
     """Infer which agent should execute a task based on name and description keywords.
 
     Combines the task name and description, then scans for keywords in priority order:
-    1. PLANNER_KEYWORDS (multi-word phrases, checked before single-word keywords
-       to avoid false matches on words like "design") -> "planner"
-    2. QA_AUDITOR_KEYWORDS (multi-word phrases, checked before single-word keywords
-       to avoid false matches) -> "qa-auditor"
+    1. PLANNER_KEYWORDS (multi-word phrases) -> "planner"
+    2. QA_AUDITOR_KEYWORDS (multi-word phrases) -> "qa-auditor"
     3. SPEC_VERIFIER_KEYWORDS (multi-word phrases, checked before REVIEWER_KEYWORDS
        to avoid false matches on "verification") -> "spec-verifier"
     4. UX_REVIEWER_KEYWORDS (multi-word phrases, checked before REVIEWER_KEYWORDS
        to avoid false matches on "review") -> "ux-reviewer"
-    5. REVIEWER_KEYWORDS -> "code-reviewer"
+    5. REVIEWER_KEYWORDS (multi-word phrases, e.g. "code review", "verify implementation")
+       -> "code-reviewer"
     5.5. FRONTEND_CODER_KEYWORDS (single words like 'frontend', 'component') -> "frontend-coder"
-    6. DESIGNER_KEYWORDS -> "systems-designer"
+    6. DESIGNER_KEYWORDS (multi-word phrases, e.g. "system design", "design document")
+       -> "systems-designer"
     7. Default -> "coder"
 
     Returns None if the agents directory (AGENTS_DIR) does not exist, which

@@ -202,13 +202,82 @@ def test_infer_agent_for_modal_task():
 
 
 def test_infer_agent_frontend_does_not_collide_with_reviewer():
-    """A task with both 'verify' and 'component' should pick code-reviewer (higher priority)."""
+    """A task with 'verify implementation' and 'component' should pick code-reviewer (higher priority)."""
     task = {
-        "name": "Verify component",
-        "description": "Verify the component implementation"
+        "name": "Verify component implementation",
+        "description": "Verify implementation of the component"
     }
     result = infer_agent_for_task(task)
     assert result == "code-reviewer", f"Expected 'code-reviewer', got '{result}'"
+
+
+# --- False-Positive Regression Tests ---
+
+
+def test_infer_agent_check_in_implementation_context():
+    """Task with 'check' in implementation context should NOT infer code-reviewer."""
+    task = {
+        "name": "Add content moderation check functionality",
+        "description": "Implement a check that validates incoming content against rules"
+    }
+    result = infer_agent_for_task(task)
+    assert result != "code-reviewer", \
+        f"'check' alone should not trigger code-reviewer, got '{result}'"
+
+
+def test_infer_agent_review_in_ui_context():
+    """Task with 'review' in UI context should NOT infer code-reviewer."""
+    task = {
+        "name": "Implement review UI for moderators",
+        "description": "Build a review interface where moderators can review flagged items"
+    }
+    result = infer_agent_for_task(task)
+    assert result != "code-reviewer", \
+        f"'review' alone in UI context should not trigger code-reviewer, got '{result}'"
+
+
+def test_infer_agent_validate_in_form_context():
+    """Task with 'validate' in form context should NOT infer code-reviewer."""
+    task = {
+        "name": "Validate user input in the form",
+        "description": "Add validation logic to the user registration form fields"
+    }
+    result = infer_agent_for_task(task)
+    assert result != "code-reviewer", \
+        f"'validate' alone in form context should not trigger code-reviewer, got '{result}'"
+
+
+def test_infer_agent_code_review_phrase_infers_reviewer():
+    """Task with 'code review' phrase should still infer code-reviewer."""
+    task = {
+        "name": "Code review the authentication module",
+        "description": "Perform a code review of the authentication changes"
+    }
+    result = infer_agent_for_task(task)
+    assert result == "code-reviewer", \
+        f"'code review' phrase should trigger code-reviewer, got '{result}'"
+
+
+def test_infer_agent_system_design_phrase_infers_designer():
+    """Task with 'system design' phrase should still infer systems-designer."""
+    task = {
+        "name": "Create system design",
+        "description": "Produce a system design document for the new feature"
+    }
+    result = infer_agent_for_task(task)
+    assert result == "systems-designer", \
+        f"'system design' phrase should trigger systems-designer, got '{result}'"
+
+
+def test_infer_agent_design_in_implementation_context():
+    """Task with 'design' in implementation context should NOT infer systems-designer."""
+    task = {
+        "name": "Implement design system tokens",
+        "description": "Add the design tokens from the design system to the CSS variables"
+    }
+    result = infer_agent_for_task(task)
+    assert result != "systems-designer", \
+        f"'design' alone in implementation context should not trigger systems-designer, got '{result}'"
 
 
 # --- ValidationConfig Tests ---
