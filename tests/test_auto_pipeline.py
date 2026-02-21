@@ -55,6 +55,8 @@ ANALYSIS_TYPE_TO_AGENT = mod.ANALYSIS_TYPE_TO_AGENT
 parse_analysis_metadata = mod.parse_analysis_metadata
 scan_all_backlogs = mod.scan_all_backlogs
 parse_step_notifications_override = mod.parse_step_notifications_override
+_extract_completion_summary = mod._extract_completion_summary
+MAX_SUMMARY_LENGTH = mod.MAX_SUMMARY_LENGTH
 
 
 # --- compact_plan_label() tests ---
@@ -1315,3 +1317,114 @@ def test_parse_step_notifications_case_insensitive(tmp_path):
     result = parse_step_notifications_override(str(md_file))
 
     assert result is True
+
+
+# --- _extract_completion_summary() tests ---
+
+
+def test_extract_completion_summary_with_root_cause_section(tmp_path):
+    """First sentence of ## Root Cause section is returned as the summary cause."""
+    md_file = tmp_path / "defect.md"
+    md_file.write_text(
+        "# My Defect\n\n"
+        "## Root Cause\n\n"
+        "The database connection pool was exhausted due to misconfiguration."
+        " This caused timeouts for all requests.\n\n"
+        "## Summary\n\n"
+        "The fix was applied.\n"
+    )
+
+    result = _extract_completion_summary(str(md_file))
+
+    assert "database connection pool was exhausted" in result
+
+
+def test_extract_completion_summary_with_root_need_line(tmp_path):
+    """**Root Need:** line is used when no ## Root Cause section exists."""
+    md_file = tmp_path / "defect.md"
+    md_file.write_text(
+        "# My Defect\n\n"
+        "## Summary\n\n"
+        "The fix was applied.\n\n"
+        "**Root Need:** The system lacked proper input validation for edge cases\n"
+    )
+
+    result = _extract_completion_summary(str(md_file))
+
+    assert "lacked proper input validation" in result
+
+
+def test_extract_completion_summary_with_summary_only(tmp_path):
+    """First sentence of ## Summary is used as fallback when no Root Cause or Root Need."""
+    md_file = tmp_path / "defect.md"
+    md_file.write_text(
+        "# My Defect\n\n"
+        "## Summary\n\n"
+        "The configuration was incorrect causing failures. Secondary sentence here.\n"
+    )
+
+    result = _extract_completion_summary(str(md_file))
+
+    assert "configuration was incorrect" in result
+    # Only first sentence used — second sentence should not appear
+    assert "Secondary sentence" not in result
+
+
+def test_extract_completion_summary_with_verification_findings(tmp_path):
+    """Fix-related findings from the last Verification Log entry are appended."""
+    md_file = tmp_path / "defect.md"
+    md_file.write_text(
+        "# My Defect\n\n"
+        "## Root Cause\n\n"
+        "Something broke.\n\n"
+        "## Verification Log\n\n"
+        "### Verification #1\n"
+        "**Status:** Complete\n\n"
+        "**Findings:**\n"
+        "- Applied the fix for database pool configuration limits\n"
+        "- All tests passing\n\n"
+        "**Verdict: PASS**\n"
+    )
+
+    result = _extract_completion_summary(str(md_file))
+
+    assert "fix for database pool configuration" in result
+
+
+def test_extract_completion_summary_truncation(tmp_path):
+    """Result is truncated to MAX_SUMMARY_LENGTH when cause and findings are very long."""
+    long_sentence = "A" * 200
+    long_fix = "B" * 200
+    md_file = tmp_path / "defect.md"
+    md_file.write_text(
+        "# My Defect\n\n"
+        "## Root Cause\n\n"
+        f"{long_sentence}.\n\n"
+        "## Verification Log\n\n"
+        "### Verification #1\n"
+        "**Status:** Complete\n\n"
+        "**Findings:**\n"
+        f"- fixed {long_fix}\n\n"
+        "**Verdict: PASS**\n"
+    )
+
+    result = _extract_completion_summary(str(md_file))
+
+    assert len(result) <= MAX_SUMMARY_LENGTH
+
+
+def test_extract_completion_summary_file_not_found():
+    """Empty string is returned for a nonexistent path; no exception is raised."""
+    result = _extract_completion_summary("/nonexistent/path/to/defect.md")
+
+    assert result == ""
+
+
+def test_extract_completion_summary_empty_file(tmp_path):
+    """Empty string is returned for a zero-byte markdown file."""
+    md_file = tmp_path / "empty.md"
+    md_file.write_text("")
+
+    result = _extract_completion_summary(str(md_file))
+
+    assert result == ""
