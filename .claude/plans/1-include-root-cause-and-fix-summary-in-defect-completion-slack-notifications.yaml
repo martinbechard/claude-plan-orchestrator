@@ -90,5 +90,9 @@ sections:
       \ Create an empty markdown file\n   - Verify empty string is returned\n\nRun\
       \ tests: ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_auto_pipeline.py\
       \ -v Fix any failures.\nFiles: tests/test_auto_pipeline.py\n"
-    attempts: 1
-    last_attempt: '2026-02-21T00:35:26.681553'
+    attempts: 2
+    last_attempt: '2026-02-21T00:40:14.863811'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: No status file
+      written by Claude'
+    validation_attempts: 1
