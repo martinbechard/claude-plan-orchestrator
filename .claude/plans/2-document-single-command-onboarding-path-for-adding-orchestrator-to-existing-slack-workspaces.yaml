@@ -24,26 +24,29 @@ sections:
   - id: '1.1'
     name: Add single-command onboarding docs to README and setup guide
     agent: coder
-    status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/2-document-single-command-onboarding-path-for-adding-orchestrator-to-existing-slack-workspaces.md
+    status: in_progress
+    description: 'Implement the work item: docs/feature-backlog/2-document-single-command-onboarding-path-for-adding-orchestrator-to-existing-slack-workspaces.md
 
       Design doc: docs/plans/2026-02-21-2-document-single-command-onboarding-path-for-adding-orchestrator-to-existing-slack-workspaces-design.md
 
       Update two files:
 
-      1. README.md: Add a new subsection "Adding a Second Project to an Existing
-      Workspace" under the Slack Integration section (after the existing "Setup:"
-      paragraph around line 459). Include a copy-pasteable one-liner command using
-      --bot-token, --app-token, --prefix, and --non-interactive flags, with a brief
-      explanation and a pointer to the setup guide.
+      1. README.md: Add a new subsection "Adding a Second Project to an Existing Workspace"
+      under the Slack Integration section (after the existing "Setup:" paragraph around
+      line 459). Include a copy-pasteable one-liner command using --bot-token, --app-token,
+      --prefix, and --non-interactive flags, with a brief explanation and a pointer
+      to the setup guide.
 
       2. docs/setup-guide.md: Add a new section "Adding to an Existing Workspace"
-      between step 3 (Set up Slack) and step 4 (Configure the project). Include:
-      when to use this path, where to find existing tokens, the full command with
-      all flags explained, what the command creates, and next steps.
+      between step 3 (Set up Slack) and step 4 (Configure the project). Include: when
+      to use this path, where to find existing tokens, the full command with all flags
+      explained, what the command creates, and next steps.
 
-      3. Review scripts/setup-slack.py non-interactive code path for any gaps
-      (missing validation, unhelpful error messages, etc.) and fix if needed.
+      3. Review scripts/setup-slack.py non-interactive code path for any gaps (missing
+      validation, unhelpful error messages, etc.) and fix if needed.
 
       Files: README.md, docs/setup-guide.md, scripts/setup-slack.py (if fixes needed)
+
+      '
+    attempts: 1
+    last_attempt: '2026-02-21T11:28:54.861403'
