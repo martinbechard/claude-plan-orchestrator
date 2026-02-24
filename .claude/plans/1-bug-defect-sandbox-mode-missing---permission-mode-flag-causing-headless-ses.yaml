@@ -1,0 +1,31 @@
+meta:
+  name: "Fix sandbox mode missing --permission-mode flag"
+  description: "Add --permission-mode acceptEdits to build_permission_flags() in both
+    plan-orchestrator.py and auto-pipeline.py to prevent headless session deadlock
+    when sandbox mode is enabled."
+  source_item: "docs/defect-backlog/1-bug-defect-sandbox-mode-missing---permission-mode-flag-causing-headless-ses.md"
+  plan_doc: "docs/plans/2026-02-24-1-bug-defect-sandbox-mode-missing---permission-mode-flag-causing-headless-ses-design.md"
+  created: '2026-02-24'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+      - coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+sections:
+  - id: phase-1
+    name: "Phase 1 - Add --permission-mode acceptEdits to sandbox flags"
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: "Add --permission-mode acceptEdits to build_permission_flags() in both scripts and update tests"
+        agent: coder
+        status: pending
+        description: "Implement the fix described in the work item: docs/defect-backlog/1-bug-defect-sandbox-mode-missing---permission-mode-flag-causing-headless-ses.md
+
+          Design doc: docs/plans/2026-02-24-1-bug-defect-sandbox-mode-missing---permission-mode-flag-causing-headless-ses-design.md
+
+          Files: scripts/plan-orchestrator.py, scripts/auto-pipeline.py,
+          tests/test_plan_orchestrator.py, tests/test_auto_pipeline.py"
