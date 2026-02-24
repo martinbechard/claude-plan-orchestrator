@@ -36,5 +36,9 @@ sections:
       tests/test_plan_orchestrator.py, tests/test_auto_pipeline.py
 
       '
-    attempts: 1
-    last_attempt: '2026-02-24T18:19:33.647237'
+    attempts: 2
+    last_attempt: '2026-02-24T18:22:31.629015'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: No status file
+      written by Claude'
+    validation_attempts: 1
