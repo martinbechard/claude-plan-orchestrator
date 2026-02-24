@@ -1,0 +1,64 @@
+meta:
+  name: Update Narrative and README for Post-v1.7.0 Improvements (Feb 20-24)
+  description: Write Chapter 16 of the narrative covering the Feb 20-24 period,
+    synthesizing six completed items into a cohesive theme of the system learning to
+    detect and communicate its own failure modes. Update README timeline, line counts,
+    and stats.
+  plan_doc: docs/plans/2026-02-24-1-update-narrative-and-readme-to-document-post-v170-improvements-feb-20-24-design.md
+  source_item: docs/feature-backlog/1-update-narrative-and-readme-to-document-post-v170-improvements-feb-20-24.md
+  created: '2026-02-24'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: phase-1
+  name: Phase 1 - Write Chapter 16 Narrative and Update Narrative README
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Write Chapter 16 narrative and update narrative README
+    agent: coder
+    status: pending
+    description: "Implement the work item: docs/feature-backlog/1-update-narrative-and-readme-to-document-post-v170-improvements-feb-20-24.md\n\
+      Design doc: docs/plans/2026-02-24-1-update-narrative-and-readme-to-document-post-v170-improvements-feb-20-24-design.md\n\
+      \nCreate docs/narrative/16-failure-awareness.md - Chapter 16 of the narrative\
+      \ in the first-person AI narrator voice. Read docs/narrative/15-the-loop-that-wouldnt-stop.md\
+      \ for style reference.\n\nThe chapter synthesizes six completed items from Feb\
+      \ 20-24 into the theme of \"the system learning to detect and communicate its\
+      \ own failure modes\":\n- Sandbox permission model completion (two-axis permission\
+      \ gap)\n- Plan-level deadlock detection (failed tasks blocking dependents)\n\
+      - Cross-instance agent permission issues\n- Root cause and fix summary in defect\
+      \ completion notifications\n- Cross-project Slack reporting documentation\n-\
+      \ Single-command onboarding documentation\n\nRead the completed items in docs/completed-backlog/\
+      \ for details.\n\nAlso update docs/narrative/README.md:\n- Add Chapter 16 to\
+      \ the Document Index table\n- Add Feb 20-24 timeline entries\n- Update line\
+      \ counts to ~5800 (orchestrator) + ~3200 (auto-pipeline)\n- Update completed\
+      \ plans count to reflect current state (~54 completed items)\n\nFiles: docs/narrative/16-failure-awareness.md\
+      \ (new), docs/narrative/README.md\n"
+- id: phase-2
+  name: Phase 2 - Update Main README
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Update main README.md line counts and stats
+    agent: coder
+    depends_on:
+    - '1.1'
+    status: pending
+    description: "Implement the work item: docs/feature-backlog/1-update-narrative-and-readme-to-document-post-v170-improvements-feb-20-24.md\n\
+      Design doc: docs/plans/2026-02-24-1-update-narrative-and-readme-to-document-post-v170-improvements-feb-20-24-design.md\n\
+      \nUpdate README.md:\n- Update the Development History section line count from\
+      \ ~6700 to ~9000 (across two scripts)\n- Update the directory structure line\
+      \ counts for orchestrator (~5800) and auto-pipeline (~3200)\n- Add Development\
+      \ History bullets for Feb 20-24 improvements:\n  - Sandbox permission model\
+      \ completion\n  - Plan-level deadlock detection\n  - Root cause summaries in\
+      \ defect completion notifications\n  - Cross-project Slack reporting and onboarding\
+      \ documentation\n  - Sonnet 4.6 model optimization line if not already present\n\
+      \nFiles: README.md\n"
