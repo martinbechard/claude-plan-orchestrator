@@ -719,8 +719,8 @@ your-project/
 │   ├── subagent-status/            # Parallel task heartbeats
 │   └── agent-claims.json           # File claim coordination
 ├── scripts/
-│   ├── plan-orchestrator.py        # Main orchestrator (~4773 lines)
-│   └── auto-pipeline.py            # Auto-pipeline daemon (~1949 lines)
+│   ├── plan-orchestrator.py        # Main orchestrator (~5800 lines)
+│   └── auto-pipeline.py            # Auto-pipeline daemon (~3200 lines)
 └── docs/
     ├── plans/
     │   └── YYYY-MM-DD-*.md         # Design documents
@@ -772,7 +772,7 @@ your-project/
 
 ## Development History
 
-The orchestrator evolved from a 454-line sequential executor to a ~6700-line parallel execution engine (across two scripts) over the course of building a production application. See [docs/narrative/](docs/narrative/) for the complete development history, including:
+The orchestrator evolved from a 454-line sequential executor to a ~9000-line parallel execution engine (across two scripts) over the course of building a production application. See [docs/narrative/](docs/narrative/) for the complete development history, including:
 
 - Genesis and initial design decisions
 - Parallel execution via git worktrees
@@ -793,6 +793,10 @@ The orchestrator evolved from a 454-line sequential executor to a ~6700-line par
 - Slack integration with inbound message polling
 - Hot-reload self-restart for auto-pipeline
 - Sonnet 4.6 model optimization for ux-designer and new frontend-coder agent
+- Sandbox permission model completion: two-axis permissions (tool availability + approval behavior) for headless sessions
+- Plan-level deadlock detection: recognizes unreachable pending tasks and sets plan status to failed instead of looping
+- Root cause and fix summary in defect completion notifications for risk triage from the monitoring channel
+- Cross-project Slack reporting and single-command onboarding for existing workspaces
 
 ## License
 
