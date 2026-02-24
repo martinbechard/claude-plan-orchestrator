@@ -1,9 +1,10 @@
 meta:
-  name: 'Fix: Sandbox mode missing --permission-mode flag causing headless session deadlock'
-  description: 'Add --permission-mode acceptEdits to build_permission_flags() in both
+  name: 'Fix: Sandbox mode missing --permission-mode flag causing headless session
+    deadlock'
+  description: Add --permission-mode acceptEdits to build_permission_flags() in both
     plan-orchestrator.py and auto-pipeline.py when sandbox is enabled. Without this
-    flag, the Claude CLI defaults to interactive approval prompts for Write/Edit, which
-    deadlocks when running with stdin=subprocess.DEVNULL.'
+    flag, the Claude CLI defaults to interactive approval prompts for Write/Edit,
+    which deadlocks when running with stdin=subprocess.DEVNULL.
   source_item: docs/defect-backlog/1-bug-defect-sandbox-mode-missing---permission-mode-flag-causing-headless-ses.md
   plan_doc: docs/plans/2026-02-24-1-bug-defect-sandbox-mode-missing---permission-mode-flag-causing-headless-ses-design.md
   created: '2026-02-24'
@@ -23,8 +24,17 @@ sections:
   - id: '1.1'
     name: Add --permission-mode acceptEdits to build_permission_flags() in both scripts
     agent: coder
-    status: pending
-    description: "Implement the work item: docs/defect-backlog/1-bug-defect-sandbox-mode-missing---permission-mode-flag-causing-headless-ses.md\n\
-      \nDesign doc: docs/plans/2026-02-24-1-bug-defect-sandbox-mode-missing---permission-mode-flag-causing-headless-ses-design.md\n\
-      \nFiles: scripts/plan-orchestrator.py, scripts/auto-pipeline.py,\n\
-      tests/test_plan_orchestrator.py, tests/test_auto_pipeline.py\n"
+    status: in_progress
+    description: 'Implement the work item: docs/defect-backlog/1-bug-defect-sandbox-mode-missing---permission-mode-flag-causing-headless-ses.md
+
+
+      Design doc: docs/plans/2026-02-24-1-bug-defect-sandbox-mode-missing---permission-mode-flag-causing-headless-ses-design.md
+
+
+      Files: scripts/plan-orchestrator.py, scripts/auto-pipeline.py,
+
+      tests/test_plan_orchestrator.py, tests/test_auto_pipeline.py
+
+      '
+    attempts: 1
+    last_attempt: '2026-02-24T18:19:33.647237'
