@@ -1,50 +1,55 @@
 meta:
   name: Pipeline Startup Sweep for Uncommitted Archival Artifacts
-  description: >
-    Add a startup sweep function that detects and commits orphaned archival
-    artifacts left by interrupted pipeline sessions, and enhance the signal
-    handler to attempt committing in-flight archive changes before exiting.
+  description: 'Add a startup sweep function that detects and commits orphaned archival
+    artifacts left by interrupted pipeline sessions, and enhance the signal handler
+    to attempt committing in-flight archive changes before exiting.
+
+    '
   plan_doc: docs/plans/2026-02-24-1-pipeline-lacks-startup-sweep-for-uncommitted-archival-artifacts-design.md
   created: '2026-02-24'
   max_attempts_default: 3
-  source_item: "docs/defect-backlog/1-pipeline-lacks-startup-sweep-for-uncommitted-archival-artifacts.md"
+  source_item: docs/defect-backlog/1-pipeline-lacks-startup-sweep-for-uncommitted-archival-artifacts.md
   validation:
     enabled: true
     run_after:
-      - coder
+    - coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
 sections:
-  - id: phase-1
-    name: Phase 1 - Startup Sweep and Signal Handler Enhancement
+- id: phase-1
+  name: Phase 1 - Startup Sweep and Signal Handler Enhancement
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add startup sweep function and integrate into pipeline startup
+    agent: coder
+    status: in_progress
+    description: 'Implement the startup sweep and signal handler enhancement described
+      in docs/defect-backlog/1-pipeline-lacks-startup-sweep-for-uncommitted-archival-artifacts.md
+
+      Design reference: docs/plans/2026-02-24-1-pipeline-lacks-startup-sweep-for-uncommitted-archival-artifacts-design.md
+
+      Key files: scripts/auto-pipeline.py
+
+      '
+    attempts: 1
+    last_attempt: '2026-02-24T18:56:51.611755'
+- id: phase-2
+  name: Phase 2 - Unit Tests
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add unit tests for startup sweep and signal handler commit
+    agent: coder
+    depends_on:
+    - '1.1'
     status: pending
-    tasks:
-      - id: '1.1'
-        name: Add startup sweep function and integrate into pipeline startup
-        agent: coder
-        status: pending
-        description: >
-          Implement the startup sweep and signal handler enhancement described
-          in docs/defect-backlog/1-pipeline-lacks-startup-sweep-for-uncommitted-archival-artifacts.md
+    description: 'Add unit tests for the startup sweep and signal handler changes
+      described in docs/defect-backlog/1-pipeline-lacks-startup-sweep-for-uncommitted-archival-artifacts.md
 
-          Design reference: docs/plans/2026-02-24-1-pipeline-lacks-startup-sweep-for-uncommitted-archival-artifacts-design.md
+      Design reference: docs/plans/2026-02-24-1-pipeline-lacks-startup-sweep-for-uncommitted-archival-artifacts-design.md
 
-          Key files: scripts/auto-pipeline.py
-  - id: phase-2
-    name: Phase 2 - Unit Tests
-    status: pending
-    tasks:
-      - id: '2.1'
-        name: Add unit tests for startup sweep and signal handler commit
-        agent: coder
-        depends_on:
-          - '1.1'
-        status: pending
-        description: >
-          Add unit tests for the startup sweep and signal handler changes
-          described in docs/defect-backlog/1-pipeline-lacks-startup-sweep-for-uncommitted-archival-artifacts.md
+      Key files: tests/test_auto_pipeline.py
 
-          Design reference: docs/plans/2026-02-24-1-pipeline-lacks-startup-sweep-for-uncommitted-archival-artifacts-design.md
-
-          Key files: tests/test_auto_pipeline.py
+      '
