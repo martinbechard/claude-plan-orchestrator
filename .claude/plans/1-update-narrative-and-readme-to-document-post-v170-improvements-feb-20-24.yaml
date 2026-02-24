@@ -88,7 +88,7 @@ sections:
     agent: coder
     depends_on:
     - '1.1'
-    status: pending
+    status: in_progress
     description: "Implement the work item: docs/feature-backlog/1-update-narrative-and-readme-to-document-post-v170-improvements-feb-20-24.md\n\
       Design doc: docs/plans/2026-02-24-1-update-narrative-and-readme-to-document-post-v170-improvements-feb-20-24-design.md\n\
       \nUpdate README.md:\n- Update the Development History section line count from\
@@ -99,3 +99,5 @@ sections:
       \ defect completion notifications\n  - Cross-project Slack reporting and onboarding\
       \ documentation\n  - Sonnet 4.6 model optimization line if not already present\n\
       \nFiles: README.md\n"
+    attempts: 1
+    last_attempt: '2026-02-24T18:43:59.188295'
