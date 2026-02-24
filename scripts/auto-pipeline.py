@@ -86,6 +86,17 @@ IDEAS_PROCESSED_DIR = "docs/ideas/processed"
 VERIFICATION_EXHAUSTED_STATUS = "Archived (verification failed)"
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
 PID_FILE_PATH = ".claude/plans/.pipeline.pid"
+
+# Directories scanned by the startup sweep for orphaned archival artifacts.
+# Trailing slash ensures only files under these directories are matched.
+ARCHIVAL_SWEEP_DIRS = [
+    DEFECT_DIR + "/",
+    FEATURE_DIR + "/",
+    ANALYSIS_DIR + "/",
+    "docs/completed-backlog/",
+    PLANS_DIR + "/",
+]
+SWEEP_COMMIT_MESSAGE = "chore: recover uncommitted archival artifacts from interrupted pipeline"
 LOGS_DIR = "logs"
 SUMMARY_LOG_FILENAME = "pipeline.log"
 
@@ -141,6 +152,61 @@ def remove_pid_file() -> None:
         pass
     except IOError as e:
         log(f"Warning: could not remove PID file: {e}")
+
+
+def _collect_archival_paths(git_status_output: str) -> list:
+    """Parse git status --porcelain output and return file paths inside archival directories.
+
+    Handles both standard entries and rename entries (orig -> new).
+    Only the final destination path is returned for renames.
+    """
+    archival_paths = []
+    for line in git_status_output.splitlines():
+        if len(line) < 3:
+            continue
+        # Porcelain format: "XY path" or "XY orig -> new" (rename)
+        path = line[3:].strip()
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        if any(path.startswith(sweep_dir) for sweep_dir in ARCHIVAL_SWEEP_DIRS):
+            archival_paths.append(path)
+    return archival_paths
+
+
+def sweep_uncommitted_archival_artifacts() -> None:
+    """Detect and commit archival artifacts left uncommitted by an interrupted pipeline session.
+
+    Runs at startup after ensure_directories() and write_pid_file(). Checks git status
+    for uncommitted changes in ARCHIVAL_SWEEP_DIRS and creates a single batch recovery
+    commit if any are found. This is a no-op when the working tree is clean.
+
+    See: docs/plans/2026-02-24-1-pipeline-lacks-startup-sweep-for-uncommitted-archival-artifacts-design.md
+    """
+    result = subprocess.run(
+        ["git", "status", "--porcelain"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        log(f"[SWEEP] Could not run git status: {result.stderr.strip()}")
+        return
+
+    orphaned_paths = _collect_archival_paths(result.stdout)
+    if not orphaned_paths:
+        return
+
+    log(f"[SWEEP] Found {len(orphaned_paths)} uncommitted archival artifact(s). Committing...")
+    try:
+        subprocess.run(
+            ["git", "add", "--"] + orphaned_paths,
+            capture_output=True, check=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", SWEEP_COMMIT_MESSAGE],
+            capture_output=True, check=True,
+        )
+        log(f"[SWEEP] Recovery commit created for {len(orphaned_paths)} artifact(s).")
+    except subprocess.CalledProcessError as e:
+        log(f"[SWEEP] Warning: recovery commit failed: {e}")
 
 
 SAFETY_SCAN_INTERVAL_SECONDS = 60
@@ -3204,6 +3270,29 @@ def handle_signal(signum, frame):
             _active_child_process.kill()
             _active_child_process.wait()
 
+    # Best-effort: commit any in-flight archive changes before exiting.
+    # If this fails the startup sweep on the next run will catch the orphaned artifacts.
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            orphaned_paths = _collect_archival_paths(result.stdout)
+            if orphaned_paths:
+                log(f"[SIGNAL] Committing {len(orphaned_paths)} in-flight archival artifact(s)...")
+                subprocess.run(
+                    ["git", "add", "--"] + orphaned_paths,
+                    capture_output=True, check=True,
+                )
+                subprocess.run(
+                    ["git", "commit", "-m", SWEEP_COMMIT_MESSAGE],
+                    capture_output=True, check=True,
+                )
+                log("[SIGNAL] In-flight archival artifacts committed.")
+    except Exception as e:
+        log(f"[SIGNAL] Warning: could not commit in-flight artifacts: {e}")
+
     # Clean up PID file and restore terminal settings
     remove_pid_file()
     restore_terminal_settings()
@@ -3261,6 +3350,7 @@ def main():
     log(f"  Mode: {'dry-run' if args.dry_run else 'once' if args.once else 'continuous watch'}")
     ensure_directories()
     write_pid_file()
+    sweep_uncommitted_archival_artifacts()
 
     budget_guard = PipelineBudgetGuard(
         max_quota_percent=args.max_budget_pct or DEFAULT_MAX_QUOTA_PERCENT,
