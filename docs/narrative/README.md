@@ -50,6 +50,7 @@ decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the 
 | [13-self-improvement.md](13-self-improvement.md) | Self-improvement: multi-project channels, intake acknowledgment, hot-reload, cost standardization |
 | [14-cognitive-specialization.md](14-cognitive-specialization.md) | Model audit across all agents, Opus/Sonnet design loop, agent teams vs subagents trade-offs, Slack suspension pattern |
 | [15-the-loop-that-wouldnt-stop.md](15-the-loop-that-wouldnt-stop.md) | Infinite loop fix, force_pipeline_exit(), mid-task stop semaphore, cross-project Slack collaboration, agent identity protocol |
+| [16-failure-awareness.md](16-failure-awareness.md) | Sandbox two-axis permission fix, plan-level deadlock detection, cross-instance keyword misclassification, root cause in Slack notifications, cross-project reporting docs, single-command onboarding |
 
 ## Timeline at a Glance
 
@@ -84,7 +85,13 @@ decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the 
 2026-02-19  Infinite loop fix: stale source cleanup, circuit breaker, force_pipeline_exit (1.6.1)
 2026-02-19  Mid-task stop semaphore check, cross-instance Slack collaboration (1.6.2-1.6.3)
 2026-02-19  Agent identity protocol: outbound signing, inbound filtering, role switching (1.7.0)
+2026-02-20  False-positive keyword fix: multi-word REVIEWER_KEYWORDS and DESIGNER_KEYWORDS
+2026-02-21  Plan-level deadlock detection: detect_plan_deadlock(), meta.status: failed
+2026-02-21  Root cause and fix summary in defect completion Slack notifications
+2026-02-21  Cross-project Slack reporting documented (consumer-side setup walkthrough)
+2026-02-21  Single-command onboarding for existing Slack workspaces documented
+2026-02-24  Sandbox permission model fix: --permission-mode acceptEdits (two-axis permissions)
 
-Current: ~5600 lines (orchestrator) + ~2600 lines (auto-pipeline)
-Plans executed: 31 completed features/defects
+Current: ~5800 lines (orchestrator) + ~3200 lines (auto-pipeline)
+Plans executed: ~54 completed features/defects
 ```
