@@ -441,6 +441,8 @@ def build_permission_flags(profile_name: str) -> list[str]:
     tools = profile["tools"]
     flags = ["--allowedTools"] + tools
     flags.extend(["--add-dir", os.getcwd()])
+    # Required for headless operation: suppresses interactive approval prompts
+    flags.extend(["--permission-mode", "acceptEdits"])
 
     log(f"Permission profile '{profile_name}': tools={tools}")
     return flags

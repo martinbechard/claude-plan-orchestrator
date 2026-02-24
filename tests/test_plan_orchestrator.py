@@ -1415,6 +1415,8 @@ def test_build_permission_flags_read_only_agent():
     assert "--allowedTools" in result
     assert "Read" in result
     assert "--add-dir" in result
+    assert "--permission-mode" in result
+    assert "acceptEdits" in result
     assert "--dangerously-skip-permissions" not in result
     assert "Write" not in result
     assert "Edit" not in result
@@ -1427,6 +1429,8 @@ def test_build_permission_flags_write_agent():
     assert "--allowedTools" in result
     assert "Write" in result
     assert "Edit" in result
+    assert "--permission-mode" in result
+    assert "acceptEdits" in result
 
 
 def test_build_permission_flags_unknown_agent():
@@ -1435,6 +1439,8 @@ def test_build_permission_flags_unknown_agent():
 
     assert "Write" in result
     assert "--allowedTools" in result
+    assert "--permission-mode" in result
+    assert "acceptEdits" in result
 
 
 def test_build_permission_flags_sandbox_disabled(monkeypatch):

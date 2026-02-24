@@ -741,6 +741,8 @@ def build_permission_flags(agent_name: str) -> list[str]:
     flags = ["--allowedTools"] + tools
     # Add project directory scoping
     flags.extend(["--add-dir", os.getcwd()])
+    # Required for headless operation: suppresses interactive approval prompts
+    flags.extend(["--permission-mode", "acceptEdits"])
 
     verbose_log(
         f"Agent '{agent_name}' -> profile '{profile_name}': "

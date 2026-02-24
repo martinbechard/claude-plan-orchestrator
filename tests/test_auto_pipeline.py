@@ -1012,6 +1012,8 @@ def test_pipeline_build_permission_flags_planner():
     assert "--allowedTools" in result
     assert "Write" in result
     assert "--add-dir" in result
+    assert "--permission-mode" in result
+    assert "acceptEdits" in result
     assert "--dangerously-skip-permissions" not in result
 
 
@@ -1022,6 +1024,8 @@ def test_pipeline_build_permission_flags_verifier():
     assert "--allowedTools" in result
     assert "Bash" in result
     assert "Write" not in result
+    assert "--permission-mode" in result
+    assert "acceptEdits" in result
     assert "--dangerously-skip-permissions" not in result
 
 
