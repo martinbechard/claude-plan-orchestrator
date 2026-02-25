@@ -19,12 +19,12 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - Add auth.test and bot_id self-skip filter
-  status: pending
+  status: completed
   tasks:
   - id: '1.1'
     name: Add auth.test bot_id resolution and bot_id-based message filter
     agent: coder
-    status: in_progress
+    status: completed
     description: "Implement the work item: docs/defect-backlog/1-there-is-a-self-skip-check-that-is-based-on-the-name-of-the-channel-this-is-not.md\n\
       Design doc: docs/plans/2026-02-24-1-there-is-a-self-skip-check-that-is-based-on-the-name-of-the-channel-this-is-not-design.md\n\
       In scripts/plan-orchestrator.py:\n1. Add a method _resolve_own_bot_id() to SlackNotifier\
@@ -47,6 +47,11 @@ sections:
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
     validation_attempts: 2
+    completed_at: '2026-02-24T21:15:06.894495'
+    result_message: Added _resolve_own_bot_id() to SlackNotifier calling auth.test
+      API, storing bot_id in self._own_bot_id. Added Rule 0 filter in _handle_polled_messages()
+      to skip messages with matching bot_id before the existing signature-based filter.
+      Graceful degradation on API failure (logs warning, leaves filter disabled).
 - id: phase-2
   name: Phase 2 - Unit Tests
   status: pending
