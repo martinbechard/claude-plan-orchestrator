@@ -123,7 +123,7 @@ sections:
   - id: '3.2'
     name: Extract budget.py with tests
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/02-extract-shared-modules.md
       Design doc: docs/plans/2026-02-25-02-extract-shared-modules-design.md
 
@@ -133,6 +133,8 @@ sections:
       Run pytest to verify.
 
       '
+    attempts: 1
+    last_attempt: '2026-02-25T01:42:13.938417'
 - id: phase-4
   name: Phase 4 - Migrate scripts to shared imports
   status: pending
