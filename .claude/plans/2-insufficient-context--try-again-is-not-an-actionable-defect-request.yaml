@@ -56,8 +56,9 @@ sections:
 
       '
     attempts: 2
-    last_attempt: '2026-02-25T04:13:01.925825'
+    last_attempt: '2026-02-25T05:13:27.190806'
     model_used: sonnet
     validation_findings: 'Validator ''validator'' failed to execute: API rate limit
       reached'
     validation_attempts: 1
+    last_error: API rate limit reached
