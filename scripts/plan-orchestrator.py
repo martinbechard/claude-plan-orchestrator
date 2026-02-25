@@ -139,7 +139,6 @@ SLACK_CHANNEL_ROLE_SUFFIXES = {
 }
 SLACK_CHANNEL_CACHE_SECONDS = 300
 SLACK_BLOCK_TEXT_MAX_LENGTH = 2900
-SENT_TS_CACHE_MAX = 500
 
 # Agent identity role constants
 AGENT_ROLE_PIPELINE = "pipeline"
@@ -3336,7 +3335,6 @@ class SlackNotifier:
         self._agent_identity: Optional[AgentIdentity] = None
         self._active_role: str = ""
         self._own_bot_id: Optional[str] = None
-        self._sent_message_ts: set[str] = set()
 
         try:
             with open(config_path, "r") as f:
@@ -3501,22 +3499,6 @@ class SlackNotifier:
             print(f"[SLACK] Socket Mode failed to start: {e}")
             return False
 
-    def _track_sent_ts(self, ts: Optional[str]) -> None:
-        """Record a sent message timestamp for self-loop prevention.
-
-        Adds ts to the sent-message set used by _handle_polled_messages()
-        to skip messages this bot instance posted. Clears the set when
-        it reaches SENT_TS_CACHE_MAX to keep memory bounded.
-
-        Args:
-            ts: Slack message timestamp from chat.postMessage response, or None
-        """
-        if ts is None:
-            return
-        if len(self._sent_message_ts) >= SENT_TS_CACHE_MAX:
-            self._sent_message_ts.clear()
-        self._sent_message_ts.add(ts)
-
     def _post_message(self, payload: dict,
                       channel_id: Optional[str] = None) -> bool:
         """POST a message to Slack via chat.postMessage API.
@@ -3549,7 +3531,6 @@ class SlackNotifier:
 
             with urllib.request.urlopen(req, timeout=10) as resp:
                 result = json.loads(resp.read())
-                self._track_sent_ts(result.get("ts"))
                 return result.get("ok", False)
 
         except Exception as e:
@@ -3589,9 +3570,7 @@ class SlackNotifier:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 result = json.loads(resp.read())
                 if result.get("ok", False):
-                    ts = result.get("ts")
-                    self._track_sent_ts(ts)
-                    return ts
+                    return result.get("ts")
                 print(f"[SLACK] Post message error: {result.get('error', 'unknown')}")
                 return None
 
@@ -4166,7 +4145,7 @@ class SlackNotifier:
                 # Filter out system/subtype messages, tag with channel info.
                 # Bot messages are allowed through — the identity filter in
                 # _handle_polled_messages handles self-loop prevention via
-                # bot_id matching (Rule 0) and sent-message tracking (Rule 1).
+                # agent signatures, which also works for cross-project bots.
                 for m in messages:
                     if m.get("subtype") is None:
                         m["_channel_name"] = channel_name
@@ -4943,9 +4922,11 @@ class SlackNotifier:
                     print(f"[SLACK] Filter: skip own-bot-id #{ch_log}: {preview!r}")
                     continue
 
-                # Rule 1: Skip messages this bot instance sent (sent-ts tracking)
-                if msg.get("ts") in self._sent_message_ts:
-                    print(f"[SLACK] Filter: skip sent-message-ts #{ch_log}: {preview!r}")
+                # Rule 1: Skip messages signed by one of our own agents
+                sig_match = AGENT_SIGNATURE_PATTERN.search(text)
+                if sig_match and self._agent_identity.is_own_signature(sig_match.group(1)):
+                    print(f"[SLACK] Filter: skip own-agent sig={sig_match.group(1)!r} "
+                          f"#{ch_log}: {preview!r}")
                     continue
 
                 # Rules 2-4: Check @AgentName addressing
