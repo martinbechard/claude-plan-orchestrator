@@ -62,9 +62,9 @@ sections:
       Key files: tests/test_auto_pipeline.py
 
       '
-    attempts: 2
-    last_attempt: '2026-02-24T19:12:16.353302'
+    attempts: 3
+    last_attempt: '2026-02-24T19:15:31.019390'
     model_used: sonnet
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
-    validation_attempts: 1
+    validation_attempts: 2
