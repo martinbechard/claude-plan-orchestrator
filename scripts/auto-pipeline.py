@@ -40,6 +40,45 @@ except ImportError:
     print("[AUTO-PIPELINE] ERROR: watchdog not installed. Run: pip install watchdog")
     sys.exit(1)
 
+from langgraph_pipeline.shared.paths import (
+    ORCHESTRATOR_CONFIG_PATH,
+    PLANS_DIR,
+    PID_FILE_PATH,
+    DEFECT_DIR,
+    FEATURE_DIR,
+    ANALYSIS_DIR,
+    COMPLETED_DEFECTS_DIR,
+    COMPLETED_FEATURES_DIR,
+    COMPLETED_ANALYSES_DIR,
+    COMPLETED_DIRS,
+)
+from langgraph_pipeline.shared.config import (
+    load_orchestrator_config,
+    DEFAULT_DEV_SERVER_PORT,
+    DEFAULT_BUILD_COMMAND,
+    DEFAULT_TEST_COMMAND,
+    DEFAULT_DEV_SERVER_COMMAND,
+    DEFAULT_AGENTS_DIR,
+)
+from langgraph_pipeline.shared.rate_limit import (
+    parse_rate_limit_reset_time,
+    check_rate_limit,
+    RATE_LIMIT_PATTERN,
+    MONTH_NAMES,
+    RATE_LIMIT_DEFAULT_WAIT_SECONDS,
+    RATE_LIMIT_BUFFER_SECONDS,
+)
+from langgraph_pipeline.shared.claude_cli import OutputCollector, stream_output
+from langgraph_pipeline.shared.budget import (
+    BudgetConfig,
+    BudgetGuard,
+    UsageTracker,
+    SCOPE_SESSION,
+    DEFAULT_MAX_QUOTA_PERCENT,
+    DEFAULT_QUOTA_CEILING_USD,
+    DEFAULT_RESERVED_BUDGET_USD,
+)
+
 # Import SlackNotifier from plan-orchestrator
 import importlib.util
 _po_spec = importlib.util.spec_from_file_location(
@@ -60,32 +99,12 @@ SUSPENSION_TIMEOUT_MINUTES = _po_mod.SUSPENSION_TIMEOUT_MINUTES
 
 # ─── Configuration ────────────────────────────────────────────────────
 
-ORCHESTRATOR_CONFIG_PATH = ".claude/orchestrator-config.yaml"
-DEFAULT_DEV_SERVER_PORT = 3000
-DEFAULT_BUILD_COMMAND = "pnpm run build"
-DEFAULT_TEST_COMMAND = "pnpm test"
-DEFAULT_DEV_SERVER_COMMAND = "pnpm dev"
-DEFAULT_AGENTS_DIR = ".claude/agents/"
-
-DEFECT_DIR = "docs/defect-backlog"
-FEATURE_DIR = "docs/feature-backlog"
-ANALYSIS_DIR = "docs/analysis-backlog"
-COMPLETED_DEFECTS_DIR = "docs/completed-backlog/defects"
-COMPLETED_FEATURES_DIR = "docs/completed-backlog/features"
-COMPLETED_ANALYSES_DIR = "docs/completed-backlog/analyses"
 REPORTS_DIR = "docs/reports"
-COMPLETED_DIRS = {
-    "defect": COMPLETED_DEFECTS_DIR,
-    "feature": COMPLETED_FEATURES_DIR,
-    "analysis": COMPLETED_ANALYSES_DIR,
-}
-PLANS_DIR = ".claude/plans"
 DESIGN_DIR = "docs/plans"
 IDEAS_DIR = "docs/ideas"
 IDEAS_PROCESSED_DIR = "docs/ideas/processed"
 VERIFICATION_EXHAUSTED_STATUS = "Archived (verification failed)"
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
-PID_FILE_PATH = ".claude/plans/.pipeline.pid"
 
 # Directories scanned by the startup sweep for orphaned archival artifacts.
 # Trailing slash ensures only files under these directories are matched.
@@ -212,12 +231,7 @@ def sweep_uncommitted_archival_artifacts() -> None:
 SAFETY_SCAN_INTERVAL_SECONDS = 60
 PLAN_CREATION_TIMEOUT_SECONDS = 600
 CHILD_SHUTDOWN_TIMEOUT_SECONDS = 10
-RATE_LIMIT_BUFFER_SECONDS = 30
-RATE_LIMIT_DEFAULT_WAIT_SECONDS = 3600
 CODE_CHANGE_POLL_INTERVAL_SECONDS = 10
-DEFAULT_MAX_QUOTA_PERCENT = 100.0
-DEFAULT_QUOTA_CEILING_USD = 0.0
-DEFAULT_RESERVED_BUDGET_USD = 0.0
 PROGRESS_REPORT_INTERVAL_SECONDS = int(os.environ.get("PIPELINE_REPORT_INTERVAL", "900"))
 COMPLETION_HISTORY_WINDOW_SECONDS = 7200
 PROGRESS_REPORT_MAX_PREVIEW_ITEMS = 5
@@ -227,19 +241,6 @@ HOT_RELOAD_WATCHED_FILES = [
     "scripts/auto-pipeline.py",
     "scripts/plan-orchestrator.py",
 ]
-
-
-def load_orchestrator_config() -> dict:
-    """Load project-level orchestrator config from .claude/orchestrator-config.yaml.
-
-    Returns the parsed dict, or an empty dict if the file doesn't exist.
-    """
-    try:
-        with open(ORCHESTRATOR_CONFIG_PATH, "r") as f:
-            config = yaml.safe_load(f)
-        return config if isinstance(config, dict) else {}
-    except (IOError, yaml.YAMLError):
-        return {}
 
 
 _config = load_orchestrator_config()
@@ -256,22 +257,6 @@ BACKLOG_SLUG_PATTERN = re.compile(r"^\d{2,}-[\w-]+$")
 COMPLETED_STATUS_PATTERN = re.compile(
     r"^##\s*Status:\s*(Fixed|Completed)", re.IGNORECASE | re.MULTILINE
 )
-
-# Rate limit detection (same pattern as plan-orchestrator.py)
-RATE_LIMIT_PATTERN = re.compile(
-    r"(?:You've hit your limit|you've hit your limit|Usage limit reached)"
-    r".*?resets?\s+(\w+\s+\d{1,2})\s+at\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM)?)"
-    r"(?:\s*\(([^)]+)\))?",
-    re.IGNORECASE | re.DOTALL,
-)
-MONTH_NAMES = {
-    "jan": 1, "january": 1, "feb": 2, "february": 2,
-    "mar": 3, "march": 3, "apr": 4, "april": 4,
-    "may": 5, "jun": 6, "june": 6,
-    "jul": 7, "july": 7, "aug": 8, "august": 8,
-    "sep": 9, "september": 9, "oct": 10, "october": 10,
-    "nov": 11, "november": 11, "dec": 12, "december": 12,
-}
 
 # Known locations for the claude binary
 CLAUDE_BINARY_SEARCH_PATHS = [
@@ -512,103 +497,6 @@ def build_permission_flags(profile_name: str) -> list[str]:
 
     log(f"Permission profile '{profile_name}': tools={tools}")
     return flags
-
-
-# ─── Output Streaming ────────────────────────────────────────────────
-
-
-class OutputCollector:
-    """Collects output from a subprocess and tracks stats."""
-
-    def __init__(self):
-        self.lines: list[str] = []
-        self.bytes_received: int = 0
-        self.line_count: int = 0
-
-    def add_line(self, line: str) -> None:
-        self.lines.append(line)
-        self.bytes_received += len(line.encode("utf-8"))
-        self.line_count += 1
-
-    def get_output(self) -> str:
-        return "".join(self.lines)
-
-
-def stream_output(
-    pipe, prefix: str, collector: OutputCollector, show_full: bool
-) -> None:
-    """Stream output from a subprocess pipe line by line."""
-    try:
-        for line in iter(pipe.readline, ""):
-            if line:
-                collector.add_line(line)
-                if show_full:
-                    ts = datetime.now().strftime("%H:%M:%S")
-                    print(f"[{ts}] [{prefix}] {line.rstrip()}", flush=True)
-    except Exception as e:
-        if VERBOSE:
-            verbose_log(f"Error streaming {prefix}: {e}")
-
-
-# ─── Rate Limit Handling ─────────────────────────────────────────────
-
-
-def parse_rate_limit_reset_time(output: str) -> Optional[datetime]:
-    """Parse a rate limit reset time from Claude CLI output."""
-    match = RATE_LIMIT_PATTERN.search(output)
-    if not match:
-        return None
-
-    date_str = match.group(1).strip()
-    time_str = match.group(2).strip()
-    tz_str = match.group(3)
-
-    try:
-        parts = date_str.split()
-        if len(parts) != 2:
-            return None
-        month_name, day_str = parts
-        month = MONTH_NAMES.get(month_name.lower())
-        if not month:
-            return None
-        day = int(day_str)
-
-        time_match = re.match(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)", time_str, re.IGNORECASE)
-        if not time_match:
-            return None
-        hour = int(time_match.group(1))
-        minute = int(time_match.group(2) or "0")
-        ampm = time_match.group(3).lower()
-        if ampm == "pm" and hour != 12:
-            hour += 12
-        elif ampm == "am" and hour == 12:
-            hour = 0
-
-        tz = ZoneInfo(tz_str) if tz_str else ZoneInfo("America/Toronto")
-        now = datetime.now(tz)
-        year = now.year
-        reset_time = datetime(year, month, day, hour, minute, tzinfo=tz)
-
-        if reset_time < now:
-            reset_time = reset_time.replace(year=year + 1)
-
-        return reset_time
-    except (ValueError, KeyError):
-        return None
-
-
-def check_rate_limit(output: str) -> Optional[float]:
-    """Check if output contains a rate limit message. Returns seconds to wait, or None."""
-    if not re.search(r"(?:You've hit your limit|Usage limit reached)", output, re.IGNORECASE):
-        return None
-
-    reset_time = parse_rate_limit_reset_time(output)
-    if reset_time:
-        now = datetime.now(reset_time.tzinfo)
-        wait_seconds = (reset_time - now).total_seconds() + RATE_LIMIT_BUFFER_SECONDS
-        return max(wait_seconds, 0)
-
-    return float(RATE_LIMIT_DEFAULT_WAIT_SECONDS)
 
 
 # ─── Stop Semaphore & Emergency Exit ─────────────────────────────────
@@ -1119,66 +1007,6 @@ MAX_PLAN_NAME_LENGTH = 50
 MAX_LOG_PREFIX_LENGTH = 30
 
 
-class SessionUsageTracker:
-    """Accumulates usage reports across all work items in a pipeline session."""
-
-    def __init__(self) -> None:
-        self.work_item_costs: list[dict] = []
-        self.total_cost_usd: float = 0.0
-        self.total_input_tokens: int = 0
-        self.total_output_tokens: int = 0
-
-    def record_from_report(self, report_path: str, work_item_name: str) -> None:
-        """Read a usage report JSON and accumulate totals."""
-        try:
-            with open(report_path) as f:
-                report = json.load(f)
-            total = report.get("total", {})
-            cost = total.get("cost_usd", 0.0)
-            self.total_cost_usd += cost
-            self.total_input_tokens += total.get("input_tokens", 0)
-            self.total_output_tokens += total.get("output_tokens", 0)
-            self.work_item_costs.append({
-                "name": work_item_name,
-                "cost_usd": cost,
-            })
-            log(f"[Usage] {work_item_name}: ~${cost:.4f} (API-equivalent)")
-        except (FileNotFoundError, json.JSONDecodeError, ValueError):
-            pass  # Report not available, skip silently
-
-    def format_session_summary(self) -> str:
-        """Format session-level usage summary."""
-        lines = ["\n=== Pipeline Session Usage (API-Equivalent Estimates) ==="]
-        lines.append("(These are API-equivalent costs reported by Claude CLI, not actual subscription charges)")
-        lines.append(f"Total API-equivalent cost: ${self.total_cost_usd:.4f}")
-        lines.append(
-            f"Total tokens: {self.total_input_tokens:,} input / "
-            f"{self.total_output_tokens:,} output"
-        )
-        if self.work_item_costs:
-            lines.append("Per work item:")
-            for item in self.work_item_costs:
-                lines.append(f"  {item['name']}: ~${item['cost_usd']:.4f}")
-        return "\n".join(lines)
-
-    def write_session_report(self) -> Optional[str]:
-        """Write a session summary JSON file."""
-        if not self.work_item_costs:
-            return None
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        report_path = Path(PLANS_DIR) / "logs" / f"pipeline-session-{timestamp}.json"
-        report = {
-            "session_timestamp": datetime.now().isoformat(),
-            "total_cost_usd": self.total_cost_usd,
-            "total_input_tokens": self.total_input_tokens,
-            "total_output_tokens": self.total_output_tokens,
-            "work_items": self.work_item_costs,
-        }
-        with open(report_path, "w") as f:
-            json.dump(report, f, indent=2)
-        return str(report_path)
-
-
 class CompletionTracker:
     """Records work item completions for velocity and ETA calculations.
 
@@ -1340,44 +1168,6 @@ class ProgressReporter:
         return f"{hours}h {minutes}m"
 
 
-class PipelineBudgetGuard:
-    """Checks session-level cost against budget limits before each work item."""
-
-    def __init__(self, max_quota_percent: float, quota_ceiling_usd: float,
-                 reserved_budget_usd: float = 0.0) -> None:
-        self.max_quota_percent = max_quota_percent
-        self.quota_ceiling_usd = quota_ceiling_usd
-        self.reserved_budget_usd = reserved_budget_usd
-
-    @property
-    def is_enabled(self) -> bool:
-        return self.quota_ceiling_usd > 0
-
-    @property
-    def effective_limit_usd(self) -> float:
-        if self.quota_ceiling_usd <= 0:
-            return float('inf')
-        percent_limit = self.quota_ceiling_usd * (self.max_quota_percent / 100.0)
-        if self.reserved_budget_usd > 0:
-            reserve_limit = self.quota_ceiling_usd - self.reserved_budget_usd
-            return min(percent_limit, reserve_limit)
-        return percent_limit
-
-    def can_proceed(self, session_cost_usd: float) -> tuple[bool, str]:
-        """Check if session budget allows another work item."""
-        if not self.is_enabled:
-            return (True, "")
-        limit = self.effective_limit_usd
-        if session_cost_usd >= limit:
-            pct = (session_cost_usd / self.quota_ceiling_usd * 100)
-            reason = (
-                f"Session budget limit reached: ${session_cost_usd:.4f} / ${limit:.4f} "
-                f"({pct:.1f}% of ${self.quota_ceiling_usd:.2f} ceiling)"
-            )
-            return (False, reason)
-        return (True, "")
-
-
 def run_child_process(
     cmd: list[str],
     description: str,
@@ -1485,8 +1275,15 @@ def run_child_process(
         full_output = stdout_collector.get_output() + stderr_collector.get_output()
 
         # Check for rate limiting
-        rate_limit_wait = check_rate_limit(full_output)
-        if rate_limit_wait is not None:
+        is_rate_limited, reset_time = check_rate_limit(full_output)
+        if is_rate_limited:
+            if reset_time:
+                now = datetime.now(reset_time.tzinfo)
+                rate_limit_wait = max(
+                    (reset_time - now).total_seconds() + RATE_LIMIT_BUFFER_SECONDS, 0.0
+                )
+            else:
+                rate_limit_wait = float(RATE_LIMIT_DEFAULT_WAIT_SECONDS)
             return ProcessResult(
                 success=False, exit_code=exit_code,
                 stdout=stdout_collector.get_output(),
@@ -2366,7 +2163,7 @@ def verify_item(item: BacklogItem, dry_run: bool = False) -> bool:
 def _perform_restart(
     reason: str,
     slack: "SlackNotifier",
-    session_tracker: SessionUsageTracker,
+    session_tracker: UsageTracker,
     observer: Optional["Observer"] = None,
     code_monitor: Optional["CodeChangeMonitor"] = None,
 ) -> None:
@@ -2411,7 +2208,7 @@ def _read_plan_name(plan_path: str) -> str:
 
 
 def _try_record_usage(
-    session_tracker: SessionUsageTracker, plan_path: str, work_item_name: str
+    session_tracker: UsageTracker, plan_path: str, work_item_name: str
 ) -> None:
     """Try to find and record a usage report after orchestrator execution."""
     plan_name = _read_plan_name(plan_path)
@@ -2750,7 +2547,7 @@ def _deliver_analysis_report(
 def _process_item_inner(
     item: BacklogItem,
     dry_run: bool,
-    session_tracker: Optional[SessionUsageTracker],
+    session_tracker: Optional[UsageTracker],
 ) -> bool:
     """Inner implementation of process_item() - called within a try/finally wrapper.
 
@@ -2889,7 +2686,7 @@ def _process_item_inner(
 def process_item(
     item: BacklogItem,
     dry_run: bool = False,
-    session_tracker: Optional[SessionUsageTracker] = None,
+    session_tracker: Optional[UsageTracker] = None,
     item_in_progress: Optional[threading.Event] = None,
     completion_tracker: Optional[CompletionTracker] = None,
 ) -> bool:
@@ -3043,7 +2840,7 @@ def _check_suspended_items(slack: SlackNotifier) -> None:
 
 
 def main_loop(dry_run: bool = False, once: bool = False,
-              budget_guard: Optional[PipelineBudgetGuard] = None) -> None:
+              budget_guard: Optional[BudgetGuard] = None) -> None:
     """Main processing loop with filesystem watching."""
     global VERBOSE, CLAUDE_CMD
 
@@ -3072,7 +2869,7 @@ def main_loop(dry_run: bool = False, once: bool = False,
     completed_items: set[str] = set()
 
     # Track usage across all work items in this session
-    session_tracker = SessionUsageTracker()
+    session_tracker = UsageTracker(scope=SCOPE_SESSION)
 
     # Track active processing and item completions for progress reporting
     item_in_progress = threading.Event()
@@ -3184,7 +2981,7 @@ def main_loop(dry_run: bool = False, once: bool = False,
             # In --once mode, process only the first item then exit
             if once:
                 item = items[0]
-                if budget_guard and budget_guard.is_enabled:
+                if budget_guard and budget_guard.config.is_enabled:
                     can_go, reason = budget_guard.can_proceed(session_tracker.total_cost_usd)
                     if not can_go:
                         log(f"Budget limit reached: {reason}")
@@ -3204,7 +3001,7 @@ def main_loop(dry_run: bool = False, once: bool = False,
                     slack.send_status("*Pipeline stopped:* Graceful stop requested", level="warning")
                     break
 
-                if budget_guard and budget_guard.is_enabled:
+                if budget_guard and budget_guard.config.is_enabled:
                     can_go, reason = budget_guard.can_proceed(session_tracker.total_cost_usd)
                     if not can_go:
                         log(f"Budget limit reached: {reason}")
@@ -3352,13 +3149,14 @@ def main():
     write_pid_file()
     sweep_uncommitted_archival_artifacts()
 
-    budget_guard = PipelineBudgetGuard(
+    _budget_config = BudgetConfig(
         max_quota_percent=args.max_budget_pct or DEFAULT_MAX_QUOTA_PERCENT,
         quota_ceiling_usd=args.quota_ceiling or DEFAULT_QUOTA_CEILING_USD,
         reserved_budget_usd=args.reserved_budget or DEFAULT_RESERVED_BUDGET_USD,
     )
-    if budget_guard.is_enabled:
-        log(f"  Budget: ${budget_guard.effective_limit_usd:.2f} limit")
+    budget_guard = BudgetGuard(_budget_config, UsageTracker(scope=SCOPE_SESSION))
+    if budget_guard.config.is_enabled:
+        log(f"  Budget: ${budget_guard.config.effective_limit_usd:.2f} limit")
 
     main_loop(dry_run=args.dry_run, once=args.once, budget_guard=budget_guard)
 
