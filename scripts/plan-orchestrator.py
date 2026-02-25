@@ -129,6 +129,9 @@ SLACK_LEVEL_EMOJI = {
 SLACK_LAST_READ_PATH = ".claude/slack-last-read.json"
 SLACK_INBOUND_POLL_LIMIT = 20
 SLACK_THREAD_REPLIES_LIMIT = 5
+MAX_SELF_REPLIES_PER_WINDOW = 3       # circuit-breaker threshold per channel
+LOOP_DETECTION_WINDOW_SECONDS = 60   # sliding window for self-reply rate
+MESSAGE_TRACKING_TTL_SECONDS = 3600  # TTL for processed/sent ts sets
 SLACK_CHANNEL_PREFIX = "orchestrator-"
 SLACK_CHANNEL_ROLE_SUFFIXES = {
     "features": "feature",
@@ -3296,6 +3299,18 @@ Use the admin notification system or console log if notifications aren't configu
         print(f"[NOTIFICATION FAILED] {subject}: {message} (Error: {e})")
 
 
+def _safe_float_ts(ts: str) -> float:
+    """Parse a Slack message ts string to float for age comparisons.
+
+    Slack ts values are Unix timestamp strings like '1234567890.123456'.
+    Returns 0.0 on parse failure so the entry is treated as expired.
+    """
+    try:
+        return float(ts)
+    except (ValueError, TypeError):
+        return 0.0
+
+
 class SlackNotifier:
     """Sends messages to Slack via Slack Web API.
 
@@ -3334,7 +3349,9 @@ class SlackNotifier:
         self._qa_history_max_turns: int = QA_HISTORY_DEFAULT_MAX_TURNS
         self._agent_identity: Optional[AgentIdentity] = None
         self._active_role: str = ""
-        self._own_bot_id: Optional[str] = None
+        self._processed_message_ts: set[str] = set()
+        self._own_sent_ts: set[str] = set()
+        self._self_reply_window: dict[str, list[float]] = {}
 
         try:
             with open(config_path, "r") as f:
@@ -3374,37 +3391,6 @@ class SlackNotifier:
         except (IOError, yaml.YAMLError):
             # Config file missing or invalid - remain disabled
             pass
-
-        if self._enabled:
-            self._resolve_own_bot_id()
-
-    def _resolve_own_bot_id(self) -> None:
-        """Call Slack auth.test to discover this bot's own bot_id.
-
-        Stores the result in self._own_bot_id. On failure, logs a warning
-        and leaves self._own_bot_id as None so the bot_id filter is skipped
-        gracefully and the signature-based filter remains the sole guard.
-        """
-        try:
-            req = urllib.request.Request(
-                "https://slack.com/api/auth.test",
-                data=b"",
-                headers={
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Authorization": f"Bearer {self._bot_token}"
-                }
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                result = json.loads(resp.read())
-
-            if result.get("ok"):
-                self._own_bot_id = result.get("bot_id")
-                print(f"[SLACK] Resolved own bot_id={self._own_bot_id!r}")
-            else:
-                print(f"[SLACK] Warning: auth.test failed: "
-                      f"{result.get('error', 'unknown')} — bot_id filter disabled")
-        except Exception as e:
-            print(f"[SLACK] Warning: auth.test error: {e} — bot_id filter disabled")
 
     def is_enabled(self) -> bool:
         """Check if Slack notifications are enabled.
@@ -3531,7 +3517,12 @@ class SlackNotifier:
 
             with urllib.request.urlopen(req, timeout=10) as resp:
                 result = json.loads(resp.read())
-                return result.get("ok", False)
+                if result.get("ok", False):
+                    sent_ts = result.get("ts")
+                    if sent_ts:
+                        self._own_sent_ts.add(sent_ts)
+                    return True
+                return False
 
         except Exception as e:
             print(f"[SLACK] Failed to post message: {e}")
@@ -3570,7 +3561,10 @@ class SlackNotifier:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 result = json.loads(resp.read())
                 if result.get("ok", False):
-                    return result.get("ts")
+                    msg_ts = result.get("ts")
+                    if msg_ts:
+                        self._own_sent_ts.add(msg_ts)
+                    return msg_ts
                 print(f"[SLACK] Post message error: {result.get('error', 'unknown')}")
                 return None
 
@@ -4887,6 +4881,31 @@ class SlackNotifier:
             self._poll_thread.join(timeout=5)
             self._poll_thread = None
 
+    def _prune_message_tracking(self) -> None:
+        """Remove stale entries from processed/sent ts sets and self-reply window.
+
+        Prunes _processed_message_ts and _own_sent_ts entries whose Slack ts
+        (a Unix timestamp string) is older than MESSAGE_TRACKING_TTL_SECONDS.
+        Prunes _self_reply_window entries outside LOOP_DETECTION_WINDOW_SECONDS.
+        """
+        cutoff_ts = time.time() - MESSAGE_TRACKING_TTL_SECONDS
+        self._processed_message_ts = {
+            ts for ts in self._processed_message_ts
+            if _safe_float_ts(ts) > cutoff_ts
+        }
+        self._own_sent_ts = {
+            ts for ts in self._own_sent_ts
+            if _safe_float_ts(ts) > cutoff_ts
+        }
+        now = time.monotonic()
+        for channel_id in list(self._self_reply_window.keys()):
+            self._self_reply_window[channel_id] = [
+                t for t in self._self_reply_window[channel_id]
+                if now - t <= LOOP_DETECTION_WINDOW_SECONDS
+            ]
+            if not self._self_reply_window[channel_id]:
+                del self._self_reply_window[channel_id]
+
     def process_inbound(self) -> None:
         """Poll for new Slack messages and route them.
 
@@ -4895,6 +4914,7 @@ class SlackNotifier:
         if not self._enabled:
             return
         try:
+            self._prune_message_tracking()
             messages = self.poll_messages()
             self._handle_polled_messages(messages)
         except Exception as e:
@@ -4912,24 +4932,31 @@ class SlackNotifier:
             if not text:
                 continue
 
-            # Agent identity filtering (before any routing/processing)
+            ts = msg.get("ts", "")
+            channel_id_key = msg.get("_channel_id", "")
+            ch_log = msg.get("_channel_name", "?")
+            preview = text[:60]
+            is_self_origin = bool(ts and ts in self._own_sent_ts)
+
+            # Dedup: skip already-processed messages
+            if ts and ts in self._processed_message_ts:
+                print(f"[SLACK] Filter: skip already-processed ts={ts}")
+                continue
+
+            # Self-origin + loop detection
+            if is_self_origin:
+                now = time.monotonic()
+                window = self._self_reply_window.get(channel_id_key, [])
+                recent_count = sum(
+                    1 for t in window if now - t <= LOOP_DETECTION_WINDOW_SECONDS
+                )
+                if recent_count >= MAX_SELF_REPLIES_PER_WINDOW:
+                    print(f"[SLACK] Filter: skip loop-detected #{ch_log}: {preview!r}")
+                    continue
+                print(f"[SLACK] Filter: accept self-origin #{ch_log}: {preview!r}")
+
+            # Rules 2-4: Check @AgentName addressing
             if self._agent_identity:
-                ch_log = msg.get("_channel_name", "?")
-                preview = text[:60]
-
-                # Rule 0: Skip messages posted by our own bot identity (bot_id match)
-                if self._own_bot_id is not None and msg.get("bot_id") == self._own_bot_id:
-                    print(f"[SLACK] Filter: skip own-bot-id #{ch_log}: {preview!r}")
-                    continue
-
-                # Rule 1: Skip messages signed by one of our own agents
-                sig_match = AGENT_SIGNATURE_PATTERN.search(text)
-                if sig_match and self._agent_identity.is_own_signature(sig_match.group(1)):
-                    print(f"[SLACK] Filter: skip own-agent sig={sig_match.group(1)!r} "
-                          f"#{ch_log}: {preview!r}")
-                    continue
-
-                # Rules 2-4: Check @AgentName addressing
                 addresses = set(AGENT_ADDRESS_PATTERN.findall(text))
                 our_names = self._agent_identity.all_names()
                 if addresses:
@@ -4948,9 +4975,8 @@ class SlackNotifier:
                     print(f"[SLACK] Filter: accept broadcast #{ch_log}: {preview!r}")
 
             user = msg.get("user", "unknown")
-            ts = msg.get("ts", "")
             channel_name = msg.get("_channel_name", "")
-            reply_to = msg.get("_channel_id", "")
+            reply_to = channel_id_key
             channel_role = self._get_channel_role(channel_name)
 
             # Channel-based routing: the channel determines the type
@@ -4990,6 +5016,13 @@ class SlackNotifier:
             else:
                 routing = self._route_message_via_llm(text)
                 self._execute_routed_action(routing, user, ts, reply_to)
+
+            # Track ts after routing to prevent duplicate processing
+            if ts:
+                self._processed_message_ts.add(ts)
+                if is_self_origin:
+                    window = self._self_reply_window.setdefault(reply_to, [])
+                    window.append(time.monotonic())
 
 
 def update_section_status(section: dict) -> None:
