@@ -33,8 +33,12 @@ sections:
       Key files: scripts/auto-pipeline.py
 
       '
-    attempts: 1
-    last_attempt: '2026-02-24T18:56:51.611755'
+    attempts: 2
+    last_attempt: '2026-02-24T19:02:04.481419'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: No status file
+      written by Claude'
+    validation_attempts: 1
 - id: phase-2
   name: Phase 2 - Unit Tests
   status: pending
