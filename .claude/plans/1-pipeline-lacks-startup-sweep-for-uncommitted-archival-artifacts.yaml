@@ -46,14 +46,14 @@ sections:
       in main() after write_pid_file(). Syntax verified clean.
 - id: phase-2
   name: Phase 2 - Unit Tests
-  status: pending
+  status: completed
   tasks:
   - id: '2.1'
     name: Add unit tests for startup sweep and signal handler commit
     agent: coder
     depends_on:
     - '1.1'
-    status: in_progress
+    status: completed
     description: 'Add unit tests for the startup sweep and signal handler changes
       described in docs/defect-backlog/1-pipeline-lacks-startup-sweep-for-uncommitted-archival-artifacts.md
 
@@ -68,3 +68,9 @@ sections:
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
     validation_attempts: 2
+    completed_at: '2026-02-24T19:16:18.544714'
+    result_message: 'Unit tests for startup sweep and signal handler already implemented
+      from prior attempts. All 7 tests pass: test_sweep_commits_orphaned_archival_files,
+      test_sweep_is_noop_when_clean, test_sweep_logs_artifact_count, test_sweep_handles_git_status_failure,
+      test_handle_signal_commits_inflight_artifacts, test_handle_signal_skips_commit_when_no_archival_paths,
+      test_handle_signal_continues_shutdown_if_commit_fails.'
