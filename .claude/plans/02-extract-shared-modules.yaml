@@ -109,8 +109,12 @@ sections:
       verify.
 
       '
-    attempts: 1
-    last_attempt: '2026-02-25T01:30:47.138681'
+    attempts: 2
+    last_attempt: '2026-02-25T01:38:04.420229'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: No status file
+      written by Claude'
+    validation_attempts: 1
   - id: '3.2'
     name: Extract budget.py with tests
     agent: coder
