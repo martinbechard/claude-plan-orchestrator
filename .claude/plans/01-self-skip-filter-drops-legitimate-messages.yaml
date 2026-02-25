@@ -17,6 +17,8 @@ meta:
     validators:
     - validator
     max_validation_attempts: 2
+  status: failed
+  failure_reason: 'Deadlock: 2.1 blocked by [''1.1'']'
 sections:
 - id: phase-1
   name: Phase 1 - Replace identity filters with dedup and loop detection
