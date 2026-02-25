@@ -54,3 +54,8 @@ Rule 0 (bot_id match) and Rule 1 (signature pattern match) silently skip message
 
 1. **bot_id check (completed):** Added bot_id as Rule 0, kept signature as Rule 1 fallback. Same wrong approach encoded differently --- still blanket-skips by sender identity.
 2. **sent-message-ts tracking (in progress, stale):** Replaced signature regex with timestamp set lookup. More reliable than text matching but still the same wrong approach --- skips all messages the bot posted rather than detecting actual loops. The plan YAML at .claude/plans/1-there-is-a-self-skip-check-that-was-based-on-the-name-of-the-channel--the-idea.yaml should be cleaned up.
+
+## Verification Log
+
+### Task 1.1 - FAIL (2026-02-25 00:07)
+  - Validator 'validator' failed to execute: No status file written by Claude
