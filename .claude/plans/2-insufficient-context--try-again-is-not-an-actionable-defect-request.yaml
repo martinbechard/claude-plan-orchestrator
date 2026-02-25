@@ -1,8 +1,8 @@
 meta:
   name: 'Defect Fix: Add context-sufficiency validation to intake pipeline'
   description: Add a quality gate to the intake pipeline that detects low-context
-    messages (like "try again") and asks for clarification instead of creating
-    unactionable backlog items. Uses LLM clarity rating and minimum length check.
+    messages (like "try again") and asks for clarification instead of creating unactionable
+    backlog items. Uses LLM clarity rating and minimum length check.
   plan_doc: docs/plans/2026-02-25-2-insufficient-context--try-again-is-not-an-actionable-defect-request-design.md
   source_item: docs/defect-backlog/2-insufficient-context--try-again-is-not-an-actionable-defect-request.md
   created: '2026-02-25'
@@ -24,19 +24,36 @@ sections:
   - id: '1.1'
     name: Add clarity rating to intake analysis and minimum length check
     agent: coder
-    status: pending
-    description: "Implement the work item: docs/defect-backlog/2-insufficient-context--try-again-is-not-an-actionable-defect-request.md\n\
-      Design doc: docs/plans/2026-02-25-2-insufficient-context--try-again-is-not-an-actionable-defect-request-design.md\n\
-      \nIn scripts/plan-orchestrator.py:\n\
-      1. Add constants: MINIMUM_INTAKE_MESSAGE_LENGTH = 20, INTAKE_CLARITY_THRESHOLD = 3\n\
-      2. Add minimum message length check in _handle_polled_messages() - messages\
-      \ shorter than threshold get a Slack reply asking for more detail\n\
-      3. Modify INTAKE_ANALYSIS_PROMPT to ask for a Clarity rating (1-5) in the output\n\
-      4. Modify _parse_intake_response() to extract the clarity rating\n\
-      5. In _run_intake_analysis_inner(), after parsing, check clarity score.\
-      \ If below threshold, send a Slack thread reply asking for clarification\
-      \ instead of creating backlog item\n\
-      6. Add INTAKE_CLARIFICATION_TEMPLATE constant for the reply message\n\
-      7. Update tests to cover: clarity parsing, low-context rejection, min length filter,\
-      \ normal messages still processed\n\
-      \nFiles: scripts/plan-orchestrator.py, tests/ (relevant test files)\n"
+    status: in_progress
+    description: 'Implement the work item: docs/defect-backlog/2-insufficient-context--try-again-is-not-an-actionable-defect-request.md
+
+      Design doc: docs/plans/2026-02-25-2-insufficient-context--try-again-is-not-an-actionable-defect-request-design.md
+
+
+      In scripts/plan-orchestrator.py:
+
+      1. Add constants: MINIMUM_INTAKE_MESSAGE_LENGTH = 20, INTAKE_CLARITY_THRESHOLD
+      = 3
+
+      2. Add minimum message length check in _handle_polled_messages() - messages
+      shorter than threshold get a Slack reply asking for more detail
+
+      3. Modify INTAKE_ANALYSIS_PROMPT to ask for a Clarity rating (1-5) in the output
+
+      4. Modify _parse_intake_response() to extract the clarity rating
+
+      5. In _run_intake_analysis_inner(), after parsing, check clarity score. If below
+      threshold, send a Slack thread reply asking for clarification instead of creating
+      backlog item
+
+      6. Add INTAKE_CLARIFICATION_TEMPLATE constant for the reply message
+
+      7. Update tests to cover: clarity parsing, low-context rejection, min length
+      filter, normal messages still processed
+
+
+      Files: scripts/plan-orchestrator.py, tests/ (relevant test files)
+
+      '
+    attempts: 1
+    last_attempt: '2026-02-25T04:01:01.382833'
