@@ -20,16 +20,6 @@ PlanUsageTracker = mod.PlanUsageTracker
 TaskUsage = mod.TaskUsage
 parse_budget_config = mod.parse_budget_config
 
-# auto-pipeline.py also has a hyphen, so use the same importlib pattern.
-spec_ap = importlib.util.spec_from_file_location(
-    "auto_pipeline", "scripts/auto-pipeline.py"
-)
-mod_ap = importlib.util.module_from_spec(spec_ap)
-spec_ap.loader.exec_module(mod_ap)
-
-PipelineBudgetGuard = mod_ap.PipelineBudgetGuard
-
-
 # --- BudgetConfig dataclass tests ---
 
 
@@ -243,48 +233,67 @@ def test_parse_budget_config_partial_cli_override():
     assert cfg.reserved_budget_usd == 5.0
 
 
-# --- PipelineBudgetGuard tests ---
+# --- BudgetGuard pipeline integration tests ---
+# These tests verify BudgetConfig + BudgetGuard together, covering the scenarios
+# previously tested via the now-removed PipelineBudgetGuard wrapper class.
+
+
+def _make_pipeline_guard(
+    max_quota_percent: float,
+    quota_ceiling_usd: float,
+    reserved_budget_usd: float = 0.0,
+    spent_usd: float = 0.0,
+) -> BudgetGuard:
+    """Helper: build a BudgetGuard with a given cumulative spend."""
+    config = BudgetConfig(
+        max_quota_percent=max_quota_percent,
+        quota_ceiling_usd=quota_ceiling_usd,
+        reserved_budget_usd=reserved_budget_usd,
+    )
+    tracker = PlanUsageTracker()
+    if spent_usd > 0.0:
+        tracker.record("t1", TaskUsage(total_cost_usd=spent_usd))
+    return BudgetGuard(config, tracker)
 
 
 def test_pipeline_guard_disabled():
     """Zero ceiling disables the guard; can_proceed always returns True."""
-    guard = PipelineBudgetGuard(
-        max_quota_percent=100.0, quota_ceiling_usd=0.0
+    guard = _make_pipeline_guard(
+        max_quota_percent=100.0, quota_ceiling_usd=0.0, spent_usd=50.0
     )
-    assert guard.is_enabled is False
-    ok, reason = guard.can_proceed(50.0)
+    assert guard.config.is_enabled is False
+    ok, reason = guard.can_proceed()
     assert ok is True
     assert reason == ""
 
 
 def test_pipeline_guard_under_budget():
     """Spending below the limit allows proceeding."""
-    guard = PipelineBudgetGuard(
-        max_quota_percent=100.0, quota_ceiling_usd=50.0
+    guard = _make_pipeline_guard(
+        max_quota_percent=100.0, quota_ceiling_usd=50.0, spent_usd=30.0
     )
-    ok, reason = guard.can_proceed(30.0)
+    ok, reason = guard.can_proceed()
     assert ok is True
     assert reason == ""
 
 
 def test_pipeline_guard_over_budget():
     """Spending at or above the effective limit triggers a stop."""
-    guard = PipelineBudgetGuard(
-        max_quota_percent=90.0, quota_ceiling_usd=50.0
+    guard = _make_pipeline_guard(
+        max_quota_percent=90.0, quota_ceiling_usd=50.0, spent_usd=45.0
     )
     # effective limit = 50 * 90/100 = 45.0
-    ok, reason = guard.can_proceed(45.0)
+    ok, reason = guard.can_proceed()
     assert ok is False
-    assert "Session budget limit reached" in reason
+    assert "Budget limit reached" in reason
 
 
 def test_pipeline_guard_effective_limit():
     """Effective limit is the minimum of percent-based and reserve-based limits."""
-    guard = PipelineBudgetGuard(
-        max_quota_percent=80.0, quota_ceiling_usd=100.0,
-        reserved_budget_usd=10.0
+    guard = _make_pipeline_guard(
+        max_quota_percent=80.0, quota_ceiling_usd=100.0, reserved_budget_usd=10.0
     )
     # percent_limit = 100 * 80/100 = 80.0
     # reserve_limit = 100 - 10 = 90.0
     # min(80.0, 90.0) = 80.0
-    assert guard.effective_limit_usd == 80.0
+    assert guard.config.effective_limit_usd == 80.0
