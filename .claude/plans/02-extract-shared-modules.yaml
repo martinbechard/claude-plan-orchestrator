@@ -99,7 +99,7 @@ sections:
   - id: '3.1'
     name: Extract git.py with tests
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/02-extract-shared-modules.md
       Design doc: docs/plans/2026-02-25-02-extract-shared-modules-design.md
 
@@ -109,6 +109,8 @@ sections:
       verify.
 
       '
+    attempts: 1
+    last_attempt: '2026-02-25T01:30:47.138681'
   - id: '3.2'
     name: Extract budget.py with tests
     agent: coder
