@@ -54,14 +54,14 @@ sections:
       Graceful degradation on API failure (logs warning, leaves filter disabled).
 - id: phase-2
   name: Phase 2 - Unit Tests
-  status: pending
+  status: completed
   tasks:
   - id: '2.1'
     name: Add unit tests for bot_id self-skip mechanism
     agent: coder
     depends_on:
     - '1.1'
-    status: in_progress
+    status: completed
     description: "Implement the work item: docs/defect-backlog/1-there-is-a-self-skip-check-that-is-based-on-the-name-of-the-channel-this-is-not.md\n\
       Design doc: docs/plans/2026-02-24-1-there-is-a-self-skip-check-that-is-based-on-the-name-of-the-channel-this-is-not-design.md\n\
       Add tests to the appropriate test files (tests/test_agent_identity.py and/or\
@@ -85,3 +85,8 @@ sections:
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
     validation_attempts: 2
+    completed_at: '2026-02-24T21:25:19.039398'
+    result_message: All 6 bot_id self-skip unit tests implemented and passing (121/121
+      tests pass). Tests cover _resolve_own_bot_id success/failure, bot_id self-skip
+      in _handle_polled_messages, non-matching bot_id, missing bot_id field, and disabled
+      filter when _own_bot_id is None.
