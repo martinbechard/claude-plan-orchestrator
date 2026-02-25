@@ -3334,6 +3334,7 @@ class SlackNotifier:
         self._qa_history_max_turns: int = QA_HISTORY_DEFAULT_MAX_TURNS
         self._agent_identity: Optional[AgentIdentity] = None
         self._active_role: str = ""
+        self._own_bot_id: Optional[str] = None
 
         try:
             with open(config_path, "r") as f:
@@ -3373,6 +3374,37 @@ class SlackNotifier:
         except (IOError, yaml.YAMLError):
             # Config file missing or invalid - remain disabled
             pass
+
+        if self._enabled:
+            self._resolve_own_bot_id()
+
+    def _resolve_own_bot_id(self) -> None:
+        """Call Slack auth.test to discover this bot's own bot_id.
+
+        Stores the result in self._own_bot_id. On failure, logs a warning
+        and leaves self._own_bot_id as None so the bot_id filter is skipped
+        gracefully and the signature-based filter remains the sole guard.
+        """
+        try:
+            req = urllib.request.Request(
+                "https://slack.com/api/auth.test",
+                data=b"",
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Authorization": f"Bearer {self._bot_token}"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read())
+
+            if result.get("ok"):
+                self._own_bot_id = result.get("bot_id")
+                print(f"[SLACK] Resolved own bot_id={self._own_bot_id!r}")
+            else:
+                print(f"[SLACK] Warning: auth.test failed: "
+                      f"{result.get('error', 'unknown')} — bot_id filter disabled")
+        except Exception as e:
+            print(f"[SLACK] Warning: auth.test error: {e} — bot_id filter disabled")
 
     def is_enabled(self) -> bool:
         """Check if Slack notifications are enabled.
@@ -4884,6 +4916,11 @@ class SlackNotifier:
             if self._agent_identity:
                 ch_log = msg.get("_channel_name", "?")
                 preview = text[:60]
+
+                # Rule 0: Skip messages posted by our own bot identity (bot_id match)
+                if self._own_bot_id is not None and msg.get("bot_id") == self._own_bot_id:
+                    print(f"[SLACK] Filter: skip own-bot-id #{ch_log}: {preview!r}")
+                    continue
 
                 # Rule 1: Skip messages signed by one of our own agents
                 sig_match = AGENT_SIGNATURE_PATTERN.search(text)
