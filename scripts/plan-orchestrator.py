@@ -150,8 +150,6 @@ AGENT_ROLE_INTAKE = "intake"
 AGENT_ROLE_QA = "qa"
 AGENT_ROLES = [AGENT_ROLE_PIPELINE, AGENT_ROLE_ORCHESTRATOR, AGENT_ROLE_INTAKE, AGENT_ROLE_QA]
 
-# Regex: em-dash + bold agent name at end of message (multiline)
-AGENT_SIGNATURE_PATTERN = re.compile(r" \u2014 \*(.+?)\*\s*$", re.MULTILINE)
 # Regex: @AgentName, negative lookbehind avoids Slack native <@U...> mentions
 AGENT_ADDRESS_PATTERN = re.compile(r"(?<![<])@([\w-]+)")
 
@@ -1268,11 +1266,6 @@ class AgentIdentity:
         for role in AGENT_ROLES:
             names.add(self.name_for_role(role))
         return names
-
-    def is_own_signature(self, signature: str) -> bool:
-        """Check if a parsed signature belongs to one of our agents."""
-        return signature in self.all_names()
-
 
 def load_agent_identity(config: dict) -> AgentIdentity:
     """Load agent identity from the orchestrator config dict.

@@ -4,8 +4,9 @@
 
 import importlib.util
 import re
+import time
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 import yaml
@@ -26,9 +27,11 @@ AGENT_ROLE_ORCHESTRATOR = mod.AGENT_ROLE_ORCHESTRATOR
 AGENT_ROLE_INTAKE = mod.AGENT_ROLE_INTAKE
 AGENT_ROLE_QA = mod.AGENT_ROLE_QA
 AGENT_ROLES = mod.AGENT_ROLES
-AGENT_SIGNATURE_PATTERN = mod.AGENT_SIGNATURE_PATTERN
 AGENT_ADDRESS_PATTERN = mod.AGENT_ADDRESS_PATTERN
 SLACK_BLOCK_TEXT_MAX_LENGTH = mod.SLACK_BLOCK_TEXT_MAX_LENGTH
+MAX_SELF_REPLIES_PER_WINDOW = mod.MAX_SELF_REPLIES_PER_WINDOW
+LOOP_DETECTION_WINDOW_SECONDS = mod.LOOP_DETECTION_WINDOW_SECONDS
+MESSAGE_TRACKING_TTL_SECONDS = mod.MESSAGE_TRACKING_TTL_SECONDS
 
 
 # ─── load_agent_identity tests ─────────────────────────────────────
@@ -145,49 +148,12 @@ class TestAgentIdentity:
         assert "My-Proj-Intake" in names
         assert "My-Proj-Qa" in names
 
-    def test_is_own_signature_match(self):
-        """is_own_signature returns True for our agent names."""
-        identity = self._make_identity()
-        assert identity.is_own_signature("MP-Pipeline") is True
-        assert identity.is_own_signature("MP-Orchestrator") is True
-
-    def test_is_own_signature_derived_match(self):
-        """is_own_signature returns True for derived default names."""
-        identity = self._make_identity()
-        assert identity.is_own_signature("My-Proj-Intake") is True
-
-    def test_is_own_signature_no_match(self):
-        """is_own_signature returns False for other agent names."""
-        identity = self._make_identity()
-        assert identity.is_own_signature("Other-Pipeline") is False
-        assert identity.is_own_signature("SomeBot") is False
-
 
 # ─── Regex pattern tests ──────────────────────────────────────────
 
 
 class TestRegexPatterns:
-    """Tests for AGENT_SIGNATURE_PATTERN and AGENT_ADDRESS_PATTERN."""
-
-    def test_signature_pattern_matches(self):
-        """Signature pattern extracts agent name from signed message."""
-        text = ":white_check_mark: Task completed \u2014 *CPO-Orchestrator*"
-        match = AGENT_SIGNATURE_PATTERN.search(text)
-        assert match is not None
-        assert match.group(1) == "CPO-Orchestrator"
-
-    def test_signature_pattern_multiline(self):
-        """Signature pattern works in multiline messages."""
-        text = "Line one\nLine two\nLine three \u2014 *MP-Pipeline*"
-        match = AGENT_SIGNATURE_PATTERN.search(text)
-        assert match is not None
-        assert match.group(1) == "MP-Pipeline"
-
-    def test_signature_pattern_no_match(self):
-        """Signature pattern does not match unsigned messages."""
-        text = "Just a normal message without a signature"
-        match = AGENT_SIGNATURE_PATTERN.search(text)
-        assert match is None
+    """Tests for AGENT_ADDRESS_PATTERN."""
 
     def test_address_pattern_matches(self):
         """Address pattern extracts @AgentName mentions."""
@@ -339,19 +305,9 @@ class TestInboundFiltering:
     def test_process_addressed_to_us(self, tmp_path):
         """Messages addressed to one of our agents are processed."""
         notifier = self._make_notifier_with_identity(tmp_path)
-        # This message is addressed to our orchestrator; it would be processed
-        # by the routing logic. We just verify it passes the filter.
-        messages = [
-            {"text": "@Test-Orchestrator what is the status?", "user": "human", "ts": "3",
-             "_channel_name": "orchestrator-questions", "_channel_id": "C1"}
-        ]
-        # _handle_polled_messages does not return filtered messages, but we can
-        # verify no crash occurs. Deep routing would attempt LLM calls etc.
-        # For unit testing, we verify the filter logic via the patterns directly.
-        text = messages[0]["text"]
-        sig_match = AGENT_SIGNATURE_PATTERN.search(text)
-        assert sig_match is None  # Not a self-signed message
+        text = "@Test-Orchestrator what is the status?"
 
+        # Verify address pattern identifies the message as directed at us
         addresses = set(AGENT_ADDRESS_PATTERN.findall(text))
         our_names = notifier._agent_identity.all_names()
         addressed_to_us = bool(addresses & our_names)
@@ -448,22 +404,14 @@ class TestRoleSwitching:
         assert "Test-Orch" in notifier._sign_text("hello")
 
 
-# ─── bot_id self-skip filter tests ───────────────────────────────
+# ─── Dedup + loop detection tests ────────────────────────────────
 
 
-OWN_BOT_ID = "B0TEST001"
-OTHER_BOT_ID = "B0OTHER99"
+class TestDedupAndLoopDetection:
+    """Tests for dedup and loop detection in _handle_polled_messages."""
 
-# A message signed by our own orchestrator — caught by Rule 1 if it
-# survives Rule 0, preventing routing/LLM calls in tests.
-_SIGNED_BY_US = "Task done \u2014 *Test-Orchestrator*"
-
-
-class TestBotIdSelfSkipFilter:
-    """Tests for the Rule 0 bot_id self-skip in _handle_polled_messages."""
-
-    def _make_notifier_with_bot_id(self, tmp_path, own_bot_id=OWN_BOT_ID):
-        """Create a SlackNotifier with identity and _own_bot_id pre-set."""
+    def _make_notifier(self, tmp_path):
+        """Create a disabled SlackNotifier with identity."""
         config_file = tmp_path / "slack.yaml"
         config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
         notifier = SlackNotifier(config_path=str(config_file))
@@ -477,70 +425,107 @@ class TestBotIdSelfSkipFilter:
             },
         )
         notifier.set_identity(identity, AGENT_ROLE_ORCHESTRATOR)
-        notifier._own_bot_id = own_bot_id
         return notifier
 
-    def _channel_msg(self, text, **extra):
-        base = {
+    def _channel_msg(self, ts, text="Hello"):
+        return {
             "text": text,
-            "user": "U0BOT",
-            "ts": "1.0",
+            "user": "U0HUMAN",
+            "ts": ts,
             "_channel_name": "orchestrator-notifications",
             "_channel_id": "C1",
         }
-        base.update(extra)
-        return base
 
-    def test_skip_own_bot_id(self, tmp_path):
-        """Messages with bot_id matching _own_bot_id are skipped (Rule 0)."""
-        notifier = self._make_notifier_with_bot_id(tmp_path)
-        # Use an unsigned message — if Rule 0 didn't skip it, Rule 4 would
-        # try to route it as a broadcast and potentially fail.
+    def _patch_routing(self, notifier):
+        """Patch routing methods to capture calls without triggering LLM."""
         routed = []
         notifier._get_channel_role = lambda ch: None
+        notifier._route_message_via_llm = lambda text: MagicMock()
+        notifier._execute_routed_action = lambda *a, **kw: routed.append(a)
+        return routed
 
-        def _capture_routing(*args, **kwargs):
-            routed.append(args)
+    def test_dedup_skips_already_processed_ts(self, tmp_path):
+        """A ts already in _processed_message_ts is skipped on second encounter."""
+        notifier = self._make_notifier(tmp_path)
+        routed = self._patch_routing(notifier)
 
-        notifier._run_intake_analysis = _capture_routing
-        notifier.answer_question = _capture_routing
-
-        msg = self._channel_msg("Hello from our bot", bot_id=OWN_BOT_ID)
+        msg = self._channel_msg("100.0", "First delivery")
         notifier._handle_polled_messages([msg])
+        first_routed = len(routed)
 
-        assert len(routed) == 0, "Message with own bot_id must not reach routing"
-
-    def test_different_bot_id_not_skipped_by_rule0(self, tmp_path):
-        """Messages with a different bot_id are not skipped by Rule 0.
-
-        The message bears our own signature, so Rule 1 will catch it,
-        confirming Rule 0 did not skip it prematurely.
-        """
-        notifier = self._make_notifier_with_bot_id(tmp_path)
-        # Signed by us → Rule 1 will skip, so no routing happens — good.
-        msg = self._channel_msg(_SIGNED_BY_US, bot_id=OTHER_BOT_ID)
-        # Should not raise; Rule 1 handles it cleanly.
+        # Second delivery of the same ts must be skipped
         notifier._handle_polled_messages([msg])
+        assert len(routed) == first_routed, "Duplicate ts must not reach routing"
 
-    def test_no_bot_id_field_bypasses_rule0(self, tmp_path):
-        """Messages without a bot_id field skip Rule 0 and reach Rule 1.
+    def test_self_origin_accepted_under_rate_limit(self, tmp_path):
+        """A self-origin message is processed when loop count is under threshold."""
+        notifier = self._make_notifier(tmp_path)
+        routed = self._patch_routing(notifier)
 
-        Using our own signature ensures Rule 1 filters it without routing.
-        """
-        notifier = self._make_notifier_with_bot_id(tmp_path)
-        msg = self._channel_msg(_SIGNED_BY_US)  # no bot_id key
-        assert "bot_id" not in msg
-        # Must not raise; Rule 1 catches it.
-        notifier._handle_polled_messages([msg])
+        ts = "200.0"
+        notifier._own_sent_ts.add(ts)
+        # Below threshold: MAX_SELF_REPLIES_PER_WINDOW - 1 recent entries
+        now = time.monotonic()
+        notifier._self_reply_window["C1"] = [
+            now - 1 for _ in range(MAX_SELF_REPLIES_PER_WINDOW - 1)
+        ]
 
-    def test_bot_id_filter_disabled_when_own_bot_id_none(self, tmp_path):
-        """When _own_bot_id is None, Rule 0 is disabled even if message has a bot_id.
+        notifier._handle_polled_messages([self._channel_msg(ts)])
+        assert len(routed) > 0, "Self-origin message under limit must reach routing"
 
-        The message bears our own signature so Rule 1 filters it cleanly.
-        """
-        notifier = self._make_notifier_with_bot_id(tmp_path, own_bot_id=None)
-        assert notifier._own_bot_id is None
+    def test_loop_detected_skips_message(self, tmp_path):
+        """A self-origin message is skipped when loop count meets threshold."""
+        notifier = self._make_notifier(tmp_path)
+        routed = self._patch_routing(notifier)
 
-        msg = self._channel_msg(_SIGNED_BY_US, bot_id=OWN_BOT_ID)
-        # Rule 0 is disabled (own_bot_id is None), Rule 1 catches it.
-        notifier._handle_polled_messages([msg])
+        ts = "300.0"
+        notifier._own_sent_ts.add(ts)
+        # At threshold: MAX_SELF_REPLIES_PER_WINDOW recent entries
+        now = time.monotonic()
+        notifier._self_reply_window["C1"] = [
+            now - 1 for _ in range(MAX_SELF_REPLIES_PER_WINDOW)
+        ]
+
+        notifier._handle_polled_messages([self._channel_msg(ts)])
+        assert len(routed) == 0, "Self-origin message at loop threshold must be skipped"
+
+    def test_prune_removes_old_entries(self, tmp_path):
+        """_prune_message_tracking removes expired ts entries and old window slots."""
+        notifier = self._make_notifier(tmp_path)
+
+        old_ts = str(time.time() - MESSAGE_TRACKING_TTL_SECONDS - 1)
+        recent_ts = str(time.time() - 10)
+
+        notifier._processed_message_ts.update({old_ts, recent_ts})
+        notifier._own_sent_ts.add(old_ts)
+
+        # Expired window slot (older than LOOP_DETECTION_WINDOW_SECONDS)
+        old_slot = time.monotonic() - LOOP_DETECTION_WINDOW_SECONDS - 1
+        recent_slot = time.monotonic() - 5
+        notifier._self_reply_window["C1"] = [old_slot, recent_slot]
+
+        notifier._prune_message_tracking()
+
+        assert old_ts not in notifier._processed_message_ts
+        assert recent_ts in notifier._processed_message_ts
+        assert old_ts not in notifier._own_sent_ts
+        # Old window slot pruned; recent slot kept
+        assert recent_slot in notifier._self_reply_window.get("C1", [])
+        assert old_slot not in notifier._self_reply_window.get("C1", [])
+
+    def test_post_message_records_ts_in_own_sent_ts(self, tmp_path):
+        """_post_message stores the returned ts in _own_sent_ts."""
+        notifier = self._make_notifier(tmp_path)
+        notifier._bot_token = "xoxb-test"
+        notifier._channel_id = "C1"
+
+        fake_response = MagicMock()
+        fake_response.read.return_value = b'{"ok": true, "ts": "999.0"}'
+        fake_response.__enter__ = lambda s: s
+        fake_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=fake_response):
+            notifier._post_message({"blocks": []})
+
+        assert "999.0" in notifier._own_sent_ts
+
