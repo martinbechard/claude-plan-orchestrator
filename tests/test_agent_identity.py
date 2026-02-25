@@ -446,3 +446,101 @@ class TestRoleSwitching:
             assert "Test-QA" in notifier._sign_text("hello")
 
         assert "Test-Orch" in notifier._sign_text("hello")
+
+
+# ─── bot_id self-skip filter tests ───────────────────────────────
+
+
+OWN_BOT_ID = "B0TEST001"
+OTHER_BOT_ID = "B0OTHER99"
+
+# A message signed by our own orchestrator — caught by Rule 1 if it
+# survives Rule 0, preventing routing/LLM calls in tests.
+_SIGNED_BY_US = "Task done \u2014 *Test-Orchestrator*"
+
+
+class TestBotIdSelfSkipFilter:
+    """Tests for the Rule 0 bot_id self-skip in _handle_polled_messages."""
+
+    def _make_notifier_with_bot_id(self, tmp_path, own_bot_id=OWN_BOT_ID):
+        """Create a SlackNotifier with identity and _own_bot_id pre-set."""
+        config_file = tmp_path / "slack.yaml"
+        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
+        notifier = SlackNotifier(config_path=str(config_file))
+        identity = AgentIdentity(
+            project="test",
+            agents={
+                "pipeline": "Test-Pipeline",
+                "orchestrator": "Test-Orchestrator",
+                "intake": "Test-Intake",
+                "qa": "Test-QA",
+            },
+        )
+        notifier.set_identity(identity, AGENT_ROLE_ORCHESTRATOR)
+        notifier._own_bot_id = own_bot_id
+        return notifier
+
+    def _channel_msg(self, text, **extra):
+        base = {
+            "text": text,
+            "user": "U0BOT",
+            "ts": "1.0",
+            "_channel_name": "orchestrator-notifications",
+            "_channel_id": "C1",
+        }
+        base.update(extra)
+        return base
+
+    def test_skip_own_bot_id(self, tmp_path):
+        """Messages with bot_id matching _own_bot_id are skipped (Rule 0)."""
+        notifier = self._make_notifier_with_bot_id(tmp_path)
+        # Use an unsigned message — if Rule 0 didn't skip it, Rule 4 would
+        # try to route it as a broadcast and potentially fail.
+        routed = []
+        notifier._get_channel_role = lambda ch: None
+
+        def _capture_routing(*args, **kwargs):
+            routed.append(args)
+
+        notifier._run_intake_analysis = _capture_routing
+        notifier.answer_question = _capture_routing
+
+        msg = self._channel_msg("Hello from our bot", bot_id=OWN_BOT_ID)
+        notifier._handle_polled_messages([msg])
+
+        assert len(routed) == 0, "Message with own bot_id must not reach routing"
+
+    def test_different_bot_id_not_skipped_by_rule0(self, tmp_path):
+        """Messages with a different bot_id are not skipped by Rule 0.
+
+        The message bears our own signature, so Rule 1 will catch it,
+        confirming Rule 0 did not skip it prematurely.
+        """
+        notifier = self._make_notifier_with_bot_id(tmp_path)
+        # Signed by us → Rule 1 will skip, so no routing happens — good.
+        msg = self._channel_msg(_SIGNED_BY_US, bot_id=OTHER_BOT_ID)
+        # Should not raise; Rule 1 handles it cleanly.
+        notifier._handle_polled_messages([msg])
+
+    def test_no_bot_id_field_bypasses_rule0(self, tmp_path):
+        """Messages without a bot_id field skip Rule 0 and reach Rule 1.
+
+        Using our own signature ensures Rule 1 filters it without routing.
+        """
+        notifier = self._make_notifier_with_bot_id(tmp_path)
+        msg = self._channel_msg(_SIGNED_BY_US)  # no bot_id key
+        assert "bot_id" not in msg
+        # Must not raise; Rule 1 catches it.
+        notifier._handle_polled_messages([msg])
+
+    def test_bot_id_filter_disabled_when_own_bot_id_none(self, tmp_path):
+        """When _own_bot_id is None, Rule 0 is disabled even if message has a bot_id.
+
+        The message bears our own signature so Rule 1 filters it cleanly.
+        """
+        notifier = self._make_notifier_with_bot_id(tmp_path, own_bot_id=None)
+        assert notifier._own_bot_id is None
+
+        msg = self._channel_msg(_SIGNED_BY_US, bot_id=OWN_BOT_ID)
+        # Rule 0 is disabled (own_bot_id is None), Rule 1 catches it.
+        notifier._handle_polled_messages([msg])

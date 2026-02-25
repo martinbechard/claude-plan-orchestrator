@@ -2529,3 +2529,98 @@ def test_answer_question_history_max_turns_zero(tmp_path, monkeypatch):
 def test_question_answer_prompt_has_history_placeholder():
     """QUESTION_ANSWER_PROMPT should contain the {history_context} placeholder."""
     assert "{history_context}" in mod.QUESTION_ANSWER_PROMPT
+
+
+# ─── _resolve_own_bot_id tests ─────────────────────────────────────
+
+
+def _make_enabled_notifier_no_auth(tmp_path, monkeypatch):
+    """Create an enabled SlackNotifier with auth.test mocked to a no-op."""
+    import urllib.request
+
+    def _noop_urlopen(req, timeout=None):
+        raise OSError("offline in test")
+
+    monkeypatch.setattr(urllib.request, "urlopen", _noop_urlopen)
+    config_file = tmp_path / "slack.yaml"
+    config_data = {
+        "slack": {
+            "enabled": True,
+            "bot_token": "xoxb-test-token",
+            "channel_id": "C0123456789",
+        }
+    }
+    with open(config_file, "w") as f:
+        yaml.dump(config_data, f)
+    return SlackNotifier(config_path=str(config_file))
+
+
+def test_resolve_own_bot_id_success(tmp_path, monkeypatch):
+    """_resolve_own_bot_id stores bot_id when auth.test returns ok=True."""
+    import urllib.request
+
+    BOT_ID = "B0TEST001"
+    response_body = json.dumps({"ok": True, "bot_id": BOT_ID}).encode()
+
+    class _FakeResponse:
+        def read(self):
+            return response_body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    # Create the notifier first (auth.test fails silently during __init__),
+    # then install the success mock before calling _resolve_own_bot_id directly.
+    notifier = _make_enabled_notifier_no_auth(tmp_path, monkeypatch)
+    notifier._own_bot_id = None
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: _FakeResponse())
+    notifier._resolve_own_bot_id()
+
+    assert notifier._own_bot_id == BOT_ID
+
+
+def test_resolve_own_bot_id_api_error_response(tmp_path, monkeypatch):
+    """_resolve_own_bot_id leaves _own_bot_id as None when auth.test returns ok=False."""
+    import urllib.request
+
+    response_body = json.dumps({"ok": False, "error": "invalid_auth"}).encode()
+
+    class _FakeResponse:
+        def read(self):
+            return response_body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: _FakeResponse())
+
+    notifier = _make_enabled_notifier_no_auth(tmp_path, monkeypatch)
+    notifier._own_bot_id = None
+    notifier._resolve_own_bot_id()
+
+    assert notifier._own_bot_id is None
+
+
+def test_resolve_own_bot_id_network_exception(tmp_path, monkeypatch):
+    """_resolve_own_bot_id leaves _own_bot_id as None and does not propagate on network error."""
+    import urllib.request
+
+    def _raise_urlopen(req, timeout=None):
+        raise OSError("simulated network failure")
+
+    monkeypatch.setattr(urllib.request, "urlopen", _raise_urlopen)
+
+    notifier = _make_enabled_notifier_no_auth(tmp_path, monkeypatch)
+    notifier._own_bot_id = None
+
+    # Must not raise
+    notifier._resolve_own_bot_id()
+
+    assert notifier._own_bot_id is None
