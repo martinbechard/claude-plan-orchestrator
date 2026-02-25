@@ -25,6 +25,8 @@ SLACK_BLOCK_TEXT_MAX_LENGTH = mod.SLACK_BLOCK_TEXT_MAX_LENGTH
 SLACK_CHANNEL_ROLE_SUFFIXES = mod.SLACK_CHANNEL_ROLE_SUFFIXES
 IntakeState = mod.IntakeState
 REQUIRED_FIVE_WHYS_COUNT = mod.REQUIRED_FIVE_WHYS_COUNT
+MINIMUM_INTAKE_MESSAGE_LENGTH = mod.MINIMUM_INTAKE_MESSAGE_LENGTH
+INTAKE_CLARITY_THRESHOLD = mod.INTAKE_CLARITY_THRESHOLD
 git_stash_working_changes = mod.git_stash_working_changes
 git_stash_pop = mod.git_stash_pop
 ORCHESTRATOR_STASH_MESSAGE = mod.ORCHESTRATOR_STASH_MESSAGE
@@ -119,6 +121,36 @@ Implement dark mode toggle in settings.
     assert result["title"] == "Add dark mode"
     assert result["classification"] == ""
     assert result["root_need"] == "Users want customizable themes"
+
+
+def test_parse_intake_response_with_clarity():
+    """Parse response that includes a Clarity rating."""
+    response = """Title: Fix crash on login
+Classification: defect - The system crashes unexpectedly
+Clarity: 4
+
+5 Whys:
+1. Why does it crash?
+
+Root Need: Stable authentication flow
+
+Description:
+The login screen crashes when the user taps submit.
+"""
+    result = SlackNotifier._parse_intake_response(response)
+    assert result["clarity"] == 4
+
+
+def test_parse_intake_response_missing_clarity_defaults_zero():
+    """Parse response with no Clarity line returns clarity=0."""
+    response = """Title: Some request
+Root Need: Something
+
+Description:
+No clarity line here.
+"""
+    result = SlackNotifier._parse_intake_response(response)
+    assert result["clarity"] == 0
 
 
 # --- create_backlog_item tests ---
@@ -243,11 +275,12 @@ def test_create_backlog_item_invalid_type(tmp_path):
 # --- _run_intake_analysis 5 Whys retry tests ---
 
 
-def build_intake_response(num_whys=5, title="Test Title"):
+def build_intake_response(num_whys=5, title="Test Title", clarity=4):
     """Build a valid LLM response string with a given number of Whys."""
     whys = "\n".join(f"{i+1}. Why {i+1} goes here" for i in range(num_whys))
     return f"""Title: {title}
 Classification: defect - test
+Clarity: {clarity}
 
 5 Whys:
 {whys}
@@ -623,6 +656,252 @@ def test_intake_ack_on_analysis_error(tmp_path):
                 # Analysis summary should NOT be sent (error path)
                 all_messages = [call[0][0] for call in mock_send.call_args_list]
                 assert not any("Here is my understanding" in msg for msg in all_messages)
+
+    finally:
+        os.chdir(original_cwd)
+
+
+# --- intake clarity gate tests ---
+
+
+def test_intake_low_clarity_sends_clarification_not_backlog(tmp_path):
+    """Verify low-clarity LLM response triggers clarification reply, not backlog creation."""
+    import unittest.mock
+
+    defect_dir = tmp_path / "docs" / "defect-backlog"
+    defect_dir.mkdir(parents=True)
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        low_clarity_response = build_intake_response(num_whys=5, clarity=1)
+        with unittest.mock.patch.object(notifier, '_call_claude_print', return_value=low_clarity_response):
+            with unittest.mock.patch.object(notifier, 'create_backlog_item') as mock_create:
+                with unittest.mock.patch.object(notifier, 'send_status'):
+                    with unittest.mock.patch.object(notifier, '_post_message') as mock_post:
+                        intake = IntakeState(
+                            channel_id="C123",
+                            channel_name="test-channel",
+                            original_text="try again",
+                            user="U123",
+                            ts="1234567890.123456",
+                            item_type="defect",
+                            analysis=None
+                        )
+
+                        notifier._run_intake_analysis(intake)
+
+                        # Backlog item must NOT be created
+                        assert mock_create.call_count == 0
+                        # A clarification reply must have been posted
+                        assert mock_post.call_count >= 1
+                        # The reply payload must carry thread_ts for in-thread reply
+                        posted_payloads = [call[0][0] for call in mock_post.call_args_list]
+                        assert any(p.get("thread_ts") == "1234567890.123456" for p in posted_payloads)
+                        # Intake status should be done
+                        assert intake.status == "done"
+
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_intake_high_clarity_creates_backlog_item(tmp_path):
+    """Verify that a message with clarity >= threshold proceeds to backlog creation."""
+    import unittest.mock
+
+    defect_dir = tmp_path / "docs" / "defect-backlog"
+    defect_dir.mkdir(parents=True)
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        high_clarity_response = build_intake_response(num_whys=5, clarity=4)
+        with unittest.mock.patch.object(notifier, '_call_claude_print', return_value=high_clarity_response):
+            with unittest.mock.patch.object(notifier, 'create_backlog_item', return_value={"filepath": "test.md", "filename": "1-test.md", "item_number": 1}) as mock_create:
+                with unittest.mock.patch.object(notifier, 'send_status'):
+                    intake = IntakeState(
+                        channel_id="C123",
+                        channel_name="test-channel",
+                        original_text="When I click submit on the login form the app crashes",
+                        user="U123",
+                        ts="1234567890.123456",
+                        item_type="defect",
+                        analysis=None
+                    )
+
+                    notifier._run_intake_analysis(intake)
+
+                    # Backlog item must be created
+                    assert mock_create.call_count == 1
+
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_intake_clarity_exactly_at_threshold_creates_backlog(tmp_path):
+    """Verify clarity == INTAKE_CLARITY_THRESHOLD proceeds to backlog creation."""
+    import unittest.mock
+
+    defect_dir = tmp_path / "docs" / "defect-backlog"
+    defect_dir.mkdir(parents=True)
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        threshold_clarity = INTAKE_CLARITY_THRESHOLD
+        threshold_response = build_intake_response(num_whys=5, clarity=threshold_clarity)
+        with unittest.mock.patch.object(notifier, '_call_claude_print', return_value=threshold_response):
+            with unittest.mock.patch.object(notifier, 'create_backlog_item', return_value={"filepath": "test.md", "filename": "1-test.md", "item_number": 1}) as mock_create:
+                with unittest.mock.patch.object(notifier, 'send_status'):
+                    intake = IntakeState(
+                        channel_id="C123",
+                        channel_name="test-channel",
+                        original_text="Some adequately detailed defect description",
+                        user="U123",
+                        ts="1234567890.123456",
+                        item_type="defect",
+                        analysis=None
+                    )
+
+                    notifier._run_intake_analysis(intake)
+                    assert mock_create.call_count == 1
+
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_intake_missing_clarity_field_creates_backlog(tmp_path):
+    """Verify that when LLM omits the Clarity field (clarity=0), backlog is created."""
+    import unittest.mock
+
+    defect_dir = tmp_path / "docs" / "defect-backlog"
+    defect_dir.mkdir(parents=True)
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        # Response with no Clarity line
+        no_clarity_response = """Title: Fix crash on login
+Classification: defect - test
+
+5 Whys:
+1. Why 1
+2. Why 2
+3. Why 3
+4. Why 4
+5. Why 5
+
+Root Need: Stable auth
+
+Description:
+Login crashes."""
+
+        with unittest.mock.patch.object(notifier, '_call_claude_print', return_value=no_clarity_response):
+            with unittest.mock.patch.object(notifier, 'create_backlog_item', return_value={"filepath": "test.md", "filename": "1-test.md", "item_number": 1}) as mock_create:
+                with unittest.mock.patch.object(notifier, 'send_status'):
+                    intake = IntakeState(
+                        channel_id="C123",
+                        channel_name="test-channel",
+                        original_text="Login screen crashes every time I tap submit",
+                        user="U123",
+                        ts="1234567890.123456",
+                        item_type="defect",
+                        analysis=None
+                    )
+
+                    notifier._run_intake_analysis(intake)
+                    # clarity=0 means no rating given; should not block backlog creation
+                    assert mock_create.call_count == 1
+
+    finally:
+        os.chdir(original_cwd)
+
+
+# --- minimum length filter tests ---
+
+
+def test_handle_polled_messages_rejects_too_short_text(tmp_path):
+    """Messages shorter than MINIMUM_INTAKE_MESSAGE_LENGTH get clarification reply."""
+    import unittest.mock
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        # Simulate having a defect channel role resolved
+        short_text = "try again"  # well below 20 chars
+        assert len(short_text) < MINIMUM_INTAKE_MESSAGE_LENGTH
+
+        msg = {
+            "text": short_text,
+            "ts": "1111111111.000001",
+            "user": "U001",
+            "_channel_id": "C_DEFECTS",
+            "_channel_name": "orchestrator-defects",
+        }
+
+        with unittest.mock.patch.object(notifier, '_post_message') as mock_post:
+            with unittest.mock.patch.object(notifier, '_run_intake_analysis') as mock_run:
+                notifier._handle_polled_messages([msg])
+
+                # Clarification posted, intake analysis NOT started
+                assert mock_run.call_count == 0
+                assert mock_post.call_count >= 1
+                # Thread reply carries thread_ts
+                posted_payloads = [call[0][0] for call in mock_post.call_args_list]
+                assert any(p.get("thread_ts") == "1111111111.000001" for p in posted_payloads)
+
+    finally:
+        os.chdir(original_cwd)
+
+
+def test_handle_polled_messages_accepts_adequate_length_text(tmp_path):
+    """Messages at or above minimum length proceed to intake analysis."""
+    import unittest.mock
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+
+        nonexistent_config = tmp_path / "nonexistent-slack-config.yaml"
+        notifier = SlackNotifier(config_path=str(nonexistent_config))
+
+        adequate_text = "Login crashes when I tap submit"
+        assert len(adequate_text) >= MINIMUM_INTAKE_MESSAGE_LENGTH
+
+        msg = {
+            "text": adequate_text,
+            "ts": "2222222222.000001",
+            "user": "U002",
+            "_channel_id": "C_DEFECTS",
+            "_channel_name": "orchestrator-defects",
+        }
+
+        with unittest.mock.patch("threading.Thread") as mock_thread:
+            mock_thread.return_value.start.return_value = None
+            notifier._handle_polled_messages([msg])
+
+            # A thread was started (intake analysis was launched)
+            assert mock_thread.call_count >= 1
 
     finally:
         os.chdir(original_cwd)

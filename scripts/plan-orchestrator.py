@@ -200,6 +200,19 @@ MESSAGE_ROUTING_TIMEOUT_SECONDS = 30
 # Intake analysis configuration
 REQUIRED_FIVE_WHYS_COUNT = 5
 MAX_INTAKE_RETRIES = 1
+MINIMUM_INTAKE_MESSAGE_LENGTH = 20
+INTAKE_CLARITY_THRESHOLD = 3
+
+INTAKE_CLARIFICATION_TEMPLATE = (
+    ":thinking_face: *I need a bit more context to create a useful backlog item.*\n"
+    "\n"
+    "Could you provide more detail? For example:\n"
+    "- What exactly happened, and what did you expect instead?\n"
+    "- Which part of the system is affected?\n"
+    "- Steps to reproduce (if it's a defect)?\n"
+    "\n"
+    "_Please reply with more context and I'll create the backlog item._"
+)
 
 INTAKE_ANALYSIS_PROMPT = """Analyze this {item_type} request using the 5 Whys method.
 
@@ -210,11 +223,20 @@ IMPORTANT: You MUST provide exactly 5 numbered "Why" questions and answers. Do n
 Then write a concise backlog item with a clear title and description.
 Also classify whether this is truly a {item_type} or should be categorized differently.
 
+Also rate the clarity of the original request on a 1-5 scale:
+1 = completely vague (e.g. "try again", "fix it")
+2 = very little context, hard to act on
+3 = some context but missing key details
+4 = clear enough to investigate
+5 = fully detailed with steps, context, and expected outcome
+
 Format your response exactly like this:
 
 Title: <one-line title for the backlog item>
 
 Classification: <defect|feature|question> - <one sentence explaining why>
+
+Clarity: <1-5 integer rating>
 
 5 Whys:
 1. <why>
@@ -4638,16 +4660,21 @@ class SlackNotifier:
     def _parse_intake_response(text: str) -> dict:
         """Parse a plain-text intake analysis response into fields.
 
-        Extracts Title:, Root Need:, Description:, and 5 Whys: sections
-        from the LLM response. Falls back gracefully if format is unexpected.
+        Extracts Title:, Classification:, Clarity:, Root Need:, Description:,
+        and 5 Whys: sections from the LLM response. Falls back gracefully if
+        format is unexpected.
 
         Args:
             text: The raw LLM response text
 
         Returns:
-            Dict with keys: title, root_need, description, five_whys (list), classification
+            Dict with keys: title, root_need, description, five_whys (list),
+            classification, clarity (int 0 if absent)
         """
-        result: dict = {"title": "", "root_need": "", "description": "", "five_whys": [], "classification": ""}
+        result: dict = {
+            "title": "", "root_need": "", "description": "",
+            "five_whys": [], "classification": "", "clarity": 0,
+        }
 
         # Extract Title: line
         title_match = re.search(r"^Title:\s*(.+)$", text, re.MULTILINE)
@@ -4658,6 +4685,11 @@ class SlackNotifier:
         class_match = re.search(r"^Classification:\s*(.+)$", text, re.MULTILINE)
         if class_match:
             result["classification"] = class_match.group(1).strip()
+
+        # Extract Clarity: integer rating
+        clarity_match = re.search(r"^Clarity:\s*(\d+)", text, re.MULTILINE)
+        if clarity_match:
+            result["clarity"] = int(clarity_match.group(1))
 
         # Extract Root Need: line
         root_match = re.search(r"^Root Need:\s*(.+)$", text, re.MULTILINE)
@@ -4770,6 +4802,24 @@ class SlackNotifier:
 
             if len(five_whys) < REQUIRED_FIVE_WHYS_COUNT:
                 print(f"[INTAKE] WARNING: Only {len(five_whys)}/{REQUIRED_FIVE_WHYS_COUNT} Whys in final analysis")
+
+            # Clarity gate: if LLM rates the request below threshold, ask for
+            # more detail instead of creating an unactionable backlog item
+            clarity = parsed.get("clarity", 0)
+            if clarity > 0 and clarity < INTAKE_CLARITY_THRESHOLD:
+                print(f"[INTAKE] Low clarity score {clarity}/{INTAKE_CLARITY_THRESHOLD - 1} "
+                      f"for {intake.item_type} — requesting clarification")
+                try:
+                    payload = self._build_status_block(
+                        INTAKE_CLARIFICATION_TEMPLATE, "warning"
+                    )
+                    if intake.ts:
+                        payload["thread_ts"] = intake.ts
+                    self._post_message(payload, channel_id=intake.channel_id)
+                except Exception as exc:
+                    print(f"[INTAKE] Failed to send clarification reply: {exc}")
+                intake.status = "done"
+                return
 
             # Send analysis summary before creating backlog item
             try:
@@ -4974,6 +5024,23 @@ class SlackNotifier:
 
             # Channel-based routing: the channel determines the type
             if channel_role in ("feature", "defect"):
+                # Minimum length gate: reject trivially short messages
+                if len(text) < MINIMUM_INTAKE_MESSAGE_LENGTH:
+                    print(f"[SLACK] {channel_role.title()} rejected (too short, "
+                          f"{len(text)} chars): {text!r}")
+                    try:
+                        payload = self._build_status_block(
+                            INTAKE_CLARIFICATION_TEMPLATE, "warning"
+                        )
+                        if ts:
+                            payload["thread_ts"] = ts
+                        self._post_message(payload, channel_id=reply_to)
+                    except Exception:
+                        pass
+                    if ts:
+                        self._processed_message_ts.add(ts)
+                    continue
+
                 intake_key = f"{channel_name}:{ts}"
                 print(f"[SLACK] {channel_role.title()} request from "
                       f"#{channel_name}: {text[:80]}")
