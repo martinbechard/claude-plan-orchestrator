@@ -1,9 +1,9 @@
 meta:
   name: 'Defect Fix: Self-skip filter drops legitimate messages'
-  description: 'Replace identity-based self-skip filters (bot_id blanket skip and
-    signature pattern skip) with processed-message deduplication and rate-based loop
-    detection. Allows legitimate bot-originated messages through while preventing
-    infinite self-reply loops.'
+  description: Replace identity-based self-skip filters (bot_id blanket skip and signature
+    pattern skip) with processed-message deduplication and rate-based loop detection.
+    Allows legitimate bot-originated messages through while preventing infinite self-reply
+    loops.
   plan_doc: docs/plans/2026-02-24-01-self-skip-filter-drops-legitimate-messages-design.md
   source_item: docs/defect-backlog/01-self-skip-filter-drops-legitimate-messages.md
   created: '2026-02-24'
@@ -25,7 +25,7 @@ sections:
   - id: '1.1'
     name: Replace bot_id and signature filters with dedup and loop detection
     agent: coder
-    status: pending
+    status: in_progress
     description: "Implement the work item: docs/defect-backlog/01-self-skip-filter-drops-legitimate-messages.md\n\
       Design doc: docs/plans/2026-02-24-01-self-skip-filter-drops-legitimate-messages-design.md\n\
       \nIn scripts/plan-orchestrator.py:\n\n1. Add constants near the top of the file:\n\
@@ -48,6 +48,8 @@ sections:
       \   Call it at the start of each poll cycle in process_inbound().\n\n6. Verify\
       \ syntax: python3 -c \"import py_compile; py_compile.compile(\n   'scripts/plan-orchestrator.py',\
       \ doraise=True)\"\n\nFiles: scripts/plan-orchestrator.py\n"
+    attempts: 1
+    last_attempt: '2026-02-24T23:24:51.958687'
 - id: phase-2
   name: Phase 2 - Update tests
   status: pending
