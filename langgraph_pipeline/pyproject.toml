@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "langgraph-pipeline"
+version = "0.1.0"
+description = "LangGraph pipeline for claude-plan-orchestrator"
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph",
+    "langgraph-checkpoint-sqlite",
+    "langsmith",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[tool.setuptools.packages.find]
+where = [".."]
+include = ["langgraph_pipeline*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
