@@ -1,0 +1,125 @@
+meta:
+  name: 'Feature: Extract Shared Modules'
+  description: Extract duplicated logic from auto-pipeline.py and plan-orchestrator.py
+    into langgraph_pipeline/shared/ modules, eliminating the importlib.util hack and
+    code duplication across both scripts.
+  plan_doc: docs/plans/2026-02-25-02-extract-shared-modules-design.md
+  source_item: docs/feature-backlog/02-extract-shared-modules.md
+  created: '2026-02-25'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+  status: pending
+sections:
+- id: phase-1
+  name: Phase 1 - Foundation modules (paths and config)
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Extract paths.py and config.py with tests
+    agent: coder
+    status: pending
+    description: >
+      Implement the work item: docs/feature-backlog/02-extract-shared-modules.md
+      Design doc: docs/plans/2026-02-25-02-extract-shared-modules-design.md
+
+      Extract the shared/paths.py module (centralized path constants: ORCHESTRATOR_CONFIG_PATH,
+      PLANS_DIR, BACKLOG_DIRS, COMPLETED_DIRS, STATUS_FILE_PATH, TASK_LOG_DIR, PID_FILE_PATH)
+      and shared/config.py module (load_orchestrator_config and default handling) from both scripts.
+      Add unit tests in tests/langgraph/shared/test_paths.py and test_config.py.
+      Run pytest to verify tests pass.
+
+- id: phase-2
+  name: Phase 2 - Standalone logic modules (rate_limit and claude_cli)
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Extract rate_limit.py with tests
+    agent: coder
+    status: pending
+    description: >
+      Implement the work item: docs/feature-backlog/02-extract-shared-modules.md
+      Design doc: docs/plans/2026-02-25-02-extract-shared-modules-design.md
+
+      Extract shared/rate_limit.py with parse_rate_limit_reset_time(), check_rate_limit()
+      (using the richer tuple[bool, Optional[datetime]] signature), and wait_for_rate_limit_reset().
+      Add unit tests in tests/langgraph/shared/test_rate_limit.py. Run pytest to verify.
+
+  - id: '2.2'
+    name: Extract claude_cli.py with tests
+    agent: coder
+    status: pending
+    description: >
+      Implement the work item: docs/feature-backlog/02-extract-shared-modules.md
+      Design doc: docs/plans/2026-02-25-02-extract-shared-modules-design.md
+
+      Extract shared/claude_cli.py with the OutputCollector class and common subprocess
+      patterns (run_child_process / run_claude_task, output streaming, log capture).
+      Add unit tests in tests/langgraph/shared/test_claude_cli.py. Run pytest to verify.
+
+- id: phase-3
+  name: Phase 3 - Complex modules (git and budget)
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Extract git.py with tests
+    agent: coder
+    status: pending
+    description: >
+      Implement the work item: docs/feature-backlog/02-extract-shared-modules.md
+      Design doc: docs/plans/2026-02-25-02-extract-shared-modules-design.md
+
+      Extract shared/git.py with git_stash_working_changes(), git_stash_pop(),
+      get_worktree_path(), create_worktree(), cleanup_worktree(), copy_worktree_artifacts(),
+      and git commit helpers. Add unit tests in tests/langgraph/shared/test_git.py.
+      Run pytest to verify.
+
+  - id: '3.2'
+    name: Extract budget.py with tests
+    agent: coder
+    status: pending
+    description: >
+      Implement the work item: docs/feature-backlog/02-extract-shared-modules.md
+      Design doc: docs/plans/2026-02-25-02-extract-shared-modules-design.md
+
+      Extract shared/budget.py merging BudgetGuard + PipelineBudgetGuard into one class
+      and SessionUsageTracker + PlanUsageTracker into one with a scope parameter.
+      Include BudgetConfig dataclass. Add unit tests in tests/langgraph/shared/test_budget.py.
+      Run pytest to verify.
+
+- id: phase-4
+  name: Phase 4 - Migrate scripts to shared imports
+  status: pending
+  tasks:
+  - id: '4.1'
+    name: Migrate auto-pipeline.py to use shared modules
+    agent: coder
+    status: pending
+    description: >
+      Implement the work item: docs/feature-backlog/02-extract-shared-modules.md
+      Design doc: docs/plans/2026-02-25-02-extract-shared-modules-design.md
+
+      Update auto-pipeline.py to import from langgraph_pipeline.shared instead of
+      defining inline duplicates. Remove the importlib.util hack (lines 44-52).
+      Replace inline OutputCollector, rate limit functions, path constants, config loader,
+      and budget classes with shared imports. Run existing tests to verify no regressions.
+
+  - id: '4.2'
+    name: Migrate plan-orchestrator.py to use shared modules
+    agent: coder
+    status: pending
+    description: >
+      Implement the work item: docs/feature-backlog/02-extract-shared-modules.md
+      Design doc: docs/plans/2026-02-25-02-extract-shared-modules-design.md
+
+      Update plan-orchestrator.py to import from langgraph_pipeline.shared instead of
+      defining inline duplicates. Replace inline rate limit functions, OutputCollector,
+      git helpers, path constants, config loader, and budget classes with shared imports.
+      Run existing tests to verify no regressions.
