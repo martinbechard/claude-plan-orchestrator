@@ -7,6 +7,7 @@
 # Design ref: docs/plans/2026-02-19-19-optional-step-by-step-notifications-design.md
 
 import importlib.util
+import signal
 import tempfile
 import os
 import time
@@ -1591,3 +1592,227 @@ def test_find_in_progress_plans_mixed_failed_and_active(tmp_path, monkeypatch):
     assert len(result) == 1
     assert any("active.yaml" in r for r in result)
     assert not any("deadlocked.yaml" in r for r in result)
+
+
+# --- _collect_archival_paths() tests ---
+
+_collect_archival_paths = mod._collect_archival_paths
+ARCHIVAL_SWEEP_DIRS = mod.ARCHIVAL_SWEEP_DIRS
+SWEEP_COMMIT_MESSAGE = mod.SWEEP_COMMIT_MESSAGE
+
+
+def test_collect_archival_paths_returns_defect_and_completed_paths():
+    """Files in defect-backlog and completed-backlog are returned."""
+    git_output = (
+        "M  docs/defect-backlog/bug.md\n"
+        "A  docs/completed-backlog/done.md\n"
+        "M  scripts/auto-pipeline.py\n"
+    )
+    result = _collect_archival_paths(git_output)
+    assert "docs/defect-backlog/bug.md" in result
+    assert "docs/completed-backlog/done.md" in result
+    assert "scripts/auto-pipeline.py" not in result
+
+
+def test_collect_archival_paths_returns_empty_for_clean_tree():
+    """Empty git status output yields an empty list."""
+    result = _collect_archival_paths("")
+    assert result == []
+
+
+def test_collect_archival_paths_filters_non_archival_paths():
+    """Only non-archival paths present returns empty list."""
+    git_output = (
+        "M  scripts/auto-pipeline.py\n"
+        "M  tests/test_auto_pipeline.py\n"
+        "A  README.md\n"
+    )
+    result = _collect_archival_paths(git_output)
+    assert result == []
+
+
+def test_collect_archival_paths_handles_rename_format():
+    """Rename entries (orig -> new) return only the destination path."""
+    git_output = "R  old-name.md -> docs/defect-backlog/new-name.md\n"
+    result = _collect_archival_paths(git_output)
+    assert result == ["docs/defect-backlog/new-name.md"]
+
+
+def test_collect_archival_paths_includes_plans_dir():
+    """.claude/plans/ entries are included in the results."""
+    git_output = "M  .claude/plans/some-plan.yaml\n"
+    result = _collect_archival_paths(git_output)
+    assert ".claude/plans/some-plan.yaml" in result
+
+
+def test_collect_archival_paths_skips_short_lines():
+    """Lines shorter than 3 chars (blank lines) are safely skipped."""
+    git_output = "\n\nM  docs/defect-backlog/bug.md\n"
+    result = _collect_archival_paths(git_output)
+    assert result == ["docs/defect-backlog/bug.md"]
+
+
+def test_collect_archival_paths_includes_feature_and_analysis_dirs():
+    """feature-backlog and analysis-backlog paths are both matched."""
+    git_output = (
+        "A  docs/feature-backlog/feat.md\n"
+        "A  docs/analysis-backlog/analysis.md\n"
+    )
+    result = _collect_archival_paths(git_output)
+    assert "docs/feature-backlog/feat.md" in result
+    assert "docs/analysis-backlog/analysis.md" in result
+
+
+# --- sweep_uncommitted_archival_artifacts() tests ---
+
+sweep_uncommitted_archival_artifacts = mod.sweep_uncommitted_archival_artifacts
+
+
+def test_sweep_commits_orphaned_archival_files(monkeypatch, capsys):
+    """Sweep stages and commits archival files found in git status."""
+    git_status_output = "A  docs/defect-backlog/orphan.md\n"
+    subprocess_calls = []
+
+    def mock_run(args, **kwargs):
+        subprocess_calls.append(list(args))
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = git_status_output if args[0:3] == ["git", "status", "--porcelain"] else ""
+        return result
+
+    monkeypatch.setattr(mod.subprocess, "run", mock_run)
+    sweep_uncommitted_archival_artifacts()
+
+    assert any("add" in call for call in subprocess_calls)
+    assert any("commit" in call for call in subprocess_calls)
+    captured = capsys.readouterr()
+    assert "[SWEEP]" in captured.out
+
+
+def test_sweep_is_noop_when_clean(monkeypatch):
+    """Sweep makes no git add/commit calls when no archival changes exist."""
+    subprocess_calls = []
+
+    def mock_run(args, **kwargs):
+        subprocess_calls.append(list(args))
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = ""
+        return result
+
+    monkeypatch.setattr(mod.subprocess, "run", mock_run)
+    sweep_uncommitted_archival_artifacts()
+
+    assert len(subprocess_calls) == 1
+    assert subprocess_calls[0][0:3] == ["git", "status", "--porcelain"]
+
+
+def test_sweep_logs_artifact_count(monkeypatch, capsys):
+    """Sweep logs the number of artifacts recovered."""
+    git_status_output = (
+        "A  docs/defect-backlog/a.md\n"
+        "A  docs/feature-backlog/b.md\n"
+    )
+
+    def mock_run(args, **kwargs):
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = git_status_output
+        return result
+
+    monkeypatch.setattr(mod.subprocess, "run", mock_run)
+    sweep_uncommitted_archival_artifacts()
+
+    captured = capsys.readouterr()
+    assert "2" in captured.out
+    assert "[SWEEP]" in captured.out
+
+
+def test_sweep_handles_git_status_failure(monkeypatch, capsys):
+    """Sweep logs a warning and returns safely when git status fails."""
+    def mock_run(args, **kwargs):
+        result = MagicMock()
+        result.returncode = 1
+        result.stderr = "not a git repo"
+        result.stdout = ""
+        return result
+
+    monkeypatch.setattr(mod.subprocess, "run", mock_run)
+    sweep_uncommitted_archival_artifacts()  # must not raise
+
+    captured = capsys.readouterr()
+    assert "[SWEEP]" in captured.out
+
+
+# --- handle_signal() commit behavior tests ---
+
+
+def test_handle_signal_commits_inflight_artifacts(monkeypatch):
+    """Signal handler stages and commits in-flight archival artifacts before exit."""
+    git_status_output = "A  docs/defect-backlog/inflight.md\n"
+    subprocess_calls = []
+
+    def mock_run(args, **kwargs):
+        subprocess_calls.append(list(args))
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = git_status_output if args[0:3] == ["git", "status", "--porcelain"] else ""
+        return result
+
+    monkeypatch.setattr(mod.subprocess, "run", mock_run)
+    monkeypatch.setattr(mod, "_active_child_process", None)
+    monkeypatch.setattr(mod, "remove_pid_file", lambda: None)
+    monkeypatch.setattr(mod, "restore_terminal_settings", lambda: None)
+
+    try:
+        mod.handle_signal(signal.SIGINT, None)
+    except SystemExit:
+        pass
+
+    assert any("add" in call for call in subprocess_calls)
+    assert any("commit" in call for call in subprocess_calls)
+
+
+def test_handle_signal_skips_commit_when_no_archival_paths(monkeypatch):
+    """Signal handler skips git add/commit when no archival files are uncommitted."""
+    subprocess_calls = []
+
+    def mock_run(args, **kwargs):
+        subprocess_calls.append(list(args))
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = "M  scripts/auto-pipeline.py\n"
+        return result
+
+    monkeypatch.setattr(mod.subprocess, "run", mock_run)
+    monkeypatch.setattr(mod, "_active_child_process", None)
+    monkeypatch.setattr(mod, "remove_pid_file", lambda: None)
+    monkeypatch.setattr(mod, "restore_terminal_settings", lambda: None)
+
+    try:
+        mod.handle_signal(signal.SIGTERM, None)
+    except SystemExit:
+        pass
+
+    assert not any("commit" in call for call in subprocess_calls)
+
+
+def test_handle_signal_continues_shutdown_if_commit_fails(monkeypatch):
+    """Signal handler completes shutdown even when the commit step raises an exception."""
+    def mock_run(args, **kwargs):
+        if args[0:3] == ["git", "status", "--porcelain"]:
+            result = MagicMock()
+            result.returncode = 0
+            result.stdout = "A  docs/defect-backlog/x.md\n"
+            return result
+        raise Exception("simulated git failure")
+
+    monkeypatch.setattr(mod.subprocess, "run", mock_run)
+    monkeypatch.setattr(mod, "_active_child_process", None)
+    monkeypatch.setattr(mod, "remove_pid_file", lambda: None)
+    monkeypatch.setattr(mod, "restore_terminal_settings", lambda: None)
+
+    try:
+        mod.handle_signal(signal.SIGINT, None)
+    except SystemExit as e:
+        assert e.code == 0
