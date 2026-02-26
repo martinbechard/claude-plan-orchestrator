@@ -104,7 +104,7 @@ sections:
   - id: '2.2'
     name: Create slack/suspension.py with question and intake flows
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/03-extract-slack-modules.md
       Design doc: docs/plans/2026-02-26-03-extract-slack-modules-design.md
 
@@ -115,6 +115,8 @@ sections:
       Run pytest to verify.
 
       '
+    attempts: 1
+    last_attempt: '2026-02-26T01:08:27.741714'
 - id: phase-3
   name: Phase 3 - Facade and script migration
   status: pending
