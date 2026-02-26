@@ -107,7 +107,7 @@ sections:
   - id: '3.1'
     name: Add LangSmith configuration section to setup guide
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/06-langsmith-observability.md
       Design doc: docs/plans/2026-02-26-06-langsmith-observability-design.md
 
@@ -117,3 +117,5 @@ sections:
       for this project (run history, trace waterfall, error drill-down), how to compare
       two pipeline runs to diagnose regressions, and how to track token costs by node,
       task, and plan.'
+    attempts: 1
+    last_attempt: '2026-02-26T07:12:05.064574'
