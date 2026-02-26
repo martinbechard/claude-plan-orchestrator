@@ -1,11 +1,10 @@
 meta:
   name: 'Feature: Unified LangGraph Pipeline Runner'
-  description: >-
-    A single CLI entry point (scripts/run-pipeline.py) that runs the complete
-    LangGraph pipeline graph, replacing both auto-pipeline.py and
-    plan-orchestrator.py with one invocation. Includes argparse CLI, PID file
-    management, signal handling, budget enforcement, and scan loop / single-item
-    modes. The legacy scripts remain untouched.
+  description: A single CLI entry point (scripts/run-pipeline.py) that runs the complete
+    LangGraph pipeline graph, replacing both auto-pipeline.py and plan-orchestrator.py
+    with one invocation. Includes argparse CLI, PID file management, signal handling,
+    budget enforcement, and scan loop / single-item modes. The legacy scripts remain
+    untouched.
   plan_doc: docs/plans/2026-02-26-20-unified-langgraph-runner-design.md
   source_item: docs/feature-backlog/20-unified-langgraph-runner.md
   created: '2026-02-26'
@@ -13,85 +12,74 @@ meta:
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
   status: pending
 sections:
-  - id: phase-1
-    name: Phase 1 - PipelineState extension and path constant
+- id: phase-1
+  name: Phase 1 - PipelineState extension and path constant
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add LANGGRAPH_PID_FILE_PATH and budget_cap_usd state field
+    agent: coder
+    status: in_progress
+    description: 'Implement the work item: docs/feature-backlog/20-unified-langgraph-runner.md
+      Design doc: docs/plans/2026-02-26-20-unified-langgraph-runner-design.md
+
+      Add LANGGRAPH_PID_FILE_PATH constant to langgraph_pipeline/shared/paths.py (value:
+      ".claude/plans/.lg-pipeline.pid") to allow the new runner to coexist with the
+      legacy auto-pipeline.py PID file.
+
+      Add an optional budget_cap_usd float field to PipelineState in langgraph_pipeline/pipeline/state.py
+      so the runner can pass the budget cap into the graph state.
+
+      Update existing unit tests if they break. Run pytest to verify.'
+    attempts: 1
+    last_attempt: '2026-02-26T18:42:44.762946'
+- id: phase-2
+  name: Phase 2 - CLI entry point script
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Create scripts/run-pipeline.py with argparse CLI and scan loop
+    agent: coder
     status: pending
-    tasks:
-      - id: '1.1'
-        name: Add LANGGRAPH_PID_FILE_PATH and budget_cap_usd state field
-        agent: coder
-        status: pending
-        description: >-
-          Implement the work item: docs/feature-backlog/20-unified-langgraph-runner.md
-          Design doc: docs/plans/2026-02-26-20-unified-langgraph-runner-design.md
-
-          Add LANGGRAPH_PID_FILE_PATH constant to langgraph_pipeline/shared/paths.py
-          (value: ".claude/plans/.lg-pipeline.pid") to allow the new runner to
-          coexist with the legacy auto-pipeline.py PID file.
-
-          Add an optional budget_cap_usd float field to PipelineState in
-          langgraph_pipeline/pipeline/state.py so the runner can pass the budget
-          cap into the graph state.
-
-          Update existing unit tests if they break. Run pytest to verify.
-
-  - id: phase-2
-    name: Phase 2 - CLI entry point script
+    description: "Implement the work item: docs/feature-backlog/20-unified-langgraph-runner.md\
+      \ Design doc: docs/plans/2026-02-26-20-unified-langgraph-runner-design.md\n\
+      Create scripts/run-pipeline.py with: (1) argparse CLI supporting --budget-cap,\
+      \ --dry-run, --single-item PATH,\n    --backlog-dir, --log-level, --no-slack,\
+      \ --no-tracing.\n(2) PID file management using LANGGRAPH_PID_FILE_PATH: write\
+      \ at startup,\n    check for stale PID, remove on exit (in finally block).\n\
+      (3) SIGINT/SIGTERM handlers that set a threading.Event to stop after\n    current\
+      \ graph invocation completes.\n(4) Startup banner logging version, config summary,\
+      \ budget cap. (5) Continuous scan loop: invoke pipeline_graph() with initial\
+      \ state,\n    check budget and shutdown flag between iterations.\n(6) Single-item\
+      \ mode: set item_path directly, invoke once, exit. (7) Exit codes: 0 = clean,\
+      \ 1 = error, 2 = budget exhausted. (8) Load config via shared/config.py, conditional\
+      \ tracing via\n    shared/langsmith.py, conditional Slack via slack/__init__.py.\n\
+      \nRun pytest to verify no regressions."
+- id: phase-3
+  name: Phase 3 - Unit tests for the runner
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Create unit tests for run-pipeline.py
+    agent: coder
     status: pending
-    tasks:
-      - id: '2.1'
-        name: Create scripts/run-pipeline.py with argparse CLI and scan loop
-        agent: coder
-        status: pending
-        description: >-
-          Implement the work item: docs/feature-backlog/20-unified-langgraph-runner.md
-          Design doc: docs/plans/2026-02-26-20-unified-langgraph-runner-design.md
+    description: 'Implement the work item: docs/feature-backlog/20-unified-langgraph-runner.md
+      Design doc: docs/plans/2026-02-26-20-unified-langgraph-runner-design.md
 
-          Create scripts/run-pipeline.py with:
-          (1) argparse CLI supporting --budget-cap, --dry-run, --single-item PATH,
-              --backlog-dir, --log-level, --no-slack, --no-tracing.
-          (2) PID file management using LANGGRAPH_PID_FILE_PATH: write at startup,
-              check for stale PID, remove on exit (in finally block).
-          (3) SIGINT/SIGTERM handlers that set a threading.Event to stop after
-              current graph invocation completes.
-          (4) Startup banner logging version, config summary, budget cap.
-          (5) Continuous scan loop: invoke pipeline_graph() with initial state,
-              check budget and shutdown flag between iterations.
-          (6) Single-item mode: set item_path directly, invoke once, exit.
-          (7) Exit codes: 0 = clean, 1 = error, 2 = budget exhausted.
-          (8) Load config via shared/config.py, conditional tracing via
-              shared/langsmith.py, conditional Slack via slack/__init__.py.
+      Create tests/langgraph/test_run_pipeline.py with unit tests covering: (1) CLI
+      argument parsing (all flags, defaults, mutual exclusions). (2) PID file write/read/remove
+      lifecycle. (3) Stale PID detection (PID file exists but process is dead). (4)
+      Signal handler sets shutdown event. (5) Budget cap enforcement: exit code 2
+      when cost exceeds cap. (6) Single-item mode: sets item_path, invokes graph once,
+      exits 0. (7) Scan loop iteration with mock graph that returns increasing cost.
 
-          Run pytest to verify no regressions.
-
-  - id: phase-3
-    name: Phase 3 - Unit tests for the runner
-    status: pending
-    tasks:
-      - id: '3.1'
-        name: Create unit tests for run-pipeline.py
-        agent: coder
-        status: pending
-        description: >-
-          Implement the work item: docs/feature-backlog/20-unified-langgraph-runner.md
-          Design doc: docs/plans/2026-02-26-20-unified-langgraph-runner-design.md
-
-          Create tests/langgraph/test_run_pipeline.py with unit tests covering:
-          (1) CLI argument parsing (all flags, defaults, mutual exclusions).
-          (2) PID file write/read/remove lifecycle.
-          (3) Stale PID detection (PID file exists but process is dead).
-          (4) Signal handler sets shutdown event.
-          (5) Budget cap enforcement: exit code 2 when cost exceeds cap.
-          (6) Single-item mode: sets item_path, invokes graph once, exits 0.
-          (7) Scan loop iteration with mock graph that returns increasing cost.
-
-          Mock the pipeline_graph context manager and SlackNotifier to avoid
-          real graph execution and network calls. Run pytest to verify all pass.
+      Mock the pipeline_graph context manager and SlackNotifier to avoid real graph
+      execution and network calls. Run pytest to verify all pass.'
