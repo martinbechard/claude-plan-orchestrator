@@ -9,11 +9,22 @@ Each module in this package exports one LangGraph node function:
   intake        → intake_analyze
   plan_creation → create_plan
   execute_plan  → execute_plan
+  verification  → verify_symptoms
+  archival      → archive
 """
 
+from langgraph_pipeline.pipeline.nodes.archival import archive
 from langgraph_pipeline.pipeline.nodes.execute_plan import execute_plan
 from langgraph_pipeline.pipeline.nodes.intake import intake_analyze
 from langgraph_pipeline.pipeline.nodes.plan_creation import create_plan
 from langgraph_pipeline.pipeline.nodes.scan import scan_backlog
+from langgraph_pipeline.pipeline.nodes.verification import verify_symptoms
 
-__all__ = ["scan_backlog", "intake_analyze", "create_plan", "execute_plan"]
+__all__ = [
+    "scan_backlog",
+    "intake_analyze",
+    "create_plan",
+    "execute_plan",
+    "verify_symptoms",
+    "archive",
+]
