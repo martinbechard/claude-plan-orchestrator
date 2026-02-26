@@ -86,8 +86,12 @@ sections:
       verify.
 
       '
-    attempts: 1
-    last_attempt: '2026-02-26T03:12:42.563038'
+    attempts: 2
+    last_attempt: '2026-02-26T03:28:37.846711'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: No status file
+      written by Claude'
+    validation_attempts: 1
   - id: '2.3'
     name: Implement verify_symptoms and archive nodes
     agent: coder
