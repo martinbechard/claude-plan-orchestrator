@@ -152,12 +152,12 @@ sections:
       failed only due to missing status file.
 - id: phase-4
   name: Phase 4 - Graph assembly and pipeline integration
-  status: pending
+  status: completed
   tasks:
   - id: '4.1'
     name: Assemble executor subgraph and integrate with pipeline
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
       Design doc: docs/plans/2026-02-26-05-task-execution-subgraph-design.md
 
@@ -176,3 +176,10 @@ sections:
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
     validation_attempts: 2
+    completed_at: '2026-02-26T06:32:00.838916'
+    result_message: executor/graph.py assembled full StateGraph with all nodes (find_next_task,
+      execute_task, validate_task, execute_parallel_task, fan_in, escalate) and conditional
+      edges. execute_plan.py updated to use compiled subgraph instead of subprocess.
+      Integration tests in test_graph_integration.py cover sequential tasks, cost
+      accumulation, circuit breaker, pre-completed task skipping, and validation flow.
+      All 863 tests pass.
