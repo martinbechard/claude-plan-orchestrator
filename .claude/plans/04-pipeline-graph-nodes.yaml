@@ -140,9 +140,9 @@ sections:
       to verify.
 
       '
-    attempts: 2
-    last_attempt: '2026-02-26T04:06:39.532970'
+    attempts: 3
+    last_attempt: '2026-02-26T04:11:54.201765'
     model_used: sonnet
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
-    validation_attempts: 1
+    validation_attempts: 2
