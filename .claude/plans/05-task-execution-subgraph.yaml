@@ -157,7 +157,7 @@ sections:
   - id: '4.1'
     name: Assemble executor subgraph and integrate with pipeline
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
       Design doc: docs/plans/2026-02-26-05-task-execution-subgraph-design.md
 
@@ -170,3 +170,5 @@ sections:
       pytest to verify all tests pass.
 
       '
+    attempts: 1
+    last_attempt: '2026-02-26T06:01:30.923917'
