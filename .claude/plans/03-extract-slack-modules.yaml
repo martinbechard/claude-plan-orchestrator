@@ -156,7 +156,7 @@ sections:
   - id: '3.2'
     name: Migrate plan-orchestrator.py and auto-pipeline.py to use slack facade
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/03-extract-slack-modules.md
       Design doc: docs/plans/2026-02-26-03-extract-slack-modules-design.md
 
@@ -168,3 +168,5 @@ sections:
       existing tests to verify no regressions.
 
       '
+    attempts: 1
+    last_attempt: '2026-02-26T01:47:45.916908'
