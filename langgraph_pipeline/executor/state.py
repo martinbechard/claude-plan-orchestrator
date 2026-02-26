@@ -16,6 +16,10 @@ from typing import Annotated, Literal, Optional
 
 from typing_extensions import TypedDict
 
+# ─── Domain literal types (continued) ────────────────────────────────────────
+
+ValidationVerdict = Literal["PASS", "WARN", "FAIL"]
+
 # ─── Domain literal types ─────────────────────────────────────────────────────
 
 ModelTier = Literal["haiku", "sonnet", "opus"]
@@ -64,6 +68,9 @@ class TaskState(TypedDict):
 
     # ── Circuit breaker ───────────────────────────────────────────────────────
     consecutive_failures: int  # resets to 0 on any task success
+
+    # ── Validation tracking ───────────────────────────────────────────────────
+    last_validation_verdict: Optional[ValidationVerdict]  # set by validate_task node
 
     # ── Cost accumulators (shared with parent pipeline) ───────────────────────
     plan_cost_usd: float
