@@ -160,6 +160,13 @@ INTAKE_RATE_WINDOW_SECONDS = 300  # 5-minute sliding window
 INTAKE_HISTORY_PATH = ".claude/plans/.intake-history.json"
 INTAKE_HISTORY_MAX_ENTRIES = 100
 INTAKE_HISTORY_TTL_SECONDS = 3600  # 1 hour
+
+# Disk-persisted backlog creation throttle — survives process restarts
+BACKLOG_CREATION_THROTTLE_PATH = ".claude/plans/.backlog-creation-throttle.json"
+MAX_DEFECTS_PER_HOUR = 20
+MAX_FEATURES_PER_HOUR = 20
+BACKLOG_THROTTLE_WINDOW_SECONDS = 3600  # 1-hour sliding window
+
 SLACK_CHANNEL_PREFIX = "orchestrator-"
 SLACK_CHANNEL_ROLE_SUFFIXES = {
     "features": "feature",
@@ -4476,12 +4483,17 @@ class SlackNotifier:
             Dict with keys filepath, filename, item_number on success,
             or empty dict on error
         """
+        if item_type not in ("feature", "defect"):
+            return {}
+
+        # Disk-persisted throttle — authoritative safety net
+        if self._check_backlog_throttle(item_type):
+            return {}
+
         if item_type == "feature":
             backlog_dir = "docs/feature-backlog"
-        elif item_type == "defect":
-            backlog_dir = "docs/defect-backlog"
         else:
-            return {}
+            backlog_dir = "docs/defect-backlog"
 
         # Find next available number
         try:
@@ -4532,6 +4544,8 @@ class SlackNotifier:
                 f.write(content)
             # A1: Record in intake history for chain-loop detection
             self._record_intake_history(next_num, slug, title[:120])
+            # Record in disk-persisted throttle
+            self._record_backlog_creation(item_type)
             return {"filepath": filepath, "filename": filename, "item_number": next_num}
         except IOError as e:
             print(f"[SLACK] Failed to create backlog item: {e}")
@@ -5419,6 +5433,71 @@ class SlackNotifier:
     def _record_intake_timestamp(self) -> None:
         """Record an intake event for rate limiting."""
         self._intake_timestamps.append(time.time())
+
+    # ─── Disk-persisted backlog creation throttle ───────────────────
+
+    def _load_backlog_throttle(self) -> dict:
+        """Load the backlog creation throttle file from disk.
+
+        Returns:
+            Dict mapping item_type to list of unix timestamps.
+        """
+        try:
+            with open(BACKLOG_CREATION_THROTTLE_PATH, "r") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return data
+        except (FileNotFoundError, json.JSONDecodeError, IOError):
+            pass
+        return {}
+
+    def _save_backlog_throttle(self, data: dict) -> None:
+        """Persist the backlog creation throttle data to disk."""
+        try:
+            os.makedirs(
+                os.path.dirname(BACKLOG_CREATION_THROTTLE_PATH), exist_ok=True
+            )
+            with open(BACKLOG_CREATION_THROTTLE_PATH, "w") as f:
+                json.dump(data, f)
+        except IOError as e:
+            print(f"[SLACK] Failed to save backlog throttle: {e}")
+
+    def _check_backlog_throttle(self, item_type: str) -> bool:
+        """Return True if backlog creation should be blocked for item_type.
+
+        Loads the disk-persisted throttle file, prunes entries older than
+        BACKLOG_THROTTLE_WINDOW_SECONDS, and checks against the per-type limit.
+        """
+        max_per_hour = (
+            MAX_DEFECTS_PER_HOUR if item_type == "defect"
+            else MAX_FEATURES_PER_HOUR
+        )
+        data = self._load_backlog_throttle()
+        now = time.time()
+        cutoff = now - BACKLOG_THROTTLE_WINDOW_SECONDS
+
+        entries = data.get(item_type, [])
+        entries = [ts for ts in entries if isinstance(ts, (int, float)) and ts > cutoff]
+        data[item_type] = entries
+        self._save_backlog_throttle(data)
+
+        if len(entries) >= max_per_hour:
+            print(
+                f"[SLACK] WARNING: Backlog creation throttle triggered! "
+                f"{len(entries)} {item_type}s created in the last "
+                f"{BACKLOG_THROTTLE_WINDOW_SECONDS}s (max {max_per_hour}). "
+                f"Refusing new {item_type}."
+            )
+            return True
+        return False
+
+    def _record_backlog_creation(self, item_type: str) -> None:
+        """Record a backlog creation event in the disk-persisted throttle."""
+        data = self._load_backlog_throttle()
+        entries = data.get(item_type, [])
+        entries.append(time.time())
+        data[item_type] = entries
+        self._save_backlog_throttle(data)
 
     def process_inbound(self) -> None:
         """Poll for new Slack messages and route them.

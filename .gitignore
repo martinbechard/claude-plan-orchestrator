@@ -23,6 +23,7 @@ venv/
 .claude/slack-*.json
 .claude/chroma/
 .claude/plans/.intake-history.json
+.claude/plans/.backlog-creation-throttle.json
 
 # Runtime pipeline logs (generated at runtime, not committed)
 logs/

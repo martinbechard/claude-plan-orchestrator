@@ -1,5 +1,17 @@
 # Release Notes
 
+## 1.8.1 (2026-02-25)
+
+### Improvements
+- **Disk-persisted backlog creation throttle:** `create_backlog_item()` now checks a
+  disk-persisted throttle file before writing any backlog file. Limits: 20 defects/hour
+  and 20 features/hour. Survives process restarts (unlike the in-memory A4 rate limiter,
+  which is kept as a fast pre-filter). The throttle is the authoritative safety net at
+  the single chokepoint where every backlog file is created.
+- **LangGraph v2 safety requirements:** Features 03, 04, and 05 now include Safety
+  Requirements sections documenting the loop prevention layers, intake throttling, and
+  RAG deduplication that must be ported from v1.8.0.
+
 ## 1.8.0 (2026-02-25)
 
 ### Fixes

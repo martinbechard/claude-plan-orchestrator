@@ -3,6 +3,7 @@
 # Design ref: plan for agent identity in shared Slack channels.
 
 import importlib.util
+import json
 import re
 import time
 from pathlib import Path
@@ -35,6 +36,10 @@ MESSAGE_TRACKING_TTL_SECONDS = mod.MESSAGE_TRACKING_TTL_SECONDS
 BOT_NOTIFICATION_PATTERN = mod.BOT_NOTIFICATION_PATTERN
 MAX_INTAKES_PER_WINDOW = mod.MAX_INTAKES_PER_WINDOW
 INTAKE_RATE_WINDOW_SECONDS = mod.INTAKE_RATE_WINDOW_SECONDS
+BACKLOG_CREATION_THROTTLE_PATH = mod.BACKLOG_CREATION_THROTTLE_PATH
+MAX_DEFECTS_PER_HOUR = mod.MAX_DEFECTS_PER_HOUR
+MAX_FEATURES_PER_HOUR = mod.MAX_FEATURES_PER_HOUR
+BACKLOG_THROTTLE_WINDOW_SECONDS = mod.BACKLOG_THROTTLE_WINDOW_SECONDS
 
 
 # ─── load_agent_identity tests ─────────────────────────────────────
@@ -691,4 +696,84 @@ class TestIntakeRateLimiter:
             old_time - i for i in range(MAX_INTAKES_PER_WINDOW)
         ]
         assert notifier._check_intake_rate_limit() is False
+
+
+# ─── Disk-persisted backlog creation throttle tests ───────────────
+
+
+class TestBacklogCreationThrottle:
+    """Tests for the disk-persisted backlog creation throttle."""
+
+    def _make_notifier(self, tmp_path):
+        config_file = tmp_path / "slack.yaml"
+        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
+        return SlackNotifier(config_path=str(config_file))
+
+    def _throttle_path(self, tmp_path):
+        return str(tmp_path / "throttle.json")
+
+    def test_allows_under_limit(self, tmp_path):
+        """Throttle allows creation when under the per-type limit."""
+        notifier = self._make_notifier(tmp_path)
+        throttle_file = self._throttle_path(tmp_path)
+        now = time.time()
+        # Pre-fill with a few entries (well under MAX_DEFECTS_PER_HOUR)
+        data = {"defect": [now - 60, now - 30, now - 10]}
+        with open(throttle_file, "w") as f:
+            json.dump(data, f)
+
+        with patch.object(mod, "BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
+            assert notifier._check_backlog_throttle("defect") is False
+
+    def test_blocks_at_limit(self, tmp_path):
+        """Throttle blocks creation when at the per-type limit."""
+        notifier = self._make_notifier(tmp_path)
+        throttle_file = self._throttle_path(tmp_path)
+        now = time.time()
+        # Fill with exactly MAX_DEFECTS_PER_HOUR recent entries
+        data = {"defect": [now - i for i in range(MAX_DEFECTS_PER_HOUR)]}
+        with open(throttle_file, "w") as f:
+            json.dump(data, f)
+
+        with patch.object(mod, "BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
+            assert notifier._check_backlog_throttle("defect") is True
+
+    def test_prune_old_entries(self, tmp_path):
+        """Old timestamps are pruned, allowing new creations."""
+        notifier = self._make_notifier(tmp_path)
+        throttle_file = self._throttle_path(tmp_path)
+        old_time = time.time() - BACKLOG_THROTTLE_WINDOW_SECONDS - 100
+        # All entries are expired
+        data = {"defect": [old_time - i for i in range(MAX_DEFECTS_PER_HOUR)]}
+        with open(throttle_file, "w") as f:
+            json.dump(data, f)
+
+        with patch.object(mod, "BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
+            assert notifier._check_backlog_throttle("defect") is False
+
+    def test_persists_across_instances(self, tmp_path):
+        """Throttle data written by one notifier is read by another."""
+        throttle_file = self._throttle_path(tmp_path)
+
+        with patch.object(mod, "BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
+            notifier1 = self._make_notifier(tmp_path)
+            notifier1._record_backlog_creation("defect")
+
+            notifier2 = self._make_notifier(tmp_path)
+            data = notifier2._load_backlog_throttle()
+            assert len(data.get("defect", [])) == 1
+
+    def test_separate_limits_per_type(self, tmp_path):
+        """Defect limit does not affect feature creation."""
+        notifier = self._make_notifier(tmp_path)
+        throttle_file = self._throttle_path(tmp_path)
+        now = time.time()
+        # Max out defects, leave features empty
+        data = {"defect": [now - i for i in range(MAX_DEFECTS_PER_HOUR)]}
+        with open(throttle_file, "w") as f:
+            json.dump(data, f)
+
+        with patch.object(mod, "BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
+            assert notifier._check_backlog_throttle("defect") is True
+            assert notifier._check_backlog_throttle("feature") is False
 
