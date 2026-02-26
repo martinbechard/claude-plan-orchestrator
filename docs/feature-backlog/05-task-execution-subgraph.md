@@ -109,6 +109,13 @@ State flows between parent and child via shared keys (plan_path, cost accumulato
 - Interrupt test: verify graph pauses on interrupt() and resumes with Command(resume=...)
 - Plan-orchestrator.py is no longer spawned as a subprocess
 
+## Safety Requirements
+
+- Circuit breaker and budget guard are already listed in the scope above.
+- The backlog creation throttle (disk-persisted) applies if the executor creates defects
+  during verification failure paths. The throttle file lives on disk at
+  .claude/plans/.backlog-creation-throttle.json, separate from graph state.
+
 ## Dependencies
 
 - 01-langgraph-project-scaffold.md (package structure)

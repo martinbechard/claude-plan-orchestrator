@@ -63,6 +63,26 @@ Question posting and reply polling for human-in-the-loop:
 - Each slack module has its own test file with mocked Slack API
 - No Slack-related code remains in the main scripts except import statements
 
+## Safety Requirements
+
+### In slack/poller.py
+
+Port the 4-layer loop prevention from v1.8.0:
+
+- **A1: Chain detection via intake history (disk-persisted):** On-disk history of recently
+  created backlog items; messages referencing known item numbers or slugs are skipped.
+  Survives restarts. Port _is_chain_loop_artifact() and _load/_save_intake_history() methods.
+- **A2: Self-reply window (1 per 300s per channel):** Blocks cascading self-replies.
+- **A3: Bot notification pattern regex filter:** Port the BOT_NOTIFICATION_PATTERN constant
+  and filter check to skip bot notification messages before LLM routing.
+- **A4: In-memory intake rate limiter (fast pre-filter):** Hard cap of MAX_INTAKES_PER_WINDOW
+  per INTAKE_RATE_WINDOW_SECONDS.
+
+### In slack/notifier.py
+
+- Port MESSAGE_ROUTING_PROMPT with the A5 notification-classification hint that tells the
+  LLM to classify notification-format messages as "none".
+
 ## Dependencies
 
 - 01-langgraph-project-scaffold.md (needs the package structure to exist)

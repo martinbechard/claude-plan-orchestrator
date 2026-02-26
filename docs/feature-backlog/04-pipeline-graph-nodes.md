@@ -96,6 +96,27 @@ graph resumes from the last checkpoint automatically.
 - Checkpointing works: kill the process mid-run, restart, and it resumes
 - The subprocess bridge to plan-orchestrator.py works identically to current behavior
 
+## Safety Requirements
+
+### In pipeline/nodes/intake.py
+
+- **Disk-persisted backlog creation throttle:** MAX_DEFECTS_PER_HOUR / MAX_FEATURES_PER_HOUR
+  checked before any backlog file creation. The throttle state file
+  (.claude/plans/.backlog-creation-throttle.json) lives on disk, not in graph state, so
+  it survives graph checkpointing and process restarts.
+- **RAG deduplication query:** Before creating new items, query ChromaDB (same as v1.8.0
+  BacklogRAG) to detect semantic duplicates and consolidate into existing items.
+- **Clarity gate:** Reject requests below INTAKE_CLARITY_THRESHOLD.
+
+### PipelineState additions for observability
+
+Add to PipelineState schema:
+
+```
+    intake_count_defects: int     # running count (separate from disk throttle)
+    intake_count_features: int
+```
+
 ## Dependencies
 
 - 01-langgraph-project-scaffold.md (package structure and LangGraph dependency)
