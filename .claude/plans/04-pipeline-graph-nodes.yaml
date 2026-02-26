@@ -128,7 +128,7 @@ sections:
   - id: '3.1'
     name: Assemble full pipeline StateGraph with SqliteSaver
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/04-pipeline-graph-nodes.md
       Design doc: docs/plans/2026-02-26-04-pipeline-graph-nodes-design.md
 
@@ -140,3 +140,5 @@ sections:
       to verify.
 
       '
+    attempts: 1
+    last_attempt: '2026-02-26T03:57:18.183099'
