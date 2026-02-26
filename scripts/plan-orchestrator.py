@@ -5564,6 +5564,11 @@ class SlackNotifier:
                 )
                 if recent_count >= MAX_SELF_REPLIES_PER_WINDOW:
                     print(f"[SLACK] Filter: skip loop-detected #{ch_log}: {preview!r}")
+                    verbose_log(
+                        f"Skip own-agent loop-detected: ts={ts} recent={recent_count} "
+                        f"channel=#{ch_log} text={preview!r}",
+                        "FILTER",
+                    )
                     continue
                 print(f"[SLACK] Filter: accept self-origin #{ch_log}: {preview!r}")
 
@@ -5578,13 +5583,28 @@ class SlackNotifier:
                     if addressed_to_others and not addressed_to_us:
                         print(f"[SLACK] Filter: skip addressed-to-other "
                               f"addrs={addresses} #{ch_log}: {preview!r}")
+                        verbose_log(
+                            f"Skip addressed-to-others: addressees={addresses} "
+                            f"ours={our_names} channel=#{ch_log} text={preview!r}",
+                            "FILTER",
+                        )
                         continue
                     # Rule 3: Addressed to us → fall through to process
                     print(f"[SLACK] Filter: accept addressed-to-us "
                           f"addrs={addresses & our_names} #{ch_log}: {preview!r}")
+                    verbose_log(
+                        f"Accept addressed-to-us: addressees={addresses & our_names} "
+                        f"ours={our_names} channel=#{ch_log} text={preview!r}",
+                        "FILTER",
+                    )
                 else:
                     # Rule 4: No addresses (broadcast) → fall through to process
                     print(f"[SLACK] Filter: accept broadcast #{ch_log}: {preview!r}")
+                    verbose_log(
+                        f"Accept broadcast: no-addressees ours={our_names} "
+                        f"channel=#{ch_log} text={preview!r}",
+                        "FILTER",
+                    )
 
             user = msg.get("user", "unknown")
             channel_name = msg.get("_channel_name", "")
