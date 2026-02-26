@@ -54,7 +54,7 @@ sections:
   - id: '2.1'
     name: Implement task_selector node (find_next_task)
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
       Design doc: docs/plans/2026-02-26-05-task-execution-subgraph-design.md
 
@@ -66,6 +66,8 @@ sections:
       Run pytest to verify.
 
       '
+    attempts: 1
+    last_attempt: '2026-02-26T04:56:03.817960'
   - id: '2.2'
     name: Implement task_runner node (execute_task)
     agent: coder
