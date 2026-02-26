@@ -30,8 +30,6 @@ AGENT_ROLE_QA = mod.AGENT_ROLE_QA
 AGENT_ROLES = mod.AGENT_ROLES
 AGENT_ADDRESS_PATTERN = mod.AGENT_ADDRESS_PATTERN
 SLACK_BLOCK_TEXT_MAX_LENGTH = mod.SLACK_BLOCK_TEXT_MAX_LENGTH
-MAX_SELF_REPLIES_PER_WINDOW = mod.MAX_SELF_REPLIES_PER_WINDOW
-LOOP_DETECTION_WINDOW_SECONDS = mod.LOOP_DETECTION_WINDOW_SECONDS
 MESSAGE_TRACKING_TTL_SECONDS = mod.MESSAGE_TRACKING_TTL_SECONDS
 BOT_NOTIFICATION_PATTERN = mod.BOT_NOTIFICATION_PATTERN
 MAX_INTAKES_PER_WINDOW = mod.MAX_INTAKES_PER_WINDOW
@@ -465,43 +463,42 @@ class TestDedupAndLoopDetection:
         notifier._handle_polled_messages([msg])
         assert len(routed) == first_routed, "Duplicate ts must not reach routing"
 
-    def test_self_origin_accepted_under_rate_limit(self, tmp_path):
-        """A self-origin message is processed when loop count is under threshold.
-
-        With MAX_SELF_REPLIES_PER_WINDOW=1, the first self-origin message
-        with an empty window should be accepted.
-        """
+    def test_self_origin_unconditionally_skipped(self, tmp_path):
+        """A self-origin message is always skipped, regardless of history."""
         notifier = self._make_notifier(tmp_path)
         routed = self._patch_routing(notifier)
 
         ts = "200.0"
         notifier._own_sent_ts.add(ts)
-        # Empty window: 0 recent entries, below threshold of 1
-        notifier._self_reply_window["C1"] = []
 
         notifier._handle_polled_messages([self._channel_msg(ts)])
-        assert len(routed) > 0, "Self-origin message under limit must reach routing"
+        assert len(routed) == 0, "Self-origin message must never reach routing"
 
-    def test_loop_detected_skips_message(self, tmp_path):
-        """A self-origin message is skipped when loop count meets threshold.
+    def test_self_origin_ts_marked_processed(self, tmp_path):
+        """A skipped self-origin message has its ts added to _processed_message_ts."""
+        notifier = self._make_notifier(tmp_path)
+        self._patch_routing(notifier)
 
-        With MAX_SELF_REPLIES_PER_WINDOW=1 and LOOP_DETECTION_WINDOW_SECONDS=300,
-        having 1 recent entry in the window triggers the loop detector.
-        """
+        ts = "250.0"
+        notifier._own_sent_ts.add(ts)
+
+        notifier._handle_polled_messages([self._channel_msg(ts)])
+        assert ts in notifier._processed_message_ts, (
+            "Self-origin ts must be marked processed to prevent future re-processing"
+        )
+
+    def test_non_self_origin_not_affected(self, tmp_path):
+        """Non-self-origin messages are not blocked by the self-origin filter."""
         notifier = self._make_notifier(tmp_path)
         routed = self._patch_routing(notifier)
 
-        ts = "300.0"
-        notifier._own_sent_ts.add(ts)
-        # At threshold: 1 recent entry within the 300s window
-        now = time.monotonic()
-        notifier._self_reply_window["C1"] = [now - 10]
-
+        ts = "350.0"
+        # ts is NOT in _own_sent_ts — this is a human message
         notifier._handle_polled_messages([self._channel_msg(ts)])
-        assert len(routed) == 0, "Self-origin message at loop threshold must be skipped"
+        assert len(routed) > 0, "Non-self-origin message must reach routing"
 
     def test_prune_removes_old_entries(self, tmp_path):
-        """_prune_message_tracking removes expired ts entries and old window slots."""
+        """_prune_message_tracking removes expired ts entries."""
         notifier = self._make_notifier(tmp_path)
 
         old_ts = str(time.time() - MESSAGE_TRACKING_TTL_SECONDS - 1)
@@ -510,19 +507,11 @@ class TestDedupAndLoopDetection:
         notifier._processed_message_ts.update({old_ts, recent_ts})
         notifier._own_sent_ts.add(old_ts)
 
-        # Expired window slot (older than LOOP_DETECTION_WINDOW_SECONDS)
-        old_slot = time.monotonic() - LOOP_DETECTION_WINDOW_SECONDS - 1
-        recent_slot = time.monotonic() - 5
-        notifier._self_reply_window["C1"] = [old_slot, recent_slot]
-
         notifier._prune_message_tracking()
 
         assert old_ts not in notifier._processed_message_ts
         assert recent_ts in notifier._processed_message_ts
         assert old_ts not in notifier._own_sent_ts
-        # Old window slot pruned; recent slot kept
-        assert recent_slot in notifier._self_reply_window.get("C1", [])
-        assert old_slot not in notifier._self_reply_window.get("C1", [])
 
     def test_post_message_records_ts_in_own_sent_ts(self, tmp_path):
         """_post_message stores the returned ts in _own_sent_ts."""
