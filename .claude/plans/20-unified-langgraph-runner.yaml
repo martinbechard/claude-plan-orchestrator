@@ -22,12 +22,12 @@ meta:
 sections:
 - id: phase-1
   name: Phase 1 - PipelineState extension and path constant
-  status: pending
+  status: completed
   tasks:
   - id: '1.1'
     name: Add LANGGRAPH_PID_FILE_PATH and budget_cap_usd state field
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: docs/feature-backlog/20-unified-langgraph-runner.md
       Design doc: docs/plans/2026-02-26-20-unified-langgraph-runner-design.md
 
@@ -45,6 +45,9 @@ sections:
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
     validation_attempts: 2
+    completed_at: '2026-02-26T18:52:52.958261'
+    result_message: LANGGRAPH_PID_FILE_PATH constant added to paths.py and budget_cap_usd
+      Optional[float] field added to PipelineState in state.py. All 183 tests pass.
 - id: phase-2
   name: Phase 2 - CLI entry point script
   status: pending
