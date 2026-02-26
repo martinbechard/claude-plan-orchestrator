@@ -136,6 +136,8 @@ SLACK_LEVEL_EMOJI = {
 SLACK_LAST_READ_PATH = ".claude/slack-last-read.json"
 SLACK_INBOUND_POLL_LIMIT = 20
 SLACK_THREAD_REPLIES_LIMIT = 5
+MAX_SELF_REPLIES_PER_WINDOW = 1       # circuit-breaker threshold per channel
+LOOP_DETECTION_WINDOW_SECONDS = 300  # sliding window for self-reply rate (5 min)
 MESSAGE_TRACKING_TTL_SECONDS = 3600  # TTL for processed/sent ts sets
 
 # A3: Content-based notification pattern filter — matches the bot's own
@@ -3658,6 +3660,7 @@ class SlackNotifier:
         self._active_role: str = ""
         self._processed_message_ts: set[str] = set()
         self._own_sent_ts: set[str] = set()
+        self._self_reply_window: dict[str, list[float]] = {}
         self._intake_timestamps: list[float] = []  # A4: global intake rate limiter
         self._intake_history: list[dict] = []  # A1: chain detection history
         self._rag: Optional[BacklogRAG] = None  # B2: ChromaDB RAG for dedup
@@ -5316,10 +5319,11 @@ class SlackNotifier:
             self._poll_thread = None
 
     def _prune_message_tracking(self) -> None:
-        """Remove stale entries from processed/sent ts sets.
+        """Remove stale entries from processed/sent ts sets and self-reply window.
 
         Prunes _processed_message_ts and _own_sent_ts entries whose Slack ts
         (a Unix timestamp string) is older than MESSAGE_TRACKING_TTL_SECONDS.
+        Prunes _self_reply_window entries outside LOOP_DETECTION_WINDOW_SECONDS.
         """
         cutoff_ts = time.time() - MESSAGE_TRACKING_TTL_SECONDS
         self._processed_message_ts = {
@@ -5330,6 +5334,14 @@ class SlackNotifier:
             ts for ts in self._own_sent_ts
             if _safe_float_ts(ts) > cutoff_ts
         }
+        now = time.monotonic()
+        for channel_id in list(self._self_reply_window.keys()):
+            self._self_reply_window[channel_id] = [
+                t for t in self._self_reply_window[channel_id]
+                if now - t <= LOOP_DETECTION_WINDOW_SECONDS
+            ]
+            if not self._self_reply_window[channel_id]:
+                del self._self_reply_window[channel_id]
 
     # ─── A1: Chain detection via on-disk intake history ────────────
 
@@ -5543,12 +5555,17 @@ class SlackNotifier:
                     self._processed_message_ts.add(ts)
                 continue
 
-            # Self-origin: unconditionally skip any message the bot itself sent
+            # Self-origin + loop detection
             if is_self_origin:
-                print(f"[SLACK] Filter: skip self-origin #{ch_log}: {preview!r}")
-                if ts:
-                    self._processed_message_ts.add(ts)
-                continue
+                now = time.monotonic()
+                window = self._self_reply_window.get(channel_id_key, [])
+                recent_count = sum(
+                    1 for t in window if now - t <= LOOP_DETECTION_WINDOW_SECONDS
+                )
+                if recent_count >= MAX_SELF_REPLIES_PER_WINDOW:
+                    print(f"[SLACK] Filter: skip loop-detected #{ch_log}: {preview!r}")
+                    continue
+                print(f"[SLACK] Filter: accept self-origin #{ch_log}: {preview!r}")
 
             # Rules 2-4: Check @AgentName addressing
             if self._agent_identity:
@@ -5632,6 +5649,9 @@ class SlackNotifier:
             # Track ts after routing to prevent duplicate processing
             if ts:
                 self._processed_message_ts.add(ts)
+                if is_self_origin:
+                    window = self._self_reply_window.setdefault(reply_to, [])
+                    window.append(time.monotonic())
 
 
 def update_section_status(section: dict) -> None:
