@@ -63,8 +63,12 @@ sections:
       for both nodes with mocked Claude CLI calls. Run pytest to verify.
 
       '
-    attempts: 1
-    last_attempt: '2026-02-26T02:52:28.901018'
+    attempts: 2
+    last_attempt: '2026-02-26T03:09:10.353779'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: No status file
+      written by Claude'
+    validation_attempts: 1
   - id: '2.2'
     name: Implement create_plan and execute_plan nodes
     agent: coder
