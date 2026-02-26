@@ -65,8 +65,12 @@ sections:
       node name, graph level (pipeline), and relevant state fields (item_slug, item_type).
       Tag traces with item_slug and item_type for dashboard filtering. Run pytest
       to verify no regressions.'
-    attempts: 1
-    last_attempt: '2026-02-26T06:43:45.855397'
+    attempts: 2
+    last_attempt: '2026-02-26T06:53:21.489044'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: No status file
+      written by Claude'
+    validation_attempts: 1
   - id: '2.2'
     name: Wire tracing into executor graph and all executor nodes
     agent: coder
