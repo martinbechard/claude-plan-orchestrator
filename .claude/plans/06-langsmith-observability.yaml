@@ -55,7 +55,7 @@ sections:
   - id: '2.1'
     name: Wire tracing into pipeline graph and all pipeline nodes
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/06-langsmith-observability.md
       Design doc: docs/plans/2026-02-26-06-langsmith-observability-design.md
 
@@ -65,6 +65,8 @@ sections:
       node name, graph level (pipeline), and relevant state fields (item_slug, item_type).
       Tag traces with item_slug and item_type for dashboard filtering. Run pytest
       to verify no regressions.'
+    attempts: 1
+    last_attempt: '2026-02-26T06:43:45.855397'
   - id: '2.2'
     name: Wire tracing into executor graph and all executor nodes
     agent: coder
