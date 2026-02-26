@@ -91,8 +91,12 @@ sections:
       Run pytest to verify.
 
       '
-    attempts: 1
-    last_attempt: '2026-02-26T00:54:55.036782'
+    attempts: 2
+    last_attempt: '2026-02-26T01:05:33.532901'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: No status file
+      written by Claude'
+    validation_attempts: 1
   - id: '2.2'
     name: Create slack/suspension.py with question and intake flows
     agent: coder
