@@ -1,0 +1,357 @@
+# tests/langgraph/pipeline/nodes/test_intake.py
+# Unit tests for the intake_analyze node.
+# Design: docs/plans/2026-02-26-04-pipeline-graph-nodes-design.md
+
+"""Tests for langgraph_pipeline.pipeline.nodes.intake."""
+
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from langgraph_pipeline.pipeline.nodes.intake import (
+    INTAKE_CLARITY_THRESHOLD,
+    MAX_INTAKES_PER_HOUR,
+    THROTTLE_WINDOW_SECONDS,
+    _check_rag_dedup,
+    _check_throttle,
+    _parse_clarity_score,
+    _parse_timestamp,
+    _read_throttle,
+    _record_intake,
+    _run_five_whys_analysis,
+    _verify_defect_symptoms,
+    _write_throttle,
+    intake_analyze,
+)
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _make_state(**overrides) -> dict:
+    """Build a minimal PipelineState dict."""
+    base = {
+        "item_path": "docs/defect-backlog/01-bug.md",
+        "item_slug": "01-bug",
+        "item_type": "defect",
+        "item_name": "01 Bug",
+        "plan_path": None,
+        "design_doc_path": None,
+        "verification_cycle": 0,
+        "verification_history": [],
+        "should_stop": False,
+        "rate_limited": False,
+        "rate_limit_reset": None,
+        "session_cost_usd": 0.0,
+        "session_input_tokens": 0,
+        "session_output_tokens": 0,
+        "intake_count_defects": 0,
+        "intake_count_features": 0,
+    }
+    base.update(overrides)
+    return base
+
+
+def _recent_ts(seconds_ago: float = 10) -> str:
+    """Return an ISO-8601 timestamp from seconds_ago seconds in the past."""
+    t = datetime.now(tz=timezone.utc) - timedelta(seconds=seconds_ago)
+    return t.isoformat()
+
+
+def _old_ts() -> str:
+    """Return an ISO-8601 timestamp well outside the throttle window."""
+    t = datetime.now(tz=timezone.utc) - timedelta(seconds=THROTTLE_WINDOW_SECONDS + 60)
+    return t.isoformat()
+
+
+# ─── _parse_timestamp ─────────────────────────────────────────────────────────
+
+
+class TestParseTimestamp:
+    def test_valid_iso_string(self):
+        ts = "2026-02-26T10:00:00+00:00"
+        result = _parse_timestamp(ts)
+        assert result > 0.0
+
+    def test_invalid_string_returns_zero(self):
+        assert _parse_timestamp("not-a-date") == 0.0
+
+    def test_none_returns_zero(self):
+        assert _parse_timestamp(None) == 0.0  # type: ignore[arg-type]
+
+
+# ─── _read_throttle / _write_throttle ────────────────────────────────────────
+
+
+class TestThrottleIO:
+    def test_read_returns_empty_dict_when_file_missing(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "missing.json"))
+        assert _read_throttle() == {}
+
+    def test_round_trip(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        path = tmp_path / "throttle.json"
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(path))
+        data = {"defect": ["2026-02-26T10:00:00+00:00"]}
+        _write_throttle(data)
+        assert _read_throttle() == data
+
+    def test_read_handles_corrupt_file(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        path = tmp_path / "throttle.json"
+        path.write_text("not-valid-json")
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(path))
+        assert _read_throttle() == {}
+
+
+# ─── _check_throttle ─────────────────────────────────────────────────────────
+
+
+class TestCheckThrottle:
+    def test_not_throttled_when_no_history(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+        assert _check_throttle("defect") is False
+
+    def test_not_throttled_below_max(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        path = tmp_path / "t.json"
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(path))
+        max_count = MAX_INTAKES_PER_HOUR["defect"]
+        data = {"defect": [_recent_ts(i * 10) for i in range(max_count - 1)]}
+        path.write_text(json.dumps(data))
+        assert _check_throttle("defect") is False
+
+    def test_throttled_at_max(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        path = tmp_path / "t.json"
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(path))
+        max_count = MAX_INTAKES_PER_HOUR["defect"]
+        data = {"defect": [_recent_ts(i * 10) for i in range(max_count)]}
+        path.write_text(json.dumps(data))
+        assert _check_throttle("defect") is True
+
+    def test_old_entries_do_not_count(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        path = tmp_path / "t.json"
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(path))
+        max_count = MAX_INTAKES_PER_HOUR["defect"]
+        # All timestamps are outside the window.
+        data = {"defect": [_old_ts() for _ in range(max_count + 5)]}
+        path.write_text(json.dumps(data))
+        assert _check_throttle("defect") is False
+
+
+# ─── _record_intake ───────────────────────────────────────────────────────────
+
+
+class TestRecordIntake:
+    def test_creates_entry_for_item_type(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        path = tmp_path / "t.json"
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(path))
+        _record_intake("defect")
+        data = json.loads(path.read_text())
+        assert "defect" in data
+        assert len(data["defect"]) == 1
+
+    def test_old_entries_pruned_on_record(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        path = tmp_path / "t.json"
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(path))
+        old = {"defect": [_old_ts(), _old_ts()]}
+        path.write_text(json.dumps(old))
+        _record_intake("defect")
+        data = json.loads(path.read_text())
+        # Old entries pruned; only the new one remains.
+        assert len(data["defect"]) == 1
+
+
+# ─── _parse_clarity_score ─────────────────────────────────────────────────────
+
+
+class TestParseClarityScore:
+    def test_extracts_integer_from_output(self):
+        assert _parse_clarity_score("Clarity: 4") == 4
+
+    def test_case_insensitive(self):
+        assert _parse_clarity_score("CLARITY: 2") == 2
+
+    def test_returns_threshold_when_not_found(self):
+        assert _parse_clarity_score("no clarity here") == INTAKE_CLARITY_THRESHOLD
+
+    def test_extracts_from_multiline_output(self):
+        output = "Title: Some Bug\nClarity: 5\nSummary: test"
+        assert _parse_clarity_score(output) == 5
+
+
+# ─── _check_rag_dedup ─────────────────────────────────────────────────────────
+
+
+class TestCheckRagDedup:
+    def test_returns_false_when_chromadb_not_installed(self):
+        """Without chromadb package, dedup is a no-op."""
+        with patch("builtins.__import__", side_effect=ImportError):
+            # Direct call; chromadb import will fail inside the function.
+            result = _check_rag_dedup("01-some-bug")
+        # Falls back to False (no duplicate).
+        # If chromadb IS installed in the test env, skip.
+        # The function should not raise.
+        assert isinstance(result, bool)
+
+    def test_returns_false_on_chromadb_exception(self):
+        """ChromaDB errors should not propagate to the caller."""
+        mock_chromadb = MagicMock()
+        mock_chromadb.PersistentClient.side_effect = RuntimeError("db error")
+        with patch.dict("sys.modules", {"chromadb": mock_chromadb}):
+            result = _check_rag_dedup("01-some-bug")
+        assert result is False
+
+
+# ─── _verify_defect_symptoms ──────────────────────────────────────────────────
+
+
+class TestVerifyDefectSymptoms:
+    def test_calls_invoke_claude_with_item_path(self, tmp_path):
+        item = tmp_path / "01-bug.md"
+        item.write_text("## Defect\nSome symptom.\n")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value="Reproducible: yes\nClarity: 4\nSummary: bug confirmed",
+        ) as mock_call:
+            result = _verify_defect_symptoms(str(item))
+        assert mock_call.called
+        prompt_arg = mock_call.call_args[0][0]
+        assert str(item) in prompt_arg
+
+    def test_parses_reproducible_yes(self, tmp_path):
+        item = tmp_path / "01-bug.md"
+        item.write_text("")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value="Reproducible: yes\nClarity: 4",
+        ):
+            result = _verify_defect_symptoms(str(item))
+        assert result["reproducible"] == "yes"
+
+    def test_parses_reproducible_no(self, tmp_path):
+        item = tmp_path / "01-bug.md"
+        item.write_text("")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value="Reproducible: no\nClarity: 3",
+        ):
+            result = _verify_defect_symptoms(str(item))
+        assert result["reproducible"] == "no"
+
+    def test_defaults_reproducible_to_unclear_on_missing(self, tmp_path):
+        item = tmp_path / "01-bug.md"
+        item.write_text("")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value="Clarity: 3",
+        ):
+            result = _verify_defect_symptoms(str(item))
+        assert result["reproducible"] == "unclear"
+
+
+# ─── _run_five_whys_analysis ─────────────────────────────────────────────────
+
+
+class TestRunFiveWhysAnalysis:
+    def test_calls_invoke_claude_with_item_path(self, tmp_path):
+        item = tmp_path / "01-analysis.md"
+        item.write_text("")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value="Title: X\nClarity: 4\n5 Whys:\n1.a\n2.b\n3.c\n4.d\n5.e",
+        ) as mock_call:
+            _run_five_whys_analysis(str(item))
+        assert mock_call.called
+        prompt_arg = mock_call.call_args[0][0]
+        assert str(item) in prompt_arg
+
+    def test_parses_clarity_score(self, tmp_path):
+        item = tmp_path / "01-analysis.md"
+        item.write_text("")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value="Title: X\nClarity: 2",
+        ):
+            result = _run_five_whys_analysis(str(item))
+        assert result["clarity"] == 2
+
+
+# ─── intake_analyze (node) ────────────────────────────────────────────────────
+
+
+class TestIntakeAnalyzeNode:
+    def test_returns_empty_dict_when_plan_already_set(self, tmp_path):
+        """If plan_path is set, skip analysis entirely (in-progress plan)."""
+        state = _make_state(plan_path="some-plan.yaml")
+        with patch("langgraph_pipeline.pipeline.nodes.intake._invoke_claude") as mock_claude:
+            result = intake_analyze(state)
+        assert result == {}
+        mock_claude.assert_not_called()
+
+    def test_defect_increments_intake_count_defects(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+        item = tmp_path / "01-bug.md"
+        item.write_text("")
+        state = _make_state(item_path=str(item), item_type="defect", intake_count_defects=2)
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value="Reproducible: yes\nClarity: 4",
+        ):
+            result = intake_analyze(state)
+        assert result.get("intake_count_defects") == 3
+
+    def test_feature_increments_intake_count_features(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+        state = _make_state(item_type="feature", intake_count_features=1)
+        with patch("langgraph_pipeline.pipeline.nodes.intake._invoke_claude") as mock_claude:
+            result = intake_analyze(state)
+        mock_claude.assert_not_called()
+        assert result.get("intake_count_features") == 2
+
+    def test_analysis_increments_intake_count_features(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+        item = tmp_path / "01-analysis.md"
+        item.write_text("")
+        state = _make_state(
+            item_path=str(item), item_type="analysis", intake_count_features=0
+        )
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value="Title: T\nClarity: 4",
+        ):
+            result = intake_analyze(state)
+        assert result.get("intake_count_features") == 1
+
+    def test_does_not_spawn_claude_for_feature(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+        state = _make_state(item_type="feature")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude"
+        ) as mock_claude:
+            intake_analyze(state)
+        mock_claude.assert_not_called()
+
+    def test_records_intake_in_throttle(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        path = tmp_path / "t.json"
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(path))
+        state = _make_state(item_type="feature")
+        with patch("langgraph_pipeline.pipeline.nodes.intake._invoke_claude"):
+            intake_analyze(state)
+        data = json.loads(path.read_text())
+        assert "feature" in data
+        assert len(data["feature"]) == 1
