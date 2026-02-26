@@ -1816,3 +1816,286 @@ def test_handle_signal_continues_shutdown_if_commit_fails(monkeypatch):
         mod.handle_signal(signal.SIGINT, None)
     except SystemExit as e:
         assert e.code == 0
+
+
+# --- _deliver_analysis_report() tests ---
+
+_deliver_analysis_report = mod._deliver_analysis_report
+_process_analysis_inner = mod._process_analysis_inner
+process_analysis_item = mod.process_analysis_item
+
+
+def _make_analysis_item(tmp_path=None, slug="01-test-analysis", analysis_type="code-review"):
+    """Build a minimal analysis BacklogItem for testing."""
+    if tmp_path is not None:
+        path = str(tmp_path / f"{slug}.md")
+        Path(path).write_text(
+            f"# Test Analysis\n## Analysis Type: {analysis_type}\n"
+        )
+    else:
+        path = f"docs/analysis-backlog/{slug}.md"
+    return BacklogItem(
+        path=path,
+        item_type="analysis",
+        slug=slug,
+        name="Test Analysis",
+    )
+
+
+def test_deliver_analysis_report_slack_posts_to_reports_channel(tmp_path):
+    """_deliver_analysis_report() posts to reports channel when get_type_channel_id returns one."""
+    item = _make_analysis_item()
+    report_path = str(tmp_path / "01-test-analysis.md")
+    Path(report_path).write_text("# Report\n## Executive Summary\nThis is a summary.\n## Details\n")
+
+    slack = MagicMock()
+    slack.get_type_channel_id.return_value = "C123REPORTS"
+
+    _deliver_analysis_report(item, slack, report_path, "slack")
+
+    slack.get_type_channel_id.assert_called_once_with("analysis")
+    slack.send_status.assert_called_once()
+    assert slack.send_status.call_args[1].get("channel_id") == "C123REPORTS"
+
+
+def test_deliver_analysis_report_slack_fallback_when_no_reports_channel(tmp_path):
+    """_deliver_analysis_report() falls back to notifications channel when get_type_channel_id returns None."""
+    item = _make_analysis_item()
+    report_path = str(tmp_path / "01-test-analysis.md")
+    Path(report_path).write_text("# Report\n## Executive Summary\nSummary text.\n")
+
+    slack = MagicMock()
+    slack.get_type_channel_id.return_value = None
+
+    _deliver_analysis_report(item, slack, report_path, "slack")
+
+    slack.send_status.assert_called_once()
+    assert "channel_id" not in slack.send_status.call_args[1]
+
+
+def test_deliver_analysis_report_markdown_does_not_call_slack(tmp_path):
+    """_deliver_analysis_report() with output_format='markdown' never calls slack.send_status."""
+    item = _make_analysis_item()
+    report_path = str(tmp_path / "01-test-analysis.md")
+    Path(report_path).write_text("# Report\n")
+
+    slack = MagicMock()
+
+    _deliver_analysis_report(item, slack, report_path, "markdown")
+
+    slack.send_status.assert_not_called()
+
+
+def test_deliver_analysis_report_both_calls_slack(tmp_path):
+    """_deliver_analysis_report() with output_format='both' calls slack.send_status."""
+    item = _make_analysis_item()
+    report_path = str(tmp_path / "01-test-analysis.md")
+    Path(report_path).write_text("# Report\n## Executive Summary\nGood analysis.\n")
+
+    slack = MagicMock()
+    slack.get_type_channel_id.return_value = "C123REPORTS"
+
+    _deliver_analysis_report(item, slack, report_path, "both")
+
+    slack.send_status.assert_called_once()
+
+
+def test_deliver_analysis_report_missing_report_uses_display_name(tmp_path):
+    """_deliver_analysis_report() uses item.display_name as summary when report file is missing."""
+    item = _make_analysis_item()
+    report_path = str(tmp_path / "nonexistent.md")
+
+    slack = MagicMock()
+    slack.get_type_channel_id.return_value = "C123REPORTS"
+
+    _deliver_analysis_report(item, slack, report_path, "slack")
+
+    slack.send_status.assert_called_once()
+    msg = slack.send_status.call_args[0][0]
+    assert item.display_name in msg
+
+
+def test_deliver_analysis_report_extracts_executive_summary(tmp_path):
+    """_deliver_analysis_report() extracts text under ## Executive Summary from the report."""
+    item = _make_analysis_item()
+    report_path = str(tmp_path / "01-test-analysis.md")
+    Path(report_path).write_text(
+        "# Analysis Report\n"
+        "## Executive Summary\n"
+        "Code quality is generally high.\n"
+        "Some technical debt exists.\n"
+        "## Details\n"
+        "More details here.\n"
+    )
+
+    slack = MagicMock()
+    slack.get_type_channel_id.return_value = None
+
+    _deliver_analysis_report(item, slack, report_path, "slack")
+
+    msg = slack.send_status.call_args[0][0]
+    assert "Code quality is generally high." in msg
+
+
+# --- _process_analysis_inner() tests ---
+
+
+def test_process_analysis_inner_dry_run_returns_true(tmp_path, monkeypatch):
+    """_process_analysis_inner() in dry-run mode returns True without spawning a subprocess."""
+    item = _make_analysis_item(tmp_path)
+    slack = MagicMock()
+    run_calls = []
+
+    def mock_run_child_process(*args, **kwargs):
+        run_calls.append(args)
+        return ProcessResult(success=True, exit_code=0, stdout="", stderr="", duration_seconds=0.1)
+
+    monkeypatch.setattr(mod, "run_child_process", mock_run_child_process)
+
+    result = _process_analysis_inner(item, slack, 0.0, dry_run=True)
+
+    assert result is True
+    assert len(run_calls) == 0, "run_child_process must not be called in dry-run mode"
+
+
+def test_process_analysis_inner_success_calls_archive(tmp_path, monkeypatch):
+    """_process_analysis_inner() returns True and archives the item on subprocess success."""
+    item = _make_analysis_item(tmp_path)
+    slack = MagicMock()
+
+    monkeypatch.setattr(mod, "run_child_process", lambda *a, **kw: ProcessResult(
+        success=True, exit_code=0, stdout="", stderr="", duration_seconds=1.0
+    ))
+    archive_calls = []
+    monkeypatch.setattr(mod, "archive_item", lambda it, dry_run: archive_calls.append(it) or True)
+    monkeypatch.setattr(mod, "_deliver_analysis_report", lambda *a, **kw: None)
+
+    result = _process_analysis_inner(item, slack, 0.0, dry_run=False)
+
+    assert result is True
+    assert len(archive_calls) == 1
+
+
+def test_process_analysis_inner_rate_limited_returns_false(tmp_path, monkeypatch):
+    """_process_analysis_inner() returns False when subprocess reports rate limiting."""
+    item = _make_analysis_item(tmp_path)
+    slack = MagicMock()
+
+    monkeypatch.setattr(mod, "run_child_process", lambda *a, **kw: ProcessResult(
+        success=False, exit_code=1, stdout="", stderr="rate limited",
+        duration_seconds=0.1, rate_limited=True,
+    ))
+
+    result = _process_analysis_inner(item, slack, 0.0, dry_run=False)
+
+    assert result is False
+
+
+def test_process_analysis_inner_failure_returns_false(tmp_path, monkeypatch):
+    """_process_analysis_inner() returns False when subprocess exits with non-zero code."""
+    item = _make_analysis_item(tmp_path)
+    slack = MagicMock()
+
+    monkeypatch.setattr(mod, "run_child_process", lambda *a, **kw: ProcessResult(
+        success=False, exit_code=1, stdout="", stderr="something went wrong",
+        duration_seconds=0.5, rate_limited=False,
+    ))
+
+    result = _process_analysis_inner(item, slack, 0.0, dry_run=False)
+
+    assert result is False
+
+
+def test_process_analysis_inner_uses_correct_agent_for_type(tmp_path, monkeypatch):
+    """_process_analysis_inner() selects the correct agent based on analysis type from metadata."""
+    item = _make_analysis_item(tmp_path, analysis_type="codebase-analysis")
+    slack = MagicMock()
+
+    monkeypatch.setattr(mod, "run_child_process", lambda *a, **kw: ProcessResult(
+        success=True, exit_code=0, stdout="", stderr="", duration_seconds=1.0
+    ))
+    monkeypatch.setattr(mod, "archive_item", lambda it, dry_run: True)
+    monkeypatch.setattr(mod, "_deliver_analysis_report", lambda *a, **kw: None)
+
+    _process_analysis_inner(item, slack, 0.0, dry_run=False)
+
+    # The Slack status message includes the resolved agent name
+    status_calls = [str(c) for c in slack.send_status.call_args_list]
+    assert any("code-explorer" in c for c in status_calls)
+
+
+# --- process_analysis_item() tests ---
+
+
+def test_process_analysis_item_dry_run_returns_true(tmp_path, monkeypatch):
+    """process_analysis_item() in dry-run mode returns True."""
+    item = _make_analysis_item(tmp_path)
+    monkeypatch.setattr(mod, "SlackNotifier", MagicMock)
+    monkeypatch.setattr(mod, "load_agent_identity", lambda cfg: MagicMock())
+    monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+    (tmp_path / "logs").mkdir()
+    monkeypatch.setattr(mod, "run_child_process", lambda *a, **kw: ProcessResult(
+        success=True, exit_code=0, stdout="", stderr="", duration_seconds=0.0
+    ))
+
+    result = process_analysis_item(item, dry_run=True)
+
+    assert result is True
+
+
+def test_process_analysis_item_clears_item_in_progress_after(tmp_path, monkeypatch):
+    """process_analysis_item() clears item_in_progress event in the finally block."""
+    item = _make_analysis_item(tmp_path)
+    event = threading.Event()
+
+    monkeypatch.setattr(mod, "SlackNotifier", MagicMock)
+    monkeypatch.setattr(mod, "load_agent_identity", lambda cfg: MagicMock())
+    monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+    (tmp_path / "logs").mkdir()
+    monkeypatch.setattr(mod, "run_child_process", lambda *a, **kw: ProcessResult(
+        success=True, exit_code=0, stdout="", stderr="", duration_seconds=0.0
+    ))
+
+    process_analysis_item(item, dry_run=True, item_in_progress=event)
+
+    assert not event.is_set()
+
+
+def test_process_analysis_item_records_completion_on_success(tmp_path, monkeypatch):
+    """process_analysis_item() records completion in the tracker when it returns True."""
+    item = _make_analysis_item(tmp_path)
+    tracker = CompletionTracker()
+
+    monkeypatch.setattr(mod, "SlackNotifier", MagicMock)
+    monkeypatch.setattr(mod, "load_agent_identity", lambda cfg: MagicMock())
+    monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+    (tmp_path / "logs").mkdir()
+    monkeypatch.setattr(mod, "run_child_process", lambda *a, **kw: ProcessResult(
+        success=True, exit_code=0, stdout="", stderr="", duration_seconds=0.0
+    ))
+
+    before = time.time()
+    process_analysis_item(item, dry_run=True, completion_tracker=tracker)
+
+    entries = tracker.completions_since(before)
+    assert len(entries) == 1
+    assert entries[0][1] == "analysis"
+
+
+def test_process_analysis_item_exception_returns_false(tmp_path, monkeypatch):
+    """process_analysis_item() returns False when _process_analysis_inner raises."""
+    item = _make_analysis_item(tmp_path)
+
+    monkeypatch.setattr(mod, "SlackNotifier", MagicMock)
+    monkeypatch.setattr(mod, "load_agent_identity", lambda cfg: MagicMock())
+    monkeypatch.setattr(mod, "LOGS_DIR", str(tmp_path / "logs"))
+    (tmp_path / "logs").mkdir()
+
+    def _raise(*a, **kw):
+        raise RuntimeError("simulated error")
+
+    monkeypatch.setattr(mod, "_process_analysis_inner", _raise)
+
+    result = process_analysis_item(item)
+
+    assert result is False
