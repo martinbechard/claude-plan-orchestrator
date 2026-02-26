@@ -797,3 +797,120 @@ class TestBacklogCreationThrottle:
             assert notifier._check_backlog_throttle("defect") is True
             assert notifier._check_backlog_throttle("feature") is False
 
+
+# ─── Verbose FILTER logging tests ────────────────────────────────
+
+
+class TestVerboseFilterLogging:
+    """Tests that verbose_log() is called with FILTER prefix for each filtering decision."""
+
+    def _make_notifier_with_identity(self, tmp_path):
+        config_file = tmp_path / "slack.yaml"
+        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
+        notifier = SlackNotifier(config_path=str(config_file))
+        identity = AgentIdentity(
+            project="test",
+            agents={
+                "pipeline": "Test-Pipeline",
+                "orchestrator": "Test-Orchestrator",
+                "intake": "Test-Intake",
+                "qa": "Test-QA",
+            },
+        )
+        notifier.set_identity(identity, AGENT_ROLE_ORCHESTRATOR)
+        return notifier
+
+    def _patch_routing(self, notifier):
+        notifier._get_channel_role = lambda ch: None
+        notifier._route_message_via_llm = lambda text: MagicMock()
+        notifier._execute_routed_action = lambda *a, **kw: None
+
+    def test_verbose_filter_skip_own_agent(self, tmp_path):
+        """verbose_log is called with FILTER prefix when a self-origin loop is detected."""
+        notifier = self._make_notifier_with_identity(tmp_path)
+        self._patch_routing(notifier)
+
+        ts = "700.0"
+        notifier._own_sent_ts.add(ts)
+        now = time.monotonic()
+        notifier._self_reply_window["C1"] = [now - 10] * MAX_SELF_REPLIES_PER_WINDOW
+
+        msg = {
+            "text": "Task completed successfully",
+            "user": "bot",
+            "ts": ts,
+            "_channel_name": "orchestrator-notifications",
+            "_channel_id": "C1",
+        }
+
+        with patch.object(mod, "verbose_log") as mock_vlog:
+            notifier._handle_polled_messages([msg])
+
+        mock_vlog.assert_called_once()
+        call_args = mock_vlog.call_args[0]
+        assert call_args[1] == "FILTER"
+        assert "Skip own-agent loop-detected" in call_args[0]
+
+    def test_verbose_filter_skip_addressed_to_others(self, tmp_path):
+        """verbose_log is called with FILTER prefix when a message is addressed only to other agents."""
+        notifier = self._make_notifier_with_identity(tmp_path)
+        self._patch_routing(notifier)
+
+        msg = {
+            "text": "@Other-Pipeline please check this issue",
+            "user": "human",
+            "ts": "701.0",
+            "_channel_name": "orchestrator-notifications",
+            "_channel_id": "C1",
+        }
+
+        with patch.object(mod, "verbose_log") as mock_vlog:
+            notifier._handle_polled_messages([msg])
+
+        mock_vlog.assert_called_once()
+        call_args = mock_vlog.call_args[0]
+        assert call_args[1] == "FILTER"
+        assert "Skip addressed-to-others" in call_args[0]
+
+    def test_verbose_filter_accept_addressed_to_us(self, tmp_path):
+        """verbose_log is called with FILTER prefix when a message is addressed to one of our agents."""
+        notifier = self._make_notifier_with_identity(tmp_path)
+        self._patch_routing(notifier)
+
+        msg = {
+            "text": "@Test-Orchestrator what is the current status?",
+            "user": "human",
+            "ts": "702.0",
+            "_channel_name": "orchestrator-notifications",
+            "_channel_id": "C1",
+        }
+
+        with patch.object(mod, "verbose_log") as mock_vlog:
+            notifier._handle_polled_messages([msg])
+
+        mock_vlog.assert_called_once()
+        call_args = mock_vlog.call_args[0]
+        assert call_args[1] == "FILTER"
+        assert "Accept addressed-to-us" in call_args[0]
+
+    def test_verbose_filter_accept_broadcast(self, tmp_path):
+        """verbose_log is called with FILTER prefix for broadcast messages with no @addressing."""
+        notifier = self._make_notifier_with_identity(tmp_path)
+        self._patch_routing(notifier)
+
+        msg = {
+            "text": "General status update for everyone",
+            "user": "human",
+            "ts": "703.0",
+            "_channel_name": "orchestrator-notifications",
+            "_channel_id": "C1",
+        }
+
+        with patch.object(mod, "verbose_log") as mock_vlog:
+            notifier._handle_polled_messages([msg])
+
+        mock_vlog.assert_called_once()
+        call_args = mock_vlog.call_args[0]
+        assert call_args[1] == "FILTER"
+        assert "Accept broadcast" in call_args[0]
+
