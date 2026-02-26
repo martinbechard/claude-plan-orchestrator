@@ -1,0 +1,121 @@
+meta:
+  name: 'Feature: Extract Slack Modules'
+  description: Extract the monolithic SlackNotifier class from plan-orchestrator.py
+    into four focused modules under langgraph_pipeline/slack/ (identity, notifier,
+    poller, suspension) with a facade for backward compatibility.
+  plan_doc: docs/plans/2026-02-26-03-extract-slack-modules-design.md
+  source_item: docs/feature-backlog/03-extract-slack-modules.md
+  created: '2026-02-26'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+  status: pending
+sections:
+- id: phase-1
+  name: Phase 1 - Identity and notifier modules
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Create slack/identity.py with AgentIdentity and signing logic
+    agent: coder
+    status: pending
+    description: 'Implement the work item: docs/feature-backlog/03-extract-slack-modules.md
+      Design doc: docs/plans/2026-02-26-03-extract-slack-modules-design.md
+
+      Extract AgentIdentity dataclass, load_agent_identity(), and signing/identity
+      methods (_sign_text, _as_role, set_identity, is_own_message detection) into
+      langgraph_pipeline/slack/identity.py. Add unit tests in
+      tests/langgraph/slack/test_identity.py with mocked Slack API. Run pytest to verify.
+
+      '
+  - id: '1.2'
+    name: Create slack/notifier.py with message posting and channel discovery
+    agent: coder
+    status: pending
+    description: 'Implement the work item: docs/feature-backlog/03-extract-slack-modules.md
+      Design doc: docs/plans/2026-02-26-03-extract-slack-modules-design.md
+
+      Extract message posting logic into langgraph_pipeline/slack/notifier.py: __init__
+      config loading, _post_message, _post_message_get_ts, _build_status_block,
+      _truncate_for_slack, _get_notifications_channel_id, get_type_channel_id,
+      send_status, send_defect, send_idea, process_agent_messages, _should_notify,
+      _ensure_socket_mode. Port the MESSAGE_ROUTING_PROMPT with A5 classification hint.
+      Add unit tests in tests/langgraph/slack/test_notifier.py. Run pytest to verify.
+
+      '
+- id: phase-2
+  name: Phase 2 - Poller and suspension modules
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Create slack/poller.py with polling and loop prevention layers
+    agent: coder
+    status: pending
+    description: 'Implement the work item: docs/feature-backlog/03-extract-slack-modules.md
+      Design doc: docs/plans/2026-02-26-03-extract-slack-modules-design.md
+
+      Extract inbound polling into langgraph_pipeline/slack/poller.py: poll_messages,
+      _discover_channels, _get_channel_role, _load_last_read_all, _save_last_read_all,
+      start_background_polling, stop_background_polling, _prune_message_tracking,
+      _handle_polled_messages, _route_message_via_llm, _execute_routed_action,
+      create_backlog_item, handle_control_command. Port all 4 safety layers:
+      A1 chain detection (_is_chain_loop_artifact, _load/_save_intake_history),
+      A2 self-reply window, A3 BOT_NOTIFICATION_PATTERN regex, A4 intake rate limiter.
+      Add unit tests in tests/langgraph/slack/test_poller.py. Run pytest to verify.
+
+      '
+  - id: '2.2'
+    name: Create slack/suspension.py with question and intake flows
+    agent: coder
+    status: pending
+    description: 'Implement the work item: docs/feature-backlog/03-extract-slack-modules.md
+      Design doc: docs/plans/2026-02-26-03-extract-slack-modules-design.md
+
+      Extract human-in-the-loop logic into langgraph_pipeline/slack/suspension.py:
+      IntakeState dataclass, send_question, post_suspension_question,
+      check_suspension_reply, _check_all_suspensions, answer_question,
+      _answer_question_inner, _run_intake_analysis, _run_intake_analysis_inner,
+      _parse_intake_response. Add unit tests in tests/langgraph/slack/test_suspension.py.
+      Run pytest to verify.
+
+      '
+- id: phase-3
+  name: Phase 3 - Facade and script migration
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Create SlackNotifier facade in slack/__init__.py
+    agent: coder
+    status: pending
+    description: 'Implement the work item: docs/feature-backlog/03-extract-slack-modules.md
+      Design doc: docs/plans/2026-02-26-03-extract-slack-modules-design.md
+
+      Replace the empty langgraph_pipeline/slack/__init__.py with a SlackNotifier
+      facade class that delegates to the four submodule classes (identity, notifier,
+      poller, suspension). The facade must expose the same public API as the original
+      SlackNotifier so existing scripts work without changes. Run pytest to verify
+      all slack module tests still pass.
+
+      '
+  - id: '3.2'
+    name: Migrate plan-orchestrator.py and auto-pipeline.py to use slack facade
+    agent: coder
+    status: pending
+    description: 'Implement the work item: docs/feature-backlog/03-extract-slack-modules.md
+      Design doc: docs/plans/2026-02-26-03-extract-slack-modules-design.md
+
+      Update plan-orchestrator.py to import SlackNotifier from langgraph_pipeline.slack
+      instead of defining it inline. Remove the original SlackNotifier class, IntakeState,
+      AgentIdentity, and related constants from plan-orchestrator.py. Update
+      auto-pipeline.py to import from langgraph_pipeline.slack, removing the
+      importlib.util hack. Verify no Slack-related code remains in the scripts except
+      import statements. Run all existing tests to verify no regressions.
+
+      '
