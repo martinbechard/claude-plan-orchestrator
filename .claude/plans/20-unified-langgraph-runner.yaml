@@ -55,7 +55,7 @@ sections:
   - id: '2.1'
     name: Create scripts/run-pipeline.py with argparse CLI and scan loop
     agent: coder
-    status: pending
+    status: in_progress
     description: "Implement the work item: docs/feature-backlog/20-unified-langgraph-runner.md\
       \ Design doc: docs/plans/2026-02-26-20-unified-langgraph-runner-design.md\n\
       Create scripts/run-pipeline.py with: (1) argparse CLI supporting --budget-cap,\
@@ -70,6 +70,8 @@ sections:
       \ 1 = error, 2 = budget exhausted. (8) Load config via shared/config.py, conditional\
       \ tracing via\n    shared/langsmith.py, conditional Slack via slack/__init__.py.\n\
       \nRun pytest to verify no regressions."
+    attempts: 1
+    last_attempt: '2026-02-26T18:52:55.139134'
 - id: phase-3
   name: Phase 3 - Unit tests for the runner
   status: pending
