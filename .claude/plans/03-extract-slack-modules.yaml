@@ -143,8 +143,12 @@ sections:
       all slack module tests still pass.
 
       '
-    attempts: 1
-    last_attempt: '2026-02-26T01:32:09.029753'
+    attempts: 2
+    last_attempt: '2026-02-26T01:40:35.383979'
+    model_used: sonnet
+    validation_findings: 'Validator ''validator'' failed to execute: No status file
+      written by Claude'
+    validation_attempts: 1
   - id: '3.2'
     name: Migrate plan-orchestrator.py and auto-pipeline.py to use slack facade
     agent: coder
