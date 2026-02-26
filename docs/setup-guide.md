@@ -180,6 +180,77 @@ Identity enables:
 
 Skip this step if the defaults work for your project.
 
+### LangSmith Observability (optional)
+
+LangSmith traces every pipeline and executor graph node, giving you run history,
+error drill-down, and token cost breakdowns. The pipeline works without it — skip
+this section if observability is not a priority.
+
+**Create an account and API key**
+
+1. Sign up at smith.langchain.com
+2. Go to Settings > API Keys and create a new key
+3. Copy the key — it starts with `ls__`
+
+**Configure the orchestrator**
+
+Environment variable (recommended — keeps secrets out of config files):
+
+```bash
+export LANGCHAIN_API_KEY=ls__your_api_key_here
+```
+
+Or add a `langsmith` section to `.claude/orchestrator-config.yaml` for local development:
+
+```yaml
+langsmith:
+  api_key: ls__your_api_key_here
+  project: my-project-name      # optional; defaults to "claude-plan-orchestrator"
+  endpoint: https://api.smith.langchain.com  # optional; for self-hosted LangSmith
+```
+
+When both are set, the environment variable takes precedence. Prefer env vars for CI
+and shared machines. Never commit an API key to a tracked config file.
+
+If no API key is found at startup, tracing is silently disabled and a single warning
+is logged. All pipeline functionality continues normally.
+
+**Navigate the LangSmith dashboard**
+
+1. Open smith.langchain.com and select your project
+2. The Runs tab lists every pipeline and executor run, newest first
+3. Click any run to open the trace waterfall — each node is a span showing its timing,
+   input state, and output state
+4. To investigate a failed task: find the run where status shows failed, click into
+   the executor subgraph, and expand the node that errored — the full Claude CLI
+   output appears in the output pane
+
+**Compare two runs to diagnose a regression**
+
+1. In the Runs tab, apply a tag filter: `item_slug:feature-17` (or whichever item slug)
+2. Locate the last passing run and the first failing run
+3. Open the failing run and note the input state of the diverging node
+4. Open the passing run's same node and compare input states
+5. Differences in the state snapshot identify what changed between runs
+
+**Track token costs by node, task, and plan**
+
+Every `task_runner` and `validator` node invocation emits these metadata fields:
+
+| Field | Description |
+|-------|-------------|
+| total_cost_usd | USD cost for that Claude CLI call |
+| input_tokens | Prompt tokens consumed |
+| output_tokens | Completion tokens generated |
+| cache_read_tokens | Tokens served from prompt cache |
+| cache_creation_tokens | Tokens written to prompt cache |
+| model | Claude model invoked |
+| duration_ms | Wall-clock time for the call |
+
+To aggregate costs for a plan: filter by `item_slug` tag, then sum `total_cost_usd`
+across all executor nodes. To compare model costs, group by the `model` metadata
+field in the Runs table view.
+
 ## 5. Create backlog directories
 
 ```bash
