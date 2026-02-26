@@ -15,6 +15,7 @@ from langgraph_pipeline.shared.paths import (
     COMPLETED_FEATURES_DIR,
     DEFECT_DIR,
     FEATURE_DIR,
+    LANGGRAPH_PID_FILE_PATH,
     ORCHESTRATOR_CONFIG_PATH,
     PID_FILE_PATH,
     PLANS_DIR,
@@ -70,6 +71,20 @@ class TestPidFilePath:
 
     def test_expected_value(self):
         assert PID_FILE_PATH == ".claude/plans/.pipeline.pid"
+
+
+class TestLanggraphPidFilePath:
+    def test_is_string(self):
+        assert isinstance(LANGGRAPH_PID_FILE_PATH, str)
+
+    def test_under_plans_dir(self):
+        assert LANGGRAPH_PID_FILE_PATH.startswith(PLANS_DIR)
+
+    def test_expected_value(self):
+        assert LANGGRAPH_PID_FILE_PATH == ".claude/plans/.lg-pipeline.pid"
+
+    def test_distinct_from_pipeline_pid(self):
+        assert LANGGRAPH_PID_FILE_PATH != PID_FILE_PATH
 
 
 class TestBacklogDirs:

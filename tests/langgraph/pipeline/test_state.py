@@ -100,6 +100,10 @@ class TestPipelineStateKeys:
         assert "rate_limited" in hints
         assert "rate_limit_reset" in hints
 
+    def test_budget_enforcement_field_present(self):
+        hints = self._hints()
+        assert "budget_cap_usd" in hints
+
     def test_cost_tracking_fields_present(self):
         hints = self._hints()
         assert "session_cost_usd" in hints
