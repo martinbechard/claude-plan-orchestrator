@@ -567,6 +567,26 @@ class TestBotNotificationPattern:
         text = "Received your feature request. Analyzing..."
         assert BOT_NOTIFICATION_PATTERN.search(text) is not None
 
+    def test_matches_completed_notification(self):
+        """Matches ':white_check_mark: *Completed:* defect: ...' format."""
+        text = ":white_check_mark: *Completed:* defect: 2 Insufficient Context"
+        assert BOT_NOTIFICATION_PATTERN.search(text) is not None
+
+    def test_matches_pipeline_processing(self):
+        """Matches ':large_blue_circle: *Pipeline: processing*' format."""
+        text = ":large_blue_circle: *Pipeline: processing* defect: 3 There Is A Self Skip"
+        assert BOT_NOTIFICATION_PATTERN.search(text) is not None
+
+    def test_matches_pipeline_completed(self):
+        """Matches ':white_check_mark: *Pipeline: completed*' format."""
+        text = ":white_check_mark: *Pipeline: completed* defect: 2 Insufficient Context"
+        assert BOT_NOTIFICATION_PATTERN.search(text) is not None
+
+    def test_matches_pipeline_failed(self):
+        """Matches ':x: *Pipeline: failed*' format."""
+        text = ":x: *Pipeline: failed* defect: 5 Some Broken Thing"
+        assert BOT_NOTIFICATION_PATTERN.search(text) is not None
+
     def test_no_match_on_normal_message(self):
         """Does NOT match a normal user message."""
         text = "The login button is broken on mobile"

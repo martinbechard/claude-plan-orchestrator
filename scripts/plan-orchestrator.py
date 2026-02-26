@@ -147,6 +147,9 @@ BOT_NOTIFICATION_PATTERN = re.compile(
     r"(?::white_check_mark:|:large_blue_circle:|:x:|:warning:|:question:)\s*"
     r"\*?(?:Defect|Feature)\s+(?:received|created)\*?"
     r"|"
+    r"(?::white_check_mark:|:large_blue_circle:|:x:|:warning:)\s*"
+    r"\*?(?:Completed:|Pipeline:\s*(?:processing|completed|failed|skipped))\*?"
+    r"|"
     r"Received\s+your\s+(?:defect|feature)\s+request"
     r")",
     re.IGNORECASE,
