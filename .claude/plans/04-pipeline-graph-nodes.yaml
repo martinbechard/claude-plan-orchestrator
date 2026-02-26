@@ -52,7 +52,7 @@ sections:
   - id: '2.1'
     name: Implement scan_backlog and intake_analyze nodes
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/04-pipeline-graph-nodes.md
       Design doc: docs/plans/2026-02-26-04-pipeline-graph-nodes-design.md
 
@@ -63,6 +63,8 @@ sections:
       for both nodes with mocked Claude CLI calls. Run pytest to verify.
 
       '
+    attempts: 1
+    last_attempt: '2026-02-26T02:52:28.901018'
   - id: '2.2'
     name: Implement create_plan and execute_plan nodes
     agent: coder
