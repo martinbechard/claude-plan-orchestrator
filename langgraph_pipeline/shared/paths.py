@@ -16,6 +16,7 @@ PLANS_DIR = ".claude/plans"
 STATUS_FILE_PATH = ".claude/plans/task-status.json"
 TASK_LOG_DIR = Path(".claude/plans/logs")
 PID_FILE_PATH = ".claude/plans/.pipeline.pid"
+LANGGRAPH_PID_FILE_PATH = ".claude/plans/.lg-pipeline.pid"
 
 # ─── Backlog directories ───────────────────────────────────────────────────────
 

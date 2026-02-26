@@ -62,6 +62,9 @@ class PipelineState(TypedDict):
     rate_limited: bool
     rate_limit_reset: Optional[str]  # ISO-8601 string when rate limit resets
 
+    # ── Budget enforcement (set by runner, checked after each graph.invoke()) ──
+    budget_cap_usd: Optional[float]  # None means no cap
+
     # ── Cost and token tracking (updated by execute_plan) ─────────────────────
     session_cost_usd: float
     session_input_tokens: int
