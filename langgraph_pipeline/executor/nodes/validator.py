@@ -20,6 +20,7 @@ from typing import Optional
 import yaml
 
 from langgraph_pipeline.executor.state import TaskState, ValidationVerdict
+from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.claude_cli import (
     OutputCollector,
     stream_json_output,
@@ -326,7 +327,9 @@ def validate_task(state: TaskState) -> dict:
     print(f"[validate_task] Running validator {validator_agent!r} for task {task_id!r}")
 
     _clear_status_file()
+    _exec_start = time.time()
     cli_success, result_capture = _run_claude(full_prompt, model_cli_name)
+    _duration_ms = int((time.time() - _exec_start) * 1000)
 
     status_dict = _read_status_file()
     verdict = _parse_verdict(status_dict, cli_success)
@@ -347,6 +350,18 @@ def validate_task(state: TaskState) -> dict:
     usage = result_capture.get("usage", {})
     input_tokens = int(usage.get("input_tokens", 0))
     output_tokens = int(usage.get("output_tokens", 0))
+
+    add_trace_metadata({
+        "node_name": "validate_task",
+        "graph_level": "executor",
+        "task_id": task_id,
+        "model": effective_model,
+        "total_cost_usd": cost_usd,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "duration_ms": _duration_ms,
+        "verdict": verdict,
+    })
 
     return {
         "last_validation_verdict": verdict,

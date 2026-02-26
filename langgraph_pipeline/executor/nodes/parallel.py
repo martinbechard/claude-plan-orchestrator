@@ -30,6 +30,7 @@ from langgraph.types import Send
 
 from langgraph_pipeline.executor.circuit_breaker import record_failure, reset_failures
 from langgraph_pipeline.executor.state import TaskResult, TaskState
+from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.claude_cli import (
     OutputCollector,
     stream_json_output,
@@ -495,7 +496,9 @@ def execute_parallel_task(state: TaskState) -> dict:
         f"with model {model_cli_name!r}"
     )
 
+    _exec_start = time.time()
     cli_success, result_capture = _run_claude_in_worktree(prompt, model_cli_name, worktree_path)
+    _duration_ms = int((time.time() - _exec_start) * 1000)
 
     cost_usd = float(result_capture.get("total_cost_usd", 0.0))
     usage = result_capture.get("usage", {})
@@ -532,6 +535,17 @@ def execute_parallel_task(state: TaskState) -> dict:
     new_failures = reset_failures() if outcome == _OUTCOME_COMPLETED else record_failure(
         state.get("consecutive_failures") or 0
     )
+
+    add_trace_metadata({
+        "node_name": "execute_parallel_task",
+        "graph_level": "executor",
+        "task_id": task_id,
+        "model": effective_model,
+        "total_cost_usd": cost_usd,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "duration_ms": _duration_ms,
+    })
 
     return {
         "task_results": [
@@ -584,5 +598,12 @@ def fan_in(state: TaskState) -> dict:
     if completed_ids:
         commit_msg = f"plan: Parallel tasks completed: {', '.join(completed_ids)}"
         git_commit_files([plan_path], commit_msg)
+
+    add_trace_metadata({
+        "node_name": "fan_in",
+        "graph_level": "executor",
+        "completed_task_count": len(completed_ids),
+        "total_task_count": len(task_results),
+    })
 
     return {"plan_data": fresh_plan_data}

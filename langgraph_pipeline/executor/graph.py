@@ -52,6 +52,7 @@ from langgraph_pipeline.executor.nodes.task_runner import execute_task
 from langgraph_pipeline.executor.nodes.task_selector import find_next_task
 from langgraph_pipeline.executor.nodes.validator import validate_task
 from langgraph_pipeline.executor.state import TaskState
+from langgraph_pipeline.shared.langsmith import configure_tracing
 
 # ─── Node name constants ──────────────────────────────────────────────────────
 # These must match the string names registered with add_node() below.
@@ -138,6 +139,7 @@ def build_executor_graph() -> StateGraph:
     Returns:
         Uncompiled StateGraph[TaskState] with all nodes and edges wired.
     """
+    configure_tracing()
     graph = StateGraph(TaskState)
 
     graph.add_node(NODE_FIND_NEXT_TASK, find_next_task)

@@ -23,6 +23,7 @@ from langgraph.types import interrupt
 
 from langgraph_pipeline.executor.circuit_breaker import record_failure, reset_failures
 from langgraph_pipeline.executor.state import TaskResult, TaskState
+from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.claude_cli import (
     OutputCollector,
     stream_json_output,
@@ -410,7 +411,9 @@ def execute_task(state: TaskState) -> dict:
     print(f"[execute_task] Running task {task_id!r} with model {model_cli_name!r}")
 
     # Execute Claude CLI
+    _exec_start = time.time()
     cli_success, result_capture, _stdout, _stderr = _run_claude(prompt, model_cli_name)
+    _duration_ms = int((time.time() - _exec_start) * 1000)
 
     # Parse usage data
     cost_usd = float(result_capture.get("total_cost_usd", 0.0))
@@ -476,6 +479,17 @@ def execute_task(state: TaskState) -> dict:
         "plan_output_tokens": (state.get("plan_output_tokens") or 0) + output_tokens,
         "consecutive_failures": new_failures,
     }
+
+    add_trace_metadata({
+        "node_name": "execute_task",
+        "graph_level": "executor",
+        "task_id": task_id,
+        "model": effective_model,
+        "total_cost_usd": cost_usd,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "duration_ms": _duration_ms,
+    })
 
     # Interrupt the graph for Slack-based human suspension (after state is built)
     if outcome == _STATUS_SUSPENDED:

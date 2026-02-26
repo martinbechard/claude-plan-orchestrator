@@ -18,6 +18,7 @@ import yaml
 
 from langgraph_pipeline.executor.circuit_breaker import is_circuit_open
 from langgraph_pipeline.executor.state import TaskState
+from langgraph_pipeline.shared.langsmith import add_trace_metadata
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -160,4 +161,10 @@ def find_next_task(state: TaskState) -> dict:
         return {"plan_data": plan_data, "current_task_id": None}
 
     print(f"[find_next_task] Selected task: {eligible['id']} - {eligible.get('name', '')}")
+    add_trace_metadata({
+        "node_name": "find_next_task",
+        "graph_level": "executor",
+        "current_task_id": eligible["id"],
+        "task_name": eligible.get("name", ""),
+    })
     return {"plan_data": plan_data, "current_task_id": eligible["id"]}
