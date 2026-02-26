@@ -1,6 +1,6 @@
 # there is a self-skip check that was based on the name of the channel. The idea w
 
-## Status: Open
+## Status: Resolved
 
 ## Priority: Medium
 
