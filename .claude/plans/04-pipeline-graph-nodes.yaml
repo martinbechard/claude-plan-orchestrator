@@ -25,16 +25,18 @@ sections:
   - id: '1.1'
     name: Create PipelineState schema and edge routing functions
     agent: coder
-    status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/04-pipeline-graph-nodes.md
+    status: in_progress
+    description: 'Implement the work item: docs/feature-backlog/04-pipeline-graph-nodes.md
       Design doc: docs/plans/2026-02-26-04-pipeline-graph-nodes-design.md
 
-      Create langgraph_pipeline/pipeline/state.py with PipelineState TypedDict
-      and langgraph_pipeline/pipeline/edges.py with conditional edge functions
-      (has_items, is_defect, verify_result, cycles_exhausted). Add unit tests
-      in tests/langgraph/pipeline/test_state.py and test_edges.py. Run pytest
-      to verify.
+      Create langgraph_pipeline/pipeline/state.py with PipelineState TypedDict and
+      langgraph_pipeline/pipeline/edges.py with conditional edge functions (has_items,
+      is_defect, verify_result, cycles_exhausted). Add unit tests in tests/langgraph/pipeline/test_state.py
+      and test_edges.py. Run pytest to verify.
+
+      '
+    attempts: 1
+    last_attempt: '2026-02-26T02:36:57.180324'
 - id: phase-2
   name: Phase 2 - Node implementations
   status: pending
@@ -43,42 +45,44 @@ sections:
     name: Implement scan_backlog and intake_analyze nodes
     agent: coder
     status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/04-pipeline-graph-nodes.md
+    description: 'Implement the work item: docs/feature-backlog/04-pipeline-graph-nodes.md
       Design doc: docs/plans/2026-02-26-04-pipeline-graph-nodes-design.md
 
-      Create langgraph_pipeline/pipeline/nodes/ package with scan.py
-      (scan_backlog node: scan backlog dirs, prioritize defects, check
-      in-progress plans) and intake.py (intake_analyze node: verify defect
-      symptoms, 5-Whys for analyses, disk-persisted throttle, RAG dedup query,
-      clarity gate). Add unit tests in tests/langgraph/pipeline/nodes/ for both
-      nodes with mocked Claude CLI calls. Run pytest to verify.
+      Create langgraph_pipeline/pipeline/nodes/ package with scan.py (scan_backlog
+      node: scan backlog dirs, prioritize defects, check in-progress plans) and intake.py
+      (intake_analyze node: verify defect symptoms, 5-Whys for analyses, disk-persisted
+      throttle, RAG dedup query, clarity gate). Add unit tests in tests/langgraph/pipeline/nodes/
+      for both nodes with mocked Claude CLI calls. Run pytest to verify.
+
+      '
   - id: '2.2'
     name: Implement create_plan and execute_plan nodes
     agent: coder
     status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/04-pipeline-graph-nodes.md
+    description: 'Implement the work item: docs/feature-backlog/04-pipeline-graph-nodes.md
       Design doc: docs/plans/2026-02-26-04-pipeline-graph-nodes-design.md
 
-      Create langgraph_pipeline/pipeline/nodes/plan_creation.py (create_plan
-      node: spawn Claude planner, write YAML plan, optionally generate design
-      doc) and execute_plan.py (subprocess bridge: spawn plan-orchestrator.py,
-      capture exit code and cost/token data). Add unit tests for both nodes
-      with mocked subprocesses. Run pytest to verify.
+      Create langgraph_pipeline/pipeline/nodes/plan_creation.py (create_plan node:
+      spawn Claude planner, write YAML plan, optionally generate design doc) and execute_plan.py
+      (subprocess bridge: spawn plan-orchestrator.py, capture exit code and cost/token
+      data). Add unit tests for both nodes with mocked subprocesses. Run pytest to
+      verify.
+
+      '
   - id: '2.3'
     name: Implement verify_symptoms and archive nodes
     agent: coder
     status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/04-pipeline-graph-nodes.md
+    description: 'Implement the work item: docs/feature-backlog/04-pipeline-graph-nodes.md
       Design doc: docs/plans/2026-02-26-04-pipeline-graph-nodes-design.md
 
-      Create langgraph_pipeline/pipeline/nodes/verification.py (verify_symptoms
-      node: run verification for defects, parse PASS/FAIL, append to
-      verification_history, increment cycle) and archival.py (archive node:
-      move to completed-backlog, clean up plan YAML, send Slack notification).
-      Add unit tests for both nodes. Run pytest to verify.
+      Create langgraph_pipeline/pipeline/nodes/verification.py (verify_symptoms node:
+      run verification for defects, parse PASS/FAIL, append to verification_history,
+      increment cycle) and archival.py (archive node: move to completed-backlog, clean
+      up plan YAML, send Slack notification). Add unit tests for both nodes. Run pytest
+      to verify.
+
+      '
 - id: phase-3
   name: Phase 3 - Graph assembly and entry point
   status: pending
@@ -87,13 +91,14 @@ sections:
     name: Assemble full pipeline StateGraph with SqliteSaver
     agent: coder
     status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/04-pipeline-graph-nodes.md
+    description: 'Implement the work item: docs/feature-backlog/04-pipeline-graph-nodes.md
       Design doc: docs/plans/2026-02-26-04-pipeline-graph-nodes-design.md
 
-      Replace the hello-world graph in langgraph_pipeline/pipeline/graph.py
-      with the full pipeline StateGraph wiring all nodes and conditional edges.
-      Configure SqliteSaver with .claude/pipeline-state.db and thread_id
-      "pipeline-main". Update pipeline/__init__.py exports. Add integration
-      test in tests/langgraph/pipeline/test_graph_integration.py that runs the
-      full graph on a test backlog item with mocked nodes. Run pytest to verify.
+      Replace the hello-world graph in langgraph_pipeline/pipeline/graph.py with the
+      full pipeline StateGraph wiring all nodes and conditional edges. Configure SqliteSaver
+      with .claude/pipeline-state.db and thread_id "pipeline-main". Update pipeline/__init__.py
+      exports. Add integration test in tests/langgraph/pipeline/test_graph_integration.py
+      that runs the full graph on a test backlog item with mocked nodes. Run pytest
+      to verify.
+
+      '
