@@ -17,7 +17,8 @@ The Plan Orchestrator executes structured YAML plans through Claude Code, provid
 - **Defect Verification Loop**: Independent symptom verification with verify-then-fix retry cycles
 - **Configurable Commands**: Build, test, and dev-server commands configurable per project
 - **Agent Framework**: 11 specialized agents (coder, frontend-coder, code-reviewer, systems-designer, ux-designer, ux-reviewer, spec-verifier, qa-auditor, planner, issue-verifier, validator) with YAML frontmatter definitions
-- **Slack Integration**: Real-time notifications, inbound message processing, LLM-powered question answering, 5 Whys intake analysis, and cross-instance collaboration via Slack
+- **Slack Integration**: Real-time notifications, inbound message processing, LLM-powered question answering, 5 Whys intake analysis, and cross-instance collaboration via Slack. Multi-layer loop prevention (chain detection, self-reply gating, notification pattern filter, global rate limiter) prevents recursive feedback spirals
+- **RAG Deduplication**: ChromaDB-based semantic search over the backlog detects duplicate defect/feature requests and consolidates them into existing items instead of creating duplicates
 - **Budget Management**: Token usage tracking, API-equivalent cost estimates, and quota-aware execution with configurable limits
 - **Model Escalation**: Tiered model selection (haiku -> sonnet -> opus) with automatic escalation after consecutive failures
 - **Per-Task Validation**: Independent validator agent that runs after each task with PASS/WARN/FAIL verdicts and retry logic
@@ -73,6 +74,7 @@ See [docs/narrative/](docs/narrative/) for the full development history and desi
 - Optional: `watchdog` (`pip install watchdog`) for auto-pipeline
 - Optional: `slack_sdk` (`pip install slack_sdk`) for Slack integration
 - Optional: `requests` (`pip install requests`) for API calls
+- Optional: `chromadb` (`pip install chromadb`) for RAG-based intake deduplication
 
 ## Installation
 
@@ -468,6 +470,14 @@ Find your existing tokens in the other project's `.claude/slack.local.yaml`. The
 
 The background polling thread checks for new messages every 15 seconds, independent of task execution.
 
+**Loop prevention** uses four redundant layers to prevent the bot from re-processing its own notifications in a feedback spiral:
+1. **Chain detection:** On-disk history of recently created items; messages referencing known item numbers are skipped
+2. **Self-reply gating:** Max 1 self-origin message accepted per 5-minute window per channel
+3. **Notification pattern filter:** Regex skips messages matching bot notification formats before LLM routing
+4. **Global intake rate limiter:** Hard cap of 10 intakes per 5 minutes across all channels
+
+**RAG deduplication** (requires `chromadb`): Incoming defect/feature requests are compared against a ChromaDB vector index of existing backlog items. When a high-similarity match is found, an LLM confirms whether it is a true duplicate. Confirmed duplicates are consolidated into the existing item (new information appended) instead of creating a new file.
+
 ### Cross-Instance Collaboration via Slack
 
 Multiple orchestrator instances running in different projects can collaborate through shared Slack channels. By inviting other instances to listen to your `orchestrator-*` channels, they gain the ability to:
@@ -715,6 +725,7 @@ your-project/
 │   ├── commands/
 │   │   └── implement.md            # /implement command
 │   ├── slack.local.yaml             # Slack channel configuration (user-created)
+│   ├── chroma/                      # ChromaDB vector store for RAG deduplication
 │   ├── orchestrator-config.yaml     # Project-specific config
 │   ├── subagent-status/            # Parallel task heartbeats
 │   └── agent-claims.json           # File claim coordination

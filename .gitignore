@@ -21,6 +21,8 @@ venv/
 .claude/agent-claims.json
 .claude/slack.local.yaml
 .claude/slack-*.json
+.claude/chroma/
+.claude/plans/.intake-history.json
 
 # Runtime pipeline logs (generated at runtime, not committed)
 logs/

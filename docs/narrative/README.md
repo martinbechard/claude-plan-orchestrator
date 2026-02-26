@@ -51,6 +51,7 @@ decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the 
 | [14-cognitive-specialization.md](14-cognitive-specialization.md) | Model audit across all agents, Opus/Sonnet design loop, agent teams vs subagents trade-offs, Slack suspension pattern |
 | [15-the-loop-that-wouldnt-stop.md](15-the-loop-that-wouldnt-stop.md) | Infinite loop fix, force_pipeline_exit(), mid-task stop semaphore, cross-project Slack collaboration, agent identity protocol |
 | [16-failure-awareness.md](16-failure-awareness.md) | Sandbox two-axis permission fix, plan-level deadlock detection, cross-instance keyword misclassification, root cause in Slack notifications, cross-project reporting docs, single-command onboarding |
+| [17-seventeen-thousand-defects.md](17-seventeen-thousand-defects.md) | Slack notification feedback loop producing 17k recursive defects, four-layer loop prevention, ChromaDB RAG deduplication, the defect that predicted itself |
 
 ## Timeline at a Glance
 
@@ -91,7 +92,9 @@ decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the 
 2026-02-21  Cross-project Slack reporting documented (consumer-side setup walkthrough)
 2026-02-21  Single-command onboarding for existing Slack workspaces documented
 2026-02-24  Sandbox permission model fix: --permission-mode acceptEdits (two-axis permissions)
+2026-02-25  Slack feedback loop fix: 4-layer loop prevention, 132 bogus files cleaned (1.8.0)
+2026-02-25  ChromaDB RAG deduplication for intake (1.8.0)
 
-Current: ~5800 lines (orchestrator) + ~3200 lines (auto-pipeline)
+Current: ~6100 lines (orchestrator) + ~3200 lines (auto-pipeline)
 Plans executed: ~54 completed features/defects
 ```
