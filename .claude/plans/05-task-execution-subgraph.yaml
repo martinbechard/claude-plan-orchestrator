@@ -26,16 +26,19 @@ sections:
   - id: '1.1'
     name: Create TaskState schema, circuit breaker, and escalation modules
     agent: coder
-    status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
+    status: in_progress
+    description: 'Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
       Design doc: docs/plans/2026-02-26-05-task-execution-subgraph-design.md
 
-      Create langgraph_pipeline/executor/state.py with TaskState TypedDict,
-      executor/circuit_breaker.py with consecutive failure tracking and threshold
-      check, and executor/escalation.py with EscalationConfig and model progression
-      (haiku -> sonnet -> opus). Add unit tests in tests/langgraph/executor/ for
-      state, circuit_breaker, and escalation. Run pytest to verify.
+      Create langgraph_pipeline/executor/state.py with TaskState TypedDict, executor/circuit_breaker.py
+      with consecutive failure tracking and threshold check, and executor/escalation.py
+      with EscalationConfig and model progression (haiku -> sonnet -> opus). Add unit
+      tests in tests/langgraph/executor/ for state, circuit_breaker, and escalation.
+      Run pytest to verify.
+
+      '
+    attempts: 1
+    last_attempt: '2026-02-26T04:46:08.340649'
 - id: phase-2
   name: Phase 2 - Core node implementations
   status: pending
@@ -44,44 +47,45 @@ sections:
     name: Implement task_selector node (find_next_task)
     agent: coder
     status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
+    description: 'Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
       Design doc: docs/plans/2026-02-26-05-task-execution-subgraph-design.md
 
       Create langgraph_pipeline/executor/nodes/task_selector.py with find_next_task
-      node that loads plan YAML, finds next pending task, checks dependency
-      satisfaction, budget guard, circuit breaker, and deadlock detection. Create
-      executor/edges.py with conditional edge functions (all_done, parallel_check,
-      retry_check, circuit_check). Add unit tests in
-      tests/langgraph/executor/nodes/test_task_selector.py and
-      tests/langgraph/executor/test_edges.py. Run pytest to verify.
+      node that loads plan YAML, finds next pending task, checks dependency satisfaction,
+      budget guard, circuit breaker, and deadlock detection. Create executor/edges.py
+      with conditional edge functions (all_done, parallel_check, retry_check, circuit_check).
+      Add unit tests in tests/langgraph/executor/nodes/test_task_selector.py and tests/langgraph/executor/test_edges.py.
+      Run pytest to verify.
+
+      '
   - id: '2.2'
     name: Implement task_runner node (execute_task)
     agent: coder
     status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
+    description: 'Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
       Design doc: docs/plans/2026-02-26-05-task-execution-subgraph-design.md
 
-      Create langgraph_pipeline/executor/nodes/task_runner.py with execute_task
-      node that loads agent definitions, builds prompts, spawns Claude CLI via
-      shared/claude_cli.py, parses token usage, updates plan YAML task status,
-      git commits on success, and handles Slack suspension via interrupt(). Add
-      unit tests in tests/langgraph/executor/nodes/test_task_runner.py with mocked
-      Claude CLI. Run pytest to verify.
+      Create langgraph_pipeline/executor/nodes/task_runner.py with execute_task node
+      that loads agent definitions, builds prompts, spawns Claude CLI via shared/claude_cli.py,
+      parses token usage, updates plan YAML task status, git commits on success, and
+      handles Slack suspension via interrupt(). Add unit tests in tests/langgraph/executor/nodes/test_task_runner.py
+      with mocked Claude CLI. Run pytest to verify.
+
+      '
   - id: '2.3'
     name: Implement validator node (validate_task)
     agent: coder
     status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
+    description: 'Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
       Design doc: docs/plans/2026-02-26-05-task-execution-subgraph-design.md
 
       Create langgraph_pipeline/executor/nodes/validator.py with validate_task node
-      that runs validation if enabled in plan config, spawns Claude CLI with
-      validator agent, parses PASS/WARN/FAIL verdict, and increments task_attempt
-      on failure. Add unit tests in tests/langgraph/executor/nodes/test_validator.py.
-      Run pytest to verify.
+      that runs validation if enabled in plan config, spawns Claude CLI with validator
+      agent, parses PASS/WARN/FAIL verdict, and increments task_attempt on failure.
+      Add unit tests in tests/langgraph/executor/nodes/test_validator.py. Run pytest
+      to verify.
+
+      '
 - id: phase-3
   name: Phase 3 - Parallel execution with worktrees
   status: pending
@@ -90,17 +94,17 @@ sections:
     name: Implement parallel fan_out and fan_in nodes
     agent: coder
     status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
+    description: 'Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
       Design doc: docs/plans/2026-02-26-05-task-execution-subgraph-design.md
 
       Create langgraph_pipeline/executor/nodes/parallel.py with fan_out and fan_in
-      nodes. fan_out detects parallel_group tasks, checks exclusive_resource
-      conflicts, and uses LangGraph Send() API for dynamic branches. Each branch
-      creates a git worktree via shared/git.py, executes the task, copies artifacts
-      back, and cleans up. fan_in merges task_results using operator.add reducer.
-      Add unit tests in tests/langgraph/executor/nodes/test_parallel.py. Run pytest
-      to verify.
+      nodes. fan_out detects parallel_group tasks, checks exclusive_resource conflicts,
+      and uses LangGraph Send() API for dynamic branches. Each branch creates a git
+      worktree via shared/git.py, executes the task, copies artifacts back, and cleans
+      up. fan_in merges task_results using operator.add reducer. Add unit tests in
+      tests/langgraph/executor/nodes/test_parallel.py. Run pytest to verify.
+
+      '
 - id: phase-4
   name: Phase 4 - Graph assembly and pipeline integration
   status: pending
@@ -109,16 +113,15 @@ sections:
     name: Assemble executor subgraph and integrate with pipeline
     agent: coder
     status: pending
-    description: >
-      Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
+    description: 'Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
       Design doc: docs/plans/2026-02-26-05-task-execution-subgraph-design.md
 
       Create langgraph_pipeline/executor/graph.py that assembles the full executor
-      StateGraph wiring all nodes (find_next_task, execute_task, validate_task,
-      fan_out, fan_in) with conditional edges. Update
-      langgraph_pipeline/pipeline/nodes/execute_plan.py to use the compiled
-      subgraph instead of spawning plan-orchestrator.py as a subprocess. Update
-      pipeline/graph.py wiring as needed. Add integration test in
-      tests/langgraph/executor/test_graph_integration.py that runs a multi-task
-      plan through the subgraph with mocked Claude CLI. Run pytest to verify all
-      tests pass.
+      StateGraph wiring all nodes (find_next_task, execute_task, validate_task, fan_out,
+      fan_in) with conditional edges. Update langgraph_pipeline/pipeline/nodes/execute_plan.py
+      to use the compiled subgraph instead of spawning plan-orchestrator.py as a subprocess.
+      Update pipeline/graph.py wiring as needed. Add integration test in tests/langgraph/executor/test_graph_integration.py
+      that runs a multi-task plan through the subgraph with mocked Claude CLI. Run
+      pytest to verify all tests pass.
+
+      '
