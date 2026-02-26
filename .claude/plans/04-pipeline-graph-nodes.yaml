@@ -75,7 +75,7 @@ sections:
   - id: '2.2'
     name: Implement create_plan and execute_plan nodes
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/04-pipeline-graph-nodes.md
       Design doc: docs/plans/2026-02-26-04-pipeline-graph-nodes-design.md
 
@@ -86,6 +86,8 @@ sections:
       verify.
 
       '
+    attempts: 1
+    last_attempt: '2026-02-26T03:12:42.563038'
   - id: '2.3'
     name: Implement verify_symptoms and archive nodes
     agent: coder
