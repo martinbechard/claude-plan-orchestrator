@@ -80,7 +80,7 @@ sections:
   - id: '2.2'
     name: Wire tracing into executor graph and all executor nodes
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/06-langsmith-observability.md
       Design doc: docs/plans/2026-02-26-06-langsmith-observability-design.md
 
@@ -90,6 +90,8 @@ sections:
       level (executor), task ID, and model used. In task_runner.py and validator.py,
       emit Claude CLI invocation cost metadata (total_cost_usd, input_tokens, output_tokens,
       model, duration_ms) to the active trace. Run pytest to verify no regressions.'
+    attempts: 1
+    last_attempt: '2026-02-26T07:03:01.630865'
 - id: phase-3
   name: Phase 3 - Documentation
   status: pending
