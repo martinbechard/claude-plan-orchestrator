@@ -47,7 +47,7 @@ sections:
       unit tests pass.
 - id: phase-2
   name: Phase 2 - Node implementations
-  status: in_progress
+  status: completed
   tasks:
   - id: '2.1'
     name: Implement scan_backlog and intake_analyze nodes
@@ -99,7 +99,7 @@ sections:
   - id: '2.3'
     name: Implement verify_symptoms and archive nodes
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: docs/feature-backlog/04-pipeline-graph-nodes.md
       Design doc: docs/plans/2026-02-26-04-pipeline-graph-nodes-design.md
 
@@ -116,6 +116,11 @@ sections:
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
     validation_attempts: 2
+    completed_at: '2026-02-26T03:57:15.992060'
+    result_message: Implemented verify_symptoms and archive nodes with 49 unit tests
+      (all passing). verification.py handles Claude CLI invocation, PASS/FAIL parsing,
+      and VerificationRecord building. archival.py handles file moves to completed-backlog,
+      plan YAML cleanup, and Slack notifications.
 - id: phase-3
   name: Phase 3 - Graph assembly and entry point
   status: pending
