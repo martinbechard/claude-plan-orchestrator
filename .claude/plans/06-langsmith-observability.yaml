@@ -1,0 +1,94 @@
+meta:
+  name: 'Feature: LangSmith Observability'
+  description: Add LangSmith tracing to all graph nodes in the pipeline and task
+    execution graphs. Configure project-level settings, environment variables, and
+    trace filtering. Document how to use the LangSmith dashboard for pipeline monitoring,
+    debugging failed tasks, and tracking costs.
+  plan_doc: docs/plans/2026-02-26-06-langsmith-observability-design.md
+  source_item: docs/feature-backlog/06-langsmith-observability.md
+  created: '2026-02-26'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+  status: pending
+sections:
+- id: phase-1
+  name: Phase 1 - Core LangSmith configuration module
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Create shared/langsmith.py with configure_tracing and trace helpers
+    agent: coder
+    status: pending
+    description: >-
+      Implement the work item: docs/feature-backlog/06-langsmith-observability.md
+      Design doc: docs/plans/2026-02-26-06-langsmith-observability-design.md
+
+      Create langgraph_pipeline/shared/langsmith.py with:
+      (1) configure_tracing() that reads LANGCHAIN_API_KEY from env or orchestrator
+      config, sets LANGCHAIN_TRACING_V2, LANGCHAIN_PROJECT, LANGCHAIN_ENDPOINT env
+      vars, and logs a warning when API key is missing.
+      (2) should_trace(node_name) helper that returns False for noisy nodes
+      (scan_backlog with no items, sleep/wait).
+      (3) add_trace_metadata(metadata_dict) helper to attach custom metadata
+      (node name, graph level, cost, tokens) to the current LangSmith run.
+      Gracefully degrade when langsmith package is not installed.
+      Add unit tests in tests/langgraph/shared/test_langsmith.py. Run pytest to verify.
+- id: phase-2
+  name: Phase 2 - Pipeline and executor node integration
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Wire tracing into pipeline graph and all pipeline nodes
+    agent: coder
+    status: pending
+    description: >-
+      Implement the work item: docs/feature-backlog/06-langsmith-observability.md
+      Design doc: docs/plans/2026-02-26-06-langsmith-observability-design.md
+
+      Call configure_tracing() in langgraph_pipeline/pipeline/graph.py at graph
+      build time. Add trace metadata to all pipeline nodes (scan.py, intake.py,
+      plan_creation.py, execute_plan.py, archival.py, verification.py) using
+      add_trace_metadata() with node name, graph level (pipeline), and relevant
+      state fields (item_slug, item_type). Tag traces with item_slug and item_type
+      for dashboard filtering. Run pytest to verify no regressions.
+  - id: '2.2'
+    name: Wire tracing into executor graph and all executor nodes
+    agent: coder
+    status: pending
+    description: >-
+      Implement the work item: docs/feature-backlog/06-langsmith-observability.md
+      Design doc: docs/plans/2026-02-26-06-langsmith-observability-design.md
+
+      Call configure_tracing() in langgraph_pipeline/executor/graph.py at graph
+      build time. Add trace metadata to all executor nodes (task_selector.py,
+      task_runner.py, validator.py, parallel.py) using add_trace_metadata() with
+      node name, graph level (executor), task ID, and model used. In task_runner.py
+      and validator.py, emit Claude CLI invocation cost metadata (total_cost_usd,
+      input_tokens, output_tokens, model, duration_ms) to the active trace.
+      Run pytest to verify no regressions.
+- id: phase-3
+  name: Phase 3 - Documentation
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Add LangSmith configuration section to setup guide
+    agent: coder
+    status: pending
+    description: >-
+      Implement the work item: docs/feature-backlog/06-langsmith-observability.md
+      Design doc: docs/plans/2026-02-26-06-langsmith-observability-design.md
+
+      Add a LangSmith Observability section to docs/setup-guide.md documenting:
+      how to create a LangSmith account and get an API key, how to configure the
+      orchestrator (env vars and orchestrator-config.yaml), how to navigate the
+      LangSmith dashboard for this project (run history, trace waterfall, error
+      drill-down), how to compare two pipeline runs to diagnose regressions, and
+      how to track token costs by node, task, and plan.
