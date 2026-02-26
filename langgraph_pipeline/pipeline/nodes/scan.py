@@ -19,6 +19,7 @@ from typing import Optional
 import yaml
 
 from langgraph_pipeline.pipeline.state import PipelineState
+from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.paths import (
     ANALYSIS_DIR,
     DEFECT_DIR,
@@ -183,6 +184,12 @@ def scan_backlog(state: PipelineState) -> dict:
             filepath = source_item
             slug = Path(filepath).stem
             item_type = _item_type_from_path(filepath)
+            add_trace_metadata({
+                "node_name": "scan_backlog",
+                "graph_level": "pipeline",
+                "item_slug": slug,
+                "item_type": item_type,
+            })
             return {
                 "item_path": filepath,
                 "item_slug": slug,
@@ -196,6 +203,12 @@ def scan_backlog(state: PipelineState) -> dict:
         items = _scan_directory(directory, item_type)
         if items:
             filepath, slug, found_type = items[0]
+            add_trace_metadata({
+                "node_name": "scan_backlog",
+                "graph_level": "pipeline",
+                "item_slug": slug,
+                "item_type": found_type,
+            })
             return {
                 "item_path": filepath,
                 "item_slug": slug,

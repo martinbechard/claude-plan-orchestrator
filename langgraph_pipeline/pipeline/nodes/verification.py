@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from langgraph_pipeline.pipeline.state import PipelineState, VerificationRecord
+from langgraph_pipeline.shared.langsmith import add_trace_metadata
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -124,6 +125,15 @@ def verify_symptoms(state: PipelineState) -> dict:
     record = _build_verification_record(outcome, notes)
 
     print(f"[verify_symptoms] Verification outcome for {item_slug}: {outcome}")
+
+    add_trace_metadata({
+        "node_name": "verify_symptoms",
+        "graph_level": "pipeline",
+        "item_slug": item_slug,
+        "item_type": "defect",
+        "verification_cycle": cycle + 1,
+        "outcome": outcome,
+    })
 
     return {
         "verification_history": [record],

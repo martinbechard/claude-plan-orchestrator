@@ -34,6 +34,7 @@ from langgraph_pipeline.pipeline.nodes import (
     verify_symptoms,
 )
 from langgraph_pipeline.pipeline.state import PipelineState
+from langgraph_pipeline.shared.langsmith import configure_tracing
 
 # ─── Configuration constants ──────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ def build_graph() -> StateGraph:
     use pipeline_graph() which wraps it with a SqliteSaver context manager.
     This function is also used directly in tests to inject a custom checkpointer.
     """
+    configure_tracing()
     graph = StateGraph(PipelineState)
 
     graph.add_node(NODE_SCAN_BACKLOG, scan_backlog)

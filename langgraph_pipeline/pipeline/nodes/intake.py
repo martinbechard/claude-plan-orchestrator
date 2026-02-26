@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Optional
 
 from langgraph_pipeline.pipeline.state import PipelineState
+from langgraph_pipeline.shared.langsmith import add_trace_metadata
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -312,5 +313,12 @@ def intake_analyze(state: PipelineState) -> dict:
 
     # Record this intake for throttle tracking.
     _record_intake(item_type)
+
+    add_trace_metadata({
+        "node_name": "intake_analyze",
+        "graph_level": "pipeline",
+        "item_slug": item_slug,
+        "item_type": item_type,
+    })
 
     return state_updates

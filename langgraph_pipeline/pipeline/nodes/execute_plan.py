@@ -20,6 +20,7 @@ from typing import Optional
 from langgraph_pipeline.executor.escalation import DEFAULT_STARTING_MODEL
 from langgraph_pipeline.executor.graph import build_executor_graph
 from langgraph_pipeline.pipeline.state import PipelineState
+from langgraph_pipeline.shared.langsmith import add_trace_metadata
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ def execute_plan(state: PipelineState) -> dict:
     """
     plan_path: Optional[str] = state.get("plan_path")
     item_slug: str = state.get("item_slug", "")
+    item_type: str = state.get("item_type", "feature")
 
     if not plan_path:
         print(f"[execute_plan] No plan_path in state for {item_slug!r}; skipping.")
@@ -80,6 +82,16 @@ def execute_plan(state: PipelineState) -> dict:
         f"[execute_plan] Executor subgraph finished for {item_slug!r}: "
         f"{task_count} task(s), ~${cost_usd:.4f}"
     )
+
+    add_trace_metadata({
+        "node_name": "execute_plan",
+        "graph_level": "pipeline",
+        "item_slug": item_slug,
+        "item_type": item_type,
+        "task_count": task_count,
+        "cost_usd": cost_usd,
+        "tags": [item_slug, item_type],
+    })
 
     return {
         "session_cost_usd": cost_usd,

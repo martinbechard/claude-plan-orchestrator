@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Optional
 
 from langgraph_pipeline.pipeline.state import PipelineState
+from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.paths import COMPLETED_DIRS
 from langgraph_pipeline.slack.notifier import SlackNotifier
 
@@ -158,5 +159,13 @@ def archive(state: PipelineState) -> dict:
     message, level = _build_slack_message(item_name, item_type, outcome)
     notifier = SlackNotifier()
     notifier.send_status(message, level=level)
+
+    add_trace_metadata({
+        "node_name": "archive",
+        "graph_level": "pipeline",
+        "item_slug": item_slug,
+        "item_type": item_type,
+        "outcome": outcome,
+    })
 
     return {}

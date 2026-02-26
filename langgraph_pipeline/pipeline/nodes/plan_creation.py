@@ -21,6 +21,7 @@ from typing import Optional
 
 from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.config import DEFAULT_AGENTS_DIR, load_orchestrator_config
+from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.paths import PLANS_DIR
 from langgraph_pipeline.shared.rate_limit import check_rate_limit
 
@@ -215,6 +216,13 @@ def create_plan(state: PipelineState) -> dict:
         return {}
 
     print(f"[create_plan] Plan created: {expected_plan_path}")
+    add_trace_metadata({
+        "node_name": "create_plan",
+        "graph_level": "pipeline",
+        "item_slug": item_slug,
+        "item_type": item_type,
+        "tags": [item_slug, item_type],
+    })
     return {
         "plan_path": expected_plan_path,
         "design_doc_path": expected_design_doc_path,
