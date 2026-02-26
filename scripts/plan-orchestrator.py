@@ -38,6 +38,13 @@ try:
 except ImportError:
     SOCKET_MODE_AVAILABLE = False
 
+# Optional ChromaDB for backlog RAG deduplication
+try:
+    import chromadb
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
+
 # Worktree configuration
 WORKTREE_BASE_DIR = ".worktrees"
 
@@ -129,9 +136,30 @@ SLACK_LEVEL_EMOJI = {
 SLACK_LAST_READ_PATH = ".claude/slack-last-read.json"
 SLACK_INBOUND_POLL_LIMIT = 20
 SLACK_THREAD_REPLIES_LIMIT = 5
-MAX_SELF_REPLIES_PER_WINDOW = 3       # circuit-breaker threshold per channel
-LOOP_DETECTION_WINDOW_SECONDS = 60   # sliding window for self-reply rate
+MAX_SELF_REPLIES_PER_WINDOW = 1       # circuit-breaker threshold per channel
+LOOP_DETECTION_WINDOW_SECONDS = 300  # sliding window for self-reply rate (5 min)
 MESSAGE_TRACKING_TTL_SECONDS = 3600  # TTL for processed/sent ts sets
+
+# A3: Content-based notification pattern filter — matches the bot's own
+# notification formats so they are skipped before reaching the LLM router.
+BOT_NOTIFICATION_PATTERN = re.compile(
+    r"(?:"
+    r"(?::white_check_mark:|:large_blue_circle:|:x:|:warning:|:question:)\s*"
+    r"\*?(?:Defect|Feature)\s+(?:received|created)\*?"
+    r"|"
+    r"Received\s+your\s+(?:defect|feature)\s+request"
+    r")",
+    re.IGNORECASE,
+)
+
+# A4: Global intake rate limiter — caps total intakes regardless of channel
+MAX_INTAKES_PER_WINDOW = 10
+INTAKE_RATE_WINDOW_SECONDS = 300  # 5-minute sliding window
+
+# A1: Chain detection history file — persists across restarts
+INTAKE_HISTORY_PATH = ".claude/plans/.intake-history.json"
+INTAKE_HISTORY_MAX_ENTRIES = 100
+INTAKE_HISTORY_TTL_SECONDS = 3600  # 1 hour
 SLACK_CHANNEL_PREFIX = "orchestrator-"
 SLACK_CHANNEL_ROLE_SUFFIXES = {
     "features": "feature",
@@ -193,7 +221,12 @@ Available actions:
 - {{"action": "none"}} - Message doesn't require any pipeline action
 
 Be conservative: only use stop_pipeline if the user clearly intends to stop.
-A message like "stop doing X" is NOT a stop command."""
+A message like "stop doing X" is NOT a stop command.
+
+IMPORTANT: Messages that contain status emoji (:white_check_mark:, :large_blue_circle:, :x:,
+:warning:) followed by phrases like "Defect received", "Feature received", "Feature created",
+"Defect created", or "Received your defect/feature request" are automated pipeline notifications.
+These should ALWAYS be classified as {{"action": "none"}}."""
 
 MESSAGE_ROUTING_TIMEOUT_SECONDS = 30
 
@@ -1259,6 +1292,257 @@ class IntakeState:
     item_type: str  # "feature" or "defect"
     status: str = "analyzing"  # "analyzing", "creating", "done", "failed"
     analysis: str = ""  # LLM 5-Whys output
+
+
+# ─── BacklogRAG: ChromaDB-based deduplication ──────────────────────
+
+CHROMA_PERSIST_DIR = ".claude/chroma"
+RAG_SIMILARITY_THRESHOLD = 0.75  # cosine similarity above this triggers dedup check
+RAG_TOP_K = 5
+RAG_CHUNK_MAX_CHARS = 1000
+
+
+class BacklogRAG:
+    """ChromaDB-based semantic search over backlog items for deduplication.
+
+    Uses ChromaDB's built-in embedding model (all-MiniLM-L6-v2) for
+    vector search. Stores in .claude/chroma/ — no server needed.
+    """
+
+    def __init__(self, persist_dir: str = CHROMA_PERSIST_DIR):
+        self._available = CHROMADB_AVAILABLE
+        self._client = None
+        self._collections: dict[str, "chromadb.Collection"] = {}
+        self._persist_dir = persist_dir
+        if self._available:
+            try:
+                os.makedirs(persist_dir, exist_ok=True)
+                self._client = chromadb.PersistentClient(path=persist_dir)
+                for name in ("defects", "features", "specs"):
+                    self._collections[name] = self._client.get_or_create_collection(
+                        name=name,
+                        metadata={"hnsw:space": "cosine"},
+                    )
+                print(f"[RAG] ChromaDB initialized at {persist_dir}")
+            except Exception as e:
+                print(f"[RAG] ChromaDB init failed: {e}")
+                self._available = False
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    def _chunk_text(self, text: str) -> list[str]:
+        """Split text into chunks for embedding."""
+        if len(text) <= RAG_CHUNK_MAX_CHARS:
+            return [text]
+        chunks = []
+        paragraphs = text.split("\n\n")
+        current = ""
+        for para in paragraphs:
+            if len(current) + len(para) + 2 > RAG_CHUNK_MAX_CHARS:
+                if current:
+                    chunks.append(current.strip())
+                current = para
+            else:
+                current = current + "\n\n" + para if current else para
+        if current:
+            chunks.append(current.strip())
+        return chunks or [text[:RAG_CHUNK_MAX_CHARS]]
+
+    def index_backlog(self) -> int:
+        """Scan backlog directories and index all items. Returns count indexed."""
+        if not self._available:
+            return 0
+        total = 0
+        for item_type, backlog_dir in [("defects", "docs/defect-backlog"),
+                                        ("features", "docs/feature-backlog")]:
+            if not os.path.isdir(backlog_dir):
+                continue
+            collection = self._collections.get(item_type)
+            if not collection:
+                continue
+            for filename in os.listdir(backlog_dir):
+                if not filename.endswith(".md"):
+                    continue
+                filepath = os.path.join(backlog_dir, filename)
+                try:
+                    with open(filepath, "r") as f:
+                        content = f.read()
+                    # Extract title from first heading
+                    title = filename
+                    for line in content.split("\n"):
+                        if line.startswith("# "):
+                            title = line[2:].strip()
+                            break
+                    chunks = self._chunk_text(f"{title}\n\n{content}")
+                    for i, chunk in enumerate(chunks):
+                        doc_id = f"{filename}:chunk{i}"
+                        collection.upsert(
+                            ids=[doc_id],
+                            documents=[chunk],
+                            metadatas=[{
+                                "filepath": filepath,
+                                "filename": filename,
+                                "title": title[:200],
+                                "chunk_index": i,
+                            }],
+                        )
+                    total += 1
+                except Exception as e:
+                    print(f"[RAG] Failed to index {filepath}: {e}")
+        print(f"[RAG] Indexed {total} backlog items")
+        return total
+
+    def index_specs(self) -> int:
+        """Scan functional spec docs and index them. Returns count indexed."""
+        if not self._available:
+            return 0
+        collection = self._collections.get("specs")
+        if not collection:
+            return 0
+        total = 0
+        spec_dirs = ["docs/specs", "design"]
+        for spec_dir in spec_dirs:
+            if not os.path.isdir(spec_dir):
+                continue
+            for root, _dirs, files in os.walk(spec_dir):
+                for filename in files:
+                    if not filename.endswith(".md"):
+                        continue
+                    filepath = os.path.join(root, filename)
+                    try:
+                        with open(filepath, "r") as f:
+                            content = f.read()
+                        chunks = self._chunk_text(content)
+                        for i, chunk in enumerate(chunks):
+                            doc_id = f"{filepath}:chunk{i}"
+                            collection.upsert(
+                                ids=[doc_id],
+                                documents=[chunk],
+                                metadatas=[{
+                                    "filepath": filepath,
+                                    "filename": filename,
+                                    "chunk_index": i,
+                                }],
+                            )
+                        total += 1
+                    except Exception as e:
+                        print(f"[RAG] Failed to index spec {filepath}: {e}")
+        print(f"[RAG] Indexed {total} spec files")
+        return total
+
+    def query_similar(self, text: str, item_type: str,
+                      top_k: int = RAG_TOP_K) -> list[dict]:
+        """Return top-k similar items with similarity scores.
+
+        Args:
+            text: Query text to find similar items for
+            item_type: Collection name ('defects', 'features', 'specs')
+            top_k: Number of results to return
+
+        Returns:
+            List of dicts with keys: filepath, filename, title, distance, document
+        """
+        if not self._available:
+            return []
+        collection = self._collections.get(item_type)
+        if not collection:
+            return []
+        try:
+            results = collection.query(
+                query_texts=[text],
+                n_results=top_k,
+                include=["documents", "metadatas", "distances"],
+            )
+            items = []
+            seen_files: set[str] = set()
+            if results and results["ids"] and results["ids"][0]:
+                for i, doc_id in enumerate(results["ids"][0]):
+                    meta = results["metadatas"][0][i] if results["metadatas"] else {}
+                    dist = results["distances"][0][i] if results["distances"] else 1.0
+                    doc = results["documents"][0][i] if results["documents"] else ""
+                    fp = meta.get("filepath", "")
+                    # Deduplicate chunks from the same file
+                    if fp in seen_files:
+                        continue
+                    seen_files.add(fp)
+                    similarity = 1.0 - dist  # cosine distance to similarity
+                    items.append({
+                        "filepath": fp,
+                        "filename": meta.get("filename", ""),
+                        "title": meta.get("title", ""),
+                        "similarity": similarity,
+                        "document": doc[:500],
+                    })
+            return items
+        except Exception as e:
+            print(f"[RAG] Query failed: {e}")
+            return []
+
+    def add_item(self, item_type: str, filepath: str, title: str,
+                 description: str) -> None:
+        """Add a new item to the RAG index after creation."""
+        if not self._available:
+            return
+        collection = self._collections.get(item_type)
+        if not collection:
+            return
+        filename = os.path.basename(filepath)
+        chunks = self._chunk_text(f"{title}\n\n{description}")
+        try:
+            for i, chunk in enumerate(chunks):
+                doc_id = f"{filename}:chunk{i}"
+                collection.upsert(
+                    ids=[doc_id],
+                    documents=[chunk],
+                    metadatas=[{
+                        "filepath": filepath,
+                        "filename": filename,
+                        "title": title[:200],
+                        "chunk_index": i,
+                    }],
+                )
+        except Exception as e:
+            print(f"[RAG] Failed to add item {filepath}: {e}")
+
+    def update_item(self, filepath: str, new_content: str) -> None:
+        """Update an existing item in the index with new content."""
+        if not self._available:
+            return
+        filename = os.path.basename(filepath)
+        # Determine collection from path
+        item_type = "defects" if "defect-backlog" in filepath else "features"
+        collection = self._collections.get(item_type)
+        if not collection:
+            return
+        title = filename
+        for line in new_content.split("\n"):
+            if line.startswith("# "):
+                title = line[2:].strip()
+                break
+        chunks = self._chunk_text(f"{title}\n\n{new_content}")
+        try:
+            # Remove old chunks
+            old_ids = [f"{filename}:chunk{i}" for i in range(20)]
+            try:
+                collection.delete(ids=old_ids)
+            except Exception:
+                pass
+            for i, chunk in enumerate(chunks):
+                doc_id = f"{filename}:chunk{i}"
+                collection.upsert(
+                    ids=[doc_id],
+                    documents=[chunk],
+                    metadatas=[{
+                        "filepath": filepath,
+                        "filename": filename,
+                        "title": title[:200],
+                        "chunk_index": i,
+                    }],
+                )
+        except Exception as e:
+            print(f"[RAG] Failed to update item {filepath}: {e}")
 
 
 @dataclass
@@ -3367,6 +3651,9 @@ class SlackNotifier:
         self._processed_message_ts: set[str] = set()
         self._own_sent_ts: set[str] = set()
         self._self_reply_window: dict[str, list[float]] = {}
+        self._intake_timestamps: list[float] = []  # A4: global intake rate limiter
+        self._intake_history: list[dict] = []  # A1: chain detection history
+        self._rag: Optional[BacklogRAG] = None  # B2: ChromaDB RAG for dedup
 
         try:
             with open(config_path, "r") as f:
@@ -4243,6 +4530,8 @@ class SlackNotifier:
             os.makedirs(backlog_dir, exist_ok=True)
             with open(filepath, "w") as f:
                 f.write(content)
+            # A1: Record in intake history for chain-loop detection
+            self._record_intake_history(next_num, slug, title[:120])
             return {"filepath": filepath, "filename": filename, "item_number": next_num}
         except IOError as e:
             print(f"[SLACK] Failed to create backlog item: {e}")
@@ -4730,6 +5019,13 @@ class SlackNotifier:
         intake_key = f"{intake.channel_name}:{intake.ts}"
         fallback_title = intake.original_text.split("\n", 1)[0][:80]
 
+        # A4: Global intake rate limiter — refuse if too many intakes recently
+        if self._check_intake_rate_limit():
+            intake.status = "done"
+            return
+
+        self._record_intake_timestamp()
+
         # Send immediate acknowledgment
         try:
             self.send_status(
@@ -4844,12 +5140,84 @@ class SlackNotifier:
             if root_need:
                 description += f"\n\n**Root Need:** {root_need}"
 
+            # B3: RAG deduplication — check for similar existing items
+            rag_collection = "defects" if intake.item_type == "defect" else "features"
+            if self._rag and self._rag.available:
+                query_text = f"{title}\n{description[:500]}"
+                similar = self._rag.query_similar(
+                    query_text, rag_collection, top_k=RAG_TOP_K
+                )
+                high_sim = [s for s in similar
+                            if s["similarity"] >= RAG_SIMILARITY_THRESHOLD]
+                if high_sim:
+                    # Ask LLM to confirm deduplication
+                    candidates_text = "\n".join(
+                        f"- {s['title']} (similarity: {s['similarity']:.2f}, "
+                        f"file: {s['filename']})"
+                        for s in high_sim
+                    )
+                    dedup_prompt = (
+                        f"A new {intake.item_type} request was submitted:\n"
+                        f"Title: {title}\n"
+                        f"Description: {description[:400]}\n\n"
+                        f"These existing items are similar:\n{candidates_text}\n\n"
+                        f"Is this new request a duplicate of any existing item? "
+                        f"Respond with ONLY a JSON object:\n"
+                        f'- {{"duplicate": true, "match_filename": "..."}} if duplicate\n'
+                        f'- {{"duplicate": false}} if not a duplicate'
+                    )
+                    try:
+                        dedup_response = self._call_claude_print(
+                            dedup_prompt, model="haiku", timeout=30,
+                        )
+                        if dedup_response:
+                            dedup_result = json.loads(dedup_response)
+                            if (isinstance(dedup_result, dict)
+                                    and dedup_result.get("duplicate")):
+                                match_file = dedup_result.get("match_filename", "")
+                                match_item = next(
+                                    (s for s in high_sim
+                                     if s["filename"] == match_file),
+                                    high_sim[0],
+                                )
+                                # Append new info to existing item
+                                existing_path = match_item["filepath"]
+                                if os.path.isfile(existing_path):
+                                    with open(existing_path, "a") as ef:
+                                        ef.write(
+                                            f"\n\n## Additional Report\n\n"
+                                            f"**From:** {intake.user} at {intake.ts}\n\n"
+                                            f"{description[:500]}\n"
+                                        )
+                                    self._rag.update_item(existing_path,
+                                                          open(existing_path).read())
+                                self.send_status(
+                                    f"*Consolidated with existing item:* "
+                                    f"`{match_item['filename']}`\n"
+                                    f"_New information appended._",
+                                    level="success",
+                                    channel_id=intake.channel_id,
+                                )
+                                intake.status = "done"
+                                return
+                    except (json.JSONDecodeError, Exception) as e:
+                        print(f"[RAG] Dedup check failed, proceeding: {e}")
+
             # Step 3: Create backlog item
             intake.status = "creating"
             item_info = self.create_backlog_item(
                 intake.item_type, title, description,
                 intake.user, intake.ts,
             )
+
+            # B3: Add new item to RAG index
+            if item_info and self._rag and self._rag.available:
+                self._rag.add_item(
+                    rag_collection,
+                    item_info["filepath"],
+                    title,
+                    description,
+                )
 
             # Step 4: Notify user on Slack
             # Build comprehensive notification with item reference
@@ -4896,6 +5264,15 @@ class SlackNotifier:
             return
         if self._poll_thread is not None and self._poll_thread.is_alive():
             return
+
+        # A1: Load intake history from disk on startup
+        self._load_intake_history()
+
+        # B2: Initialize ChromaDB RAG and index backlog
+        if CHROMADB_AVAILABLE and self._rag is None:
+            self._rag = BacklogRAG()
+            if self._rag.available:
+                self._rag.index_backlog()
 
         self._poll_stop_event.clear()
 
@@ -4949,6 +5326,100 @@ class SlackNotifier:
             if not self._self_reply_window[channel_id]:
                 del self._self_reply_window[channel_id]
 
+    # ─── A1: Chain detection via on-disk intake history ────────────
+
+    def _load_intake_history(self) -> None:
+        """Load intake history from disk, pruning stale entries."""
+        try:
+            with open(INTAKE_HISTORY_PATH, "r") as f:
+                entries = json.load(f)
+            if not isinstance(entries, list):
+                entries = []
+        except (IOError, json.JSONDecodeError):
+            entries = []
+        cutoff = time.time() - INTAKE_HISTORY_TTL_SECONDS
+        self._intake_history = [
+            e for e in entries
+            if isinstance(e, dict) and e.get("timestamp", 0) > cutoff
+        ]
+
+    def _save_intake_history(self) -> None:
+        """Persist intake history to disk."""
+        try:
+            os.makedirs(os.path.dirname(INTAKE_HISTORY_PATH), exist_ok=True)
+            with open(INTAKE_HISTORY_PATH, "w") as f:
+                json.dump(self._intake_history[-INTAKE_HISTORY_MAX_ENTRIES:], f)
+        except IOError as e:
+            print(f"[SLACK] Failed to save intake history: {e}")
+
+    def _record_intake_history(self, item_number: int, slug: str,
+                               title_summary: str) -> None:
+        """Append a new entry to the intake history after creating a backlog item."""
+        self._intake_history.append({
+            "item_number": item_number,
+            "slug": slug,
+            "title_summary": title_summary[:120],
+            "timestamp": time.time(),
+        })
+        # Prune to max size
+        if len(self._intake_history) > INTAKE_HISTORY_MAX_ENTRIES:
+            self._intake_history = self._intake_history[-INTAKE_HISTORY_MAX_ENTRIES:]
+        self._save_intake_history()
+
+    def _is_chain_loop_artifact(self, text: str) -> bool:
+        """Check if message text references a recently created backlog item.
+
+        Detects the feedback loop: bot creates item #N, sends notification
+        containing '#N', notification gets polled back and would create #N+1.
+        """
+        if not self._intake_history:
+            self._load_intake_history()
+
+        # Extract item number references like #17552
+        refs = re.findall(r"#(\d+)", text)
+        ref_numbers = {int(r) for r in refs}
+
+        history_numbers = {
+            e["item_number"] for e in self._intake_history
+            if isinstance(e.get("item_number"), int)
+        }
+        if ref_numbers & history_numbers:
+            return True
+
+        # Check slug/filename patterns
+        text_lower = text.lower()
+        for entry in self._intake_history:
+            slug = entry.get("slug", "")
+            if slug and len(slug) > 8 and slug in text_lower:
+                return True
+        return False
+
+    # ─── A4: Global intake rate limiter ──────────────────────────────
+
+    def _check_intake_rate_limit(self) -> bool:
+        """Return True if the intake rate limit has been exceeded.
+
+        Logs a loud warning when triggered.
+        """
+        now = time.time()
+        cutoff = now - INTAKE_RATE_WINDOW_SECONDS
+        self._intake_timestamps = [
+            t for t in self._intake_timestamps if t > cutoff
+        ]
+        if len(self._intake_timestamps) >= MAX_INTAKES_PER_WINDOW:
+            print(
+                f"[SLACK] WARNING: Intake rate limit exceeded! "
+                f"{len(self._intake_timestamps)} intakes in "
+                f"{INTAKE_RATE_WINDOW_SECONDS}s (max {MAX_INTAKES_PER_WINDOW}). "
+                f"Refusing new intake."
+            )
+            return True
+        return False
+
+    def _record_intake_timestamp(self) -> None:
+        """Record an intake event for rate limiting."""
+        self._intake_timestamps.append(time.time())
+
     def process_inbound(self) -> None:
         """Poll for new Slack messages and route them.
 
@@ -4984,6 +5455,22 @@ class SlackNotifier:
             # Dedup: skip already-processed messages
             if ts and ts in self._processed_message_ts:
                 print(f"[SLACK] Filter: skip already-processed ts={ts}")
+                continue
+
+            # A3: Content-based notification pattern filter — skip messages
+            # that match the bot's own notification formats
+            if BOT_NOTIFICATION_PATTERN.search(text):
+                print(f"[SLACK] Filter: skip bot-notification-pattern #{ch_log}: {preview!r}")
+                if ts:
+                    self._processed_message_ts.add(ts)
+                continue
+
+            # A1: Chain detection — skip messages referencing recently created
+            # backlog items (feedback loop artifacts)
+            if self._is_chain_loop_artifact(text):
+                print(f"[SLACK] Filter: skip chain-loop-artifact #{ch_log}: {preview!r}")
+                if ts:
+                    self._processed_message_ts.add(ts)
                 continue
 
             # Self-origin + loop detection

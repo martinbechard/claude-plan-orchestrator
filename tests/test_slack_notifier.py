@@ -1946,10 +1946,10 @@ def test_intake_thread_nonblocking(tmp_path, monkeypatch):
 
     notifier._run_intake_analysis = mock_run_intake
 
-    # Mock poll_messages to return a feature message
+    # Mock poll_messages to return a feature message (>= 20 chars to pass min length)
     def mock_poll():
         return [{
-            "text": "Add new feature X",
+            "text": "Add new feature X for user dashboard display",
             "user": "U789",
             "ts": "300.400",
             "_channel_name": "orchestrator-features",

@@ -32,6 +32,9 @@ SLACK_BLOCK_TEXT_MAX_LENGTH = mod.SLACK_BLOCK_TEXT_MAX_LENGTH
 MAX_SELF_REPLIES_PER_WINDOW = mod.MAX_SELF_REPLIES_PER_WINDOW
 LOOP_DETECTION_WINDOW_SECONDS = mod.LOOP_DETECTION_WINDOW_SECONDS
 MESSAGE_TRACKING_TTL_SECONDS = mod.MESSAGE_TRACKING_TTL_SECONDS
+BOT_NOTIFICATION_PATTERN = mod.BOT_NOTIFICATION_PATTERN
+MAX_INTAKES_PER_WINDOW = mod.MAX_INTAKES_PER_WINDOW
+INTAKE_RATE_WINDOW_SECONDS = mod.INTAKE_RATE_WINDOW_SECONDS
 
 
 # ─── load_agent_identity tests ─────────────────────────────────────
@@ -458,33 +461,36 @@ class TestDedupAndLoopDetection:
         assert len(routed) == first_routed, "Duplicate ts must not reach routing"
 
     def test_self_origin_accepted_under_rate_limit(self, tmp_path):
-        """A self-origin message is processed when loop count is under threshold."""
+        """A self-origin message is processed when loop count is under threshold.
+
+        With MAX_SELF_REPLIES_PER_WINDOW=1, the first self-origin message
+        with an empty window should be accepted.
+        """
         notifier = self._make_notifier(tmp_path)
         routed = self._patch_routing(notifier)
 
         ts = "200.0"
         notifier._own_sent_ts.add(ts)
-        # Below threshold: MAX_SELF_REPLIES_PER_WINDOW - 1 recent entries
-        now = time.monotonic()
-        notifier._self_reply_window["C1"] = [
-            now - 1 for _ in range(MAX_SELF_REPLIES_PER_WINDOW - 1)
-        ]
+        # Empty window: 0 recent entries, below threshold of 1
+        notifier._self_reply_window["C1"] = []
 
         notifier._handle_polled_messages([self._channel_msg(ts)])
         assert len(routed) > 0, "Self-origin message under limit must reach routing"
 
     def test_loop_detected_skips_message(self, tmp_path):
-        """A self-origin message is skipped when loop count meets threshold."""
+        """A self-origin message is skipped when loop count meets threshold.
+
+        With MAX_SELF_REPLIES_PER_WINDOW=1 and LOOP_DETECTION_WINDOW_SECONDS=300,
+        having 1 recent entry in the window triggers the loop detector.
+        """
         notifier = self._make_notifier(tmp_path)
         routed = self._patch_routing(notifier)
 
         ts = "300.0"
         notifier._own_sent_ts.add(ts)
-        # At threshold: MAX_SELF_REPLIES_PER_WINDOW recent entries
+        # At threshold: 1 recent entry within the 300s window
         now = time.monotonic()
-        notifier._self_reply_window["C1"] = [
-            now - 1 for _ in range(MAX_SELF_REPLIES_PER_WINDOW)
-        ]
+        notifier._self_reply_window["C1"] = [now - 10]
 
         notifier._handle_polled_messages([self._channel_msg(ts)])
         assert len(routed) == 0, "Self-origin message at loop threshold must be skipped"
@@ -528,4 +534,161 @@ class TestDedupAndLoopDetection:
             notifier._post_message({"blocks": []})
 
         assert "999.0" in notifier._own_sent_ts
+
+
+# ─── A3: Bot notification pattern filter tests ───────────────────
+
+
+class TestBotNotificationPattern:
+    """Tests for BOT_NOTIFICATION_PATTERN regex matching."""
+
+    def test_matches_defect_received_with_emoji(self):
+        """Matches ':white_check_mark: *Defect received*' format."""
+        text = ":white_check_mark: *Defect received* (#17552 - some-file.md)"
+        assert BOT_NOTIFICATION_PATTERN.search(text) is not None
+
+    def test_matches_feature_created_with_emoji(self):
+        """Matches ':large_blue_circle: *Feature created*' format."""
+        text = ":large_blue_circle: *Feature created* (#42 - cool-feature.md)"
+        assert BOT_NOTIFICATION_PATTERN.search(text) is not None
+
+    def test_matches_received_your_defect_request(self):
+        """Matches 'Received your defect request' format."""
+        text = "Received your defect request. Analyzing..."
+        assert BOT_NOTIFICATION_PATTERN.search(text) is not None
+
+    def test_matches_received_your_feature_request(self):
+        """Matches 'Received your feature request' format."""
+        text = "Received your feature request. Analyzing..."
+        assert BOT_NOTIFICATION_PATTERN.search(text) is not None
+
+    def test_no_match_on_normal_message(self):
+        """Does NOT match a normal user message."""
+        text = "The login button is broken on mobile"
+        assert BOT_NOTIFICATION_PATTERN.search(text) is None
+
+    def test_no_match_on_status_update(self):
+        """Does NOT match a general status update."""
+        text = "Pipeline completed task 3/5"
+        assert BOT_NOTIFICATION_PATTERN.search(text) is None
+
+    def test_notification_filter_skips_in_handle_polled(self, tmp_path):
+        """_handle_polled_messages skips bot notification messages."""
+        config_file = tmp_path / "slack.yaml"
+        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
+        notifier = SlackNotifier(config_path=str(config_file))
+        identity = AgentIdentity(project="test", agents={
+            "orchestrator": "Test-Orchestrator",
+        })
+        notifier.set_identity(identity, AGENT_ROLE_ORCHESTRATOR)
+
+        routed = []
+        notifier._get_channel_role = lambda ch: None
+        notifier._route_message_via_llm = lambda text: MagicMock()
+        notifier._execute_routed_action = lambda *a, **kw: routed.append(a)
+
+        msg = {
+            "text": ":white_check_mark: *Defect received* (#100 - test.md)",
+            "user": "bot",
+            "ts": "500.0",
+            "_channel_name": "orchestrator-notifications",
+            "_channel_id": "C1",
+        }
+        notifier._handle_polled_messages([msg])
+        assert len(routed) == 0, "Bot notification message must be skipped"
+
+
+# ─── A1: Chain detection tests ──────────────────────────────────
+
+
+class TestChainDetection:
+    """Tests for intake history chain-loop detection."""
+
+    def _make_notifier(self, tmp_path):
+        config_file = tmp_path / "slack.yaml"
+        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
+        notifier = SlackNotifier(config_path=str(config_file))
+        identity = AgentIdentity(project="test", agents={
+            "orchestrator": "Test-Orchestrator",
+        })
+        notifier.set_identity(identity, AGENT_ROLE_ORCHESTRATOR)
+        return notifier
+
+    def test_detects_item_number_reference(self, tmp_path):
+        """Chain detection catches text referencing a recently created item."""
+        notifier = self._make_notifier(tmp_path)
+        notifier._intake_history = [
+            {"item_number": 17552, "slug": "some-defect", "title_summary": "test",
+             "timestamp": time.time()},
+        ]
+        text = ":white_check_mark: Defect received (#17552 - some-defect.md)"
+        assert notifier._is_chain_loop_artifact(text) is True
+
+    def test_does_not_match_unrelated_text(self, tmp_path):
+        """Chain detection does not false-positive on unrelated text."""
+        notifier = self._make_notifier(tmp_path)
+        notifier._intake_history = [
+            {"item_number": 17552, "slug": "some-defect", "title_summary": "test",
+             "timestamp": time.time()},
+        ]
+        text = "The login button is broken on mobile browsers"
+        assert notifier._is_chain_loop_artifact(text) is False
+
+    def test_chain_filter_skips_in_handle_polled(self, tmp_path):
+        """_handle_polled_messages skips chain loop artifacts."""
+        notifier = self._make_notifier(tmp_path)
+        notifier._intake_history = [
+            {"item_number": 42, "slug": "login-bug", "title_summary": "Login bug",
+             "timestamp": time.time()},
+        ]
+
+        routed = []
+        notifier._get_channel_role = lambda ch: None
+        notifier._route_message_via_llm = lambda text: MagicMock()
+        notifier._execute_routed_action = lambda *a, **kw: routed.append(a)
+
+        msg = {
+            "text": "Defect created (#42 - login-bug.md): Login bug",
+            "user": "bot",
+            "ts": "600.0",
+            "_channel_name": "orchestrator-defects",
+            "_channel_id": "C2",
+        }
+        notifier._handle_polled_messages([msg])
+        assert len(routed) == 0, "Chain loop artifact must be skipped"
+
+
+# ─── A4: Global intake rate limiter tests ────────────────────────
+
+
+class TestIntakeRateLimiter:
+    """Tests for the global intake rate limiter."""
+
+    def _make_notifier(self, tmp_path):
+        config_file = tmp_path / "slack.yaml"
+        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
+        return SlackNotifier(config_path=str(config_file))
+
+    def test_under_limit_allows(self, tmp_path):
+        """Rate limiter allows intakes when under the threshold."""
+        notifier = self._make_notifier(tmp_path)
+        assert notifier._check_intake_rate_limit() is False
+
+    def test_at_limit_blocks(self, tmp_path):
+        """Rate limiter blocks when at MAX_INTAKES_PER_WINDOW."""
+        notifier = self._make_notifier(tmp_path)
+        now = time.time()
+        notifier._intake_timestamps = [
+            now - i for i in range(MAX_INTAKES_PER_WINDOW)
+        ]
+        assert notifier._check_intake_rate_limit() is True
+
+    def test_old_entries_pruned(self, tmp_path):
+        """Rate limiter prunes entries outside the window."""
+        notifier = self._make_notifier(tmp_path)
+        old_time = time.time() - INTAKE_RATE_WINDOW_SECONDS - 10
+        notifier._intake_timestamps = [
+            old_time - i for i in range(MAX_INTAKES_PER_WINDOW)
+        ]
+        assert notifier._check_intake_rate_limit() is False
 

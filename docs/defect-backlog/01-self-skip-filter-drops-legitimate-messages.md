@@ -1,6 +1,6 @@
 # Self-skip filter drops legitimate messages
 
-## Status: Open
+## Status: Resolved
 
 ## Priority: High
 
@@ -54,6 +54,17 @@ Rule 0 (bot_id match) and Rule 1 (signature pattern match) silently skip message
 
 1. **bot_id check (completed):** Added bot_id as Rule 0, kept signature as Rule 1 fallback. Same wrong approach encoded differently --- still blanket-skips by sender identity.
 2. **sent-message-ts tracking (in progress, stale):** Replaced signature regex with timestamp set lookup. More reliable than text matching but still the same wrong approach --- skips all messages the bot posted rather than detecting actual loops. The plan YAML at .claude/plans/1-there-is-a-self-skip-check-that-was-based-on-the-name-of-the-channel--the-idea.yaml should be cleaned up.
+
+## Resolution (v1.8.0)
+
+Loop detection was implemented with four redundant layers instead of bot_id filtering:
+
+1. **Chain detection (A1):** On-disk history of recently created backlog items. When a notification referencing item #N is polled back, it is matched against the history and skipped. Survives process restarts.
+2. **Tighter self-reply window (A2):** Reduced from 3/60s to 1/300s per channel, blocking cascading self-replies.
+3. **Content-based notification filter (A3):** Regex matching bot notification formats (emoji + "Defect received" etc.) skips them before routing.
+4. **Global intake rate limiter (A4):** Hard cap of 10 intakes per 5 minutes regardless of channel or origin.
+
+Bot_id filtering was NOT used, preserving legitimate cross-instance messages as this defect recommended.
 
 ## Verification Log
 

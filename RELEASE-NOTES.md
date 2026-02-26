@@ -1,5 +1,33 @@
 # Release Notes
 
+## 1.8.0 (2026-02-25)
+
+### Fixes
+- **Slack notification feedback loop prevention**: Four redundant layers prevent
+  the bot from re-processing its own notification messages, which previously caused
+  17,000+ recursive defect filings:
+  - **Chain detection (A1):** On-disk history of recently created backlog items;
+    messages referencing known item numbers or slugs are skipped. Survives restarts.
+  - **Tighter self-reply window (A2):** Reduced from 3 per 60s to 1 per 300s per
+    channel, blocking cascading self-replies.
+  - **Content-based notification filter (A3):** Regex matching bot notification
+    formats (emoji + "Defect received" etc.) skips them before LLM routing.
+  - **Global intake rate limiter (A4):** Hard cap of 10 intakes per 5 minutes.
+  - **LLM routing hint (A5):** MESSAGE_ROUTING_PROMPT tells the LLM to classify
+    notification-format messages as "none".
+- **Bogus backlog cleanup:** Deleted 132 recursive loop artifact files from
+  docs/defect-backlog/ (items 17561-17687).
+- **Defect #01 resolved:** Self-skip filter replaced with loop detection per the
+  defect's own recommendation (no bot_id filtering).
+
+### New Features
+- **ChromaDB RAG for intake deduplication (Phase B):** Incoming defect/feature
+  requests are checked against a semantic vector index of existing backlog items.
+  Duplicates are consolidated into the existing item with an "Additional Report"
+  section appended. Uses ChromaDB embedded (no server), stores in .claude/chroma/.
+- **BacklogRAG class:** index_backlog(), index_specs(), query_similar(), add_item(),
+  update_item() methods for semantic search over the backlog.
+
 ## 1.7.0 (2026-02-19)
 
 ### New Features
