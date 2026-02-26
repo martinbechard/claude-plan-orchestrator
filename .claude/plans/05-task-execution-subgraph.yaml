@@ -49,12 +49,12 @@ sections:
       progression). All 49 unit tests pass.
 - id: phase-2
   name: Phase 2 - Core node implementations
-  status: pending
+  status: in_progress
   tasks:
   - id: '2.1'
     name: Implement task_selector node (find_next_task)
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: docs/feature-backlog/05-task-execution-subgraph.md
       Design doc: docs/plans/2026-02-26-05-task-execution-subgraph-design.md
 
@@ -72,6 +72,10 @@ sections:
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
     validation_attempts: 2
+    completed_at: '2026-02-26T05:14:12.441231'
+    result_message: 'task_selector.py and edges.py already implemented and verified.
+      All 66 tests pass (task_selector: 7 tests, edges: 38 tests, plus 21 from prior
+      phase). Status file was missing from previous attempts.'
   - id: '2.2'
     name: Implement task_runner node (execute_task)
     agent: coder
