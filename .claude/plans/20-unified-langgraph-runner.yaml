@@ -89,7 +89,7 @@ sections:
   - id: '3.1'
     name: Create unit tests for run-pipeline.py
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/20-unified-langgraph-runner.md
       Design doc: docs/plans/2026-02-26-20-unified-langgraph-runner-design.md
 
@@ -102,3 +102,5 @@ sections:
 
       Mock the pipeline_graph context manager and SlackNotifier to avoid real graph
       execution and network calls. Run pytest to verify all pass.'
+    attempts: 1
+    last_attempt: '2026-02-26T19:13:23.934609'
