@@ -84,12 +84,12 @@ sections:
       0/1/2. All 1332 tests pass.'
 - id: phase-3
   name: Phase 3 - Unit tests for the runner
-  status: pending
+  status: completed
   tasks:
   - id: '3.1'
     name: Create unit tests for run-pipeline.py
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: docs/feature-backlog/20-unified-langgraph-runner.md
       Design doc: docs/plans/2026-02-26-20-unified-langgraph-runner-design.md
 
@@ -104,3 +104,14 @@ sections:
       execution and network calls. Run pytest to verify all pass.'
     attempts: 1
     last_attempt: '2026-02-26T19:13:23.934609'
+    model_used: sonnet
+    completed_at: '2026-02-26T19:22:49.366250'
+    result_message: 'Created tests/langgraph/test_run_pipeline.py with 46 unit tests
+      covering: CLI argument parsing (all flags, defaults, invalid input), PID file
+      write/read/remove lifecycle, stale PID detection (dead process, alive process,
+      PermissionError, unreadable file), signal handler setting shutdown event (SIGINT,
+      SIGTERM, idempotency), budget cap enforcement (no cap, below, at, above, zero-zero
+      edge case), single-item mode (success, graph called once, item_path set, budget
+      exceeded, dry-run, exception), and scan loop iteration (budget on first/second
+      call, shutdown mid-loop, dry-run, exception, no-cap loops until shutdown). All
+      46 tests pass.'
