@@ -1,11 +1,10 @@
 # tests/langgraph/test_run_pipeline.py
-# Unit tests for scripts/run-pipeline.py: CLI parsing, PID management, signal handling,
+# Unit tests for langgraph_pipeline/cli.py: CLI parsing, PID management, signal handling,
 # budget enforcement, single-item mode, and scan loop.
 # Design: docs/plans/2026-02-26-20-unified-langgraph-runner-design.md
 
-"""Unit tests for the unified LangGraph pipeline runner (scripts/run-pipeline.py)."""
+"""Unit tests for the unified LangGraph pipeline runner (langgraph_pipeline.cli)."""
 
-import importlib.util
 import logging
 import os
 import signal
@@ -16,26 +15,20 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# run-pipeline.py has a hyphen so it must be loaded via importlib.
-_SCRIPT_PATH = str(Path(__file__).parents[2] / "scripts" / "run-pipeline.py")
-_spec = importlib.util.spec_from_file_location("run_pipeline", _SCRIPT_PATH)
-_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
-
-# ─── Symbols imported from the loaded module ─────────────────────────────────
-
-_build_arg_parser = _mod._build_arg_parser
-_write_pid_file = _mod._write_pid_file
-_remove_pid_file = _mod._remove_pid_file
-_check_stale_pid = _mod._check_stale_pid
-_register_signal_handlers = _mod._register_signal_handlers
-_is_budget_exhausted = _mod._is_budget_exhausted
-_run_single_item = _mod._run_single_item
-_run_scan_loop = _mod._run_scan_loop
-
-EXIT_CODE_CLEAN = _mod.EXIT_CODE_CLEAN
-EXIT_CODE_ERROR = _mod.EXIT_CODE_ERROR
-EXIT_CODE_BUDGET_EXHAUSTED = _mod.EXIT_CODE_BUDGET_EXHAUSTED
+import langgraph_pipeline.cli as _mod
+from langgraph_pipeline.cli import (
+    EXIT_CODE_BUDGET_EXHAUSTED,
+    EXIT_CODE_CLEAN,
+    EXIT_CODE_ERROR,
+    _build_arg_parser,
+    _check_stale_pid,
+    _is_budget_exhausted,
+    _register_signal_handlers,
+    _remove_pid_file,
+    _run_scan_loop,
+    _run_single_item,
+    _write_pid_file,
+)
 
 # ─── Shared state helper ──────────────────────────────────────────────────────
 
