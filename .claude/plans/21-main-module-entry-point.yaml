@@ -1,0 +1,36 @@
+meta:
+  name: 'Feature: Module Entry Point for LangGraph Pipeline'
+  description: Add langgraph_pipeline/__main__.py so the pipeline can be invoked as
+    python -m langgraph_pipeline. Move CLI logic from scripts/run-pipeline.py into
+    langgraph_pipeline/cli.py. scripts/run-pipeline.py becomes a thin wrapper.
+  plan_doc: docs/plans/2026-02-26-21-main-module-entry-point-design.md
+  source_item: docs/feature-backlog/21-main-module-entry-point.md
+  created: '2026-02-26'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+  status: pending
+sections:
+- id: phase-1
+  name: Phase 1 - Create cli.py and __main__.py, update run-pipeline.py
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Create langgraph_pipeline/cli.py and __main__.py, slim down scripts/run-pipeline.py
+    agent: coder
+    status: pending
+    description: 'Implement the work item: docs/feature-backlog/21-main-module-entry-point.md
+      Design doc: docs/plans/2026-02-26-21-main-module-entry-point-design.md
+
+      Move all CLI logic from scripts/run-pipeline.py into langgraph_pipeline/cli.py.
+      Create langgraph_pipeline/__main__.py as a thin bootstrap that calls cli.main().
+      Replace scripts/run-pipeline.py with a thin wrapper that imports and calls
+      langgraph_pipeline.cli.main(). Update tests/langgraph/test_run_pipeline.py
+      imports to point at langgraph_pipeline.cli. All existing tests must pass.'
