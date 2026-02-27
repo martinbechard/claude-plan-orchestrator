@@ -25,12 +25,19 @@ sections:
   - id: '1.1'
     name: Create langgraph_pipeline/cli.py and __main__.py, slim down scripts/run-pipeline.py
     agent: coder
-    status: pending
+    status: completed
     description: 'Implement the work item: docs/feature-backlog/21-main-module-entry-point.md
       Design doc: docs/plans/2026-02-26-21-main-module-entry-point-design.md
 
       Move all CLI logic from scripts/run-pipeline.py into langgraph_pipeline/cli.py.
       Create langgraph_pipeline/__main__.py as a thin bootstrap that calls cli.main().
-      Replace scripts/run-pipeline.py with a thin wrapper that imports and calls
-      langgraph_pipeline.cli.main(). Update tests/langgraph/test_run_pipeline.py
-      imports to point at langgraph_pipeline.cli. All existing tests must pass.'
+      Replace scripts/run-pipeline.py with a thin wrapper that imports and calls langgraph_pipeline.cli.main().
+      Update tests/langgraph/test_run_pipeline.py imports to point at langgraph_pipeline.cli.
+      All existing tests must pass.'
+    last_attempt: '2026-02-26T19:47:51.982322'
+    attempts: 1
+    model_used: haiku
+    completed_at: '2026-02-26T19:50:25.556890'
+    result_message: Successfully created langgraph_pipeline/cli.py and __main__.py,
+      slimmed down scripts/run-pipeline.py to thin wrapper, updated test imports.
+      All 46 tests pass.
