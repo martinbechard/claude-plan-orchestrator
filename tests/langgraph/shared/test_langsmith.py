@@ -11,10 +11,11 @@ import pytest
 
 from langgraph_pipeline.shared.langsmith import (
     DEFAULT_LANGSMITH_PROJECT,
-    ENV_LANGCHAIN_API_KEY,
-    ENV_LANGCHAIN_ENDPOINT,
-    ENV_LANGCHAIN_PROJECT,
-    ENV_LANGCHAIN_TRACING_V2,
+    ENV_LANGSMITH_API_KEY,
+    ENV_LANGSMITH_ENDPOINT,
+    ENV_LANGSMITH_PROJECT,
+    ENV_LANGSMITH_TRACING,
+    ENV_LANGSMITH_WORKSPACE_ID,
     NOISY_NODE_NAMES,
     TRACING_ENABLED_VALUE,
     add_trace_metadata,
@@ -26,15 +27,16 @@ from langgraph_pipeline.shared.langsmith import (
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 _TRACING_ENV_VARS = [
-    ENV_LANGCHAIN_API_KEY,
-    ENV_LANGCHAIN_TRACING_V2,
-    ENV_LANGCHAIN_PROJECT,
-    ENV_LANGCHAIN_ENDPOINT,
+    ENV_LANGSMITH_API_KEY,
+    ENV_LANGSMITH_TRACING,
+    ENV_LANGSMITH_PROJECT,
+    ENV_LANGSMITH_ENDPOINT,
+    ENV_LANGSMITH_WORKSPACE_ID,
 ]
 
 
 def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Remove all LangChain env vars to ensure a clean slate per test."""
+    """Remove all LangSmith env vars to ensure a clean slate per test."""
     for var in _TRACING_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
 
@@ -52,14 +54,14 @@ class TestConfigureTracingNoApiKey:
             result = configure_tracing()
         assert result is False
 
-    def test_does_not_set_tracing_v2_when_no_key(self, monkeypatch):
+    def test_does_not_set_tracing_when_no_key(self, monkeypatch):
         _clean_env(monkeypatch)
         with patch(
             "langgraph_pipeline.shared.langsmith.load_orchestrator_config",
             return_value={},
         ):
             configure_tracing()
-        assert os.environ.get(ENV_LANGCHAIN_TRACING_V2) is None
+        assert os.environ.get(ENV_LANGSMITH_TRACING) is None
 
     def test_logs_warning_when_no_key(self, monkeypatch, caplog):
         _clean_env(monkeypatch)
@@ -71,13 +73,13 @@ class TestConfigureTracingNoApiKey:
 
             with caplog.at_level(logging.WARNING, logger="langgraph_pipeline.shared.langsmith"):
                 configure_tracing()
-        assert any("LANGCHAIN_API_KEY" in record.message for record in caplog.records)
+        assert any("LANGSMITH_API_KEY" in record.message for record in caplog.records)
 
 
 class TestConfigureTracingWithEnvKey:
     def test_returns_true_when_env_key_set(self, monkeypatch):
         _clean_env(monkeypatch)
-        monkeypatch.setenv(ENV_LANGCHAIN_API_KEY, "test-key-123")
+        monkeypatch.setenv(ENV_LANGSMITH_API_KEY, "test-key-123")
         with patch(
             "langgraph_pipeline.shared.langsmith.load_orchestrator_config",
             return_value={},
@@ -85,57 +87,57 @@ class TestConfigureTracingWithEnvKey:
             result = configure_tracing()
         assert result is True
 
-    def test_sets_tracing_v2_true(self, monkeypatch):
+    def test_sets_tracing_true(self, monkeypatch):
         _clean_env(monkeypatch)
-        monkeypatch.setenv(ENV_LANGCHAIN_API_KEY, "test-key-123")
+        monkeypatch.setenv(ENV_LANGSMITH_API_KEY, "test-key-123")
         with patch(
             "langgraph_pipeline.shared.langsmith.load_orchestrator_config",
             return_value={},
         ):
             configure_tracing()
-        assert os.environ.get(ENV_LANGCHAIN_TRACING_V2) == TRACING_ENABLED_VALUE
+        assert os.environ.get(ENV_LANGSMITH_TRACING) == TRACING_ENABLED_VALUE
 
     def test_sets_default_project_when_no_project_env_or_config(self, monkeypatch):
         _clean_env(monkeypatch)
-        monkeypatch.setenv(ENV_LANGCHAIN_API_KEY, "test-key-123")
+        monkeypatch.setenv(ENV_LANGSMITH_API_KEY, "test-key-123")
         with patch(
             "langgraph_pipeline.shared.langsmith.load_orchestrator_config",
             return_value={},
         ):
             configure_tracing()
-        assert os.environ.get(ENV_LANGCHAIN_PROJECT) == DEFAULT_LANGSMITH_PROJECT
+        assert os.environ.get(ENV_LANGSMITH_PROJECT) == DEFAULT_LANGSMITH_PROJECT
 
     def test_uses_env_project_when_set(self, monkeypatch):
         _clean_env(monkeypatch)
-        monkeypatch.setenv(ENV_LANGCHAIN_API_KEY, "test-key-123")
-        monkeypatch.setenv(ENV_LANGCHAIN_PROJECT, "my-project")
+        monkeypatch.setenv(ENV_LANGSMITH_API_KEY, "test-key-123")
+        monkeypatch.setenv(ENV_LANGSMITH_PROJECT, "my-project")
         with patch(
             "langgraph_pipeline.shared.langsmith.load_orchestrator_config",
             return_value={},
         ):
             configure_tracing()
-        assert os.environ.get(ENV_LANGCHAIN_PROJECT) == "my-project"
+        assert os.environ.get(ENV_LANGSMITH_PROJECT) == "my-project"
 
     def test_does_not_set_endpoint_when_absent(self, monkeypatch):
         _clean_env(monkeypatch)
-        monkeypatch.setenv(ENV_LANGCHAIN_API_KEY, "test-key-123")
+        monkeypatch.setenv(ENV_LANGSMITH_API_KEY, "test-key-123")
         with patch(
             "langgraph_pipeline.shared.langsmith.load_orchestrator_config",
             return_value={},
         ):
             configure_tracing()
-        assert os.environ.get(ENV_LANGCHAIN_ENDPOINT) is None
+        assert os.environ.get(ENV_LANGSMITH_ENDPOINT) is None
 
     def test_sets_endpoint_from_env(self, monkeypatch):
         _clean_env(monkeypatch)
-        monkeypatch.setenv(ENV_LANGCHAIN_API_KEY, "test-key-123")
-        monkeypatch.setenv(ENV_LANGCHAIN_ENDPOINT, "https://custom.endpoint")
+        monkeypatch.setenv(ENV_LANGSMITH_API_KEY, "test-key-123")
+        monkeypatch.setenv(ENV_LANGSMITH_ENDPOINT, "https://custom.endpoint")
         with patch(
             "langgraph_pipeline.shared.langsmith.load_orchestrator_config",
             return_value={},
         ):
             configure_tracing()
-        assert os.environ.get(ENV_LANGCHAIN_ENDPOINT) == "https://custom.endpoint"
+        assert os.environ.get(ENV_LANGSMITH_ENDPOINT) == "https://custom.endpoint"
 
 
 class TestConfigureTracingWithConfigKey:
@@ -157,7 +159,7 @@ class TestConfigureTracingWithConfigKey:
             return_value=config,
         ):
             configure_tracing()
-        assert os.environ.get(ENV_LANGCHAIN_PROJECT) == "config-project"
+        assert os.environ.get(ENV_LANGSMITH_PROJECT) == "config-project"
 
     def test_sets_endpoint_from_config(self, monkeypatch):
         _clean_env(monkeypatch)
@@ -172,18 +174,18 @@ class TestConfigureTracingWithConfigKey:
             return_value=config,
         ):
             configure_tracing()
-        assert os.environ.get(ENV_LANGCHAIN_ENDPOINT) == "https://self-hosted.example.com"
+        assert os.environ.get(ENV_LANGSMITH_ENDPOINT) == "https://self-hosted.example.com"
 
     def test_env_key_takes_priority_over_config_key(self, monkeypatch):
         _clean_env(monkeypatch)
-        monkeypatch.setenv(ENV_LANGCHAIN_API_KEY, "env-key")
+        monkeypatch.setenv(ENV_LANGSMITH_API_KEY, "env-key")
         config = {"langsmith": {"api_key": "config-key"}}
         with patch(
             "langgraph_pipeline.shared.langsmith.load_orchestrator_config",
             return_value=config,
         ):
             configure_tracing()
-        assert os.environ.get(ENV_LANGCHAIN_API_KEY) == "env-key"
+        assert os.environ.get(ENV_LANGSMITH_API_KEY) == "env-key"
 
 
 # ─── should_trace ─────────────────────────────────────────────────────────────

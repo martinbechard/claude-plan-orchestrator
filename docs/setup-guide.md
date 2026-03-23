@@ -197,7 +197,7 @@ this section if observability is not a priority.
 Environment variable (recommended — keeps secrets out of config files):
 
 ```bash
-export LANGCHAIN_API_KEY=ls__your_api_key_here
+export LANGSMITH_API_KEY=lsv2_sk_your_api_key_here
 ```
 
 Or add a `langsmith` section to `.claude/orchestrator-config.yaml` for local development:

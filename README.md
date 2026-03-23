@@ -549,9 +549,27 @@ If not configured, display names are derived from the current directory name (e.
 
 ### LangSmith Tracing
 
-The pipeline supports LangSmith tracing for debugging and observability. When a LangSmith API key is configured, all graph invocations are traced.
+The pipeline supports [LangSmith](https://smith.langchain.com) tracing for debugging and observability. When a LangSmith API key is configured, all graph invocations are traced and visible in the LangSmith dashboard.
 
-Disable with `--no-tracing` if not needed.
+**Getting a key:**
+1. Create a free account at [smith.langchain.com](https://smith.langchain.com)
+2. Go to Settings > API Keys and create a new key
+
+**Configuring the key** (pick one):
+
+```bash
+# Option 1: Environment variable (recommended, avoids committing secrets)
+export LANGSMITH_API_KEY="lsv2_sk_..."
+
+# Option 2: In .claude/orchestrator-config.yaml (gitignore this file or use a .local variant)
+# langsmith:
+#   api_key: "lsv2_sk_..."
+#   project: "my-project"
+```
+
+The code checks `LANGSMITH_API_KEY` env var first, then falls back to `orchestrator-config.yaml` langsmith.api_key.
+
+Disable tracing entirely with `--no-tracing`.
 
 ## Configuration
 

@@ -12,10 +12,10 @@ from langgraph_pipeline.shared.config import load_orchestrator_config
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-ENV_LANGCHAIN_API_KEY = "LANGCHAIN_API_KEY"
-ENV_LANGCHAIN_TRACING_V2 = "LANGCHAIN_TRACING_V2"
-ENV_LANGCHAIN_PROJECT = "LANGCHAIN_PROJECT"
-ENV_LANGCHAIN_ENDPOINT = "LANGCHAIN_ENDPOINT"
+ENV_LANGSMITH_API_KEY = "LANGSMITH_API_KEY"
+ENV_LANGSMITH_TRACING = "LANGCHAIN_TRACING_V2"
+ENV_LANGSMITH_PROJECT = "LANGCHAIN_PROJECT"
+ENV_LANGSMITH_ENDPOINT = "LANGCHAIN_ENDPOINT"
 ENV_LANGSMITH_WORKSPACE_ID = "LANGSMITH_WORKSPACE_ID"
 
 DEFAULT_LANGSMITH_PROJECT = "claude-plan-orchestrator"
@@ -32,15 +32,15 @@ logger = logging.getLogger(__name__)
 
 
 def configure_tracing() -> bool:
-    """Configure LangSmith tracing via LangChain environment variables.
+    """Configure LangSmith tracing via environment variables.
 
     Reads configuration from (in priority order):
-      1. Environment variables (LANGCHAIN_API_KEY already set)
-      2. .claude/orchestrator-config.yaml langsmith section
+      1. LANGSMITH_API_KEY environment variable
+      2. .claude/orchestrator-config.yaml langsmith.api_key
       3. Defaults (tracing disabled when no API key)
 
-    Sets LANGCHAIN_TRACING_V2, LANGCHAIN_PROJECT, and optionally
-    LANGCHAIN_ENDPOINT when an API key is available.
+    Sets LANGSMITH_API_KEY, LANGCHAIN_TRACING_V2, LANGCHAIN_PROJECT,
+    and optionally LANGCHAIN_ENDPOINT when an API key is available.
 
     Returns:
         True if tracing was enabled, False if disabled (no API key).
@@ -48,14 +48,15 @@ def configure_tracing() -> bool:
     api_key = _resolve_api_key()
     if not api_key:
         logger.warning(
-            "LangSmith tracing disabled: LANGCHAIN_API_KEY not set "
-            "and not found in orchestrator-config.yaml langsmith section."
+            "LangSmith tracing disabled: LANGSMITH_API_KEY not set "
+            "and not found in orchestrator-config.yaml langsmith.api_key. "
+            "Get a free key at https://smith.langchain.com/settings/api-keys"
         )
         return False
 
-    os.environ[ENV_LANGCHAIN_API_KEY] = api_key
-    os.environ[ENV_LANGCHAIN_TRACING_V2] = TRACING_ENABLED_VALUE
-    os.environ[ENV_LANGCHAIN_PROJECT] = _resolve_project_name()
+    os.environ[ENV_LANGSMITH_API_KEY] = api_key
+    os.environ[ENV_LANGSMITH_TRACING] = TRACING_ENABLED_VALUE
+    os.environ[ENV_LANGSMITH_PROJECT] = _resolve_project_name()
 
     workspace_id = _resolve_workspace_id()
     if workspace_id:
@@ -63,7 +64,7 @@ def configure_tracing() -> bool:
 
     endpoint = _resolve_endpoint()
     if endpoint:
-        os.environ[ENV_LANGCHAIN_ENDPOINT] = endpoint
+        os.environ[ENV_LANGSMITH_ENDPOINT] = endpoint
 
     return True
 
@@ -111,8 +112,8 @@ def add_trace_metadata(metadata: dict[str, Any]) -> None:
 
 
 def _resolve_api_key() -> str:
-    """Return the LangSmith API key, preferring env var over config file."""
-    env_key = os.environ.get(ENV_LANGCHAIN_API_KEY, "")
+    """Return the LangSmith API key from env var or config file."""
+    env_key = os.environ.get(ENV_LANGSMITH_API_KEY, "")
     if env_key:
         return env_key
     config = load_orchestrator_config()
@@ -121,7 +122,7 @@ def _resolve_api_key() -> str:
 
 def _resolve_project_name() -> str:
     """Return the LangSmith project name from env, config, or default."""
-    env_project = os.environ.get(ENV_LANGCHAIN_PROJECT, "")
+    env_project = os.environ.get(ENV_LANGSMITH_PROJECT, "")
     if env_project:
         return env_project
     config = load_orchestrator_config()
@@ -139,7 +140,7 @@ def _resolve_workspace_id() -> str:
 
 def _resolve_endpoint() -> str:
     """Return the optional LangSmith endpoint override, or empty string."""
-    env_endpoint = os.environ.get(ENV_LANGCHAIN_ENDPOINT, "")
+    env_endpoint = os.environ.get(ENV_LANGSMITH_ENDPOINT, "")
     if env_endpoint:
         return env_endpoint
     config = load_orchestrator_config()
