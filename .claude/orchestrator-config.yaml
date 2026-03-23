@@ -35,12 +35,13 @@ identity:
     qa: CPO-QA
 
 # LangSmith observability configuration.
-# Traces all LangGraph nodes, agent invocations, tool calls, and LLM calls.
+# Set enabled: true to activate tracing. Requires LANGSMITH_API_KEY and
+# LANGSMITH_WORKSPACE_ID (set in .env.local or as environment variables).
+# Get a free key at https://smith.langchain.com/settings/api-keys
 langsmith:
-  # api_key: "lsv2_sk_..."  # Set via LANGSMITH_API_KEY env var or here
-  # workspace_id: "..."
+  enabled: true
   project: "claude-plan-orchestrator"
-  # endpoint: "https://api.smith.langchain.com"  # default, uncomment for self-hosted
+  # endpoint: "https://api.smith.langchain.com"  # uncomment for self-hosted
 
 # Per-task validation configuration.
 # When enabled, the orchestrator spawns a validator agent after each

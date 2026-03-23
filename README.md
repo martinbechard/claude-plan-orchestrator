@@ -549,31 +549,31 @@ If not configured, display names are derived from the current directory name (e.
 
 ### LangSmith Tracing
 
-The pipeline supports [LangSmith](https://smith.langchain.com) tracing for debugging and observability. When a LangSmith API key is configured, all graph invocations are traced and visible in the LangSmith dashboard.
+The pipeline supports [LangSmith](https://smith.langchain.com) tracing for debugging and observability. Tracing is **opt-in** -- it must be explicitly enabled in the config, and both an API key and workspace ID are validated before any calls are made.
 
-**Getting a key:**
+**Step 1: Get credentials**
 1. Create a free account at [smith.langchain.com](https://smith.langchain.com)
 2. Go to Settings > API Keys and create a new key
+3. Copy your Workspace ID from the URL (`https://smith.langchain.com/o/<WORKSPACE-ID>/...`)
 
-**Configuring the key** (pick one):
+**Step 2: Enable in config** (`.claude/orchestrator-config.yaml`):
 
-```bash
-# Option 1: .env.local file (recommended -- gitignored, loaded automatically)
-cp .env.example .env.local
-# Then edit .env.local and set: LANGSMITH_API_KEY=lsv2_sk_...
-
-# Option 2: Shell environment variable
-export LANGSMITH_API_KEY="lsv2_sk_..."
-
-# Option 3: In .claude/orchestrator-config.yaml
-# langsmith:
-#   api_key: "lsv2_sk_..."
-#   project: "my-project"
+```yaml
+langsmith:
+  enabled: true
+  project: "my-project"       # optional, defaults to "claude-plan-orchestrator"
 ```
 
-The pipeline loads `.env.local` then `.env` on startup. Since the orchestrator runs as a plugin inside a host project, `.env.local` is the right place for orchestrator-specific secrets (the host project may have its own `.env`). Existing env vars are never overwritten.
+**Step 3: Set credentials** in `.env.local` (gitignored):
 
-Disable tracing entirely with `--no-tracing`.
+```
+LANGSMITH_API_KEY=lsv2_sk_...
+LANGSMITH_WORKSPACE_ID=a3b32608-...
+```
+
+The pipeline loads `.env.local` then `.env` on startup. Existing env vars are never overwritten.
+
+If `langsmith.enabled` is false (the default), tracing is off and no LangSmith calls are made. If enabled but credentials are missing, a single warning is logged and tracing is disabled. Use `--no-tracing` to skip all LangSmith configuration entirely.
 
 ## Configuration
 

@@ -505,11 +505,10 @@ def main() -> int:
     _log_startup_banner(args, config)
 
     if not args.no_tracing:
-        tracing_enabled = configure_tracing()
-        if tracing_enabled:
+        if configure_tracing():
             logger.info("LangSmith tracing enabled.")
-        else:
-            logger.info("LangSmith tracing not configured (no API key).")
+    else:
+        logger.info("LangSmith tracing disabled (--no-tracing).")
 
     slack: Optional[SlackNotifier] = None
     if not args.no_slack:

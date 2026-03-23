@@ -2,7 +2,12 @@
 # LangSmith tracing configuration and trace helper utilities.
 # Design: docs/plans/2026-02-26-06-langsmith-observability-design.md
 
-"""LangSmith observability: configure tracing, filter noisy nodes, attach metadata."""
+"""LangSmith observability: configure tracing, filter noisy nodes, attach metadata.
+
+Tracing is opt-in via the langsmith.enabled config flag or --no-tracing CLI flag.
+When enabled, both LANGSMITH_API_KEY and LANGSMITH_WORKSPACE_ID must be set
+(via .env.local, environment variables, or orchestrator-config.yaml).
+"""
 
 import logging
 import os
@@ -20,6 +25,7 @@ ENV_LANGSMITH_WORKSPACE_ID = "LANGSMITH_WORKSPACE_ID"
 
 DEFAULT_LANGSMITH_PROJECT = "claude-plan-orchestrator"
 TRACING_ENABLED_VALUE = "true"
+TRACING_DISABLED_VALUE = "false"
 
 # Node names that produce high-frequency runs with no meaningful signal.
 # should_trace() returns False for these to suppress custom metadata emission.
@@ -27,46 +33,95 @@ NOISY_NODE_NAMES = frozenset({"scan_backlog", "sleep", "wait"})
 
 logger = logging.getLogger(__name__)
 
+# Module-level flag to avoid repeated warnings across multiple configure_tracing() calls.
+_tracing_configured = False
+_tracing_active = False
+
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 
 
 def configure_tracing() -> bool:
-    """Configure LangSmith tracing via environment variables.
+    """Configure LangSmith tracing if enabled and credentials are valid.
 
-    Reads configuration from (in priority order):
-      1. LANGSMITH_API_KEY environment variable
-      2. .claude/orchestrator-config.yaml langsmith.api_key
-      3. Defaults (tracing disabled when no API key)
+    This function is idempotent: the first call resolves configuration and
+    logs any warnings; subsequent calls return the cached result silently.
 
-    Sets LANGSMITH_API_KEY, LANGCHAIN_TRACING_V2, LANGCHAIN_PROJECT,
-    and optionally LANGCHAIN_ENDPOINT when an API key is available.
+    Tracing is enabled when langsmith.enabled is true in orchestrator-config.yaml
+    (or not explicitly disabled via --no-tracing). When enabled, both
+    LANGSMITH_API_KEY and LANGSMITH_WORKSPACE_ID must be present.
+
+    Resolution order for each setting:
+      1. Environment variable (including .env.local)
+      2. orchestrator-config.yaml langsmith section
 
     Returns:
-        True if tracing was enabled, False if disabled (no API key).
+        True if tracing was enabled, False if disabled or misconfigured.
     """
-    api_key = _resolve_api_key()
-    if not api_key:
-        logger.warning(
-            "LangSmith tracing disabled: LANGSMITH_API_KEY not set "
-            "and not found in orchestrator-config.yaml langsmith.api_key. "
-            "Get a free key at https://smith.langchain.com/settings/api-keys"
+    global _tracing_configured, _tracing_active
+
+    if _tracing_configured:
+        return _tracing_active
+
+    _tracing_configured = True
+    _tracing_active = False
+
+    config = load_orchestrator_config()
+    langsmith_config = config.get("langsmith", {})
+
+    # Check the enabled flag. Default to False (opt-in).
+    enabled = langsmith_config.get("enabled", False)
+    if not enabled:
+        logger.info(
+            "LangSmith tracing is not enabled. "
+            "Set langsmith.enabled: true in orchestrator-config.yaml to enable."
         )
+        # Explicitly disable tracing so LangGraph doesn't try to trace
+        os.environ[ENV_LANGSMITH_TRACING] = TRACING_DISABLED_VALUE
         return False
 
+    # Validate API key
+    api_key = _resolve_value(ENV_LANGSMITH_API_KEY, langsmith_config, "api_key")
+    if not api_key:
+        logger.warning(
+            "LangSmith enabled but LANGSMITH_API_KEY not set. "
+            "Tracing disabled. Get a key at https://smith.langchain.com/settings/api-keys"
+        )
+        os.environ[ENV_LANGSMITH_TRACING] = TRACING_DISABLED_VALUE
+        return False
+
+    # Validate workspace ID
+    workspace_id = _resolve_value(ENV_LANGSMITH_WORKSPACE_ID, langsmith_config, "workspace_id")
+    if not workspace_id:
+        logger.warning(
+            "LangSmith enabled but LANGSMITH_WORKSPACE_ID not set. "
+            "Tracing disabled. Find your workspace ID at "
+            "https://smith.langchain.com (Settings > Workspace ID)."
+        )
+        os.environ[ENV_LANGSMITH_TRACING] = TRACING_DISABLED_VALUE
+        return False
+
+    # All validated -- activate tracing
     os.environ[ENV_LANGSMITH_API_KEY] = api_key
+    os.environ[ENV_LANGSMITH_WORKSPACE_ID] = workspace_id
     os.environ[ENV_LANGSMITH_TRACING] = TRACING_ENABLED_VALUE
-    os.environ[ENV_LANGSMITH_PROJECT] = _resolve_project_name()
+    os.environ[ENV_LANGSMITH_PROJECT] = _resolve_value(
+        ENV_LANGSMITH_PROJECT, langsmith_config, "project"
+    ) or DEFAULT_LANGSMITH_PROJECT
 
-    workspace_id = _resolve_workspace_id()
-    if workspace_id:
-        os.environ[ENV_LANGSMITH_WORKSPACE_ID] = workspace_id
-
-    endpoint = _resolve_endpoint()
+    endpoint = _resolve_value(ENV_LANGSMITH_ENDPOINT, langsmith_config, "endpoint")
     if endpoint:
         os.environ[ENV_LANGSMITH_ENDPOINT] = endpoint
 
+    _tracing_active = True
     return True
+
+
+def reset_tracing_state() -> None:
+    """Reset the module-level tracing state. Used in tests only."""
+    global _tracing_configured, _tracing_active
+    _tracing_configured = False
+    _tracing_active = False
 
 
 def should_trace(node_name: str) -> bool:
@@ -111,37 +166,9 @@ def add_trace_metadata(metadata: dict[str, Any]) -> None:
 # ─── Private helpers ──────────────────────────────────────────────────────────
 
 
-def _resolve_api_key() -> str:
-    """Return the LangSmith API key from env var or config file."""
-    env_key = os.environ.get(ENV_LANGSMITH_API_KEY, "")
-    if env_key:
-        return env_key
-    config = load_orchestrator_config()
-    return config.get("langsmith", {}).get("api_key", "")
-
-
-def _resolve_project_name() -> str:
-    """Return the LangSmith project name from env, config, or default."""
-    env_project = os.environ.get(ENV_LANGSMITH_PROJECT, "")
-    if env_project:
-        return env_project
-    config = load_orchestrator_config()
-    return config.get("langsmith", {}).get("project", DEFAULT_LANGSMITH_PROJECT)
-
-
-def _resolve_workspace_id() -> str:
-    """Return the LangSmith workspace ID for org-scoped service keys."""
-    env_ws = os.environ.get(ENV_LANGSMITH_WORKSPACE_ID, "")
-    if env_ws:
-        return env_ws
-    config = load_orchestrator_config()
-    return config.get("langsmith", {}).get("workspace_id", "")
-
-
-def _resolve_endpoint() -> str:
-    """Return the optional LangSmith endpoint override, or empty string."""
-    env_endpoint = os.environ.get(ENV_LANGSMITH_ENDPOINT, "")
-    if env_endpoint:
-        return env_endpoint
-    config = load_orchestrator_config()
-    return config.get("langsmith", {}).get("endpoint", "")
+def _resolve_value(env_var: str, config_section: dict, config_key: str) -> str:
+    """Return a value from env var first, then config file, or empty string."""
+    env_val = os.environ.get(env_var, "")
+    if env_val:
+        return env_val
+    return config_section.get(config_key, "")
