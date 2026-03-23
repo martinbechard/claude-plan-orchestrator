@@ -32,6 +32,7 @@ from typing import Optional
 from langgraph_pipeline.pipeline.graph import PIPELINE_THREAD_ID, pipeline_graph
 from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.config import load_orchestrator_config
+from langgraph_pipeline.shared.dotenv import load_dotenv
 from langgraph_pipeline.shared.langsmith import configure_tracing
 from langgraph_pipeline.shared.paths import LANGGRAPH_PID_FILE_PATH
 from langgraph_pipeline.slack import SlackNotifier
@@ -489,6 +490,8 @@ def main() -> int:
     Returns:
         Exit code: EXIT_CODE_CLEAN, EXIT_CODE_ERROR, or EXIT_CODE_BUDGET_EXHAUSTED.
     """
+    load_dotenv()  # Load .env before anything else reads os.environ
+
     parser = _build_arg_parser()
     args = parser.parse_args()
 

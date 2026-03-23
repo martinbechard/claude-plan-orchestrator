@@ -11,6 +11,9 @@ venv/
 *.swp
 *.swo
 
+# Environment secrets
+.env
+
 # Auto-generated (user-specific)
 .claude/plans/task-status.json
 .claude/plans/current-plan.yaml
@@ -25,7 +28,12 @@ venv/
 .claude/plans/.intake-history.json
 .claude/plans/.backlog-creation-throttle.json
 
-# Runtime pipeline logs (generated at runtime, not committed)
+# Runtime pipeline state and logs
+.claude/pipeline-state.db
+.claude/pipeline-state.db-shm
+.claude/pipeline-state.db-wal
+.chroma/
+.langgraph_api/
 logs/
 
 # OS

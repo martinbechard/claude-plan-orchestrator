@@ -558,16 +558,20 @@ The pipeline supports [LangSmith](https://smith.langchain.com) tracing for debug
 **Configuring the key** (pick one):
 
 ```bash
-# Option 1: Environment variable (recommended, avoids committing secrets)
+# Option 1: .env file (recommended -- gitignored, loaded automatically at startup)
+cp .env.example .env
+# Then edit .env and set: LANGSMITH_API_KEY=lsv2_sk_...
+
+# Option 2: Shell environment variable
 export LANGSMITH_API_KEY="lsv2_sk_..."
 
-# Option 2: In .claude/orchestrator-config.yaml (gitignore this file or use a .local variant)
+# Option 3: In .claude/orchestrator-config.yaml
 # langsmith:
 #   api_key: "lsv2_sk_..."
 #   project: "my-project"
 ```
 
-The code checks `LANGSMITH_API_KEY` env var first, then falls back to `orchestrator-config.yaml` langsmith.api_key.
+The pipeline loads `.env` on startup (existing env vars are not overwritten). Resolution order: environment variable, then `orchestrator-config.yaml` langsmith.api_key.
 
 Disable tracing entirely with `--no-tracing`.
 
