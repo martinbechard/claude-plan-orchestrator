@@ -13,6 +13,7 @@ venv/
 
 # Environment secrets
 .env
+.env.local
 
 # Auto-generated (user-specific)
 .claude/plans/task-status.json

@@ -558,9 +558,9 @@ The pipeline supports [LangSmith](https://smith.langchain.com) tracing for debug
 **Configuring the key** (pick one):
 
 ```bash
-# Option 1: .env file (recommended -- gitignored, loaded automatically at startup)
-cp .env.example .env
-# Then edit .env and set: LANGSMITH_API_KEY=lsv2_sk_...
+# Option 1: .env.local file (recommended -- gitignored, loaded automatically)
+cp .env.example .env.local
+# Then edit .env.local and set: LANGSMITH_API_KEY=lsv2_sk_...
 
 # Option 2: Shell environment variable
 export LANGSMITH_API_KEY="lsv2_sk_..."
@@ -571,7 +571,7 @@ export LANGSMITH_API_KEY="lsv2_sk_..."
 #   project: "my-project"
 ```
 
-The pipeline loads `.env` on startup (existing env vars are not overwritten). Resolution order: environment variable, then `orchestrator-config.yaml` langsmith.api_key.
+The pipeline loads `.env.local` then `.env` on startup. Since the orchestrator runs as a plugin inside a host project, `.env.local` is the right place for orchestrator-specific secrets (the host project may have its own `.env`). Existing env vars are never overwritten.
 
 Disable tracing entirely with `--no-tracing`.
 

@@ -1,11 +1,15 @@
 # langgraph_pipeline/shared/dotenv.py
 # Minimal .env file loader with no external dependencies.
 
-"""Load environment variables from a .env file.
+"""Load environment variables from .env files.
+
+Loads .env.local first (project-specific overrides, e.g. API keys for the
+orchestrator plugin), then .env (the host project's shared defaults).
+Since existing variables are never overwritten, .env.local values win
+over .env values, and real environment variables win over both.
 
 Supports KEY=value and KEY="value" (with optional quotes).
 Lines starting with # are comments. Blank lines are ignored.
-Existing environment variables are NOT overwritten.
 """
 
 import logging
@@ -19,19 +23,39 @@ _LINE_PATTERN = re.compile(
     r"""^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|(.*))\s*$"""
 )
 
-DEFAULT_DOTENV_PATH = ".env"
+# Load order: .env.local first (higher priority), then .env.
+# Since existing vars are never overwritten, first file wins.
+DOTENV_FILES = (".env.local", ".env")
 
 
-def load_dotenv(path: str = DEFAULT_DOTENV_PATH) -> int:
-    """Load variables from a .env file into os.environ.
+def load_dotenv_files() -> int:
+    """Load variables from .env.local and .env into os.environ.
 
-    Existing environment variables are not overwritten (env takes precedence).
-
-    Args:
-        path: Path to the .env file. Defaults to ".env" in the working directory.
+    Files are loaded in order: .env.local, then .env. Since existing
+    environment variables are never overwritten, the precedence is:
+      1. Real environment variables (always win)
+      2. .env.local (project-specific, e.g. orchestrator plugin secrets)
+      3. .env (host project defaults)
 
     Returns:
-        Number of variables loaded.
+        Total number of variables loaded across all files.
+    """
+    total = 0
+    for path in DOTENV_FILES:
+        total += _load_single_file(path)
+    return total
+
+
+def _load_single_file(path: str) -> int:
+    """Load variables from a single .env file into os.environ.
+
+    Existing environment variables are not overwritten.
+
+    Args:
+        path: Path to the .env file.
+
+    Returns:
+        Number of variables loaded from this file.
     """
     if not os.path.isfile(path):
         return 0
