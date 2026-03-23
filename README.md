@@ -11,48 +11,60 @@ The Plan Orchestrator executes structured YAML plans through Claude Code, provid
 - **Dependency Management**: Tasks declare dependencies; orchestrator respects execution order
 - **Circuit Breaker**: Stops after consecutive failures to avoid wasting resources
 - **Rate Limit Handling**: Detects Claude API rate limits and waits automatically
-- **Graceful Stop**: Touch a semaphore file to stop between tasks
-- **Post-Plan Smoke Tests**: Optionally run Playwright tests after plan completion
-- **Auto-Pipeline**: Daemon that watches backlog folders and drives the orchestrator automatically
+- **Graceful Stop**: Touch a semaphore file or send SIGINT/SIGTERM to stop between tasks
 - **Defect Verification Loop**: Independent symptom verification with verify-then-fix retry cycles
 - **Configurable Commands**: Build, test, and dev-server commands configurable per project
 - **Agent Framework**: 11 specialized agents (coder, frontend-coder, code-reviewer, systems-designer, ux-designer, ux-reviewer, spec-verifier, qa-auditor, planner, issue-verifier, validator) with YAML frontmatter definitions
 - **Slack Integration**: Real-time notifications, inbound message processing, LLM-powered question answering, 5 Whys intake analysis, and cross-instance collaboration via Slack. Multi-layer loop prevention (chain detection, self-reply gating, notification pattern filter, global rate limiter) prevents recursive feedback spirals
 - **RAG Deduplication**: ChromaDB-based semantic search over the backlog detects duplicate defect/feature requests and consolidates them into existing items instead of creating duplicates
-- **Budget Management**: Token usage tracking, API-equivalent cost estimates, and quota-aware execution with configurable limits
+- **Budget Management**: Session-level budget cap via CLI, plus per-plan budget limits in YAML
 - **Model Escalation**: Tiered model selection (haiku -> sonnet -> opus) with automatic escalation after consecutive failures
 - **Per-Task Validation**: Independent validator agent that runs after each task with PASS/WARN/FAIL verdicts and retry logic
 - **Design Competitions**: Phase 0 parallel design generation with AI judge for architecture decisions
-- **Hot-Reload**: Auto-pipeline monitors its own source files and self-restarts when code changes are detected
+- **Crash Recovery**: SQLite-backed checkpointing allows the pipeline to resume from the last completed step after a crash
+- **LangSmith Tracing**: Optional LangSmith integration for debugging and observability
+
+## Architecture
+
+The pipeline is built on LangGraph, with two interconnected graphs:
 
 ```
-                     ┌──────────────────────────┐
-                     │      YAML Plan           │
-                     │  (sections + tasks +     │
-                     │   dependencies)          │
-                     └────────────┬─────────────┘
-                                  │
-                     ┌────────────▼─────────────┐
-                     │     Orchestrator          │
-                     │  (Python state machine)   │
-                     │                           │
-                     │  ┌─────┐ ┌─────┐ ┌─────┐ │
-                     │  │Task │ │Task │ │Task │ │  ← parallel via
-                     │  │ 2.1 │ │ 2.2 │ │ 2.3 │ │    git worktrees
-                     │  └──┬──┘ └──┬──┘ └──┬──┘ │
-                     │     │       │       │     │
-                     └─────┼───────┼───────┼─────┘
-                           │       │       │
-                     ┌─────▼───────▼───────▼─────┐
-                     │    Claude Code CLI         │
-                     │  (fresh session per task)  │
-                     └────────────┬──────────────┘
-                                  │
-                     ┌────────────▼─────────────┐
-                     │    task-status.json       │
-                     │  (completion protocol)    │
-                     └──────────────────────────┘
+                     ┌───────────────────────────────────────────────┐
+                     │            Pipeline Graph                     │
+                     │                                               │
+                     │  scan_backlog ──► intake_analyze ──► create_plan
+                     │       │                                  │    │
+                     │       ▼                                  ▼    │
+                     │     (END if                        execute_plan
+                     │      no items)                     ┌─────┤    │
+                     │                                    │     ▼    │
+                     │                              (defect?) verify │
+                     │                                    │   │   │  │
+                     │                                    │ PASS FAIL│
+                     │                                    │   │   │  │
+                     │                                    ▼   ▼   ▼  │
+                     │                                  archive  ◄───┘
+                     │                                    │          │
+                     │                                    ▼          │
+                     │                                  (END)        │
+                     └───────────────────────────────────────────────┘
+
+                     ┌───────────────────────────────────────────────┐
+                     │          Executor Subgraph                    │
+                     │  (invoked by execute_plan node)               │
+                     │                                               │
+                     │  task_selector ──► task_runner ──► validator   │
+                     │       ▲                               │       │
+                     │       │          FAIL + escalate      │       │
+                     │       └───────────────────────────────┘       │
+                     │                                               │
+                     │  Features: parallel worktrees, circuit        │
+                     │  breaker, model escalation, fresh Claude      │
+                     │  session per task                             │
+                     └───────────────────────────────────────────────┘
 ```
+
+Each task runs in a fresh Claude Code CLI session. The executor subgraph handles task selection, Claude CLI invocation, validation, parallel worktree execution, circuit breaking, and model escalation entirely within LangGraph.
 
 ## Why Fresh Sessions Matter
 
@@ -69,12 +81,11 @@ See [docs/narrative/](docs/narrative/) for the full development history and desi
 
 - Python 3.8+
 - PyYAML (`pip install pyyaml`)
+- LangGraph (`pip install langgraph`)
 - Claude Code CLI installed and authenticated
 - Git (for version control and parallel worktrees)
-- Optional: `watchdog` (`pip install watchdog`) for auto-pipeline
-- Optional: `slack_sdk` (`pip install slack_sdk`) for Slack integration
-- Optional: `requests` (`pip install requests`) for API calls
 - Optional: `chromadb` (`pip install chromadb`) for RAG-based intake deduplication
+- Optional: `slack-bolt` (`pip install slack-bolt`) for Slack Socket Mode (interactive buttons)
 
 ## Installation
 
@@ -90,13 +101,13 @@ Or for local development:
 claude --plugin-dir /path/to/claude-plan-orchestrator
 ```
 
-After plugin install, the orchestrator scripts are available in the plugin directory:
+After plugin install, run the pipeline from your project directory:
 
 ```bash
-python "$(claude plugin path plan-orchestrator)/scripts/plan-orchestrator.py" --plan .claude/plans/my-feature.yaml
+python scripts/auto-pipeline.py
 ```
 
-See the [Setup Guide](docs/setup-guide.md) for the complete setup procedure including Slack integration, .gitignore configuration, and upgrading from manual-copy installs or webhook-based Slack.
+See the [Setup Guide](docs/setup-guide.md) for the complete setup procedure including Slack integration, .gitignore configuration, and upgrading from earlier versions.
 
 ### Manual Install (Alternative)
 
@@ -109,21 +120,22 @@ git clone https://github.com/martinbechard/claude-plan-orchestrator.git
 # Copy to your project
 cp -r claude-plan-orchestrator/.claude/ /path/to/your/project/
 cp -r claude-plan-orchestrator/scripts/ /path/to/your/project/
+cp -r claude-plan-orchestrator/langgraph_pipeline/ /path/to/your/project/
 cp -r claude-plan-orchestrator/docs/ /path/to/your/project/
 ```
 
-Or copy individual files:
+Or copy individual components:
 
 ```bash
-# Required
-cp scripts/plan-orchestrator.py /your/project/scripts/
+# Required: the pipeline package and entry point
+cp -r langgraph_pipeline/ /your/project/
+cp scripts/auto-pipeline.py /your/project/scripts/
 
 # Recommended
 cp CODING-RULES.md /your/project/                  # Coding standards template
 cp .claude/skills/implement/SKILL.md /your/project/.claude/skills/implement/
 
 # Optional
-cp scripts/auto-pipeline.py /your/project/scripts/
 cp .claude/commands/implement.md /your/project/.claude/commands/
 cp .claude/plans/sample-plan.yaml /your/project/.claude/plans/
 ```
@@ -186,30 +198,45 @@ sections:
 
 Write detailed implementation steps at `docs/plans/YYYY-MM-DD-my-feature-design.md`. The more detailed, the better Claude will execute each task.
 
-### 3. Run the orchestrator
+### 3. Run the pipeline
 
 ```bash
-# Dry run first (shows what would execute)
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml --dry-run
+# Start the pipeline (scans backlogs, creates plans, executes tasks)
+python scripts/auto-pipeline.py
 
-# Run all pending tasks
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml
+# Or equivalently via module
+python -m langgraph_pipeline
 
-# Run with parallel execution
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml --parallel
+# Process one item then exit
+python scripts/auto-pipeline.py --once
 
-# Run single task then stop
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml --single-task
+# Dry run (shows what would execute without running)
+python scripts/auto-pipeline.py --dry-run
 
-# Resume from specific task
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml --resume-from 2.1
-
-# Verbose output with real-time streaming
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml --verbose
-
-# Skip post-plan smoke tests
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml --skip-smoke
+# Verbose output (debug logging)
+python scripts/auto-pipeline.py --verbose
 ```
+
+## CLI Reference
+
+The pipeline accepts the following flags. Both `python scripts/auto-pipeline.py` and `python -m langgraph_pipeline` accept the same arguments:
+
+| Flag | Description |
+|------|-------------|
+| `--once` | Scan backlog, process one item, then exit |
+| `--single-item PATH` | Process a specific backlog item at PATH and exit |
+| `--dry-run` | Log what would be done without executing |
+| `--verbose` | Shorthand for `--log-level DEBUG` |
+| `--log-level LEVEL` | Set logging verbosity: DEBUG, INFO, WARNING, ERROR (default: INFO) |
+| `--budget-cap USD` | Stop after cumulative session cost exceeds this value. Exits with code 2 |
+| `--backlog-dir DIR` | Override the default backlog directory to scan |
+| `--no-slack` | Disable all Slack notifications and inbound polling |
+| `--no-tracing` | Skip LangSmith tracing configuration |
+
+Exit codes:
+- `0` -- clean shutdown (SIGINT/SIGTERM, `--once` complete, or no items)
+- `1` -- unhandled error
+- `2` -- budget cap exhausted
 
 ## Features
 
@@ -260,28 +287,16 @@ When Claude CLI output contains rate limit messages ("You've hit your limit"), t
 
 ### Graceful Stop
 
-To stop the orchestrator cleanly:
+To stop the pipeline cleanly, use any of these methods:
 
 ```bash
+# Semaphore file (checked between tasks)
 touch .claude/plans/.stop
-```
 
-The orchestrator checks for this semaphore every second during task execution and between tasks. A mid-task stop terminates the running Claude subprocess within 1 second and exits cleanly. For immediate process termination, use the PID file:
-
-```bash
+# Signal (completes current graph invocation, then exits)
 kill $(cat .claude/plans/.pipeline.pid)
-```
 
-### Post-Plan Smoke Tests
-
-After all tasks complete, the orchestrator can run Playwright smoke tests to verify the application still works:
-
-```bash
-# Enabled by default (looks for tests/SMOKE01-critical-paths.spec.ts)
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml
-
-# Disable smoke tests
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml --skip-smoke
+# Or just Ctrl+C (SIGINT)
 ```
 
 ### Plan Modification by Claude
@@ -293,14 +308,6 @@ Claude can modify the YAML plan during execution:
 - **Self-extending plans**: A task can append new tasks and set `plan_modified: true`
 
 Set `plan_modified: true` in the status file to trigger a plan reload.
-
-### Verbose / Streaming Output
-
-Use `--verbose` for real-time streaming of Claude's output via `--output-format stream-json`:
-
-```bash
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml --verbose
-```
 
 ### Agent Framework
 
@@ -391,8 +398,6 @@ For significant architectural decisions, the orchestrator supports a Phase 0 des
 
 The planner agent reads the winning design and creates implementation phases, setting `plan_modified: true` to trigger a plan reload.
 
-### Judge Model for Design Competitions
-
 Design competition judging can use a different model by adding `judge_model` to the plan meta:
 
 ```yaml
@@ -401,74 +406,83 @@ meta:
   # judge_model: opus   # For architecture competitions
 ```
 
-When `judge_model` is set, the planner task that evaluates competition designs uses that model instead of the planner agent's default.
-
 ### Model Escalation
 
-The orchestrator supports tiered model selection that automatically escalates to more capable (and expensive) models after consecutive task failures:
+The executor subgraph uses tiered model selection that automatically escalates to more capable models after consecutive task failures:
 
-```bash
-# Use default escalation (haiku -> sonnet -> opus after 2 failures each)
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml
-
-# Start with sonnet, escalate after 1 failure
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml \
-  --starting-model sonnet --escalate-after-failures 1
-
-# Cap at sonnet (never use opus)
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml \
-  --max-model sonnet
-```
+- **Default progression**: haiku -> sonnet -> opus
+- **Reset on success**: After a task succeeds, the model resets to the starting tier
+- Escalation is enabled by default with `haiku` as the starting model
 
 Model tiers: haiku (fastest/cheapest) -> sonnet (balanced) -> opus (most capable).
 
-### Budget and Quota Management
+### Budget Management
 
-Track token usage and enforce budget limits during plan execution:
+Budget limits can be set at two levels:
+
+**Session-level** via CLI flag:
 
 ```bash
-# Set maximum quota percentage (stop if usage exceeds this % of daily quota)
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml \
-  --max-quota-percent 80
+# Stop after cumulative cost exceeds ~$5 (exits with code 2)
+python scripts/auto-pipeline.py --budget-cap 5.00
+```
 
-# Set quota ceiling in USD (API-equivalent estimate)
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml \
-  --quota-ceiling-usd 50.00
+**Per-plan** via YAML metadata:
 
-# Set reserved budget (stop when remaining budget drops below this)
-python scripts/plan-orchestrator.py --plan .claude/plans/my-feature.yaml \
-  --reserved-budget-usd 10.00
+```yaml
+meta:
+  budget_limit_usd: 10.00
 ```
 
 Cost displays use `~$` prefix to indicate API-equivalent estimates. Note: Claude Max subscription users are not billed per-token; these are estimates for planning purposes.
 
+### Crash Recovery
+
+The pipeline uses SQLite-backed checkpointing (via LangGraph's `SqliteSaver`). If the process crashes or is killed, it resumes from the last completed graph node on restart. The checkpoint database is stored at `.claude/pipeline-state.db`.
+
+### Defect Verification Loop
+
+For defects, the pipeline runs a verify-then-fix cycle after plan execution:
+
+```
+scan_backlog --> intake_analyze --> create_plan --> execute_plan
+                                                       |
+                                             (defect?) verify_symptoms
+                                                    |           |
+                                                  PASS        FAIL
+                                                    |           |
+                                                archive    back to create_plan
+                                                           (findings inform
+                                                            the next plan)
+```
+
+The verifier checks whether the reported symptoms are actually resolved. It appends structured findings to the defect file, which the next plan-creation step reads to produce a targeted fix. Up to 3 verification cycles are attempted.
+
 ### Slack Integration
 
-The auto-pipeline integrates with Slack for real-time notifications and inbound work items:
+The pipeline integrates with Slack for real-time notifications and inbound work items. Slack is enabled by default; disable with `--no-slack`.
 
 **Outbound notifications** are sent to dedicated channels:
-- `orchestrator-notifications` - Status updates, progress reports
-- `orchestrator-defects` - Defect intake and status
-- `orchestrator-features` - Feature intake and status
-- `orchestrator-questions` - Questions from the orchestrator to the team
+- `{prefix}-notifications` - Status updates, progress reports
+- `{prefix}-defects` - Defect intake and status
+- `{prefix}-features` - Feature intake and status
+- `{prefix}-questions` - Questions from the pipeline to the team
 
-**Inbound message processing** supports:
+**Inbound message processing** runs on a background polling thread (every 15 seconds) and supports:
 - Submitting new features and defects via Slack messages
 - Asking questions about the pipeline state (answered by LLM with full context)
-- Control commands (stop, status, etc.)
+- Control commands: `stop_pipeline`, `skip_item`, `get_status`
 - 5 Whys analysis for intake - the system automatically structures incoming feature/defect requests using the 5 Whys methodology
 
 **Setup:** Run `python scripts/setup-slack.py --prefix myproject` to create a Slack app, channels, and config automatically. For a second project reusing an existing app, pass `--bot-token` and `--app-token` with a different `--prefix`. See the [Setup Guide](docs/setup-guide.md) for the full walkthrough including required bot scopes, manual setup alternative, and migration from webhook-based Slack to app-based Slack.
 
-**Adding a Second Project to an Existing Workspace:** If you already have a Slack app running for another project, you can add the orchestrator to a second project with a single command — no browser required:
+**Adding a Second Project to an Existing Workspace:** If you already have a Slack app running for another project, you can add the orchestrator to a second project with a single command:
 
 ```bash
 python scripts/setup-slack.py --prefix newproject --bot-token xoxb-your-existing-token --app-token xapp-your-existing-token --non-interactive
 ```
 
-Find your existing tokens in the other project's `.claude/slack.local.yaml`. The command creates new `newproject-*` channels and writes `.claude/slack.local.yaml` in the current directory. See [Adding to an Existing Workspace](docs/setup-guide.md#adding-to-an-existing-workspace) in the Setup Guide for full details.
-
-The background polling thread checks for new messages every 15 seconds, independent of task execution.
+Find your existing tokens in the other project's `.claude/slack.local.yaml`. The command creates new `newproject-*` channels and writes `.claude/slack.local.yaml` in the current directory.
 
 **Loop prevention** uses four redundant layers to prevent the bot from re-processing its own notifications in a feedback spiral:
 1. **Chain detection:** On-disk history of recently created items; messages referencing known item numbers are skipped
@@ -480,30 +494,30 @@ The background polling thread checks for new messages every 15 seconds, independ
 
 ### Cross-Instance Collaboration via Slack
 
-Multiple orchestrator instances running in different projects can collaborate through shared Slack channels. By inviting other instances to listen to your `orchestrator-*` channels, they gain the ability to:
+Multiple orchestrator instances running in different projects can collaborate through shared Slack channels. By inviting other instances to listen to your channels, they gain the ability to:
 
 - **Discover new versions**: Instances see release notifications and can flag when they are running outdated code
-- **Submit defects**: An instance that encounters a bug in the orchestrator itself can post a structured defect report to the `orchestrator-defects` channel, which the upstream instance picks up as a backlog item
-- **Submit features**: Instances can request new capabilities by posting to `orchestrator-features`
-- **Ask questions**: Cross-instance questions are answered by the LLM with full pipeline context via `orchestrator-questions`
+- **Submit defects**: An instance that encounters a bug in the orchestrator itself can post a structured defect report to the defects channel
+- **Submit features**: Instances can request new capabilities by posting to the features channel
+- **Ask questions**: Cross-instance questions are answered by the LLM with full pipeline context
 
-This turns the Slack channels into a lightweight coordination bus where orchestrator instances running across different codebases can report issues, request improvements, and stay informed about upstream changes --- without any direct coupling between the projects.
+This turns the Slack channels into a lightweight coordination bus where orchestrator instances running across different codebases can report issues, request improvements, and stay informed about upstream changes -- without any direct coupling between the projects.
 
-**Setup:** Each instance uses its own channel prefix (e.g., `myproject-notifications`), but can be invited to monitor another instance's channels as a read/write participant. The inbound message processing handles messages from any source identically --- whether from a human or another orchestrator instance.
+**Setup:** Each instance uses its own channel prefix (e.g., `myproject-notifications`), but can be invited to monitor another instance's channels as a read/write participant. The inbound message processing handles messages from any source identically -- whether from a human or another orchestrator instance.
 
-### Setting Up Cross-Project Reporting (Consumer Side)
+#### Setting Up Cross-Project Reporting (Consumer Side)
 
 If your project wants to report defects or request features to an upstream orchestrator, three things must be in place:
 
-1. **Know the upstream channel prefix** --- The upstream project's channels follow the naming pattern `{prefix}-defects`, `{prefix}-features`, `{prefix}-notifications`, and `{prefix}-questions`. Get this prefix from the upstream team.
+1. **Know the upstream channel prefix** -- The upstream project's channels follow the naming pattern `{prefix}-defects`, `{prefix}-features`, `{prefix}-notifications`, and `{prefix}-questions`. Get this prefix from the upstream team.
 
-2. **Invite your bot to the upstream channels** --- In each upstream Slack channel you want to post to, open the channel and run `/invite @YourBotName`. Your bot needs `chat:write` access on those channels to post and `channels:history` (or `groups:history` for private channels) to poll them.
+2. **Invite your bot to the upstream channels** -- In each upstream Slack channel you want to post to, open the channel and run `/invite @YourBotName`. Your bot needs `chat:write` access on those channels to post and `channels:history` (or `groups:history` for private channels) to poll them.
 
-3. **Configure agent identity** --- Add an `identity` section to your `orchestrator-config.yaml` (see [Agent Identity Protocol](#agent-identity-protocol) below) so the upstream orchestrator can identify your messages and skip self-echoes.
+3. **Configure agent identity** -- Add an `identity` section to your `orchestrator-config.yaml` (see [Agent Identity Protocol](#agent-identity-protocol) below) so the upstream orchestrator can identify your messages and skip self-echoes.
 
-Once invited and configured, set `channel_prefix` in your `.claude/slack.local.yaml` to the upstream's prefix. Your orchestrator will then discover the upstream channels, poll them for release notifications, and route outbound `send_defect` and `send_idea` calls there.
+Once invited and configured, set `channel_prefix` in your `.claude/slack.local.yaml` to the upstream's prefix. Your orchestrator will then discover the upstream channels, poll them for release notifications, and route outbound defect and feature reports there.
 
-For the full step-by-step procedure including a quick-start example, see [Cross-Project Reporting](docs/setup-guide.md#cross-project-reporting) in the Setup Guide.
+For the full step-by-step procedure, see [Cross-Project Reporting](docs/setup-guide.md#cross-project-reporting) in the Setup Guide.
 
 ### Agent Identity Protocol
 
@@ -523,7 +537,7 @@ identity:
 
 If not configured, display names are derived from the current directory name (e.g., directory `cheapoville` produces `Cheapoville-Pipeline`, `Cheapoville-Orchestrator`, etc.).
 
-**Outbound signing**: Every Slack message is appended with ` --- *AgentName*` (em-dash, bold), where the agent name reflects the active role (orchestrator, pipeline, intake, or QA). The signature is appended after truncation so it is never cut off.
+**Outbound signing**: Every Slack message is appended with ` -- *AgentName*` (em-dash, bold), where the agent name reflects the active role (orchestrator, pipeline, intake, or QA). The signature is appended after truncation so it is never cut off.
 
 **Inbound filtering** applies four rules in order:
 1. Messages signed by one of our own agents are skipped (self-loop prevention)
@@ -533,76 +547,50 @@ If not configured, display names are derived from the current directory name (e.
 
 **Directed messages**: Use `@AgentName` in the message body to address a specific agent. Slack native `<@U...>` user mentions are not confused with agent addresses.
 
-### Hot-Reload
+### LangSmith Tracing
 
-The auto-pipeline monitors its own source files for changes. When a modification is detected between work items, it performs a graceful self-restart using `os.execv()` to pick up the new code without disrupting the Slack polling thread:
+The pipeline supports LangSmith tracing for debugging and observability. When a LangSmith API key is configured, all graph invocations are traced.
 
-```
-Work item completes -> Check source file hashes -> Changed? -> Graceful restart
-                                                       -> No change? -> Continue
-```
+Disable with `--no-tracing` if not needed.
 
-Monitored files are defined in `HOT_RELOAD_WATCHED_FILES` in auto-pipeline.py.
-
-## Auto-Pipeline
-
-The auto-pipeline daemon (`scripts/auto-pipeline.py`) watches backlog folders and drives the orchestrator automatically:
-
-```bash
-# Watch backlogs and process items
-python scripts/auto-pipeline.py
-
-# Single pass (process one item, then exit)
-python scripts/auto-pipeline.py --once
-
-# Dry run
-python scripts/auto-pipeline.py --dry-run
-
-# Verbose output
-python scripts/auto-pipeline.py --verbose
-```
-
-The auto-pipeline:
-1. Monitors `docs/defect-backlog/` and `docs/feature-backlog/` for new `.md` files
-2. Prioritizes defects over features; respects `## Dependencies` between items
-3. For each item: Claude creates a design + YAML plan, then the orchestrator executes it
-4. For defects: runs an independent verification step to confirm symptoms are resolved
-5. If verification fails: deletes stale plan, retries with findings (up to 3 cycles)
-6. Archives completed items to `completed/` subdirectories
-7. Shares the `.stop` semaphore with the orchestrator for coordinated shutdown
-
-Requires: `pip install watchdog pyyaml`
-
-### Defect Verification Loop
-
-For defects, the auto-pipeline runs a verify-then-fix cycle after the orchestrator completes:
-
-```
-Phase 1: Create plan      --> Phase 2: Execute plan
-                                        |
-                              Phase 3: Verify symptoms
-                                    |           |
-                                  PASS        FAIL
-                                    |           |
-                              Phase 4:    Delete stale plan,
-                              Archive     loop to Phase 1
-                                          (findings in defect file
-                                           inform the next plan)
-```
-
-The verifier is a read-only Claude session that checks whether the reported symptoms are actually resolved. It appends structured findings to the defect file, which the next plan-creation step reads to produce a targeted fix.
+## Configuration
 
 ### Project Configuration
 
 Customize build and test commands in `.claude/orchestrator-config.yaml`:
 
 ```yaml
+# Project name (used in Slack identity and logging)
+project_name: my-project
+
 # Build/test commands used during verification (defaults shown)
-# build_command: "pnpm run build"
-# test_command: "pnpm test"
-# dev_server_command: "pnpm dev"
-# dev_server_port: 3000
-# agents_dir: ".claude/agents"
+build_command: "pnpm run build"
+test_command: "pnpm test"
+dev_server_command: "pnpm dev"
+dev_server_port: 3000
+agents_dir: ".claude/agents"
+
+# Agent identity for Slack (optional)
+identity:
+  project: my-project
+  agents:
+    pipeline: MyProject-Pipeline
+    orchestrator: MyProject-Orchestrator
+    intake: MyProject-Intake
+    qa: MyProject-QA
+```
+
+### Slack Configuration
+
+Slack credentials and preferences are stored in `.claude/slack.local.yaml` (created by `scripts/setup-slack.py`):
+
+```yaml
+slack:
+  enabled: true
+  bot_token: xoxb-...
+  app_token: xapp-...        # Required for Socket Mode (interactive buttons)
+  channel_id: C...            # Primary notifications channel
+  channel_prefix: myproject   # Channel naming prefix
 ```
 
 ### Backlog Item Format
@@ -637,7 +625,7 @@ How to verify the fix is correct.
 
 Key conventions:
 - Filenames use `NN-slug-name.md` format (e.g., `01-fix-login-bug.md`)
-- `## Status: Fixed` or `## Status: Completed` marks items as done (auto-pipeline skips them)
+- `## Status: Fixed` or `## Status: Completed` marks items as done (pipeline skips them)
 - `## Dependencies` lists other backlog slugs that must be completed first
 - Items in `completed/` subdirectories are ignored
 - Items in `on-hold/` subdirectories are ignored
@@ -653,13 +641,21 @@ You can also run tasks manually using the `/implement` command in Claude Code:
 
 ## How It Works
 
-1. **Find Next Task**: Orchestrator finds first `pending` or `in_progress` task (respecting dependencies)
-2. **Build Prompt**: Creates prompt with task details, plan document reference, and coordination instructions
-3. **Execute Claude**: Runs `claude --dangerously-skip-permissions --print <prompt>` in a fresh session
-4. **Check Status**: Reads `.claude/plans/task-status.json` for result
-5. **Update Plan**: Marks task complete/failed in YAML
-6. **Commit**: Auto-commits changes to git
-7. **Repeat**: Continues until all tasks done, circuit breaker trips, or stop semaphore detected
+### Pipeline Graph
+
+1. **scan_backlog**: Scans `docs/defect-backlog/` and `docs/feature-backlog/` for items. Prioritizes defects over features. Checks for in-progress plans to resume
+2. **intake_analyze**: Runs 5 Whys analysis on the item, checks for duplicates via RAG
+3. **create_plan**: Creates a design document and YAML plan via Claude
+4. **execute_plan**: Invokes the executor subgraph (see below)
+5. **verify_symptoms** (defects only): Runs a read-only Claude session to verify the fix
+6. **archive**: Moves completed items to `docs/completed-backlog/`
+
+### Executor Subgraph
+
+1. **task_selector**: Finds the next pending task (respecting dependencies and parallel groups)
+2. **task_runner**: Runs `claude --dangerously-skip-permissions --print <prompt>` in a fresh session
+3. **validator**: Checks `.claude/plans/task-status.json` for results, runs optional validation agents
+4. **Loop**: Repeats until all tasks complete, circuit breaker trips, or budget is exhausted
 
 ### Status File Protocol
 
@@ -698,48 +694,70 @@ See `.claude/skills/implement/SKILL.md` for the full protocol details.
 
 ```
 your-project/
-├── CODING-RULES.md                   # Coding standards (adapt for your project)
-├── .claude/
-│   ├── plans/
-│   │   ├── sample-plan.yaml        # Template plan
-│   │   ├── my-feature.yaml         # Your active plan
-│   │   ├── task-status.json        # Auto-generated status
-│   │   └── .stop                   # Graceful stop semaphore
-│   ├── agents/
-│   │   ├── coder.md               # Implementation specialist
-│   │   ├── code-reviewer.md        # Read-only reviewer
-│   │   ├── systems-designer.md    # Architecture designer
-│   │   ├── ux-designer.md          # UI/UX designer
-│   │   ├── frontend-coder.md       # Frontend implementation specialist
-│   │   ├── ux-reviewer.md           # UX quality reviewer
-│   │   ├── spec-verifier.md        # Spec compliance checker
-│   │   ├── qa-auditor.md           # QA audit specialist
-│   │   ├── planner.md              # Design-to-plan bridge
-│   │   ├── issue-verifier.md       # Defect fix verifier
-│   │   └── validator.md            # Per-task validator
-│   ├── skills/
-│   │   ├── implement/
-│   │   │   └── SKILL.md            # Implementation skill
-│   │   └── coding-rules/
-│   │       └── SKILL.md            # Coding standards skill
-│   ├── commands/
-│   │   └── implement.md            # /implement command
-│   ├── slack.local.yaml             # Slack channel configuration (user-created)
-│   ├── chroma/                      # ChromaDB vector store for RAG deduplication
-│   ├── orchestrator-config.yaml     # Project-specific config
-│   ├── subagent-status/            # Parallel task heartbeats
-│   └── agent-claims.json           # File claim coordination
-├── scripts/
-│   ├── plan-orchestrator.py        # Main orchestrator (~5800 lines)
-│   └── auto-pipeline.py            # Auto-pipeline daemon (~3200 lines)
-└── docs/
-    ├── plans/
-    │   └── YYYY-MM-DD-*.md         # Design documents
-    ├── defect-backlog/             # Active defects
-    ├── feature-backlog/            # Active features
-    ├── completed-backlog/          # Archived completed items
-    └── narrative/
-        └── *.md                    # Development history
++-- CODING-RULES.md                   # Coding standards (adapt for your project)
++-- langgraph_pipeline/               # Unified LangGraph pipeline (primary entry point)
+|   +-- __main__.py                   # Module entry: python -m langgraph_pipeline
+|   +-- cli.py                        # CLI argument parsing and main loop
+|   +-- pipeline/                     # Pipeline graph nodes and edges
+|   |   +-- graph.py                  # Graph assembly with SqliteSaver checkpointing
+|   |   +-- state.py                  # PipelineState TypedDict
+|   |   +-- edges.py                  # Conditional edge functions
+|   |   +-- nodes/                    # Node implementations
+|   |       +-- scan.py               # scan_backlog: find next work item
+|   |       +-- intake.py             # intake_analyze: 5 Whys, RAG dedup
+|   |       +-- plan_creation.py      # create_plan: design doc + YAML plan
+|   |       +-- execute_plan.py       # execute_plan: invoke executor subgraph
+|   |       +-- verification.py       # verify_symptoms: defect verification
+|   |       +-- archival.py           # archive: move to completed
+|   +-- executor/                     # Task execution subgraph
+|   |   +-- graph.py                  # Executor graph assembly
+|   |   +-- state.py                  # TaskState TypedDict
+|   |   +-- edges.py                  # Conditional edges (done, should_retry, etc.)
+|   |   +-- escalation.py            # Model tier escalation logic
+|   |   +-- circuit_breaker.py        # Consecutive failure detection
+|   |   +-- nodes/                    # Node implementations
+|   |       +-- task_selector.py      # Pick next task respecting deps
+|   |       +-- task_runner.py        # Run Claude CLI session
+|   |       +-- validator.py          # Check task-status.json, run validators
+|   |       +-- parallel.py           # Parallel worktree execution
+|   +-- slack/                        # Slack integration
+|   |   +-- __init__.py               # SlackNotifier facade
+|   |   +-- notifier.py              # Outbound messaging, Block Kit formatting
+|   |   +-- poller.py                # Background polling, LLM-powered routing
+|   |   +-- suspension.py            # Q&A flows, 5 Whys intake analysis
+|   |   +-- identity.py              # Agent identity, message signing
+|   +-- shared/                       # Shared utilities
+|       +-- paths.py                  # Standard path constants
+|       +-- config.py                # orchestrator-config.yaml loader
+|       +-- rate_limit.py            # Rate limit detection and parsing
+|       +-- budget.py                # Budget tracking types
+|       +-- claude_cli.py            # Claude CLI streaming helpers
+|       +-- langsmith.py             # LangSmith tracing setup
++-- scripts/
+|   +-- auto-pipeline.py             # Backward-compatible wrapper (calls langgraph_pipeline.cli)
+|   +-- setup-slack.py               # Slack app and channel setup
++-- .claude/
+|   +-- plans/
+|   |   +-- sample-plan.yaml         # Template plan
+|   |   +-- task-status.json         # Auto-generated task status
+|   |   +-- .stop                    # Graceful stop semaphore
+|   |   +-- .pipeline.pid            # Running process PID
+|   +-- agents/                       # Agent definitions (YAML frontmatter)
+|   +-- skills/implement/SKILL.md    # Implementation skill
+|   +-- commands/implement.md         # /implement command
+|   +-- orchestrator-config.yaml     # Project-specific config
+|   +-- slack.local.yaml             # Slack credentials (user-created, gitignored)
+|   +-- pipeline-state.db            # SQLite checkpoint database
+|   +-- slack-last-read.json         # Per-channel Slack polling timestamps
+|   +-- subagent-status/             # Parallel task heartbeats
+|   +-- agent-claims.json            # File claim coordination
++-- docs/
+    +-- plans/                        # Design documents
+    +-- defect-backlog/              # Active defects
+    +-- feature-backlog/             # Active features
+    +-- completed-backlog/           # Archived completed items
+    +-- setup-guide.md               # Full setup walkthrough
+    +-- narrative/                    # Development history
 ```
 
 ## Tips
@@ -748,9 +766,10 @@ your-project/
 2. **Detailed Designs**: The design doc is crucial - be specific about file paths and steps
 3. **Use Dependencies**: Declare `depends_on` to ensure correct execution order
 4. **Parallel Where Possible**: Group independent tasks with `parallel_group` for faster execution
-5. **Graceful Stop**: Use `touch .claude/plans/.stop` instead of killing the process
+5. **Graceful Stop**: Use `touch .claude/plans/.stop` or Ctrl+C instead of `kill -9`
 6. **Self-Extending Plans**: Let Claude add tasks during execution with `plan_modified: true`
 7. **Monitor Progress**: Check the YAML file for status updates during execution
+8. **Budget Caps**: Use `--budget-cap` for unattended runs to prevent runaway costs
 
 ## Troubleshooting
 
@@ -759,6 +778,7 @@ your-project/
 - Increase `max_attempts` for complex tasks (default: 3, max recommended: 5)
 - Simplify the task description
 - The circuit breaker trips after 3 consecutive failures (300s cooldown)
+- Model escalation automatically tries more capable models after failures
 
 **Parallel tasks conflict:**
 - Use `exclusive_resources` to prevent shared-resource tasks from running together
@@ -774,16 +794,24 @@ your-project/
 
 **Graceful stop not working:**
 - Ensure the `.stop` file is in `.claude/plans/.stop` (not the project root)
-- The check happens every second during task execution and between tasks
+- The stop is checked between graph invocations, not mid-task
 - For immediate termination, use `kill $(cat .claude/plans/.pipeline.pid)` instead
 
 **Stale worktrees after crash:**
 - Run `git worktree list` and `git worktree remove <path>` for orphans
 - The orchestrator attempts cleanup, but crashes may leave worktrees behind
 
+**Pipeline won't start (stale PID file):**
+- If a previous run crashed without cleanup, a warning about an existing PID is logged
+- The pipeline proceeds anyway; the PID file is overwritten on startup
+
+**Checkpoint database issues:**
+- The SQLite checkpoint database is at `.claude/pipeline-state.db`
+- To force a clean start, delete this file (loses crash-recovery state)
+
 ## Development History
 
-The orchestrator evolved from a 454-line sequential executor to a ~9000-line parallel execution engine (across two scripts) over the course of building a production application. See [docs/narrative/](docs/narrative/) for the complete development history, including:
+The orchestrator evolved from a 454-line sequential executor to a parallel execution engine, and was later rewritten as a modular LangGraph pipeline with SQLite-backed checkpointing, replacing the monolithic scripts. See [docs/narrative/](docs/narrative/) for the complete development history, including:
 
 - Genesis and initial design decisions
 - Parallel execution via git worktrees
@@ -802,12 +830,7 @@ The orchestrator evolved from a 454-line sequential executor to a ~9000-line par
 - Tiered model escalation
 - Token usage and budget tracking
 - Slack integration with inbound message polling
-- Hot-reload self-restart for auto-pipeline
-- Sonnet 4.6 model optimization for ux-designer and new frontend-coder agent
-- Sandbox permission model completion: two-axis permissions (tool availability + approval behavior) for headless sessions
-- Plan-level deadlock detection: recognizes unreachable pending tasks and sets plan status to failed instead of looping
-- Root cause and fix summary in defect completion notifications for risk triage from the monitoring channel
-- Cross-project Slack reporting and single-command onboarding for existing workspaces
+- LangGraph migration: unified pipeline and executor subgraphs
 
 ## License
 

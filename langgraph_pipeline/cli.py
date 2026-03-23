@@ -83,6 +83,13 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Log what would be done without executing graph nodes.",
     )
     parser.add_argument(
+        "--once",
+        action="store_true",
+        default=False,
+        help="Scan the backlog, process one item, then exit. "
+        "Equivalent to the old auto-pipeline.py --once flag.",
+    )
+    parser.add_argument(
         "--single-item",
         metavar="PATH",
         default=None,
@@ -99,6 +106,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Logging verbosity level. Default: INFO.",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="Shorthand for --log-level DEBUG.",
     )
     parser.add_argument(
         "--no-slack",
@@ -208,7 +221,8 @@ def _log_startup_banner(args: argparse.Namespace, config: dict) -> None:
     logger.info("=" * 60)
     logger.info("LangGraph Pipeline Runner v%s", VERSION)
     logger.info("=" * 60)
-    logger.info("Mode          : %s", "single-item" if args.single_item else "continuous scan")
+    mode = "single-item" if args.single_item else "once" if args.once else "continuous scan"
+    logger.info("Mode          : %s", mode)
     if args.single_item:
         logger.info("Item path     : %s", args.single_item)
     if args.backlog_dir:
@@ -338,6 +352,60 @@ def _run_single_item(
         return EXIT_CODE_ERROR
 
 
+# ─── Once mode (scan + process one item) ──────────────────────────────────────
+
+
+def _run_once(
+    budget_cap_usd: Optional[float],
+    dry_run: bool,
+) -> int:
+    """Scan the backlog, process the first item found, then exit.
+
+    This replicates the old auto-pipeline.py --once behaviour: one scan cycle,
+    one item processed, clean exit.  If no item is found, exits cleanly.
+
+    Args:
+        budget_cap_usd: Budget cap in USD, or None.
+        dry_run: When True, log what would be done without executing.
+
+    Returns:
+        EXIT_CODE_CLEAN on success or no items,
+        EXIT_CODE_BUDGET_EXHAUSTED if cap exceeded,
+        EXIT_CODE_ERROR on unhandled exception.
+    """
+    logger.info("Once mode: will process one backlog item then exit.")
+    if dry_run:
+        logger.info("[DRY RUN] Would invoke pipeline_graph() for the next backlog item.")
+        return EXIT_CODE_CLEAN
+
+    try:
+        initial_state = _build_initial_state(budget_cap_usd)
+        thread_config = {"configurable": {"thread_id": PIPELINE_THREAD_ID}}
+
+        with pipeline_graph() as graph:
+            final_state: PipelineState = graph.invoke(initial_state, config=thread_config)
+
+        if not final_state.get("item_slug"):
+            logger.info("No backlog items found. Exiting.")
+            return EXIT_CODE_CLEAN
+
+        logger.info(
+            "Item complete: cost=~$%.4f tokens_in=%d tokens_out=%d",
+            final_state.get("session_cost_usd", 0.0),
+            final_state.get("session_input_tokens", 0),
+            final_state.get("session_output_tokens", 0),
+        )
+
+        if _is_budget_exhausted(final_state, budget_cap_usd):
+            return EXIT_CODE_BUDGET_EXHAUSTED
+
+        return EXIT_CODE_CLEAN
+
+    except Exception as exc:
+        logger.exception("Unhandled error in once mode: %s", exc)
+        return EXIT_CODE_ERROR
+
+
 # ─── Continuous scan loop ─────────────────────────────────────────────────────
 
 
@@ -424,6 +492,10 @@ def main() -> int:
     parser = _build_arg_parser()
     args = parser.parse_args()
 
+    # --verbose is shorthand for --log-level DEBUG
+    if args.verbose:
+        args.log_level = "DEBUG"
+
     _configure_logging(args.log_level)
 
     config = load_orchestrator_config()
@@ -459,6 +531,11 @@ def main() -> int:
         if args.single_item:
             exit_code = _run_single_item(
                 args.single_item,
+                args.budget_cap,
+                args.dry_run,
+            )
+        elif args.once:
+            exit_code = _run_once(
                 args.budget_cap,
                 args.dry_run,
             )

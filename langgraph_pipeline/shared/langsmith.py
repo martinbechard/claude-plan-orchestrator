@@ -16,6 +16,7 @@ ENV_LANGCHAIN_API_KEY = "LANGCHAIN_API_KEY"
 ENV_LANGCHAIN_TRACING_V2 = "LANGCHAIN_TRACING_V2"
 ENV_LANGCHAIN_PROJECT = "LANGCHAIN_PROJECT"
 ENV_LANGCHAIN_ENDPOINT = "LANGCHAIN_ENDPOINT"
+ENV_LANGSMITH_WORKSPACE_ID = "LANGSMITH_WORKSPACE_ID"
 
 DEFAULT_LANGSMITH_PROJECT = "claude-plan-orchestrator"
 TRACING_ENABLED_VALUE = "true"
@@ -55,6 +56,10 @@ def configure_tracing() -> bool:
     os.environ[ENV_LANGCHAIN_API_KEY] = api_key
     os.environ[ENV_LANGCHAIN_TRACING_V2] = TRACING_ENABLED_VALUE
     os.environ[ENV_LANGCHAIN_PROJECT] = _resolve_project_name()
+
+    workspace_id = _resolve_workspace_id()
+    if workspace_id:
+        os.environ[ENV_LANGSMITH_WORKSPACE_ID] = workspace_id
 
     endpoint = _resolve_endpoint()
     if endpoint:
@@ -121,6 +126,15 @@ def _resolve_project_name() -> str:
         return env_project
     config = load_orchestrator_config()
     return config.get("langsmith", {}).get("project", DEFAULT_LANGSMITH_PROJECT)
+
+
+def _resolve_workspace_id() -> str:
+    """Return the LangSmith workspace ID for org-scoped service keys."""
+    env_ws = os.environ.get(ENV_LANGSMITH_WORKSPACE_ID, "")
+    if env_ws:
+        return env_ws
+    config = load_orchestrator_config()
+    return config.get("langsmith", {}).get("workspace_id", "")
 
 
 def _resolve_endpoint() -> str:

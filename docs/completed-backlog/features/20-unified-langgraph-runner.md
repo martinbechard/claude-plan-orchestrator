@@ -20,7 +20,11 @@ did. This feature wires everything together behind a single CLI.
 
 ### Entry Point Script
 
-Create scripts/run-pipeline.py (or langgraph_pipeline/__main__.py) that:
+Create langgraph_pipeline/__main__.py so the pipeline is invoked as:
+
+    python -m langgraph_pipeline [options]
+
+The module:
 
 1. Parses CLI arguments (budget cap, dry-run, single-item mode, backlog paths,
    log level, Slack enable/disable)
