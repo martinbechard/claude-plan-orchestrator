@@ -175,7 +175,7 @@ sections:
   - id: '3.2'
     name: Add unit tests for quota detection in intake_analyze and create_plan nodes
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '3.1'
     description: "Implement the work item: docs/defect-backlog/01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival.md\n\
@@ -189,3 +189,8 @@ sections:
     last_attempt: '2026-03-24T17:38:06.510518'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-24T17:41:24.330901'
+    result_message: 'Added TestIntakeAnalyzeQuotaDetection class to test_intake.py
+      with two tests: defect and analysis item types both return {quota_exhausted:
+      True} when _invoke_claude() output triggers detect_quota_exhaustion(). test_plan_creation.py
+      already had the quota exhaustion test from task 1.2. All 52 node tests pass.'
