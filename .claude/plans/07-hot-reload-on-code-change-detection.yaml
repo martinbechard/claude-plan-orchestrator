@@ -59,6 +59,14 @@ sections:
       utilities: CODE_CHANGE_POLL_INTERVAL_SECONDS, HOT_RELOAD_WATCHED_FILES, _compute_file_hash,
       snapshot_source_hashes, check_code_changed, CodeChangeMonitor, and _perform_restart.
       Verified with py_compile and pytest (no new failures introduced).'
+    validation_attempts: 1
+    validation_findings: langgraph_pipeline/shared/hot_reload.py created with all
+      7 required components (CODE_CHANGE_POLL_INTERVAL_SECONDS, HOT_RELOAD_WATCHED_FILES,
+      _compute_file_hash, snapshot_source_hashes, check_code_changed, CodeChangeMonitor,
+      _perform_restart). Build commands pass. File header meets coding rules. Test
+      failures in test_auto_pipeline.py/test_completed_archive.py are pre-existing
+      (CompletionTracker/completed_slugs missing from auto-pipeline.py before this
+      task); no new failures introduced.
 - id: phase-2
   name: Phase 2 - Wire monitor into cli.py
   status: pending
@@ -66,7 +74,7 @@ sections:
   - id: '2.1'
     name: Integrate CodeChangeMonitor into _run_scan_loop in cli.py
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/07-hot-reload-on-code-change-detection.md
       Design doc: docs/plans/2026-03-24-07-hot-reload-on-code-change-detection-design.md
 
@@ -87,6 +95,9 @@ sections:
 
       Restart must only occur between complete graph invocations (never mid-task).
       Run pytest to verify no regressions.'
+    last_attempt: '2026-03-24T18:02:29.959632'
+    attempts: 1
+    model_used: sonnet
 - id: phase-3
   name: Phase 3 - Tests
   status: pending
