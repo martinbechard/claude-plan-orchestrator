@@ -561,6 +561,7 @@ def execute_task(state: TaskState) -> dict:
             "model": effective_model,
             "plan_name": plan_name,
         },
+        parent_run_id=state.get("langsmith_root_run_id"),
     )
 
     add_trace_metadata({

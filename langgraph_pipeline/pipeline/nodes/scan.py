@@ -20,7 +20,7 @@ from typing import Optional
 import yaml
 
 from langgraph_pipeline.pipeline.state import PipelineState
-from langgraph_pipeline.shared.langsmith import add_trace_metadata
+from langgraph_pipeline.shared.langsmith import add_trace_metadata, create_root_run
 from langgraph_pipeline.shared.paths import (
     ANALYSIS_DIR,
     BACKLOG_DIRS,
@@ -234,6 +234,7 @@ def scan_backlog(state: PipelineState) -> dict:
             filepath = source_item
             slug = Path(filepath).stem
             item_type = _item_type_from_path(filepath)
+            _, root_run_id = create_root_run(slug, filepath)
             add_trace_metadata({
                 "node_name": "scan_backlog",
                 "graph_level": "pipeline",
@@ -246,6 +247,7 @@ def scan_backlog(state: PipelineState) -> dict:
                 "item_type": item_type,
                 "item_name": slug.replace("-", " ").title(),
                 "plan_path": plan_path,
+                "langsmith_root_run_id": root_run_id,
             }
 
     # Priority 2–4: Scan backlog directories in declared order.
@@ -253,6 +255,7 @@ def scan_backlog(state: PipelineState) -> dict:
         items = _scan_directory(directory, item_type)
         if items:
             filepath, slug, found_type = items[0]
+            _, root_run_id = create_root_run(slug, filepath)
             add_trace_metadata({
                 "node_name": "scan_backlog",
                 "graph_level": "pipeline",
@@ -265,6 +268,7 @@ def scan_backlog(state: PipelineState) -> dict:
                 "item_type": found_type,
                 "item_name": slug.replace("-", " ").title(),
                 "plan_path": None,
+                "langsmith_root_run_id": root_run_id,
             }
 
     # Backlog is empty — return sentinel values to trigger END routing.
@@ -274,4 +278,5 @@ def scan_backlog(state: PipelineState) -> dict:
         "item_type": "feature",
         "item_name": "",
         "plan_path": None,
+        "langsmith_root_run_id": None,
     }

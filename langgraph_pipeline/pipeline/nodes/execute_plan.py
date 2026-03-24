@@ -68,6 +68,7 @@ def execute_plan(state: PipelineState) -> dict:
         "plan_cost_usd": _INITIAL_COST,
         "plan_input_tokens": _INITIAL_TOKENS,
         "plan_output_tokens": _INITIAL_TOKENS,
+        "langsmith_root_run_id": state.get("langsmith_root_run_id"),
     }
 
     executor = build_executor_graph().compile()

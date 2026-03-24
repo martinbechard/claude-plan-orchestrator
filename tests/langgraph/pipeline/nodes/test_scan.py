@@ -377,3 +377,51 @@ class TestScanBacklog:
         )
         result = scan_backlog(_make_state())
         assert result["item_name"] == "03 Add Dark Mode"
+
+    def test_langsmith_root_run_id_is_none_when_tracing_inactive(self, tmp_path, monkeypatch):
+        """langsmith_root_run_id is None when tracing is off (create_root_run returns None)."""
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        import langgraph_pipeline.shared.langsmith as ls_mod
+        defect_dir = tmp_path / "defects"
+        defect_dir.mkdir()
+        _write_md(defect_dir / "01-bug.md")
+        monkeypatch.setattr(scan_mod, "PLANS_DIR", str(tmp_path / "plans"))
+        monkeypatch.setattr(
+            scan_mod, "BACKLOG_SCAN_ORDER",
+            [("defect", str(defect_dir))],
+        )
+        monkeypatch.setattr(ls_mod, "_tracing_active", False)
+        result = scan_backlog(_make_state())
+        assert result["langsmith_root_run_id"] is None
+
+    def test_langsmith_root_run_id_populated_when_tracing_active(self, tmp_path, monkeypatch):
+        """langsmith_root_run_id receives a UUID when create_root_run succeeds."""
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        defect_dir = tmp_path / "defects"
+        defect_dir.mkdir()
+        item = defect_dir / "01-bug.md"
+        _write_md(item)
+        monkeypatch.setattr(scan_mod, "PLANS_DIR", str(tmp_path / "plans"))
+        monkeypatch.setattr(
+            scan_mod, "BACKLOG_SCAN_ORDER",
+            [("defect", str(defect_dir))],
+        )
+        fake_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        monkeypatch.setattr(
+            scan_mod, "create_root_run",
+            lambda slug, path: (object(), fake_id),
+        )
+        result = scan_backlog(_make_state())
+        assert result["langsmith_root_run_id"] == fake_id
+
+    def test_empty_backlog_sets_langsmith_root_run_id_to_none(self, tmp_path, monkeypatch):
+        """When the backlog is empty the sentinel dict includes langsmith_root_run_id: None."""
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        monkeypatch.setattr(scan_mod, "PLANS_DIR", str(tmp_path / "plans"))
+        monkeypatch.setattr(
+            scan_mod, "BACKLOG_SCAN_ORDER",
+            [("defect", str(tmp_path / "d"))],
+        )
+        result = scan_backlog(_make_state())
+        assert result["item_path"] == ""
+        assert result["langsmith_root_run_id"] is None
