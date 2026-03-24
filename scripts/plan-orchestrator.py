@@ -4520,7 +4520,7 @@ class SlackNotifier:
         if not slug:
             slug = "untitled"
 
-        filename = f"{next_num}-{slug}.md"
+        filename = f"{next_num:02d}-{slug}.md"
         filepath = os.path.join(backlog_dir, filename)
 
         # Build markdown content
