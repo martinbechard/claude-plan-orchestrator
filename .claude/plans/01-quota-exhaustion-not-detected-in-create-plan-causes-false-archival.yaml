@@ -167,10 +167,15 @@ sections:
       Both import after_intake/after_create_plan/NODE_EXECUTE_PLAN from edges.py and
       cover quota_exhausted=True to END and normal state to next node. All 34 tests
       pass.
+    validation_attempts: 1
+    validation_findings: All 34 edge tests pass. TestAfterIntake and TestAfterCreatePlan
+      classes correctly imported and cover quota_exhausted=True to END and normal
+      state to next node. Build clean. Pre-existing collection errors in test_auto_pipeline.py
+      and test_completed_archive.py are unrelated to this task.
   - id: '3.2'
     name: Add unit tests for quota detection in intake_analyze and create_plan nodes
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '3.1'
     description: "Implement the work item: docs/defect-backlog/01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival.md\n\
@@ -181,3 +186,6 @@ sections:
       \ {\"quota_exhausted\": True}\n  when subprocess combined_output triggers detect_quota_exhaustion()\
       \ (mock _run_subprocess)\n- Run full test suite (~/.pyenv/versions/3.11.*/bin/python\
       \ -m pytest tests/ -v) and fix any failures"
+    last_attempt: '2026-03-24T17:38:06.510518'
+    attempts: 1
+    model_used: sonnet
