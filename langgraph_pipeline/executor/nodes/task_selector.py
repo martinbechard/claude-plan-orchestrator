@@ -14,16 +14,24 @@ satisfied, execution cannot proceed and current_task_id is set to None.
 Returns a partial state dict with plan_data and current_task_id.
 """
 
+import os
+import re
+
 import yaml
 
 from langgraph_pipeline.executor.circuit_breaker import is_circuit_open
-from langgraph_pipeline.executor.state import TaskState
+from langgraph_pipeline.executor.escalation import MODEL_TIER_PROGRESSION
+from langgraph_pipeline.executor.state import ModelTier, TaskState
+from langgraph_pipeline.shared.config import load_orchestrator_config
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 PENDING_STATUS = "pending"
 TERMINAL_STATUSES = frozenset({"completed", "failed", "skipped"})
+
+# Pattern to extract model from agent frontmatter (e.g. "model: sonnet")
+_AGENT_MODEL_PATTERN = re.compile(r"^model:\s*(\S+)", re.MULTILINE)
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -109,6 +117,58 @@ def _find_eligible_task(
     return None
 
 
+def _resolve_agent_model(task: dict) -> ModelTier:
+    """Read the model tier from the agent definition file for this task.
+
+    Looks up the agent name from the task dict, finds the agent markdown
+    file in the configured agents directory, and extracts the model
+    from YAML frontmatter. Falls back to "sonnet" if the agent file
+    is missing or has no model field.
+
+    Args:
+        task: Task dict from the plan YAML.
+
+    Returns:
+        The model tier declared in the agent definition.
+    """
+    agent_name = task.get("agent", "coder")
+    config = load_orchestrator_config()
+    agents_dir = config.get("agents_dir", ".claude/agents")
+    agent_path = os.path.join(agents_dir, f"{agent_name}.md")
+
+    try:
+        with open(agent_path, "r") as f:
+            content = f.read(500)  # Frontmatter is near the top
+        match = _AGENT_MODEL_PATTERN.search(content)
+        if match:
+            model = match.group(1).lower()
+            if model in MODEL_TIER_PROGRESSION:
+                return model  # type: ignore[return-value]
+    except (IOError, OSError):
+        pass
+
+    return "sonnet"  # Safe default — never silently use haiku for real work
+
+
+def _effective_model_for_task(task: dict, current_model: ModelTier) -> ModelTier:
+    """Return the effective model: the higher of the agent's model and the current escalation.
+
+    The agent's declared model acts as a floor — escalation can go higher
+    but never below what the agent specifies.
+
+    Args:
+        task: Task dict from the plan YAML.
+        current_model: Current model from escalation state.
+
+    Returns:
+        The model tier to use for this task.
+    """
+    agent_model = _resolve_agent_model(task)
+    agent_index = MODEL_TIER_PROGRESSION.index(agent_model)
+    current_index = MODEL_TIER_PROGRESSION.index(current_model)
+    return MODEL_TIER_PROGRESSION[max(agent_index, current_index)]
+
+
 # ─── Node ─────────────────────────────────────────────────────────────────────
 
 
@@ -160,11 +220,24 @@ def find_next_task(state: TaskState) -> dict:
         )
         return {"plan_data": plan_data, "current_task_id": None}
 
-    print(f"[find_next_task] Selected task: {eligible['id']} - {eligible.get('name', '')}")
+    current_model: ModelTier = state.get("effective_model") or "haiku"
+    effective = _effective_model_for_task(eligible, current_model)
+
+    agent_name = eligible.get("agent", "coder")
+    print(
+        f"[find_next_task] Selected task: {eligible['id']} - {eligible.get('name', '')} "
+        f"(agent={agent_name}, model={effective})"
+    )
     add_trace_metadata({
         "node_name": "find_next_task",
         "graph_level": "executor",
         "current_task_id": eligible["id"],
         "task_name": eligible.get("name", ""),
+        "agent": agent_name,
+        "effective_model": effective,
     })
-    return {"plan_data": plan_data, "current_task_id": eligible["id"]}
+    return {
+        "plan_data": plan_data,
+        "current_task_id": eligible["id"],
+        "effective_model": effective,
+    }
