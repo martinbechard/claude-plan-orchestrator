@@ -11,8 +11,11 @@ from langgraph_pipeline.pipeline.edges import (
     MAX_VERIFICATION_CYCLES,
     NODE_ARCHIVE,
     NODE_CREATE_PLAN,
+    NODE_EXECUTE_PLAN,
     NODE_INTAKE_ANALYZE,
     NODE_VERIFY_SYMPTOMS,
+    after_create_plan,
+    after_intake,
     cycles_exhausted,
     has_items,
     is_defect,
@@ -195,3 +198,35 @@ class TestVerifyResult:
     def test_returns_archive_when_history_missing_from_state(self):
         state = {}
         assert verify_result(state) == NODE_ARCHIVE
+
+
+class TestAfterIntake:
+    """after_intake routes to END on quota exhaustion, else create_plan."""
+
+    def test_quota_exhausted_routes_to_end(self):
+        state = _make_state(quota_exhausted=True)
+        assert after_intake(state) == END
+
+    def test_normal_state_routes_to_create_plan(self):
+        state = _make_state(quota_exhausted=False)
+        assert after_intake(state) == NODE_CREATE_PLAN
+
+    def test_missing_quota_exhausted_routes_to_create_plan(self):
+        state = _make_state()
+        assert after_intake(state) == NODE_CREATE_PLAN
+
+
+class TestAfterCreatePlan:
+    """after_create_plan routes to END on quota exhaustion, else execute_plan."""
+
+    def test_quota_exhausted_routes_to_end(self):
+        state = _make_state(quota_exhausted=True)
+        assert after_create_plan(state) == END
+
+    def test_normal_state_routes_to_execute_plan(self):
+        state = _make_state(quota_exhausted=False)
+        assert after_create_plan(state) == NODE_EXECUTE_PLAN
+
+    def test_missing_quota_exhausted_routes_to_execute_plan(self):
+        state = _make_state()
+        assert after_create_plan(state) == NODE_EXECUTE_PLAN
