@@ -189,6 +189,10 @@ def find_next_task(state: TaskState) -> dict:
     """
     plan_data: dict = state.get("plan_data") or _load_plan_yaml(state["plan_path"])
 
+    if state.get("quota_exhausted"):
+        print("[find_next_task] Quota exhausted — stopping task selection")
+        return {"plan_data": plan_data, "current_task_id": None}
+
     consecutive_failures = state.get("consecutive_failures") or 0
     if is_circuit_open(consecutive_failures):
         print(

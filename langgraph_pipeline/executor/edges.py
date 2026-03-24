@@ -97,15 +97,19 @@ def parallel_check(state: TaskState) -> str:
 def circuit_check(state: TaskState) -> str:
     """Conditional edge routing from execute_task.
 
-    Opens the circuit when consecutive_failures has reached the threshold,
-    halting further execution.  Otherwise, routing continues to validate_task.
+    Opens the circuit when quota is exhausted or when consecutive_failures has
+    reached the threshold, halting further execution.  Otherwise, routing
+    continues to validate_task.
 
     Args:
         state: Current TaskState after execute_task has run.
 
     Returns:
-        ROUTE_CIRCUIT_BREAK if the circuit is open; ROUTE_CONTINUE otherwise.
+        ROUTE_CIRCUIT_BREAK if quota is exhausted or the circuit is open;
+        ROUTE_CONTINUE otherwise.
     """
+    if state.get("quota_exhausted"):
+        return ROUTE_CIRCUIT_BREAK
     consecutive_failures = state.get("consecutive_failures") or 0
     if is_circuit_open(consecutive_failures):
         return ROUTE_CIRCUIT_BREAK

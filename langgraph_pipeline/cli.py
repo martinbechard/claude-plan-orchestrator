@@ -368,6 +368,7 @@ def _build_initial_state(
         "should_stop": False,
         "rate_limited": False,
         "rate_limit_reset": None,
+        "quota_exhausted": False,
         "budget_cap_usd": budget_cap_usd,
         "session_cost_usd": 0.0,
         "session_input_tokens": 0,
