@@ -23,9 +23,10 @@ from langgraph.types import interrupt
 
 from langgraph_pipeline.executor.circuit_breaker import record_failure, reset_failures
 from langgraph_pipeline.executor.state import TaskResult, TaskState
-from langgraph_pipeline.shared.langsmith import add_trace_metadata
+from langgraph_pipeline.shared.langsmith import add_trace_metadata, emit_tool_call_traces
 from langgraph_pipeline.shared.claude_cli import (
     OutputCollector,
+    ToolCallRecord,
     stream_json_output,
     stream_output,
 )
@@ -255,12 +256,13 @@ def _write_task_log(
         print(f"[execute_task] Failed to write task log: {exc}")
 
 
-def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, dict, str, str]:
+def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, dict, str, str, list[ToolCallRecord]]:
     """Spawn Claude CLI and stream its output in real-time.
 
-    Returns (success, result_capture, stdout_text, stderr_text).
+    Returns (success, result_capture, stdout_text, stderr_text, tool_calls).
     success is True when Claude exits with return code 0.
     result_capture holds the parsed 'result' JSON event with usage data.
+    tool_calls accumulates ToolCallRecord entries from each tool_use and text event.
     """
     cmd = [
         "claude",
@@ -273,6 +275,7 @@ def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, dict, str, str]
     stdout_collector = OutputCollector()
     stderr_collector = OutputCollector()
     result_capture: dict = {}
+    tool_calls: list[ToolCallRecord] = []
 
     start_time = time.time()
     try:
@@ -287,7 +290,7 @@ def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, dict, str, str]
         )
         stdout_thread = threading.Thread(
             target=stream_json_output,
-            args=(process.stdout, stdout_collector, result_capture),
+            args=(process.stdout, stdout_collector, result_capture, tool_calls),
         )
         stderr_thread = threading.Thread(
             target=stream_output,
@@ -319,14 +322,15 @@ def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, dict, str, str]
             result_capture,
             stdout_collector.get_output(),
             stderr_collector.get_output(),
+            tool_calls,
         )
 
     except subprocess.TimeoutExpired:
         print(f"[execute_task] Claude CLI timed out after {CLAUDE_TIMEOUT_SECONDS}s")
-        return (False, {}, "", "Timed out")
+        return (False, {}, "", "Timed out", [])
     except Exception as exc:
         print(f"[execute_task] Failed to spawn Claude CLI: {exc}")
-        return (False, {}, "", str(exc))
+        return (False, {}, "", str(exc), [])
 
 
 # ─── Status File ──────────────────────────────────────────────────────────────
@@ -412,7 +416,7 @@ def execute_task(state: TaskState) -> dict:
 
     # Execute Claude CLI
     _exec_start = time.time()
-    cli_success, result_capture, _stdout, _stderr = _run_claude(prompt, model_cli_name)
+    cli_success, result_capture, _stdout, _stderr, tool_calls = _run_claude(prompt, model_cli_name)
     _duration_ms = int((time.time() - _exec_start) * 1000)
 
     # Parse usage data
@@ -480,6 +484,17 @@ def execute_task(state: TaskState) -> dict:
         "consecutive_failures": new_failures,
     }
 
+    plan_name = plan_data.get("meta", {}).get("name", "")
+    emit_tool_call_traces(
+        tool_calls,
+        f"execute_task:{task_id}",
+        {
+            "task_id": task_id,
+            "model": effective_model,
+            "plan_name": plan_name,
+        },
+    )
+
     add_trace_metadata({
         "node_name": "execute_task",
         "graph_level": "executor",
@@ -489,6 +504,7 @@ def execute_task(state: TaskState) -> dict:
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "duration_ms": _duration_ms,
+        "tool_calls_count": len(tool_calls),
     })
 
     # Interrupt the graph for Slack-based human suspension (after state is built)
