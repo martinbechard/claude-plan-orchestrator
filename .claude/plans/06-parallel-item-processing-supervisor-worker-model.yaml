@@ -1,0 +1,133 @@
+meta:
+  name: 'Feature: Parallel Backlog Item Processing - Supervisor + Worker Model'
+  description: Add a configurable worker pool so N backlog items execute concurrently.
+    A lightweight supervisor owns scanning, dispatch, budget tracking, and Slack reporting;
+    it spawns one worker subprocess per item. Workers report completion via a JSON result
+    file. Backwards-compatible -- max_parallel_items defaults to 1.
+  plan_doc: docs/plans/2026-03-24-06-parallel-item-processing-supervisor-worker-model-design.md
+  source_item: docs/feature-backlog/06-parallel-item-processing-supervisor-worker-model.md
+  created: '2026-03-24'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+  status: pending
+sections:
+- id: phase-1
+  name: Phase 1 - Foundation (paths, config, item claiming)
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add path constants and config helper for parallel items
+    agent: coder
+    status: pending
+    description: "Implement the work item: docs/feature-backlog/06-parallel-item-processing-supervisor-worker-model.md\
+      \ Design doc: docs/plans/2026-03-24-06-parallel-item-processing-supervisor-worker-model-design.md\n\
+      \nAdd CLAIMED_DIR = \".claude/plans/.claimed\" and WORKER_RESULT_DIR = \".claude/plans\"\
+      \ to langgraph_pipeline/shared/paths.py.\n\nAdd get_max_parallel_items(config:\
+      \ dict) -> int to langgraph_pipeline/shared/config.py: reads config.get(\"pipeline\"\
+      , {}).get(\"max_parallel_items\", 1), validates it is a positive int, returns\
+      \ 1 as default.\n\nRun pytest to verify no regressions."
+- id: phase-2
+  name: Phase 2 - claim_item / unclaim_item in scan.py
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Implement atomic item claiming in scan.py
+    agent: coder
+    status: pending
+    description: "Implement the work item: docs/feature-backlog/06-parallel-item-processing-supervisor-worker-model.md\
+      \ Design doc: docs/plans/2026-03-24-06-parallel-item-processing-supervisor-worker-model-design.md\n\
+      \nAdd two functions to langgraph_pipeline/pipeline/nodes/scan.py:\n\nclaim_item(item_path:\
+      \ str) -> bool -- creates CLAIMED_DIR if absent, then calls os.rename(item_path,\
+      \ CLAIMED_DIR/<basename>). Returns True on success, False if FileNotFoundError\
+      \ (another process won the race). Propagates other OSError.\n\nunclaim_item(claimed_path:\
+      \ str) -> None -- renames the file back from CLAIMED_DIR to its original location\
+      \ (item_type directory inferred from filename prefix or passed as parameter).\
+      \ Used by the supervisor on worker crash to return the item to the backlog.\n\
+      \nRun pytest to verify no regressions."
+- id: phase-3
+  name: Phase 3 - Worker entry point
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Create langgraph_pipeline/worker.py
+    agent: coder
+    status: pending
+    description: "Implement the work item: docs/feature-backlog/06-parallel-item-processing-supervisor-worker-model.md\
+      \ Design doc: docs/plans/2026-03-24-06-parallel-item-processing-supervisor-worker-model-design.md\n\
+      \nCreate langgraph_pipeline/worker.py -- the subprocess entry point for processing\
+      \ a single backlog item.\n\nCLI: accepts --item-path PATH and --result-file\
+      \ PATH arguments.\n\nBehavior:\n1. Load dotenv files and configure logging.\n\
+      2. Build initial PipelineState with item_path set (no budget cap).\n3. Invoke\
+      \ pipeline_graph().invoke() for that one item.\n4. On completion (success or\
+      \ known failure), write the result JSON to --result-file with fields:\n   {success,\
+      \ item_path, cost_usd, input_tokens, output_tokens, duration_s, message}\n5.\
+      \ On unhandled exception, write the result JSON with success=false before exiting.\n\
+      6. Exit 0 on success, 1 on error.\n\nThe result file is always written before\
+      \ exit so the supervisor can distinguish a crash (no file) from a handled failure\
+      \ (file with success=false).\n\nRun pytest to verify no regressions."
+- id: phase-4
+  name: Phase 4 - Supervisor module
+  status: pending
+  tasks:
+  - id: '4.1'
+    name: Create langgraph_pipeline/supervisor.py
+    agent: coder
+    status: pending
+    description: "Implement the work item: docs/feature-backlog/06-parallel-item-processing-supervisor-worker-model.md\
+      \ Design doc: docs/plans/2026-03-24-06-parallel-item-processing-supervisor-worker-model-design.md\n\
+      \nCreate langgraph_pipeline/supervisor.py with run_supervisor_loop(max_workers,\
+      \ budget_cap_usd, dry_run, shutdown_event, slack) -> int.\n\nThe supervisor\
+      \ loop:\n1. Maintains a dict of active workers: {pid: (claimed_path, result_file_path,\
+      \ start_time)}.\n2. Each iteration: reap any finished workers (non-blocking\
+      \ os.waitpid with WNOHANG), read their result JSON, update cumulative cost,\
+      \ check budget cap, un-claim or archive item as appropriate.\n3. While len(active_workers)\
+      \ < max_workers: scan backlog (call scan_backlog_fn), claim the item (claim_item),\
+      \ spawn a worker subprocess (langgraph_pipeline.worker via python -m), track\
+      \ PID.\n4. When backlog is empty and no active workers, sleep SCAN_SLEEP_SECONDS.\n\
+      5. Check shutdown_event between iterations.\n6. Budget cap checked after each\
+      \ worker result is read; stop dispatching new items when exceeded.\n7. A worker\
+      \ subprocess that exits non-zero with no result file is treated as a crash:\
+      \ call unclaim_item() to return the item to the backlog.\n\nReturn EXIT_CODE_CLEAN,\
+      \ EXIT_CODE_BUDGET_EXHAUSTED, or EXIT_CODE_ERROR."
+- id: phase-5
+  name: Phase 5 - CLI integration
+  status: pending
+  tasks:
+  - id: '5.1'
+    name: Wire supervisor into cli.py scan loop
+    agent: coder
+    status: pending
+    description: "Implement the work item: docs/feature-backlog/06-parallel-item-processing-supervisor-worker-model.md\
+      \ Design doc: docs/plans/2026-03-24-06-parallel-item-processing-supervisor-worker-model-design.md\n\
+      \nModify langgraph_pipeline/cli.py:\n1. In main(), read max_parallel_items from\
+      \ config via get_max_parallel_items(config) from shared/config.py.\n2. In _run_scan_loop():\
+      \ when max_parallel_items > 1, delegate to run_supervisor_loop() from supervisor.py\
+      \ instead of the existing sequential graph-invoke loop. When max_parallel_items\
+      \ == 1, keep the existing single-item sequential loop unchanged.\n3. Log the\
+      \ parallelism degree in the startup banner.\n4. Update _log_startup_banner to\
+      \ show Workers: N when N > 1.\n\nRun pytest to verify no regressions."
+- id: phase-6
+  name: Phase 6 - Unit tests
+  status: pending
+  tasks:
+  - id: '6.1'
+    name: Create unit tests for claim_item, unclaim_item, config helper, and worker
+    agent: coder
+    status: pending
+    description: "Implement the work item: docs/feature-backlog/06-parallel-item-processing-supervisor-worker-model.md\
+      \ Design doc: docs/plans/2026-03-24-06-parallel-item-processing-supervisor-worker-model-design.md\n\
+      \nCreate tests/langgraph/test_parallel_items.py covering:\n1. get_max_parallel_items:\
+      \ default 1, explicit value, invalid type falls back to 1.\n2. claim_item: success\
+      \ renames file, returns True; race (file gone) returns False; CLAIMED_DIR created\
+      \ if absent.\n3. unclaim_item: renames claimed file back to original directory.\n\
+      4. Worker result JSON schema: valid and invalid inputs.\n5. Supervisor reaping:\
+      \ mock os.waitpid to simulate worker exit, verify result is read and cost accumulated.\n\
+      \nMock filesystem operations where appropriate. Run pytest and fix all failures."
