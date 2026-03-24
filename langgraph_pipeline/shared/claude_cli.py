@@ -10,7 +10,7 @@ import os
 import shutil
 import subprocess
 from datetime import datetime
-from typing import IO, Literal, Optional, TypedDict
+from typing import IO, Literal, NotRequired, Optional, TypedDict
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +34,18 @@ class ToolCallRecord(TypedDict):
     type distinguishes tool invocations from assistant text blocks.
     tool_input holds the raw input dict for tool_use events, or
     {"text": "..."} for text events.
+    tool_use_id correlates this record with its tool_result event.
+    start_time and duration_s are set when the matching tool_result arrives,
+    enabling accurate span widths in LangSmith traces.
     """
 
     type: Literal["tool_use", "text"]
     tool_name: str
     tool_input: dict
     timestamp: str
+    tool_use_id: NotRequired[Optional[str]]
+    start_time: NotRequired[Optional[datetime]]
+    duration_s: NotRequired[Optional[float]]
 
 
 # ─── call_claude ─────────────────────────────────────────────────────────────
@@ -167,6 +173,7 @@ def stream_json_output(
     When tool_calls is provided, each tool_use block and non-empty text block from
     assistant events is appended as a ToolCallRecord for post-hoc LangSmith tracing.
     """
+    pending: dict[str, tuple[datetime, ToolCallRecord]] = {}
     try:
         for line in iter(pipe.readline, ""):
             if not line:
@@ -201,6 +208,8 @@ def stream_json_output(
                     elif block_type == "tool_use":
                         tool_name = block.get("name", "?")
                         tool_input = block.get("input", {})
+                        tool_use_id = block.get("id")
+                        start_time = datetime.now()
                         if tool_name in ("Read", "Edit", "Write"):
                             detail = tool_input.get("file_path", "")
                         elif tool_name == "Bash":
@@ -214,12 +223,26 @@ def stream_json_output(
                             detail = ""
                         print(f"  [{ts}] [Tool] {tool_name}: {detail}", flush=True)
                         if tool_calls is not None:
-                            tool_calls.append(ToolCallRecord(
+                            record = ToolCallRecord(
                                 type="tool_use",
                                 tool_name=tool_name,
                                 tool_input=tool_input,
                                 timestamp=ts,
-                            ))
+                                tool_use_id=tool_use_id,
+                                start_time=start_time,
+                            )
+                            tool_calls.append(record)
+                            if tool_use_id:
+                                pending[tool_use_id] = (start_time, record)
+
+            elif event_type == "user":
+                msg = event.get("message", {})
+                for block in msg.get("content", []):
+                    if block.get("type") == "tool_result":
+                        tool_use_id = block.get("tool_use_id")
+                        if tool_use_id and tool_use_id in pending:
+                            start, record = pending.pop(tool_use_id)
+                            record["duration_s"] = (datetime.now() - start).total_seconds()
 
             elif event_type == "result":
                 cost = event.get("total_cost_usd", 0)
