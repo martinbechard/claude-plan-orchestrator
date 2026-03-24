@@ -32,6 +32,7 @@ from typing import Optional
 from langgraph_pipeline.pipeline.graph import PIPELINE_THREAD_ID, pipeline_graph
 from langgraph_pipeline.pipeline.nodes.scan import scan_backlog as scan_backlog_fn
 from langgraph_pipeline.pipeline.state import PipelineState
+from langgraph_pipeline.shared.claude_cli import call_claude
 from langgraph_pipeline.shared.config import load_orchestrator_config
 from langgraph_pipeline.shared.dotenv import load_dotenv_files
 from langgraph_pipeline.shared.langsmith import configure_tracing
@@ -553,7 +554,7 @@ def main() -> int:
     slack: Optional[SlackNotifier] = None
     if not args.no_slack:
         try:
-            slack = SlackNotifier()
+            slack = SlackNotifier(call_claude=call_claude)
             if slack.is_enabled():
                 slack.start_background_polling()
                 logger.info("Slack notifications and polling enabled.")

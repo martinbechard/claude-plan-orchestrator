@@ -5,13 +5,95 @@
 """OutputCollector class and subprocess output streaming utilities for the Claude CLI."""
 
 import json
+import logging
+import os
+import shutil
+import subprocess
 from datetime import datetime
-from typing import IO
+from typing import IO, Optional
+
+logger = logging.getLogger(__name__)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 OUTPUT_PREVIEW_MAX_CHARS = 200   # Max chars of Claude text blocks shown inline
 TOOL_CMD_PREVIEW_MAX_CHARS = 80  # Max chars of Bash command shown inline
+
+# ─── Constants ────────────────────────────────────────────────────────────────
+
+STRIPPED_ENV_VAR = "CLAUDECODE"  # Removed so child Claude can spawn from Claude Code
+DEFAULT_CALL_TIMEOUT_SECONDS = 120
+
+
+# ─── call_claude ─────────────────────────────────────────────────────────────
+
+
+def _find_claude_binary() -> str:
+    """Find the claude CLI binary path."""
+    path = shutil.which("claude")
+    if path:
+        return path
+    # Common install locations
+    for candidate in ("/usr/local/bin/claude", os.path.expanduser("~/.claude/bin/claude")):
+        if os.path.isfile(candidate):
+            return candidate
+    return "claude"  # Fall back, let subprocess raise if missing
+
+
+def _build_child_env() -> dict:
+    """Return environment dict with CLAUDECODE stripped for child Claude processes."""
+    env = os.environ.copy()
+    env.pop(STRIPPED_ENV_VAR, None)
+    return env
+
+
+def call_claude(
+    prompt: str,
+    model: str = "sonnet",
+    timeout: Optional[int] = DEFAULT_CALL_TIMEOUT_SECONDS,
+) -> str:
+    """Call Claude CLI with --print and return the text result.
+
+    Uses subprocess.run to invoke claude --print with JSON output format.
+    This is the shared LLM callback used by Slack intake, message routing,
+    and Q&A.
+
+    Args:
+        prompt: The prompt text to send.
+        model: Model name (e.g. "sonnet", "haiku", "claude-opus-4-6").
+        timeout: Subprocess timeout in seconds, or None for no timeout.
+
+    Returns:
+        The LLM text response, or empty string on failure.
+    """
+    claude_bin = _find_claude_binary()
+    cmd = [
+        claude_bin, "--print", prompt,
+        "--model", model,
+        "--output-format", "json",
+        "--dangerously-skip-permissions",
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=os.getcwd(),
+            env=_build_child_env(),
+        )
+        if proc.returncode == 0:
+            data = json.loads(proc.stdout)
+            return data.get("result", "").strip()
+        logger.warning("claude --print returned code %d: %s", proc.returncode, proc.stderr[:200])
+        return ""
+    except subprocess.TimeoutExpired:
+        logger.warning("claude --print timed out after %ds", timeout)
+        return ""
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning("claude --print failed: %s", exc)
+        return ""
+
 
 # ─── OutputCollector ──────────────────────────────────────────────────────────
 
