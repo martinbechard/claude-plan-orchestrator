@@ -487,12 +487,12 @@ sections:
       into the test module. All 52 tests pass.'
 - id: phase-5
   name: Phase 5 - Plugin Version Bump
-  status: completed
+  status: pending
   tasks:
   - id: '5.1'
     name: Bump plugin version and update release notes
     agent: coder
-    status: completed
+    status: in_progress
     depends_on:
     - '3.4'
     description: "Bump the plugin version in plugin.json and update RELEASE-NOTES.md\n\
@@ -513,19 +513,14 @@ sections:
       \ feature\"\n\nFiles: plugin.json, RELEASE-NOTES.md\n"
     attempts: 1
     last_attempt: '2026-02-18T21:18:31.372426'
-    model_used: sonnet
-    completed_at: '2026-02-18T21:19:48.329502'
-    result_message: Bumped plugin version from 1.3.0 to 1.4.0 and added 1.4.0 release
-      notes entry covering Opus/Sonnet design loop, ux-implementer agent, Slack-based
-      question suspension, and suspension marker files.
 - id: phase-6
   name: Phase 6 - Final Verification
-  status: completed
+  status: pending
   tasks:
   - id: '6.1'
     name: Final verification - syntax, tests, and dry-run
     agent: code-reviewer
-    status: completed
+    status: pending
     depends_on:
     - '4.1'
     - '4.2'
@@ -556,12 +551,3 @@ sections:
       \ failure with details.\n\nFiles: scripts/plan-orchestrator.py, scripts/auto-pipeline.py,\n\
       \  .claude/agents/ux-designer.md, .claude/agents/ux-implementer.md,\n  tests/test_plan_orchestrator.py,\
       \ plugin.json, RELEASE-NOTES.md\n"
-    attempts: 1
-    last_attempt: '2026-02-18T21:19:50.719408'
-    model_used: sonnet
-    completed_at: '2026-02-18T21:21:29.650657'
-    result_message: 'All verification checks passed: Python syntax OK, 266/266 tests
-      pass, agent files exist with correct models (ux-designer=opus, ux-implementer=sonnet),
-      suspension constants verified (UX_DESIGN_MAX_ROUNDS=3, SUSPENDED_DIR=.claude/suspended,
-      SUSPENSION_TIMEOUT_MINUTES=1440), functions create_suspension_marker and is_item_suspended
-      callable, orchestrator dry-run completes 6/6 tasks with 0 failures'

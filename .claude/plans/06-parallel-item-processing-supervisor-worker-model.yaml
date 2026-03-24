@@ -221,6 +221,13 @@ sections:
       when max_parallel_items > 1 (sequential path unchanged); _log_startup_banner()
       shows Workers: N when N > 1; main() reads and threads max_parallel_items from
       config. 1317 tests pass, 3 pre-existing failures unrelated to this change.'
+    validation_attempts: 1
+    validation_findings: 'All 4 requirements met: get_max_parallel_items imported
+      and called in main(); run_supervisor_loop imported and delegated to when max_parallel_items
+      > 1; sequential path preserved when max_parallel_items == 1; _log_startup_banner
+      shows Workers: N when N > 1. Build passes. 1317 tests pass with 3 pre-existing
+      failures unrelated to this change. 2 collection errors in test_auto_pipeline.py
+      and test_completed_archive.py are also pre-existing. File header present.'
 - id: phase-6
   name: Phase 6 - Unit tests
   status: pending
@@ -228,7 +235,7 @@ sections:
   - id: '6.1'
     name: Create unit tests for claim_item, unclaim_item, config helper, and worker
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/06-parallel-item-processing-supervisor-worker-model.md
       Design doc: docs/plans/2026-03-24-06-parallel-item-processing-supervisor-worker-model-design.md
 
@@ -250,3 +257,6 @@ sections:
 
 
       Mock filesystem operations where appropriate. Run pytest and fix all failures.'
+    last_attempt: '2026-03-24T17:16:13.078853'
+    attempts: 1
+    model_used: sonnet
