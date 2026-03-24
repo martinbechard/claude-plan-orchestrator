@@ -71,6 +71,14 @@ sections:
       auth.test at startup), and A0 identity-based self-skip guard in _handle_polled_messages()
       to SlackPoller in langgraph_pipeline/slack/poller.py. All 66 existing tests
       pass.
+    validation_attempts: 1
+    validation_findings: 'Core implementation is correct: _bot_user_id field, _resolve_own_bot_id()
+      calling auth.test, and A0 guard in _handle_polled_messages() are all present
+      and correct in poller.py. All 66 poller tests pass. Build succeeds. However,
+      the design doc required a TestBotUserIdSelfSkip class in tests/langgraph/slack/test_poller.py
+      (5 test cases), which is absent — the A0 path is untested in the unit suite.
+      Pre-existing unrelated failures in test_auto_pipeline.py and test_completed_archive.py
+      (missing CompletionTracker/completed_slugs) are not caused by this task.'
 - id: phase-3
   name: Phase 3 - Tests for both implementations
   status: pending
@@ -78,7 +86,7 @@ sections:
   - id: '3.1'
     name: Add bot user ID filter tests for SlackNotifier and SlackPoller
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.1'
     description: 'Implement the work item: docs/defect-backlog/01-in-the-mpact-project-i-submitted-a-feature-request-and-the-orchestrator-respons.md
@@ -90,3 +98,11 @@ sections:
       Files: tests/test_agent_identity.py, tests/langgraph/slack/test_poller.py
 
       '
+    last_attempt: '2026-03-24T12:18:35.180421'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T12:25:34.777288'
+    result_message: 'Added TestBotUserIdSelfSkip class to tests/test_agent_identity.py
+      and tests/langgraph/slack/test_poller.py with 5 tests each covering: own-user-ID
+      skip, different-user passthrough, null-bot-ID graceful degradation, resolve-on-success,
+      and resolve-on-failure. All 135 tests pass.'
