@@ -37,6 +37,7 @@ from langgraph_pipeline.shared.config import load_orchestrator_config
 from langgraph_pipeline.shared.dotenv import load_dotenv_files
 from langgraph_pipeline.shared.langsmith import configure_tracing
 from langgraph_pipeline.shared.paths import LANGGRAPH_PID_FILE_PATH
+from langgraph_pipeline.shared.quota import QUOTA_PROBE_INTERVAL_SECONDS, probe_quota_available
 from langgraph_pipeline.slack import SlackNotifier
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -269,6 +270,50 @@ def _is_budget_exhausted(state: PipelineState, budget_cap_usd: Optional[float]) 
     return False
 
 
+# ─── Quota probe idle loop ────────────────────────────────────────────────────
+
+
+def _run_quota_probe_loop(
+    shutdown_event: threading.Event,
+    slack: Optional[SlackNotifier],
+) -> None:
+    """Block until Claude quota is available again or shutdown is requested.
+
+    Logs a warning and sends an optional Slack notification on entry, then
+    probes Claude every QUOTA_PROBE_INTERVAL_SECONDS seconds until either a
+    successful response is received or the shutdown event is set.
+
+    Args:
+        shutdown_event: Set by signal handlers to request clean exit.
+        slack: SlackNotifier instance, or None if Slack is disabled.
+    """
+    logger.warning(
+        "Quota exhausted — entering probe loop. "
+        "Will retry every %ds until Claude responds.",
+        QUOTA_PROBE_INTERVAL_SECONDS,
+    )
+    if slack is not None:
+        slack.send_status(
+            "Claude quota exhausted — pipeline paused. "
+            f"Probing every {QUOTA_PROBE_INTERVAL_SECONDS}s.",
+            level="warning",
+        )
+
+    while not shutdown_event.is_set():
+        shutdown_event.wait(QUOTA_PROBE_INTERVAL_SECONDS)
+        if shutdown_event.is_set():
+            break
+        if probe_quota_available():
+            logger.info("Quota probe succeeded — resuming pipeline.")
+            if slack is not None:
+                slack.send_status("Claude quota restored — pipeline resuming.", level="info")
+            break
+        logger.warning(
+            "Quota probe failed — still exhausted. Retrying in %ds.",
+            QUOTA_PROBE_INTERVAL_SECONDS,
+        )
+
+
 # ─── Lightweight pre-scan ─────────────────────────────────────────────────────
 
 
@@ -364,6 +409,12 @@ def _run_single_item(
         with pipeline_graph() as graph:
             final_state: PipelineState = graph.invoke(initial_state, config=thread_config)
 
+        if final_state.get("quota_exhausted"):
+            logger.warning(
+                "Quota exhausted during single-item run — item left in backlog for retry."
+            )
+            return EXIT_CODE_CLEAN
+
         logger.info(
             "Item complete: cost=~$%.4f tokens_in=%d tokens_out=%d",
             final_state.get("session_cost_usd", 0.0),
@@ -424,6 +475,12 @@ def _run_once(
         with pipeline_graph() as graph:
             final_state: PipelineState = graph.invoke(pre_scanned, config=thread_config)
 
+        if final_state.get("quota_exhausted"):
+            logger.warning(
+                "Quota exhausted during once-mode run — item left in backlog for retry."
+            )
+            return EXIT_CODE_CLEAN
+
         logger.info(
             "Item complete: cost=~$%.4f tokens_in=%d tokens_out=%d",
             final_state.get("session_cost_usd", 0.0),
@@ -448,17 +505,20 @@ def _run_scan_loop(
     budget_cap_usd: Optional[float],
     dry_run: bool,
     shutdown_event: threading.Event,
+    slack: Optional[SlackNotifier] = None,
 ) -> int:
     """Run the continuous scan loop until shutdown or budget exhaustion.
 
     Opens the pipeline_graph() context manager once and invokes the graph
     repeatedly. Sleeps between iterations when no item was found. Checks the
-    shutdown event and budget cap between each invocation.
+    shutdown event and budget cap between each invocation. Enters the quota
+    probe idle loop when quota exhaustion is detected.
 
     Args:
         budget_cap_usd: Budget cap in USD, or None.
         dry_run: When True, log each iteration without executing.
         shutdown_event: Set by signal handlers to request clean exit.
+        slack: SlackNotifier instance, or None if Slack is disabled.
 
     Returns:
         EXIT_CODE_CLEAN on graceful shutdown,
@@ -499,6 +559,10 @@ def _run_scan_loop(
                 final_state: PipelineState = graph.invoke(
                     pre_scanned, config=thread_config
                 )
+
+                if final_state.get("quota_exhausted"):
+                    _run_quota_probe_loop(shutdown_event, slack)
+                    continue
 
                 cost = final_state.get("session_cost_usd", 0.0)
                 logger.debug(
@@ -588,6 +652,7 @@ def main() -> int:
                 args.budget_cap,
                 args.dry_run,
                 shutdown_event,
+                slack,
             )
     finally:
         _remove_pid_file()
