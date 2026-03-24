@@ -10,8 +10,8 @@ checkpointing for crash recovery.
 
 Graph topology:
   scan_backlog --[has_items]--> intake_analyze | END
-  intake_analyze --> create_plan
-  create_plan --> execute_plan
+  intake_analyze --[after_intake]--> create_plan | END
+  create_plan --[after_create_plan]--> execute_plan | END
   execute_plan --[is_defect]--> verify_symptoms | archive
   verify_symptoms --[verify_result]--> archive | create_plan
   archive --> END
@@ -24,7 +24,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from langgraph_pipeline.pipeline.edges import has_items, is_defect, verify_result
+from langgraph_pipeline.pipeline.edges import after_create_plan, after_intake, has_items, is_defect, verify_result
 from langgraph_pipeline.pipeline.nodes import (
     archive,
     create_plan,
@@ -77,11 +77,11 @@ def build_graph() -> StateGraph:
     # scan_backlog → has_items → intake_analyze | END
     graph.add_conditional_edges(NODE_SCAN_BACKLOG, has_items)
 
-    # intake_analyze → create_plan (always)
-    graph.add_edge(NODE_INTAKE_ANALYZE, NODE_CREATE_PLAN)
+    # intake_analyze → after_intake → create_plan | END
+    graph.add_conditional_edges(NODE_INTAKE_ANALYZE, after_intake)
 
-    # create_plan → execute_plan (always)
-    graph.add_edge(NODE_CREATE_PLAN, NODE_EXECUTE_PLAN)
+    # create_plan → after_create_plan → execute_plan | END
+    graph.add_conditional_edges(NODE_CREATE_PLAN, after_create_plan)
 
     # execute_plan → is_defect → verify_symptoms | archive
     graph.add_conditional_edges(NODE_EXECUTE_PLAN, is_defect)
