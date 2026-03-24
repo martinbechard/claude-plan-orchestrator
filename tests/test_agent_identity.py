@@ -914,3 +914,89 @@ class TestVerboseFilterLogging:
         assert call_args[1] == "FILTER"
         assert "Accept broadcast" in call_args[0]
 
+
+# ─── A0: Bot user ID self-skip filter tests ──────────────────────
+
+
+class TestBotUserIdSelfSkip:
+    """Tests for A0 identity-based bot user ID self-skip in SlackNotifier."""
+
+    def _make_notifier(self, tmp_path):
+        config_file = tmp_path / "slack.yaml"
+        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
+        return SlackNotifier(config_path=str(config_file))
+
+    def _channel_msg(self, ts: str, user: str) -> dict:
+        return {
+            "text": "The login button is broken on mobile",
+            "user": user,
+            "ts": ts,
+            "_channel_name": "orchestrator-notifications",
+            "_channel_id": "C1",
+        }
+
+    def _patch_routing(self, notifier):
+        routed = []
+        notifier._get_channel_role = lambda ch: None
+        notifier._route_message_via_llm = lambda text: MagicMock()
+        notifier._execute_routed_action = lambda *a, **kw: routed.append(a)
+        return routed
+
+    def test_own_user_id_message_is_skipped(self, tmp_path):
+        """Message whose user field equals _bot_user_id is skipped and ts recorded."""
+        notifier = self._make_notifier(tmp_path)
+        notifier._bot_user_id = "UBOT123"
+
+        notifier._handle_polled_messages([self._channel_msg("800.0", "UBOT123")])
+
+        assert "800.0" in notifier._processed_message_ts
+
+    def test_different_user_id_passes_filter(self, tmp_path):
+        """Message from a different user is not filtered by A0 and reaches routing."""
+        notifier = self._make_notifier(tmp_path)
+        notifier._bot_user_id = "UBOT123"
+        routed = self._patch_routing(notifier)
+
+        notifier._handle_polled_messages([self._channel_msg("801.0", "UHUMAN")])
+
+        assert len(routed) > 0, "Message from different user must pass A0 and reach routing"
+
+    def test_no_bot_user_id_passes_filter(self, tmp_path):
+        """When _bot_user_id is None, A0 is skipped and message reaches routing."""
+        notifier = self._make_notifier(tmp_path)
+        assert notifier._bot_user_id is None
+        routed = self._patch_routing(notifier)
+
+        notifier._handle_polled_messages([self._channel_msg("802.0", "UANYUSER")])
+
+        assert len(routed) > 0, "Message must reach routing when _bot_user_id is None"
+
+    def test_resolve_own_bot_id_sets_user_id(self, tmp_path):
+        """_resolve_own_bot_id stores user_id from a successful auth.test response."""
+        notifier = self._make_notifier(tmp_path)
+        notifier._bot_token = "xoxb-test"
+        notifier._bot_user_id = None
+
+        fake_response = MagicMock()
+        fake_response.read.return_value = json.dumps(
+            {"ok": True, "user_id": "UBOT456"}
+        ).encode()
+        fake_response.__enter__ = lambda s: s
+        fake_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=fake_response):
+            notifier._resolve_own_bot_id()
+
+        assert notifier._bot_user_id == "UBOT456"
+
+    def test_resolve_own_bot_id_graceful_on_failure(self, tmp_path):
+        """_resolve_own_bot_id leaves _bot_user_id as None when auth.test raises."""
+        notifier = self._make_notifier(tmp_path)
+        notifier._bot_token = "xoxb-test"
+        notifier._bot_user_id = None
+
+        with patch("urllib.request.urlopen", side_effect=Exception("network error")):
+            notifier._resolve_own_bot_id()
+
+        assert notifier._bot_user_id is None
+

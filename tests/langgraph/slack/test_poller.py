@@ -728,3 +728,97 @@ class TestExecuteRoutedAction:
         time.sleep(0.05)
         run_intake.assert_called_once()
         assert isinstance(run_intake.call_args[0][0], IntakeState)
+
+
+# ── A0: Bot user ID self-skip ─────────────────────────────────────────────────
+
+
+class TestBotUserIdSelfSkip:
+    """Tests for A0 identity-based bot user ID self-skip in SlackPoller."""
+
+    def test_own_user_id_message_is_skipped(self):
+        """Message whose user field equals _bot_user_id is skipped and ts recorded."""
+        p = _make_poller(bot_token="")
+        p._bot_user_id = "UBOT123"
+
+        msg = {
+            "ts": "1800.001",
+            "text": "The login button is broken on mobile",
+            "user": "UBOT123",
+            "_channel_name": "orchestrator-defects",
+            "_channel_id": "C1",
+        }
+        p._handle_polled_messages([msg])
+
+        assert "1800.001" in p._processed_message_ts
+
+    def test_different_user_id_passes_filter(self):
+        """Message from a different user is not filtered by A0 and reaches intake."""
+        run_intake = MagicMock()
+        callbacks = PollerCallbacks(run_intake=run_intake)
+        p = _make_poller(
+            bot_token="", channel_prefix="orchestrator-", callbacks=callbacks
+        )
+        p._bot_user_id = "UBOT123"
+        p._discovered_channels = {"orchestrator-defects": "C1"}
+
+        msg = {
+            "ts": "1801.001",
+            "text": "The login button is broken on mobile",
+            "user": "UHUMAN",
+            "_channel_name": "orchestrator-defects",
+            "_channel_id": "C1",
+        }
+        p._handle_polled_messages([msg])
+
+        run_intake.assert_called_once()
+
+    def test_no_bot_user_id_passes_filter(self):
+        """When _bot_user_id is None, A0 is skipped and message reaches intake."""
+        run_intake = MagicMock()
+        callbacks = PollerCallbacks(run_intake=run_intake)
+        p = _make_poller(
+            bot_token="", channel_prefix="orchestrator-", callbacks=callbacks
+        )
+        assert p._bot_user_id is None
+        p._discovered_channels = {"orchestrator-defects": "C1"}
+
+        msg = {
+            "ts": "1802.001",
+            "text": "The login button is broken on mobile",
+            "user": "UANYUSER",
+            "_channel_name": "orchestrator-defects",
+            "_channel_id": "C1",
+        }
+        p._handle_polled_messages([msg])
+
+        run_intake.assert_called_once()
+
+    def test_resolve_own_bot_id_sets_user_id(self):
+        """_resolve_own_bot_id stores user_id from a successful auth.test response."""
+        p = _make_poller(bot_token="")
+        p._bot_token = "xoxb-test"
+        p._bot_user_id = None
+
+        fake_response = MagicMock()
+        fake_response.read.return_value = json.dumps(
+            {"ok": True, "user_id": "UBOT456"}
+        ).encode()
+        fake_response.__enter__ = lambda s: s
+        fake_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=fake_response):
+            p._resolve_own_bot_id()
+
+        assert p._bot_user_id == "UBOT456"
+
+    def test_resolve_own_bot_id_graceful_on_failure(self):
+        """_resolve_own_bot_id leaves _bot_user_id as None when auth.test raises."""
+        p = _make_poller(bot_token="")
+        p._bot_token = "xoxb-test"
+        p._bot_user_id = None
+
+        with patch("urllib.request.urlopen", side_effect=Exception("network error")):
+            p._resolve_own_bot_id()
+
+        assert p._bot_user_id is None
