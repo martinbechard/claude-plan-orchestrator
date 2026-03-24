@@ -67,6 +67,11 @@ sections:
       branch to only fire when reset_time is not None, so quota exhaustion (rate limit
       with no reset time) correctly returns quota_exhausted: True. Updated test to
       reflect correct behavior.'
+    validation_attempts: 1
+    validation_findings: detect_quota_exhaustion imported and called correctly after
+      rate limit check (with reset_time guard). All 20 unit tests pass including new
+      quota exhaustion test. Build clean. Two pre-existing unrelated collection errors
+      in test_auto_pipeline.py and test_completed_archive.py.
 - id: phase-2
   name: Phase 2 - Add Routing Functions and Rewire Graph
   status: pending
@@ -74,7 +79,7 @@ sections:
   - id: '2.1'
     name: Add after_intake and after_create_plan edge routing functions
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.2'
     description: 'Implement the work item: docs/defect-backlog/01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival.md
@@ -91,6 +96,12 @@ sections:
       else NODE_EXECUTE_PLAN
 
       - See the design doc for exact implementation'
+    last_attempt: '2026-03-24T17:30:23.807711'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T17:31:09.039444'
+    result_message: Added NODE_EXECUTE_PLAN constant and after_intake/after_create_plan
+      routing functions to edges.py. All 28 existing tests pass.
   - id: '2.2'
     name: Rewire graph to use conditional edges for intake and create_plan
     agent: coder
