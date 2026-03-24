@@ -84,6 +84,12 @@ sections:
       When ToolCallRecord has both duration_s and start_time set, end_time is computed
       and passed to child.end(). Falls back to current behavior when either field
       is absent. Added 3 new tests covering all branches; all 46 tests pass.
+    validation_attempts: 1
+    validation_findings: Build passes. 46 langsmith tests pass including 3 new tests
+      covering all end_time branches. Pre-existing failures in unrelated test files
+      are not caused by this task. Implementation correctly computes end_time = start_time
+      + timedelta(seconds=duration_s) when both fields are set, and falls back to
+      no end_time otherwise.
 - id: phase-3
   name: Phase 3 - Unit tests
   status: pending
@@ -91,7 +97,7 @@ sections:
   - id: '3.1'
     name: Add unit tests for duration tracking in stream_json_output and emit_tool_call_traces
     agent: coder
-    status: pending
+    status: completed
     description: 'Implement the work item: docs/defect-backlog/01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration.md
       Design doc: docs/plans/2026-03-24-01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration-design.md
 
@@ -108,3 +114,12 @@ sections:
       '
     depends_on:
     - '2.1'
+    last_attempt: '2026-03-24T11:44:00.758840'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T11:46:10.332728'
+    result_message: 'Added TestStreamJsonOutputDurationTracking class (6 tests) to
+      test_claude_cli.py covering: duration_s set from tool_result pairing, absent
+      for text blocks, absent for unmatched tool calls, start_time captured, tool_use_id
+      stored, unmatched tool_result silently ignored. LangSmith end_time tests were
+      already added in task 2.1. All 94 tests pass.'
