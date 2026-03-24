@@ -53,7 +53,7 @@ decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the 
 | [15-the-loop-that-wouldnt-stop.md](15-the-loop-that-wouldnt-stop.md) | Infinite loop fix, force_pipeline_exit(), mid-task stop semaphore, cross-project Slack collaboration, agent identity protocol |
 | [16-failure-awareness.md](16-failure-awareness.md) | Sandbox two-axis permission fix, plan-level deadlock detection, cross-instance keyword misclassification, root cause in Slack notifications, cross-project reporting docs, single-command onboarding |
 | [17-seventeen-thousand-defects.md](17-seventeen-thousand-defects.md) | Slack notification feedback loop producing 17k recursive defects, four-layer loop prevention, ChromaDB RAG deduplication, the defect that predicted itself |
-| [18-the-great-rewrite.md](18-the-great-rewrite.md) | LangGraph migration: ~9300 monolithic lines replaced by 25-file modular package, drop-in backward compatibility, SQLite crash recovery, README rewrite |
+| [18-the-great-rewrite.md](18-the-great-rewrite.md) | LangGraph migration: modular package replacing monoliths, drop-in compatibility, first live run wiring fixes, LangSmith tool call tracing, agent model enforcement |
 
 ## Timeline at a Glance
 
@@ -98,7 +98,12 @@ decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the 
 2026-02-25  ChromaDB RAG deduplication for intake (1.8.0)
 2026-02-26  LangGraph migration begins: pipeline graph + executor subgraph
 2026-03-23  Drop-in replacement: auto-pipeline.py wrapper, README rewrite (1.8.1)
+2026-03-23  First live run: Slack polling start, call_claude wiring, .env.local support
+2026-03-23  LangSmith opt-in with credential validation, idle scan trace suppression
+2026-03-23  Agent model from frontmatter (haiku floor fix), JSON extraction for router
+2026-03-23  LangSmith tool call tracing (self-implemented by pipeline from backlog)
+2026-03-23  Auto-commit archival changes, zero-pad backlog item numbers
 
-Current: ~2500 lines across 25 files in langgraph_pipeline/
-Plans executed: ~54 completed features/defects
+Current: ~2800 lines across 28 files in langgraph_pipeline/
+Plans executed: ~56 completed features/defects
 ```

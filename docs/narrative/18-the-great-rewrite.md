@@ -118,3 +118,61 @@ The rewrite was invisible to consumers. The only new visible artifact is `.claud
 **Graphs are state machines with checkpoints.** The LangGraph rewrite did not change what the code does. It changed how the code expresses what it does. Each node is a pure function from state to state. The graph framework handles sequencing, conditional branching, and persistence.
 
 **Backward compatibility is a design constraint, not an afterthought.** The wrapper script was trivial to write but required the new CLI to accept the old flags. That meant adding `--once` and `--verbose` as first-class arguments, not as deprecated aliases.
+
+## First Live Run: The Missing Wires
+
+The rewrite looked complete on paper. Every node was implemented, every test passed, the README was polished. Then a consumer project tried to run it.
+
+### Slack polling never started
+
+`SlackNotifier()` was created but `start_background_polling()` was never called in `cli.py`. The cleanup code (`stop_background_polling`) existed in the `finally` block. The start call was simply missing --- a one-line omission that made the entire Slack integration silently inert.
+
+### No LLM callback
+
+`SlackNotifier` accepts a `call_claude` callback for LLM-powered operations: message routing, intake analysis, and Q&A. The old monolith defined `_call_claude_print()` as a method on the class. The new modular `cli.py` created `SlackNotifier()` without passing the callback. Result: every LLM call returned an empty string, every intake analysis produced `[INTAKE] LLM returned empty response`, and the message router silently fell through to `{"action": "none"}`.
+
+The fix: a shared `call_claude()` function in `shared/claude_cli.py` that invokes `claude --print` as a subprocess and returns the result text. One function, passed to `SlackNotifier(call_claude=call_claude)`.
+
+### Single-digit file numbering
+
+The Slack intake created files like `1-slug.md`, but the backlog scanner required `\d{2,}` (two or more digits). Items 1-9 were silently skipped. One-character fix: `{next_num}` to `{next_num:02d}`.
+
+### JSON parsing in the message router
+
+The LLM message router called `json.loads(response)` on Claude's output, expecting pure JSON. But Claude wraps JSON in markdown code fences or adds preamble. The `_extract_json()` helper now tries: (1) direct parse, (2) code fence extraction, (3) inline `{...}` extraction.
+
+### Haiku for everything
+
+The model escalation system started every task at `haiku` regardless of agent type. A `frontend-coder` task (which declares `model: sonnet` in its frontmatter) was running on haiku and producing low-quality output. The fix: `find_next_task` now reads the agent's frontmatter model and uses it as a floor --- escalation can only go higher, never below the agent's declared minimum.
+
+### LangSmith noise
+
+With LangSmith enabled, every 15-second idle scan cycle sent 4+ traces to the API. The fix: run `scan_backlog` directly (no graph, no tracing) to check for work, then only invoke the full pipeline graph (with tracing) when an item is found.
+
+Additionally, LangSmith configuration was changed to opt-in (`langsmith.enabled: true` required), with upfront validation of both `LANGSMITH_API_KEY` and `LANGSMITH_WORKSPACE_ID` before making any calls.
+
+### Tool call tracing
+
+The pipeline self-implemented its first feature backlog item: LangSmith tool call tracing. Each Claude CLI task execution now emits child spans for every tool call (Read, Edit, Bash, Grep, etc.) so the LangSmith dashboard shows what Claude did during each task, not just the final result.
+
+### Archival commit gap
+
+The archive node moved files and deleted plan YAMLs but never committed the changes, leaving a dirty working tree after each completed item. Now `_git_commit_archival()` stages and commits automatically.
+
+### Environment secrets
+
+A `.env.local` / `.env` loader was added so secrets (LangSmith API key, workspace ID, Slack tokens) can be kept out of config files and git history. `.env.local` is loaded first (plugin-specific), then `.env` (host project defaults). No third-party dependencies.
+
+## The Pattern
+
+Every issue followed the same pattern: the modular architecture was correct, but the wiring between modules was incomplete. The old monoliths had no wiring --- everything was methods on one class calling other methods on the same class. The new architecture required explicit connections: callbacks passed as constructor arguments, functions imported and called at the right moment, configuration loaded and validated before use.
+
+Integration testing would have caught all of these. Unit tests verified that each node worked in isolation. What was missing was a test that started the pipeline, sent a Slack message, and verified the item appeared in the backlog.
+
+## Lessons (continued)
+
+**Unit tests are necessary but not sufficient.** 258 executor tests passed. The system did not work. Every failure was at the boundary between modules, which unit tests by design do not cover.
+
+**The first live run is the real test.** The rewrite was "done" for three weeks before a consumer project tried it. Every issue above was discovered in the first hour of real use.
+
+**Opt-in is safer than opt-out for external services.** LangSmith tracing defaulting to on with no validation produced a stream of error logs. Changing it to opt-in with credential validation eliminated an entire class of startup failures.
