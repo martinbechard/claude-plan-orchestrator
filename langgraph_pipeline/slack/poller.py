@@ -6,8 +6,9 @@
 
 Extracted from plan-orchestrator.py SlackNotifier class (~line 4313).
 Covers channel polling, last-read tracking, message deduplication, and
-four safety layers that prevent bot-induced feedback loops:
+safety layers that prevent bot-induced feedback loops:
 
+  A0 - Identity-based self-skip (bot user ID from auth.test)
   A1 - Chain-loop artifact detection (on-disk intake history)
   A2 - Self-reply window circuit breaker (in-memory, per-channel)
   A3 - Content-based bot-notification pattern filter (regex)
@@ -217,13 +218,14 @@ class PollerCallbacks:
 
 
 class SlackPoller:
-    """Inbound Slack polling with loop-prevention safety layers A1-A4.
+    """Inbound Slack polling with loop-prevention safety layers A0-A4.
 
     Handles channel discovery, per-channel last-read tracking, message
     deduplication, and routing of polled messages. Cross-module operations
     (message posting, intake analysis, Q&A) are injected via PollerCallbacks.
 
     Safety layers:
+      A0 - Identity-based self-skip (bot user ID from auth.test)
       A1 - Chain-loop artifact detection via on-disk intake history
       A2 - Self-reply window circuit breaker (per-channel, in-memory)
       A3 - Content-based bot-notification pattern filter (regex)
@@ -260,6 +262,8 @@ class SlackPoller:
         self._discovered_channels: dict[str, str] = {}
         self._channels_discovered_at = 0.0
 
+        self._bot_user_id: Optional[str] = None  # A0: identity-based self-skip
+
         # Dedup state
         self._processed_message_ts: set[str] = set()
         self._own_sent_ts: set[str] = set()
@@ -276,6 +280,40 @@ class SlackPoller:
         # Background polling thread
         self._poll_thread: Optional[threading.Thread] = None
         self._poll_stop_event = threading.Event()
+
+        self._resolve_own_bot_id()
+
+    def _resolve_own_bot_id(self) -> None:
+        """Resolve and store the bot's own Slack user ID via auth.test.
+
+        Called once during __init__. On success, sets self._bot_user_id so
+        that _handle_polled_messages can apply the A0 identity-based self-skip.
+        On any failure (network, API error), logs a warning and leaves
+        self._bot_user_id as None (graceful degradation — content-based
+        guards remain active).
+
+        Reference: docs/plans/2026-03-24-01-in-the-mpact-project-i-submitted-a-feature-request-and-the-orchestrator-respons-design.md
+        """
+        if not self._bot_token:
+            return
+        try:
+            req = urllib.request.Request(
+                "https://slack.com/api/auth.test",
+                method="POST",
+                headers={
+                    "Authorization": f"Bearer {self._bot_token}",
+                    "Content-Type": "application/json",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read())
+            if result.get("ok", False):
+                self._bot_user_id = result.get("user_id")
+                print(f"[SLACK] Bot user ID resolved: {self._bot_user_id}")
+            else:
+                print(f"[SLACK] Warning: auth.test failed: {result.get('error', 'unknown')}")
+        except Exception as e:
+            print(f"[SLACK] Warning: could not resolve bot user ID: {e}")
 
     # ── Channel discovery ────────────────────────────────────────────────────
 
@@ -1000,6 +1038,15 @@ class SlackPoller:
             # Dedup: skip already-processed messages
             if ts and ts in self._processed_message_ts:
                 print(f"[SLACK] Filter: skip already-processed ts={ts}")
+                continue
+
+            # A0: Identity-based self-skip — unconditionally skip any message
+            # whose user field matches the bot's own Slack user ID.
+            # Immune to message format changes and process restarts.
+            if self._bot_user_id and msg.get("user") == self._bot_user_id:
+                print(f"[SLACK] Filter: skip own-bot-user #{ch_log}: {preview!r}")
+                if ts:
+                    self._processed_message_ts.add(ts)
                 continue
 
             # A0: Self-signed message filter — skip messages signed by our own agents.
