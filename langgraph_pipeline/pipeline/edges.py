@@ -44,9 +44,12 @@ def has_items(state: PipelineState) -> str:
 def is_defect(state: PipelineState) -> str:
     """Route from execute_plan based on the item type.
 
-    Defects must be verified after plan execution; all other item types
-    (feature, analysis) go directly to archival.
+    Quota exhaustion takes priority: return END so the item remains on disk
+    for re-discovery after quota restores.  Otherwise, defects go to
+    verification and all other item types go to archival.
     """
+    if state.get("quota_exhausted"):
+        return END
     if state.get("item_type") == "defect":
         return NODE_VERIFY_SYMPTOMS
     return NODE_ARCHIVE

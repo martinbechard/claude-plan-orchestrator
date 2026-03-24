@@ -97,4 +97,5 @@ def execute_plan(state: PipelineState) -> dict:
         "session_cost_usd": cost_usd,
         "session_input_tokens": input_tokens,
         "session_output_tokens": output_tokens,
+        "quota_exhausted": bool(final_task_state.get("quota_exhausted")),
     }

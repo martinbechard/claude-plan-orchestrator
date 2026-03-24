@@ -23,6 +23,7 @@ from langgraph.types import interrupt
 
 from langgraph_pipeline.executor.circuit_breaker import record_failure, reset_failures
 from langgraph_pipeline.executor.state import TaskResult, TaskState
+from langgraph_pipeline.shared.quota import detect_quota_exhaustion
 from langgraph_pipeline.shared.langsmith import add_trace_metadata, emit_tool_call_traces
 from langgraph_pipeline.shared.claude_cli import (
     OutputCollector,
@@ -475,6 +476,13 @@ def execute_task(state: TaskState) -> dict:
     _exec_start = time.time()
     cli_success, result_capture, _stdout, _stderr, tool_calls = _run_claude(prompt, model_cli_name)
     _duration_ms = int((time.time() - _exec_start) * 1000)
+
+    # Detect quota exhaustion before processing outcome
+    if detect_quota_exhaustion(_stdout + _stderr):
+        print(f"[execute_task] Quota exhaustion detected for task {task_id!r}; resetting to pending")
+        task["status"] = "pending"
+        _save_plan_yaml(plan_path, plan_data)
+        return {"quota_exhausted": True, "plan_data": plan_data}
 
     # Parse usage data
     cost_usd = float(result_capture.get("total_cost_usd", 0.0))
