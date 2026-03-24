@@ -23,6 +23,7 @@ from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.config import DEFAULT_AGENTS_DIR, load_orchestrator_config
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.paths import PLANS_DIR
+from langgraph_pipeline.shared.quota import detect_quota_exhaustion
 from langgraph_pipeline.shared.rate_limit import check_rate_limit
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -196,13 +197,16 @@ def create_plan(state: PipelineState) -> dict:
 
     combined_output = stdout + stderr
     is_rate_limited, reset_time = check_rate_limit(combined_output)
-    if is_rate_limited:
-        reset_iso = reset_time.isoformat() if reset_time else None
+    if is_rate_limited and reset_time is not None:
         print(f"[create_plan] Rate limited during plan creation for {item_slug}")
         return {
             "rate_limited": True,
-            "rate_limit_reset": reset_iso,
+            "rate_limit_reset": reset_time.isoformat(),
         }
+
+    if detect_quota_exhaustion(combined_output):
+        print(f"[create_plan] Quota exhausted during plan creation for {item_slug}")
+        return {"quota_exhausted": True}
 
     if exit_code != 0:
         print(

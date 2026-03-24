@@ -247,7 +247,7 @@ class TestCreatePlan:
             result = create_plan(state)
         assert result.get("rate_limited") is True
 
-    def test_rate_limit_reset_is_none_when_unparseable(self):
+    def test_quota_exhausted_when_rate_limit_has_no_reset_time(self):
         rate_limit_output = "You've hit your limit"
         state = _make_state()
         with patch(
@@ -255,7 +255,8 @@ class TestCreatePlan:
             return_value=(1, rate_limit_output, ""),
         ):
             result = create_plan(state)
-        assert result.get("rate_limited") is True
+        assert result.get("quota_exhausted") is True
+        assert "rate_limited" not in result
 
     def test_design_doc_path_contains_date_and_slug(self, tmp_path, monkeypatch):
         slug = "02-feature"
