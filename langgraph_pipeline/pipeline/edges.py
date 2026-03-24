@@ -23,6 +23,7 @@ MAX_VERIFICATION_CYCLES = 3
 
 NODE_INTAKE_ANALYZE = "intake_analyze"
 NODE_CREATE_PLAN = "create_plan"
+NODE_EXECUTE_PLAN = "execute_plan"
 NODE_VERIFY_SYMPTOMS = "verify_symptoms"
 NODE_ARCHIVE = "archive"
 
@@ -39,6 +40,20 @@ def has_items(state: PipelineState) -> str:
     if state.get("item_path"):
         return NODE_INTAKE_ANALYZE
     return END
+
+
+def after_intake(state: PipelineState) -> str:
+    """Route from intake_analyze: END on quota exhaustion, else create_plan."""
+    if state.get("quota_exhausted"):
+        return END
+    return NODE_CREATE_PLAN
+
+
+def after_create_plan(state: PipelineState) -> str:
+    """Route from create_plan: END on quota exhaustion, else execute_plan."""
+    if state.get("quota_exhausted"):
+        return END
+    return NODE_EXECUTE_PLAN
 
 
 def is_defect(state: PipelineState) -> str:
