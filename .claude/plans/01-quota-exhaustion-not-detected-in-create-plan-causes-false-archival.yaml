@@ -130,6 +130,11 @@ sections:
       from edges.py; replaced add_edge for intake_analyze->create_plan and create_plan->execute_plan
       with add_conditional_edges; updated module docstring topology to reflect new
       conditional routing.'
+    validation_attempts: 1
+    validation_findings: 'All requirements satisfied: after_intake and after_create_plan
+      imported in graph.py, both fixed edges replaced with add_conditional_edges,
+      module docstring topology updated. Build passes. Test suite errors are pre-existing
+      and unrelated to this task.'
 - id: phase-3
   name: Phase 3 - Tests
   status: pending
@@ -137,7 +142,7 @@ sections:
   - id: '3.1'
     name: Add unit tests for new edge routing functions
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.2'
     description: 'Implement the work item: docs/defect-backlog/01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival.md
@@ -154,6 +159,14 @@ sections:
       state routes to NODE_EXECUTE_PLAN
 
       - Run tests and fix any failures'
+    last_attempt: '2026-03-24T17:36:00.548067'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T17:36:58.040118'
+    result_message: Added TestAfterIntake and TestAfterCreatePlan classes to test_edges.py.
+      Both import after_intake/after_create_plan/NODE_EXECUTE_PLAN from edges.py and
+      cover quota_exhausted=True to END and normal state to next node. All 34 tests
+      pass.
   - id: '3.2'
     name: Add unit tests for quota detection in intake_analyze and create_plan nodes
     agent: coder
