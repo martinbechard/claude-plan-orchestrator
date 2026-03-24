@@ -102,7 +102,7 @@ sections:
   - id: '3.1'
     name: Add quota probe idle loop to cli.py
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: docs/feature-backlog/01-detect-when-were-out-of-quota-in-claude-code-and-dont-process-any-further-ite.md
       Design doc: docs/plans/2026-03-24-01-detect-when-were-out-of-quota-in-claude-code-and-dont-process-any-further-ite-design.md
 
@@ -122,6 +122,11 @@ sections:
     last_attempt: '2026-03-24T01:27:23.770535'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-24T01:30:04.444638'
+    result_message: Added _run_quota_probe_loop() to cli.py; wired into _run_scan_loop
+      (calls probe loop on quota_exhausted), _run_once and _run_single_item (log warning
+      and return EXIT_CODE_CLEAN). Threaded slack through _run_scan_loop signature.
+      All 981 tests pass.
 - id: phase-4
   name: Phase 4 - Tests
   status: pending
