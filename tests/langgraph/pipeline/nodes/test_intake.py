@@ -355,3 +355,43 @@ class TestIntakeAnalyzeNode:
         data = json.loads(path.read_text())
         assert "feature" in data
         assert len(data["feature"]) == 1
+
+
+# ─── intake_analyze quota detection ──────────────────────────────────────────
+
+
+QUOTA_EXHAUSTION_OUTPUT = "You've hit your limit"
+
+
+class TestIntakeAnalyzeQuotaDetection:
+    def test_defect_returns_quota_exhausted_when_claude_signals_limit(
+        self, tmp_path, monkeypatch
+    ):
+        """intake_analyze returns quota_exhausted=True when Claude output triggers detect_quota_exhaustion()."""
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+        item = tmp_path / "01-bug.md"
+        item.write_text("## Defect\nSome symptom.\n")
+        state = _make_state(item_path=str(item), item_type="defect")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value=QUOTA_EXHAUSTION_OUTPUT,
+        ):
+            result = intake_analyze(state)
+        assert result == {"quota_exhausted": True}
+
+    def test_analysis_returns_quota_exhausted_when_claude_signals_limit(
+        self, tmp_path, monkeypatch
+    ):
+        """intake_analyze returns quota_exhausted=True for analysis type when quota is exhausted."""
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+        item = tmp_path / "01-analysis.md"
+        item.write_text("## Analysis\nSome analysis.\n")
+        state = _make_state(item_path=str(item), item_type="analysis")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value=QUOTA_EXHAUSTION_OUTPUT,
+        ):
+            result = intake_analyze(state)
+        assert result == {"quota_exhausted": True}
