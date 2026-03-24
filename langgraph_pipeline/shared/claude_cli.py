@@ -10,7 +10,7 @@ import os
 import shutil
 import subprocess
 from datetime import datetime
-from typing import IO, Optional
+from typing import IO, Literal, Optional, TypedDict
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,23 @@ TOOL_CMD_PREVIEW_MAX_CHARS = 80  # Max chars of Bash command shown inline
 
 STRIPPED_ENV_VAR = "CLAUDECODE"  # Removed so child Claude can spawn from Claude Code
 DEFAULT_CALL_TIMEOUT_SECONDS = 120
+
+
+# ─── Types ────────────────────────────────────────────────────────────────────
+
+
+class ToolCallRecord(TypedDict):
+    """A single tool call or text event captured during Claude CLI streaming.
+
+    type distinguishes tool invocations from assistant text blocks.
+    tool_input holds the raw input dict for tool_use events, or
+    {"text": "..."} for text events.
+    """
+
+    type: Literal["tool_use", "text"]
+    tool_name: str
+    tool_input: dict
+    timestamp: str
 
 
 # ─── call_claude ─────────────────────────────────────────────────────────────
@@ -139,12 +156,16 @@ def stream_json_output(
     pipe: IO[str],
     collector: OutputCollector,
     result_capture: dict,
+    tool_calls: Optional[list[ToolCallRecord]] = None,
 ) -> None:
     """Stream Claude CLI output in stream-json format, printing tool use and text in real-time.
 
     Lines are accumulated in collector. When a 'result' event is received,
     result_capture is populated with its fields so the caller can read cost/usage data
     after the thread joins.
+
+    When tool_calls is provided, each tool_use block and non-empty text block from
+    assistant events is appended as a ToolCallRecord for post-hoc LangSmith tracing.
     """
     try:
         for line in iter(pipe.readline, ""):
@@ -170,6 +191,13 @@ def stream_json_output(
                                 "..." if len(text) > OUTPUT_PREVIEW_MAX_CHARS else ""
                             )
                             print(f"  [{ts}] [Claude] {display}", flush=True)
+                            if tool_calls is not None:
+                                tool_calls.append(ToolCallRecord(
+                                    type="text",
+                                    tool_name="",
+                                    tool_input={"text": text},
+                                    timestamp=ts,
+                                ))
                     elif block_type == "tool_use":
                         tool_name = block.get("name", "?")
                         tool_input = block.get("input", {})
@@ -185,6 +213,13 @@ def stream_json_output(
                         else:
                             detail = ""
                         print(f"  [{ts}] [Tool] {tool_name}: {detail}", flush=True)
+                        if tool_calls is not None:
+                            tool_calls.append(ToolCallRecord(
+                                type="tool_use",
+                                tool_name=tool_name,
+                                tool_input=tool_input,
+                                timestamp=ts,
+                            ))
 
             elif event_type == "result":
                 cost = event.get("total_cost_usd", 0)

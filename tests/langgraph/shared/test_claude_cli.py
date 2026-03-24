@@ -13,6 +13,7 @@ from langgraph_pipeline.shared.claude_cli import (
     OUTPUT_PREVIEW_MAX_CHARS,
     TOOL_CMD_PREVIEW_MAX_CHARS,
     OutputCollector,
+    ToolCallRecord,
     stream_json_output,
     stream_output,
 )
@@ -348,6 +349,119 @@ class TestStreamJsonOutput:
         assert c.line_count == 1
         captured = capsys.readouterr()
         assert captured.out == ""
+
+
+# ─── stream_json_output: tool_calls accumulation ──────────────────────────────
+
+
+class TestStreamJsonOutputToolCallsAccumulation:
+    def test_tool_calls_none_by_default(self):
+        """Passing no tool_calls arg does not raise and produces no side-effects."""
+        events = [{
+            "type": "assistant",
+            "message": {"content": [{"type": "tool_use", "name": "Read", "input": {"file_path": "/f"}}]}
+        }]
+        pipe = _make_json_pipe(events)
+        c = OutputCollector()
+        result: dict = {}
+        # Must not raise even without tool_calls arg
+        stream_json_output(pipe, c, result)
+
+    def test_tool_use_block_appended_to_tool_calls(self):
+        events = [{
+            "type": "assistant",
+            "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {"command": "ls"}}]}
+        }]
+        pipe = _make_json_pipe(events)
+        c = OutputCollector()
+        result: dict = {}
+        tool_calls: list[ToolCallRecord] = []
+        stream_json_output(pipe, c, result, tool_calls)
+        assert len(tool_calls) == 1
+        assert tool_calls[0]["type"] == "tool_use"
+        assert tool_calls[0]["tool_name"] == "Bash"
+        assert tool_calls[0]["tool_input"] == {"command": "ls"}
+
+    def test_text_block_appended_to_tool_calls(self):
+        events = [{
+            "type": "assistant",
+            "message": {"content": [{"type": "text", "text": "Hello from Claude"}]}
+        }]
+        pipe = _make_json_pipe(events)
+        c = OutputCollector()
+        result: dict = {}
+        tool_calls: list[ToolCallRecord] = []
+        stream_json_output(pipe, c, result, tool_calls)
+        assert len(tool_calls) == 1
+        assert tool_calls[0]["type"] == "text"
+        assert tool_calls[0]["tool_input"] == {"text": "Hello from Claude"}
+
+    def test_empty_text_block_not_appended(self):
+        events = [{
+            "type": "assistant",
+            "message": {"content": [{"type": "text", "text": "   "}]}
+        }]
+        pipe = _make_json_pipe(events)
+        c = OutputCollector()
+        result: dict = {}
+        tool_calls: list[ToolCallRecord] = []
+        stream_json_output(pipe, c, result, tool_calls)
+        assert len(tool_calls) == 0
+
+    def test_multiple_blocks_all_appended(self):
+        events = [{
+            "type": "assistant",
+            "message": {"content": [
+                {"type": "text", "text": "Thinking..."},
+                {"type": "tool_use", "name": "Read", "input": {"file_path": "/a.py"}},
+                {"type": "tool_use", "name": "Write", "input": {"file_path": "/b.py"}},
+            ]}
+        }]
+        pipe = _make_json_pipe(events)
+        c = OutputCollector()
+        result: dict = {}
+        tool_calls: list[ToolCallRecord] = []
+        stream_json_output(pipe, c, result, tool_calls)
+        assert len(tool_calls) == 3
+        assert tool_calls[0]["type"] == "text"
+        assert tool_calls[1]["tool_name"] == "Read"
+        assert tool_calls[2]["tool_name"] == "Write"
+
+    def test_tool_call_record_has_timestamp(self):
+        events = [{
+            "type": "assistant",
+            "message": {"content": [{"type": "tool_use", "name": "Glob", "input": {"pattern": "*.py"}}]}
+        }]
+        pipe = _make_json_pipe(events)
+        c = OutputCollector()
+        result: dict = {}
+        tool_calls: list[ToolCallRecord] = []
+        stream_json_output(pipe, c, result, tool_calls)
+        assert len(tool_calls) == 1
+        assert tool_calls[0]["timestamp"] != ""
+
+    def test_result_event_does_not_append_to_tool_calls(self):
+        events = [
+            {"type": "result", "total_cost_usd": 0.01, "duration_ms": 1000, "num_turns": 1}
+        ]
+        pipe = _make_json_pipe(events)
+        c = OutputCollector()
+        result: dict = {}
+        tool_calls: list[ToolCallRecord] = []
+        stream_json_output(pipe, c, result, tool_calls)
+        assert len(tool_calls) == 0
+
+    def test_tool_calls_list_not_mutated_when_none(self):
+        """When tool_calls is None (default), no ToolCallRecord is produced."""
+        events = [{
+            "type": "assistant",
+            "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {"command": "pwd"}}]}
+        }]
+        pipe = _make_json_pipe(events)
+        c = OutputCollector()
+        result: dict = {}
+        # No assertion needed -- verifies no AttributeError is raised on None
+        stream_json_output(pipe, c, result, None)
 
 
 # ─── Constants ────────────────────────────────────────────────────────────────

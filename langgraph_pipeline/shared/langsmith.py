@@ -11,9 +11,12 @@ When enabled, both LANGSMITH_API_KEY and LANGSMITH_WORKSPACE_ID must be set
 
 import logging
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langgraph_pipeline.shared.config import load_orchestrator_config
+
+if TYPE_CHECKING:
+    from langgraph_pipeline.shared.claude_cli import ToolCallRecord
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -138,6 +141,48 @@ def should_trace(node_name: str) -> bool:
         True if metadata should be emitted, False to suppress emission.
     """
     return node_name not in NOISY_NODE_NAMES
+
+
+def emit_tool_call_traces(
+    tool_calls: "list[ToolCallRecord]",
+    run_name: str,
+    metadata: dict[str, Any],
+) -> None:
+    """Emit LangSmith child runs for each tool call collected during streaming.
+
+    Creates one child run per ToolCallRecord attached to the current LangSmith
+    run context. Degrades gracefully when langsmith is not installed or tracing
+    is inactive. All RunTree construction happens on the caller's thread (never
+    the streaming thread) to avoid thread-safety issues.
+
+    Args:
+        tool_calls: Events collected by stream_json_output during task execution.
+        run_name: Label for the trace group (e.g., "execute_task:1.1").
+        metadata: Task-level metadata attached to each child run's extra field.
+    """
+    if not _tracing_active or not tool_calls:
+        return
+    try:
+        from langsmith import run_trees as _rt  # type: ignore[import]
+
+        parent = _rt.get_current_run_tree()
+        if parent is None:
+            return
+
+        for record in tool_calls:
+            is_tool = record["type"] == "tool_use"
+            child = parent.create_child(
+                name=record["tool_name"] if is_tool else "assistant_text",
+                run_type="tool" if is_tool else "llm",
+                inputs=record["tool_input"],
+                extra={"metadata": {**metadata, "timestamp": record["timestamp"]}},
+            )
+            child.end()
+            child.post()
+    except ImportError:
+        pass  # langsmith package not installed -- degrade silently
+    except Exception as exc:
+        logger.debug("emit_tool_call_traces failed (non-fatal): %s", exc)
 
 
 def add_trace_metadata(metadata: dict[str, Any]) -> None:
