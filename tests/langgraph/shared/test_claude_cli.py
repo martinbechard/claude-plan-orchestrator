@@ -464,6 +464,133 @@ class TestStreamJsonOutputToolCallsAccumulation:
         stream_json_output(pipe, c, result, None)
 
 
+# ─── stream_json_output: duration tracking ────────────────────────────────────
+
+
+class TestStreamJsonOutputDurationTracking:
+    def test_duration_s_set_when_tool_result_arrives(self):
+        """duration_s is computed when a user message with matching tool_use_id arrives."""
+        events = [
+            {
+                "type": "assistant",
+                "message": {"content": [{
+                    "type": "tool_use",
+                    "name": "Bash",
+                    "input": {"command": "ls"},
+                    "id": "tu_001",
+                }]},
+            },
+            {
+                "type": "user",
+                "message": {"content": [{
+                    "type": "tool_result",
+                    "tool_use_id": "tu_001",
+                    "content": "file1\nfile2",
+                }]},
+            },
+        ]
+        pipe = _make_json_pipe(events)
+        c = OutputCollector()
+        result: dict = {}
+        tool_calls: list[ToolCallRecord] = []
+        stream_json_output(pipe, c, result, tool_calls)
+        assert len(tool_calls) == 1
+        assert tool_calls[0]["type"] == "tool_use"
+        assert tool_calls[0].get("duration_s") is not None
+        assert tool_calls[0]["duration_s"] >= 0.0  # type: ignore[operator]
+
+    def test_duration_s_not_set_for_text_blocks(self):
+        """Text blocks never have duration_s because they have no tool_result pairing."""
+        events = [{
+            "type": "assistant",
+            "message": {"content": [{"type": "text", "text": "Hello from Claude"}]},
+        }]
+        pipe = _make_json_pipe(events)
+        c = OutputCollector()
+        result: dict = {}
+        tool_calls: list[ToolCallRecord] = []
+        stream_json_output(pipe, c, result, tool_calls)
+        assert len(tool_calls) == 1
+        assert tool_calls[0]["type"] == "text"
+        assert tool_calls[0].get("duration_s") is None
+
+    def test_duration_s_not_set_for_unmatched_tool_calls(self):
+        """Tool calls with no arriving tool_result leave duration_s unset."""
+        events = [{
+            "type": "assistant",
+            "message": {"content": [{
+                "type": "tool_use",
+                "name": "Read",
+                "input": {"file_path": "/a.py"},
+                "id": "tu_002",
+            }]},
+        }]
+        pipe = _make_json_pipe(events)
+        c = OutputCollector()
+        result: dict = {}
+        tool_calls: list[ToolCallRecord] = []
+        stream_json_output(pipe, c, result, tool_calls)
+        assert len(tool_calls) == 1
+        assert tool_calls[0]["type"] == "tool_use"
+        assert tool_calls[0].get("duration_s") is None
+
+    def test_start_time_set_on_tool_use_record(self):
+        """start_time is captured when the tool_use block is processed."""
+        events = [{
+            "type": "assistant",
+            "message": {"content": [{
+                "type": "tool_use",
+                "name": "Glob",
+                "input": {"pattern": "*.py"},
+                "id": "tu_003",
+            }]},
+        }]
+        pipe = _make_json_pipe(events)
+        c = OutputCollector()
+        result: dict = {}
+        tool_calls: list[ToolCallRecord] = []
+        stream_json_output(pipe, c, result, tool_calls)
+        assert len(tool_calls) == 1
+        assert tool_calls[0].get("start_time") is not None
+
+    def test_tool_use_id_set_on_record(self):
+        """tool_use_id from the block is stored on ToolCallRecord."""
+        events = [{
+            "type": "assistant",
+            "message": {"content": [{
+                "type": "tool_use",
+                "name": "Bash",
+                "input": {"command": "pwd"},
+                "id": "tu_abc",
+            }]},
+        }]
+        pipe = _make_json_pipe(events)
+        c = OutputCollector()
+        result: dict = {}
+        tool_calls: list[ToolCallRecord] = []
+        stream_json_output(pipe, c, result, tool_calls)
+        assert tool_calls[0].get("tool_use_id") == "tu_abc"
+
+    def test_unmatched_tool_result_does_not_raise(self):
+        """A tool_result with no corresponding pending tool_use is silently ignored."""
+        events = [
+            {
+                "type": "user",
+                "message": {"content": [{
+                    "type": "tool_result",
+                    "tool_use_id": "no_such_id",
+                    "content": "data",
+                }]},
+            },
+        ]
+        pipe = _make_json_pipe(events)
+        c = OutputCollector()
+        result: dict = {}
+        tool_calls: list[ToolCallRecord] = []
+        stream_json_output(pipe, c, result, tool_calls)
+        assert len(tool_calls) == 0  # No tool_use was emitted
+
+
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 
