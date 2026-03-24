@@ -21,7 +21,11 @@ sections:
   - id: '1.1'
     name: Create ux-implementer agent definition
     agent: coder
+<<<<<<< Updated upstream
     status: completed
+=======
+    status: in_progress
+>>>>>>> Stashed changes
     description: "Create the Sonnet-based ux-implementer agent that produces design\
       \ documents\nfrom a design brief provided by the Opus ux-designer orchestrator.\n\
       \nReference: docs/plans/2026-02-18-9-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md\n\
@@ -63,11 +67,14 @@ sections:
       \nFiles: .claude/agents/ux-implementer.md\n"
     attempts: 1
     last_attempt: '2026-02-18T20:43:53.053534'
+<<<<<<< Updated upstream
     model_used: sonnet
     completed_at: '2026-02-18T20:45:37.522841'
     result_message: 'Created .claude/agents/ux-implementer.md — Sonnet-based design
       implementer with STATUS: COMPLETE/QUESTION output protocol, read-only constraints,
       and full design document structure guidance'
+=======
+>>>>>>> Stashed changes
   - id: '1.2'
     name: Rewrite ux-designer as Opus orchestrator with loop logic
     agent: coder
@@ -132,6 +139,7 @@ sections:
       \n4. Git commit:\n   git add .claude/agents/ux-designer.md\n   git commit -m\
       \ \"feat: rewrite ux-designer as Opus orchestrator with Sonnet loop\"\n\nFiles:\
       \ .claude/agents/ux-designer.md\n"
+<<<<<<< Updated upstream
     attempts: 2
     last_attempt: '2026-02-18T20:48:44.143479'
     model_used: sonnet
@@ -171,6 +179,8 @@ sections:
     result_message: 'Fixed test regression: updated test_ux_reviewer_distinct_from_ux_designer
       to expect opus model for ux-designer (the agent was correctly rewritten as Opus
       orchestrator in the prior attempt). All 255 tests pass.'
+=======
+>>>>>>> Stashed changes
 - id: phase-2
   name: Phase 2 - Part 1 Implementation (plan-orchestrator changes)
   status: completed
@@ -207,6 +217,7 @@ sections:
       \ doraise=True); print('syntax OK')\"\n\n7. Git commit:\n   git add scripts/plan-orchestrator.py\n\
       \   git commit -m \"feat: add UX loop constants and suspended task status handling\"\
       \n\nFiles: scripts/plan-orchestrator.py\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T20:49:43.009213'
     model_used: sonnet
@@ -215,6 +226,8 @@ sections:
       '.claude/suspended' to REQUIRED_DIRS, added suspended field to TaskResult dataclass,
       added 'suspended' status branch in run_claude_task() and main orchestrator loop,
       documented suspended skip behavior in find_next_task(). All 255 tests pass.
+=======
+>>>>>>> Stashed changes
 - id: phase-3
   name: Phase 3 - Part 2 Suspension Infrastructure
   status: completed
@@ -257,6 +270,7 @@ sections:
       \ OK')\"\n\n5. Git commit:\n   git add scripts/plan-orchestrator.py\n   git\
       \ commit -m \"feat: add suspension marker file management functions\"\n\nFiles:\
       \ scripts/plan-orchestrator.py\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T20:55:08.180999'
     model_used: sonnet
@@ -264,6 +278,8 @@ sections:
     result_message: Added SUSPENSION_TIMEOUT_MINUTES constant and 5 suspension marker
       functions (create, read, clear, is_item_suspended, get_suspension_answer) to
       plan-orchestrator.py
+=======
+>>>>>>> Stashed changes
   - id: '3.2'
     name: Add Slack question posting for suspended items
     agent: coder
@@ -308,6 +324,7 @@ sections:
       \ doraise=True); print('syntax OK')\"\n\n5. Git commit:\n   git add scripts/plan-orchestrator.py\n\
       \   git commit -m \"feat: add Slack suspension question posting and reply checking\"\
       \n\nFiles: scripts/plan-orchestrator.py\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T20:57:40.741075'
     model_used: sonnet
@@ -316,6 +333,8 @@ sections:
       private helper, post_suspension_question() for posting Block Kit questions to
       type-specific Slack channels, and check_suspension_reply() for polling conversations.replies
       for human thread responses
+=======
+>>>>>>> Stashed changes
   - id: '3.3'
     name: Add suspension handling to auto-pipeline
     agent: coder
@@ -361,6 +380,7 @@ sections:
       \ print('syntax OK')\"\n\n9. Git commit:\n   git add scripts/auto-pipeline.py\n\
       \   git commit -m \"feat: add suspension handling to auto-pipeline\"\n\nFiles:\
       \ scripts/auto-pipeline.py\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T21:01:50.677698'
     model_used: sonnet
@@ -370,6 +390,8 @@ sections:
       items, _check_suspended_items() polls for Slack answers each cycle, _process_item_inner()
       detects suspended plan tasks and posts questions to Slack via _handle_suspension().
       All 255 tests pass.'
+=======
+>>>>>>> Stashed changes
   - id: '3.4'
     name: Wire suspension reply checking into Slack background poller
     agent: coder
@@ -402,12 +424,15 @@ sections:
       \ doraise=True); print('syntax OK')\"\n\n5. Git commit:\n   git add scripts/plan-orchestrator.py\n\
       \   git commit -m \"feat: wire suspension reply checking into Slack background\
       \ poller\"\n\nFiles: scripts/plan-orchestrator.py\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T21:10:32.484089'
     model_used: sonnet
     completed_at: '2026-02-18T21:13:27.038119'
     result_message: Added glob import, implemented _check_all_suspensions() on SlackNotifier,
       and wired it into _poll_loop so suspension replies are detected each poll cycle
+=======
+>>>>>>> Stashed changes
 - id: phase-4
   name: Phase 4 - Unit Tests
   status: completed
@@ -447,6 +472,7 @@ sections:
       \ returns None\n\n3. Run the tests:\n   ~/.pyenv/versions/3.11.*/bin/python\
       \ -m pytest tests/test_plan_orchestrator.py -v -k suspension\n   Fix any failures\
       \ before marking this task complete.\n\nFiles: tests/test_plan_orchestrator.py\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T21:13:29.351679'
     model_used: sonnet
@@ -454,6 +480,8 @@ sections:
     result_message: Added 8 unit tests for suspension marker functions (create, read,
       clear, is_item_suspended active/timed-out, get_suspension_answer present/absent).
       All 49 tests pass.
+=======
+>>>>>>> Stashed changes
   - id: '4.2'
     name: Add unit tests for suspended task status handling
     agent: coder
@@ -478,6 +506,7 @@ sections:
       \ done)\n\n3. Run the tests:\n   ~/.pyenv/versions/3.11.*/bin/python -m pytest\
       \ tests/test_plan_orchestrator.py -v -k suspended\n   Fix any failures before\
       \ marking this task complete.\n\nFiles: tests/test_plan_orchestrator.py\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T21:15:55.963310'
     model_used: sonnet
@@ -485,6 +514,8 @@ sections:
     result_message: 'Added 3 unit tests: test_find_next_task_skips_suspended, test_find_next_task_all_suspended,
       test_section_status_with_suspended_task. Imported find_next_task and update_section_status
       into the test module. All 52 tests pass.'
+=======
+>>>>>>> Stashed changes
 - id: phase-5
   name: Phase 5 - Plugin Version Bump
   status: pending
@@ -511,8 +542,11 @@ sections:
       \ and Slack thread correlation.\n4. Git commit both files:\n   git add plugin.json\
       \ RELEASE-NOTES.md\n   git commit -m \"chore: bump version for ux-designer-opus-sonnet-loop\
       \ feature\"\n\nFiles: plugin.json, RELEASE-NOTES.md\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T21:18:31.372426'
+=======
+>>>>>>> Stashed changes
 - id: phase-6
   name: Phase 6 - Final Verification
   status: pending
