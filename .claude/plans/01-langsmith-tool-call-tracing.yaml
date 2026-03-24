@@ -22,22 +22,31 @@ sections:
   status: pending
   tasks:
   - id: '1.1'
-    name: Add tool call event collection to stream_json_output and emit_tool_call_traces helper
+    name: Add tool call event collection to stream_json_output and emit_tool_call_traces
+      helper
     agent: coder
-    status: pending
-    description: >-
-      Implement the work item: docs/feature-backlog/01-langsmith-tool-call-tracing.md
+    status: completed
+    description: 'Implement the work item: docs/feature-backlog/01-langsmith-tool-call-tracing.md
       Design doc: docs/plans/2026-03-23-01-langsmith-tool-call-tracing-design.md
 
       Phase 1: (1) In langgraph_pipeline/shared/claude_cli.py, define a ToolCallRecord
       TypedDict with fields tool_name, tool_input, timestamp. Add an optional tool_calls
-      list parameter to stream_json_output. When a tool_use block is parsed, append a
-      ToolCallRecord. Also capture assistant text blocks with type "text". (2) In
-      langgraph_pipeline/shared/langsmith.py, add emit_tool_call_traces() that takes a
-      list of ToolCallRecords and parent metadata, creates LangSmith child runs via RunTree
-      API, and degrades gracefully when langsmith is not installed or tracing is disabled.
-      (3) Add unit tests for both: stream_json_output tool_calls accumulation and
-      emit_tool_call_traces RunTree construction (with mocked langsmith). Run pytest.
+      list parameter to stream_json_output. When a tool_use block is parsed, append
+      a ToolCallRecord. Also capture assistant text blocks with type "text". (2) In
+      langgraph_pipeline/shared/langsmith.py, add emit_tool_call_traces() that takes
+      a list of ToolCallRecords and parent metadata, creates LangSmith child runs
+      via RunTree API, and degrades gracefully when langsmith is not installed or
+      tracing is disabled. (3) Add unit tests for both: stream_json_output tool_calls
+      accumulation and emit_tool_call_traces RunTree construction (with mocked langsmith).
+      Run pytest.'
+    last_attempt: '2026-03-23T22:31:06.161870'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-23T22:36:06.412766'
+    result_message: Added ToolCallRecord TypedDict to claude_cli.py, optional tool_calls
+      param to stream_json_output (collects tool_use and text blocks), emit_tool_call_traces()
+      in langsmith.py (creates RunTree child runs, degrades gracefully). Added 16
+      unit tests, all passing.
 - id: phase-2
   name: Phase 2 - Wire tracing into task runner
   status: pending
@@ -46,12 +55,12 @@ sections:
     name: Integrate tool call tracing into _run_claude and execute_task
     agent: coder
     status: pending
-    description: >-
-      Implement the work item: docs/feature-backlog/01-langsmith-tool-call-tracing.md
+    description: 'Implement the work item: docs/feature-backlog/01-langsmith-tool-call-tracing.md
       Design doc: docs/plans/2026-03-23-01-langsmith-tool-call-tracing-design.md
 
       Phase 2: In langgraph_pipeline/executor/nodes/task_runner.py: (1) Create a tool_calls
-      list in _run_claude and pass it to stream_json_output. (2) After threads join, call
-      emit_tool_call_traces with the collected tool_calls and task metadata (task_id, model,
-      plan name). (3) Return tool_calls count in the result so it can be included in trace
-      metadata. (4) Update existing task_runner tests to verify no regressions. Run pytest.
+      list in _run_claude and pass it to stream_json_output. (2) After threads join,
+      call emit_tool_call_traces with the collected tool_calls and task metadata (task_id,
+      model, plan name). (3) Return tool_calls count in the result so it can be included
+      in trace metadata. (4) Update existing task_runner tests to verify no regressions.
+      Run pytest.'
