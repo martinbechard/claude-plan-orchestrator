@@ -18,6 +18,7 @@ injected via PollerCallbacks so this class remains independently testable.
 """
 
 import json
+import logging
 import os
 import re
 import threading
@@ -26,7 +27,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 from langgraph_pipeline.slack.identity import AGENT_ADDRESS_PATTERN, AgentIdentity
 from langgraph_pipeline.slack.suspension import IntakeState
@@ -76,6 +79,43 @@ BACKLOG_THROTTLE_WINDOW_SECONDS = 3600  # 1-hour sliding window
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
 MESSAGE_ROUTING_TIMEOUT_SECONDS = 30
 MINIMUM_INTAKE_MESSAGE_LENGTH = 20
+
+# Pattern to find JSON object in LLM response (handles markdown code fences)
+_JSON_BLOCK_PATTERN = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+_JSON_INLINE_PATTERN = re.compile(r"(\{[^{}]*\})")
+
+
+def _extract_json(text: str) -> Any:
+    """Extract a JSON object from LLM text that may include explanation or code fences.
+
+    Tries in order:
+    1. Direct json.loads (response is pure JSON)
+    2. JSON inside markdown code fences
+    3. First inline { ... } block
+    """
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Try markdown code fence
+    match = _JSON_BLOCK_PATTERN.search(text)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Try first inline JSON object
+    match = _JSON_INLINE_PATTERN.search(text)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    return None
 
 INTAKE_CLARIFICATION_TEMPLATE = (
     ":thinking_face: *I need a bit more context to create a useful backlog item.*\n"
@@ -792,12 +832,13 @@ class SlackPoller:
             )
             if not response:
                 return fallback
-            result = json.loads(response)
+            result = _extract_json(response)
             if isinstance(result, dict) and "action" in result:
                 return result
+            logger.debug("LLM routing returned non-actionable response: %s", response[:200])
             return fallback
-        except (json.JSONDecodeError, Exception) as e:
-            print(f"[SLACK] LLM routing failed: {e}")
+        except Exception as e:
+            logger.warning("LLM routing failed: %s", e)
             return fallback
 
     # ── Action execution ─────────────────────────────────────────────────────
