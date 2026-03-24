@@ -30,6 +30,7 @@ import time
 from typing import Optional
 
 from langgraph_pipeline.pipeline.graph import PIPELINE_THREAD_ID, pipeline_graph
+from langgraph_pipeline.pipeline.nodes.scan import scan_backlog as scan_backlog_fn
 from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.config import load_orchestrator_config
 from langgraph_pipeline.shared.dotenv import load_dotenv_files
@@ -267,6 +268,32 @@ def _is_budget_exhausted(state: PipelineState, budget_cap_usd: Optional[float]) 
     return False
 
 
+# ─── Lightweight pre-scan ─────────────────────────────────────────────────────
+
+
+def _pre_scan(budget_cap_usd: Optional[float]) -> Optional[PipelineState]:
+    """Run scan_backlog directly (no graph, no tracing) to check for work.
+
+    Returns a PipelineState with the item pre-populated if work was found,
+    or None if the backlog is empty. This avoids sending LangSmith traces
+    for idle scan cycles.
+    """
+    empty_state = _build_initial_state(budget_cap_usd)
+    scan_result = scan_backlog_fn(empty_state)
+
+    item_path = scan_result.get("item_path", "")
+    if not item_path:
+        return None
+
+    # Merge scan results into initial state so the graph skips scan_backlog.
+    state = _build_initial_state(budget_cap_usd, item_path=item_path)
+    state["item_slug"] = scan_result.get("item_slug", "")
+    state["item_type"] = scan_result.get("item_type", "feature")
+    state["item_name"] = scan_result.get("item_name", "")
+    state["plan_path"] = scan_result.get("plan_path")
+    return state
+
+
 # ─── Initial state builders ───────────────────────────────────────────────────
 
 
@@ -380,15 +407,21 @@ def _run_once(
         return EXIT_CODE_CLEAN
 
     try:
-        initial_state = _build_initial_state(budget_cap_usd)
-        thread_config = {"configurable": {"thread_id": PIPELINE_THREAD_ID}}
-
-        with pipeline_graph() as graph:
-            final_state: PipelineState = graph.invoke(initial_state, config=thread_config)
-
-        if not final_state.get("item_slug"):
+        # Lightweight pre-scan: no graph, no tracing.
+        pre_scanned = _pre_scan(budget_cap_usd)
+        if pre_scanned is None:
             logger.info("No backlog items found. Exiting.")
             return EXIT_CODE_CLEAN
+
+        logger.info(
+            "Processing [%s] %s",
+            pre_scanned.get("item_type"),
+            pre_scanned.get("item_slug"),
+        )
+
+        thread_config = {"configurable": {"thread_id": PIPELINE_THREAD_ID}}
+        with pipeline_graph() as graph:
+            final_state: PipelineState = graph.invoke(pre_scanned, config=thread_config)
 
         logger.info(
             "Item complete: cost=~$%.4f tokens_in=%d tokens_out=%d",
@@ -444,11 +477,26 @@ def _run_scan_loop(
 
         with pipeline_graph() as graph:
             while not shutdown_event.is_set():
-                initial_state = _build_initial_state(budget_cap_usd)
-                logger.debug("Invoking pipeline graph.")
+                # Lightweight pre-scan: no graph, no tracing, just check directories.
+                pre_scanned = _pre_scan(budget_cap_usd)
+
+                if pre_scanned is None:
+                    logger.debug(
+                        "No backlog item found. Sleeping %ds before next scan.",
+                        SCAN_SLEEP_SECONDS,
+                    )
+                    shutdown_event.wait(SCAN_SLEEP_SECONDS)
+                    continue
+
+                # Item found — invoke the full graph (with tracing).
+                logger.info(
+                    "Processing [%s] %s",
+                    pre_scanned.get("item_type"),
+                    pre_scanned.get("item_slug"),
+                )
 
                 final_state: PipelineState = graph.invoke(
-                    initial_state, config=thread_config
+                    pre_scanned, config=thread_config
                 )
 
                 cost = final_state.get("session_cost_usd", 0.0)
@@ -464,14 +512,6 @@ def _run_scan_loop(
 
                 if shutdown_event.is_set():
                     break
-
-                # No item found in this scan — sleep before re-scanning.
-                if not final_state.get("item_slug"):
-                    logger.debug(
-                        "No backlog item found. Sleeping %ds before next scan.",
-                        SCAN_SLEEP_SECONDS,
-                    )
-                    shutdown_event.wait(SCAN_SLEEP_SECONDS)
 
         logger.info("Shutdown event set — exiting scan loop.")
         return EXIT_CODE_CLEAN

@@ -222,6 +222,22 @@ class TestItemTypeFromPath:
 
 
 class TestScanBacklog:
+    def test_short_circuits_when_item_path_pre_populated(self, tmp_path, monkeypatch):
+        """When item_path is already set (pre-scanned by CLI), scan_backlog returns empty dict."""
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        # Create a defect that would normally be found.
+        defect_dir = tmp_path / "defects"
+        defect_dir.mkdir()
+        _write_md(defect_dir / "01-bug.md")
+        monkeypatch.setattr(scan_mod, "PLANS_DIR", str(tmp_path / "plans"))
+        monkeypatch.setattr(
+            scan_mod, "BACKLOG_SCAN_ORDER",
+            [("defect", str(defect_dir))],
+        )
+        # Pre-populated item_path should cause short-circuit.
+        result = scan_backlog(_make_state(item_path="/pre/scanned/item.md"))
+        assert result == {}
+
     def test_returns_empty_path_when_backlog_empty(self, tmp_path, monkeypatch):
         import langgraph_pipeline.pipeline.nodes.scan as scan_mod
         monkeypatch.setattr(scan_mod, "PLANS_DIR", str(tmp_path / "plans"))

@@ -164,6 +164,11 @@ def _item_type_from_path(filepath: str) -> str:
 def scan_backlog(state: PipelineState) -> dict:
     """LangGraph node: scan backlog directories and select the next work item.
 
+    If item_path is already populated in state (pre-scanned by the CLI loop),
+    this node short-circuits and returns the existing state unchanged. This
+    avoids redundant directory scanning when the CLI has already identified
+    the next work item outside the graph.
+
     Priority order:
     1. In-progress plans: resume work on any plan that was started but not finished.
     2. Defects: highest-priority new items.
@@ -175,6 +180,10 @@ def scan_backlog(state: PipelineState) -> dict:
     empty, item_path is set to an empty string so the has_items conditional
     edge routes to END.
     """
+    # Short-circuit if the CLI already pre-scanned an item.
+    if state.get("item_path"):
+        return {}
+
     # Priority 1: Resume in-progress plans.
     in_progress = _find_in_progress_plans()
     if in_progress:
