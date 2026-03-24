@@ -16,6 +16,19 @@ DEFAULT_TEST_COMMAND = "pnpm test"
 DEFAULT_DEV_SERVER_COMMAND = "pnpm dev"
 DEFAULT_AGENTS_DIR = ".claude/agents/"
 DEFAULT_E2E_COMMAND = "npx playwright test"
+DEFAULT_MAX_PARALLEL_ITEMS = 1
+
+
+def get_max_parallel_items(config: dict) -> int:
+    """Return the maximum number of backlog items to process in parallel.
+
+    Reads pipeline.max_parallel_items from config. Returns 1 if the key is
+    absent or the value is not a positive integer.
+    """
+    raw = config.get("pipeline", {}).get("max_parallel_items", DEFAULT_MAX_PARALLEL_ITEMS)
+    if isinstance(raw, int) and raw > 0:
+        return raw
+    return DEFAULT_MAX_PARALLEL_ITEMS
 
 
 def load_orchestrator_config() -> dict:

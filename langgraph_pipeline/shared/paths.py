@@ -30,6 +30,11 @@ BACKLOG_DIRS = {
     "analysis": ANALYSIS_DIR,
 }
 
+# ─── Parallel item processing ─────────────────────────────────────────────────
+
+CLAIMED_DIR = ".claude/plans/.claimed"
+WORKER_RESULT_DIR = ".claude/plans"
+
 # ─── Completed backlog directories ────────────────────────────────────────────
 
 COMPLETED_DEFECTS_DIR = "docs/completed-backlog/defects"
