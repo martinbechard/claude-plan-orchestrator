@@ -102,10 +102,16 @@ sections:
     completed_at: '2026-03-24T17:31:09.039444'
     result_message: Added NODE_EXECUTE_PLAN constant and after_intake/after_create_plan
       routing functions to edges.py. All 28 existing tests pass.
+    validation_attempts: 1
+    validation_findings: NODE_EXECUTE_PLAN constant and after_intake/after_create_plan
+      routing functions implemented correctly in edges.py per design spec. Build passes.
+      All 60 edge-related tests pass. Pre-existing test collection errors in test_auto_pipeline.py
+      and test_completed_archive.py are unrelated. Tests for new functions are scoped
+      to task 3.1.
   - id: '2.2'
     name: Rewire graph to use conditional edges for intake and create_plan
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.1'
     description: "Implement the work item: docs/defect-backlog/01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival.md\n\
@@ -116,6 +122,14 @@ sections:
       \ with\n  graph.add_conditional_edges(NODE_CREATE_PLAN, after_create_plan)\n\
       - Update the module docstring graph topology comment to reflect the new conditional\
       \ edges"
+    last_attempt: '2026-03-24T17:33:42.675803'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T17:34:54.998389'
+    result_message: 'Rewired graph.py: imported after_intake and after_create_plan
+      from edges.py; replaced add_edge for intake_analyze->create_plan and create_plan->execute_plan
+      with add_conditional_edges; updated module docstring topology to reflect new
+      conditional routing.'
 - id: phase-3
   name: Phase 3 - Tests
   status: pending
