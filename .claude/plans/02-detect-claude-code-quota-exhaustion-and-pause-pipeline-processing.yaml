@@ -1,7 +1,7 @@
 meta:
   name: Detect Claude Code quota exhaustion and pause pipeline processing
-  description: Fix executor routing infinite loop, missing initial state field, and add
-    missing unit tests for quota exhaustion detection.
+  description: Fix executor routing infinite loop, missing initial state field, and
+    add missing unit tests for quota exhaustion detection.
   source_item: docs/feature-backlog/02-detect-claude-code-quota-exhaustion-and-pause-pipeline-processing.md
   plan_doc: docs/plans/2026-03-24-02-detect-claude-code-quota-exhaustion-and-pause-pipeline-processing-design.md
   created: '2026-03-24'
@@ -21,23 +21,45 @@ sections:
   - id: '1.1'
     name: Fix circuit_check and find_next_task to short-circuit on quota_exhausted
     agent: coder
-    status: pending
-    description: "Implement the work item: docs/feature-backlog/02-detect-claude-code-quota-exhaustion-and-pause-pipeline-processing.md\n\
-      Design reference: docs/plans/2026-03-24-02-detect-claude-code-quota-exhaustion-and-pause-pipeline-processing-design.md\n\
-      Fix the executor routing infinite loop described in Gap 1 of the design.\n\
-      Files to modify:\n\
-      - langgraph_pipeline/executor/edges.py: In circuit_check(), add a guard\n\
-        before the consecutive_failures check: if state.get(\"quota_exhausted\"):\n\
-        return ROUTE_CIRCUIT_BREAK\n\
-      - langgraph_pipeline/executor/nodes/task_selector.py: In find_next_task(),\n\
-        add a guard after loading plan_data but before circuit breaker check:\n\
-        if state.get(\"quota_exhausted\"): return {\"plan_data\": plan_data, \"current_task_id\": None}\n\
-      - langgraph_pipeline/cli.py: In _build_initial_state(), add\n\
-        quota_exhausted: False to the state dict (after rate_limit_reset).\n\
-      Verify syntax: python3 -c \"import py_compile;\
-        py_compile.compile('langgraph_pipeline/executor/edges.py', doraise=True);\
-        py_compile.compile('langgraph_pipeline/executor/nodes/task_selector.py', doraise=True);\
-        py_compile.compile('langgraph_pipeline/cli.py', doraise=True)\"\n"
+    status: completed
+    description: 'Implement the work item: docs/feature-backlog/02-detect-claude-code-quota-exhaustion-and-pause-pipeline-processing.md
+
+      Design reference: docs/plans/2026-03-24-02-detect-claude-code-quota-exhaustion-and-pause-pipeline-processing-design.md
+
+      Fix the executor routing infinite loop described in Gap 1 of the design.
+
+      Files to modify:
+
+      - langgraph_pipeline/executor/edges.py: In circuit_check(), add a guard
+
+      before the consecutive_failures check: if state.get("quota_exhausted"):
+
+      return ROUTE_CIRCUIT_BREAK
+
+      - langgraph_pipeline/executor/nodes/task_selector.py: In find_next_task(),
+
+      add a guard after loading plan_data but before circuit breaker check:
+
+      if state.get("quota_exhausted"): return {"plan_data": plan_data, "current_task_id":
+      None}
+
+      - langgraph_pipeline/cli.py: In _build_initial_state(), add
+
+      quota_exhausted: False to the state dict (after rate_limit_reset).
+
+      Verify syntax: python3 -c "import py_compile;py_compile.compile(''langgraph_pipeline/executor/edges.py'',
+      doraise=True);py_compile.compile(''langgraph_pipeline/executor/nodes/task_selector.py'',
+      doraise=True);py_compile.compile(''langgraph_pipeline/cli.py'', doraise=True)"
+
+      '
+    last_attempt: '2026-03-24T11:55:25.256078'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T11:56:33.626413'
+    result_message: 'Added quota_exhausted guard to circuit_check() in edges.py (returns
+      ROUTE_CIRCUIT_BREAK before consecutive_failures check), added guard to find_next_task()
+      in task_selector.py (returns None current_task_id to stop selection), and seeded
+      quota_exhausted: False in _build_initial_state() in cli.py'
 - id: phase-2
   name: Phase 2 - Unit tests
   status: pending
@@ -48,20 +70,38 @@ sections:
     depends_on:
     - '1.1'
     status: pending
-    description: "Implement the work item: docs/feature-backlog/02-detect-claude-code-quota-exhaustion-and-pause-pipeline-processing.md\n\
-      Design reference: docs/plans/2026-03-24-02-detect-claude-code-quota-exhaustion-and-pause-pipeline-processing-design.md\n\
-      Add unit tests covering all gaps described in Gap 3 of the design.\n\
-      Files to create/modify:\n\
-      1. CREATE tests/langgraph/shared/test_quota.py with tests for\n\
-         detect_quota_exhaustion and probe_quota_available as described in the design.\n\
-      2. MODIFY tests/langgraph/executor/test_edges.py: add\n\
-         test_quota_exhausted_routes_circuit_break in TestCircuitCheck.\n\
-      3. MODIFY tests/langgraph/executor/nodes/test_task_selector.py: add\n\
-         test_quota_exhausted_stops_task_selection.\n\
-      4. MODIFY tests/langgraph/pipeline/test_edges.py: add\n\
-         test_quota_exhausted_routes_end for is_defect.\n\
-      Run and fix: ~/.pyenv/versions/3.11.*/bin/python -m pytest\n\
-        tests/langgraph/shared/test_quota.py\n\
-        tests/langgraph/executor/test_edges.py\n\
-        tests/langgraph/executor/nodes/test_task_selector.py\n\
-        tests/langgraph/pipeline/test_edges.py -v\n"
+    description: 'Implement the work item: docs/feature-backlog/02-detect-claude-code-quota-exhaustion-and-pause-pipeline-processing.md
+
+      Design reference: docs/plans/2026-03-24-02-detect-claude-code-quota-exhaustion-and-pause-pipeline-processing-design.md
+
+      Add unit tests covering all gaps described in Gap 3 of the design.
+
+      Files to create/modify:
+
+      1. CREATE tests/langgraph/shared/test_quota.py with tests for
+
+      detect_quota_exhaustion and probe_quota_available as described in the design.
+
+      2. MODIFY tests/langgraph/executor/test_edges.py: add
+
+      test_quota_exhausted_routes_circuit_break in TestCircuitCheck.
+
+      3. MODIFY tests/langgraph/executor/nodes/test_task_selector.py: add
+
+      test_quota_exhausted_stops_task_selection.
+
+      4. MODIFY tests/langgraph/pipeline/test_edges.py: add
+
+      test_quota_exhausted_routes_end for is_defect.
+
+      Run and fix: ~/.pyenv/versions/3.11.*/bin/python -m pytest
+
+      tests/langgraph/shared/test_quota.py
+
+      tests/langgraph/executor/test_edges.py
+
+      tests/langgraph/executor/nodes/test_task_selector.py
+
+      tests/langgraph/pipeline/test_edges.py -v
+
+      '
