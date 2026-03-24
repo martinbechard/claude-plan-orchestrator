@@ -20,6 +20,7 @@ venv/
 .claude/plans/current-plan.yaml
 .claude/plans/.stop
 .claude/plans/.pipeline.pid
+.claude/plans/.lg-pipeline.pid
 .claude/plans/logs/
 .claude/subagent-status/
 .claude/agent-claims.json
