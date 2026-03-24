@@ -1,10 +1,11 @@
 meta:
   name: 'Defect Fix: Calculate Tool Call Duration from Timestamps'
-  description: >
-    Fix tool call durations showing as 0.00 seconds in LangSmith by pairing tool_use
-    events with tool_result events via tool_use_id, computing elapsed wall-clock time,
-    storing duration_s on ToolCallRecord, and propagating end_time into LangSmith child
-    runs so traces reflect actual tool execution time.
+  description: 'Fix tool call durations showing as 0.00 seconds in LangSmith by pairing
+    tool_use events with tool_result events via tool_use_id, computing elapsed wall-clock
+    time, storing duration_s on ToolCallRecord, and propagating end_time into LangSmith
+    child runs so traces reflect actual tool execution time.
+
+    '
   plan_doc: docs/plans/2026-03-24-01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration-design.md
   source_item: docs/defect-backlog/01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration.md
   created: '2026-03-24'
@@ -12,73 +13,82 @@ meta:
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
   status: pending
 sections:
-  - id: phase-1
-    name: Phase 1 - Extend ToolCallRecord with duration tracking
+- id: phase-1
+  name: Phase 1 - Extend ToolCallRecord with duration tracking
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add tool_use_id, start_time, and duration_s fields to ToolCallRecord
+    agent: coder
+    status: completed
+    description: "Implement the work item: docs/defect-backlog/01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration.md\
+      \ Design doc: docs/plans/2026-03-24-01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration-design.md\n\
+      In langgraph_pipeline/shared/claude_cli.py: 1. Add three optional fields to\
+      \ ToolCallRecord: tool_use_id, start_time (datetime), duration_s (float). 2.\
+      \ Update stream_json_output to track in-flight tool calls using a pending dict\
+      \ keyed by tool_use_id.\n   On tool_use block: record tool_use_id -> datetime.now()\
+      \ in pending dict and set start_time on the record.\n   On user message with\
+      \ tool_result blocks: match tool_use_id, compute elapsed seconds, set duration_s\
+      \ on the matching ToolCallRecord.\n3. Run existing tests and fix any failures.\n"
+    last_attempt: '2026-03-24T11:34:00.016795'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T11:36:47.719334'
+    result_message: Added tool_use_id (NotRequired[Optional[str]]), start_time (NotRequired[Optional[datetime]]),
+      and duration_s (NotRequired[Optional[float]]) to ToolCallRecord. Updated stream_json_output
+      with a pending dict keyed by tool_use_id; on tool_use block records start_time
+      and stashes (start_time, record_ref) in pending; on user message with tool_result
+      blocks computes elapsed seconds and sets duration_s on the matching record.
+      All 42 existing tests pass.
+- id: phase-2
+  name: Phase 2 - Propagate duration into LangSmith spans
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Pass end_time to child.end() in emit_tool_call_traces
+    agent: coder
     status: pending
-    tasks:
-      - id: '1.1'
-        name: Add tool_use_id, start_time, and duration_s fields to ToolCallRecord
-        agent: coder
-        status: pending
-        description: >
-          Implement the work item: docs/defect-backlog/01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration.md
-          Design doc: docs/plans/2026-03-24-01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration-design.md
+    description: 'Implement the work item: docs/defect-backlog/01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration.md
+      Design doc: docs/plans/2026-03-24-01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration-design.md
 
-          In langgraph_pipeline/shared/claude_cli.py:
-          1. Add three optional fields to ToolCallRecord: tool_use_id, start_time (datetime), duration_s (float).
-          2. Update stream_json_output to track in-flight tool calls using a pending dict keyed by tool_use_id.
-             On tool_use block: record tool_use_id -> datetime.now() in pending dict and set start_time on the record.
-             On user message with tool_result blocks: match tool_use_id, compute elapsed seconds, set duration_s on the matching ToolCallRecord.
-          3. Run existing tests and fix any failures.
+      In langgraph_pipeline/shared/langsmith.py emit_tool_call_traces(): When a ToolCallRecord
+      has duration_s set, compute end_time = record start_time + timedelta(seconds=duration_s).
+      Pass end_time to child.end(outputs=..., end_time=end_time). When duration_s
+      is None or missing, preserve current behavior (no end_time arg). Run existing
+      tests and fix any failures.
 
-  - id: phase-2
-    name: Phase 2 - Propagate duration into LangSmith spans
+      '
+    depends_on:
+    - '1.1'
+- id: phase-3
+  name: Phase 3 - Unit tests
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Add unit tests for duration tracking in stream_json_output and emit_tool_call_traces
+    agent: coder
     status: pending
-    tasks:
-      - id: '2.1'
-        name: Pass end_time to child.end() in emit_tool_call_traces
-        agent: coder
-        status: pending
-        description: >
-          Implement the work item: docs/defect-backlog/01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration.md
-          Design doc: docs/plans/2026-03-24-01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration-design.md
+    description: 'Implement the work item: docs/defect-backlog/01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration.md
+      Design doc: docs/plans/2026-03-24-01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration-design.md
 
-          In langgraph_pipeline/shared/langsmith.py emit_tool_call_traces():
-          When a ToolCallRecord has duration_s set, compute end_time = record start_time + timedelta(seconds=duration_s).
-          Pass end_time to child.end(outputs=..., end_time=end_time).
-          When duration_s is None or missing, preserve current behavior (no end_time arg).
-          Run existing tests and fix any failures.
-        depends_on:
-          - '1.1'
+      In tests/langgraph/shared/test_claude_cli.py, add tests that verify: - stream_json_output
+      sets duration_s when a tool_result with matching tool_use_id arrives - duration_s
+      is None for text blocks and unmatched tool calls
 
-  - id: phase-3
-    name: Phase 3 - Unit tests
-    status: pending
-    tasks:
-      - id: '3.1'
-        name: Add unit tests for duration tracking in stream_json_output and emit_tool_call_traces
-        agent: coder
-        status: pending
-        description: >
-          Implement the work item: docs/defect-backlog/01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration.md
-          Design doc: docs/plans/2026-03-24-01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration-design.md
+      In tests/langgraph/shared/test_langsmith.py, add tests that verify: - emit_tool_call_traces
+      passes end_time to child.end() when duration_s is present - emit_tool_call_traces
+      omits end_time when duration_s is None
 
-          In tests/langgraph/shared/test_claude_cli.py, add tests that verify:
-          - stream_json_output sets duration_s when a tool_result with matching tool_use_id arrives
-          - duration_s is None for text blocks and unmatched tool calls
+      Run the full test suite and fix any failures.
 
-          In tests/langgraph/shared/test_langsmith.py, add tests that verify:
-          - emit_tool_call_traces passes end_time to child.end() when duration_s is present
-          - emit_tool_call_traces omits end_time when duration_s is None
-
-          Run the full test suite and fix any failures.
-        depends_on:
-          - '2.1'
+      '
+    depends_on:
+    - '2.1'
