@@ -61,6 +61,7 @@ class PipelineState(TypedDict):
     should_stop: bool
     rate_limited: bool
     rate_limit_reset: Optional[str]  # ISO-8601 string when rate limit resets
+    quota_exhausted: bool            # True when Claude reports exhaustion with no reset time
 
     # ── Budget enforcement (set by runner, checked after each graph.invoke()) ──
     budget_cap_usd: Optional[float]  # None means no cap

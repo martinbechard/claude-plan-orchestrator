@@ -72,6 +72,9 @@ class TaskState(TypedDict):
     # ── Validation tracking ───────────────────────────────────────────────────
     last_validation_verdict: Optional[ValidationVerdict]  # set by validate_task node
 
+    # ── Quota exhaustion flag ─────────────────────────────────────────────────
+    quota_exhausted: bool  # True when Claude reports exhaustion with no reset time
+
     # ── Cost accumulators (shared with parent pipeline) ───────────────────────
     plan_cost_usd: float
     plan_input_tokens: int
