@@ -732,7 +732,7 @@ class SlackPoller:
         slug = "".join(c for c in slug if c.isalnum() or c == "-")
         slug = slug.strip("-") or "untitled"
 
-        filename = f"{next_num}-{slug}.md"
+        filename = f"{next_num:02d}-{slug}.md"
         filepath = os.path.join(backlog_dir, filename)
 
         source_line = "Created from Slack message"
