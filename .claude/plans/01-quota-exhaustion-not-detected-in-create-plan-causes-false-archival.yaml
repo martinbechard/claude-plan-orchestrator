@@ -41,10 +41,16 @@ sections:
     result_message: 'Added detect_quota_exhaustion import and checks after _verify_defect_symptoms()
       and _run_five_whys_analysis() calls in intake_analyze(). Returns {"quota_exhausted":
       True} immediately on detection, before any state updates.'
+    validation_attempts: 1
+    validation_findings: 'detect_quota_exhaustion imported and called correctly after
+      _verify_defect_symptoms() and _run_five_whys_analysis() in intake_analyze(),
+      returning {quota_exhausted: True} before any state updates. Build passes. Pre-existing
+      test collection errors in test_auto_pipeline.py and test_completed_archive.py
+      are unrelated to this change.'
   - id: '1.2'
     name: Add quota detection to create_plan node
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.1'
     description: "Implement the work item: docs/defect-backlog/01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival.md\n\
@@ -53,6 +59,14 @@ sections:
       \ returns combined_output,\n  call detect_quota_exhaustion(combined_output)\
       \ immediately after the existing\n  is_rate_limited check and return {\"quota_exhausted\"\
       : True} if detected\n- See the design doc for exact placement guidance"
+    last_attempt: '2026-03-24T17:27:21.991178'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T17:29:23.495551'
+    result_message: 'Added quota exhaustion detection to create_plan node. Fixed rate_limited
+      branch to only fire when reset_time is not None, so quota exhaustion (rate limit
+      with no reset time) correctly returns quota_exhausted: True. Updated test to
+      reflect correct behavior.'
 - id: phase-2
   name: Phase 2 - Add Routing Functions and Rewire Graph
   status: pending
