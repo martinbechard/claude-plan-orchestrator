@@ -1,0 +1,112 @@
+meta:
+  name: 'Defect Fix: Quota Exhaustion Not Detected in create_plan Causes False Archival'
+  description: >
+    Add detect_quota_exhaustion() checks to intake_analyze and create_plan nodes so
+    quota exhaustion detected during plan creation routes to END instead of flowing
+    forward and falsely archiving backlog items with no work done.
+  plan_doc: docs/plans/2026-03-24-01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival-design.md
+  source_item: "docs/defect-backlog/01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival.md"
+  created: '2026-03-24'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+      - coder
+      - e2e-test-agent
+      - frontend-coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+sections:
+- id: phase-1
+  name: Phase 1 - Add Quota Detection to Nodes
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add quota detection to intake_analyze node
+    agent: coder
+    status: pending
+    description: "Implement the work item: docs/defect-backlog/01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival.md\n\
+      \nFocus on langgraph_pipeline/pipeline/nodes/intake.py:\n\
+      - Import detect_quota_exhaustion from langgraph_pipeline.shared.quota\n\
+      - In intake_analyze(), after each _invoke_claude() call that produces output,\n\
+      \  call detect_quota_exhaustion() on the result and return {\"quota_exhausted\": True}\n\
+      \  immediately if detected (before any state updates or further processing)\n\
+      - See the design doc for exact placement guidance"
+
+  - id: '1.2'
+    name: Add quota detection to create_plan node
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.1'
+    description: "Implement the work item: docs/defect-backlog/01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival.md\n\
+      \nFocus on langgraph_pipeline/pipeline/nodes/plan_creation.py:\n\
+      - Import detect_quota_exhaustion from langgraph_pipeline.shared.quota\n\
+      - In create_plan(), after _run_subprocess() returns combined_output,\n\
+      \  call detect_quota_exhaustion(combined_output) immediately after the existing\n\
+      \  is_rate_limited check and return {\"quota_exhausted\": True} if detected\n\
+      - See the design doc for exact placement guidance"
+
+- id: phase-2
+  name: Phase 2 - Add Routing Functions and Rewire Graph
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add after_intake and after_create_plan edge routing functions
+    agent: coder
+    status: pending
+    depends_on:
+    - '1.2'
+    description: "Implement the work item: docs/defect-backlog/01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival.md\n\
+      \nFocus on langgraph_pipeline/pipeline/edges.py:\n\
+      - Add NODE_EXECUTE_PLAN constant\n\
+      - Add after_intake(state) routing function: returns END if quota_exhausted else NODE_CREATE_PLAN\n\
+      - Add after_create_plan(state) routing function: returns END if quota_exhausted else NODE_EXECUTE_PLAN\n\
+      - See the design doc for exact implementation"
+
+  - id: '2.2'
+    name: Rewire graph to use conditional edges for intake and create_plan
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.1'
+    description: "Implement the work item: docs/defect-backlog/01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival.md\n\
+      \nFocus on langgraph_pipeline/pipeline/graph.py:\n\
+      - Import after_intake and after_create_plan from edges.py\n\
+      - Replace graph.add_edge(NODE_INTAKE_ANALYZE, NODE_CREATE_PLAN) with\n\
+      \  graph.add_conditional_edges(NODE_INTAKE_ANALYZE, after_intake)\n\
+      - Replace graph.add_edge(NODE_CREATE_PLAN, NODE_EXECUTE_PLAN) with\n\
+      \  graph.add_conditional_edges(NODE_CREATE_PLAN, after_create_plan)\n\
+      - Update the module docstring graph topology comment to reflect the new conditional edges"
+
+- id: phase-3
+  name: Phase 3 - Tests
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Add unit tests for new edge routing functions
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.2'
+    description: "Implement the work item: docs/defect-backlog/01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival.md\n\
+      \nFocus on tests/langgraph/pipeline/test_edges.py:\n\
+      - Import after_intake and after_create_plan\n\
+      - Add TestAfterIntake class: quota_exhausted=True routes to END, normal state routes to NODE_CREATE_PLAN\n\
+      - Add TestAfterCreatePlan class: quota_exhausted=True routes to END, normal state routes to NODE_EXECUTE_PLAN\n\
+      - Run tests and fix any failures"
+
+  - id: '3.2'
+    name: Add unit tests for quota detection in intake_analyze and create_plan nodes
+    agent: coder
+    status: pending
+    depends_on:
+    - '3.1'
+    description: "Implement the work item: docs/defect-backlog/01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival.md\n\
+      \nFocus on tests/langgraph/pipeline/nodes/test_intake.py and test_plan_creation.py:\n\
+      - In test_intake.py: add test that intake_analyze returns {\"quota_exhausted\": True}\n\
+      \  when _invoke_claude() output triggers detect_quota_exhaustion() (mock the Claude call)\n\
+      - In test_plan_creation.py: add test that create_plan returns {\"quota_exhausted\": True}\n\
+      \  when subprocess combined_output triggers detect_quota_exhaustion() (mock _run_subprocess)\n\
+      - Run full test suite (~/.pyenv/versions/3.11.*/bin/python -m pytest tests/ -v) and fix any failures"
