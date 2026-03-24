@@ -27,6 +27,7 @@ from typing import Optional
 
 from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
+from langgraph_pipeline.shared.quota import detect_quota_exhaustion
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -276,6 +277,8 @@ def intake_analyze(state: PipelineState) -> dict:
 
     if item_type == "defect" and item_path:
         result = _verify_defect_symptoms(item_path)
+        if detect_quota_exhaustion(str(result["raw_output"])):
+            return {"quota_exhausted": True}
         clarity = result["clarity"]
         reproducible = result["reproducible"]
 
@@ -295,6 +298,8 @@ def intake_analyze(state: PipelineState) -> dict:
 
     elif item_type == "analysis" and item_path:
         result = _run_five_whys_analysis(item_path)
+        if detect_quota_exhaustion(str(result["raw_output"])):
+            return {"quota_exhausted": True}
         clarity = result["clarity"]
 
         if clarity < INTAKE_CLARITY_THRESHOLD:
