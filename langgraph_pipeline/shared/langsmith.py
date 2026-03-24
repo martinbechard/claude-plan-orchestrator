@@ -11,6 +11,7 @@ When enabled, both LANGSMITH_API_KEY and LANGSMITH_WORKSPACE_ID must be set
 
 import logging
 import os
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from langgraph_pipeline.shared.config import load_orchestrator_config
@@ -181,7 +182,13 @@ def emit_tool_call_traces(
                 inputs=record["tool_input"],
                 extra={"metadata": {**metadata, "timestamp": record["timestamp"]}},
             )
-            child.end(outputs=record["tool_input"])
+            duration_s = record.get("duration_s")
+            start_time = record.get("start_time")
+            if duration_s is not None and start_time is not None:
+                end_time = start_time + timedelta(seconds=duration_s)
+                child.end(outputs=record["tool_input"], end_time=end_time)
+            else:
+                child.end(outputs=record["tool_input"])
             child.post()
 
         parent.end()

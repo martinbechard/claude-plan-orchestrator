@@ -5,7 +5,8 @@
 """Unit tests for langgraph_pipeline.shared.langsmith."""
 
 import os
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timedelta
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -338,13 +339,20 @@ def _make_tool_call(
     tool_name: str = "Read",
     tool_input: dict | None = None,
     timestamp: str = "12:00:00",
+    start_time: datetime | None = None,
+    duration_s: float | None = None,
 ) -> ToolCallRecord:
-    return ToolCallRecord(
+    record = ToolCallRecord(
         type=record_type,  # type: ignore[arg-type]
         tool_name=tool_name,
         tool_input=tool_input or {"file_path": "/a.py"},
         timestamp=timestamp,
     )
+    if start_time is not None:
+        record["start_time"] = start_time
+    if duration_s is not None:
+        record["duration_s"] = duration_s
+    return record
 
 
 class TestEmitToolCallTracesWhenInactive:
@@ -455,6 +463,51 @@ class TestEmitToolCallTracesWithMockedLangSmith:
         call_kwargs = mock_cls.call_args.kwargs
         assert call_kwargs["name"] == "task:1.1"
         assert call_kwargs["run_type"] == "chain"
+
+    def test_end_time_passed_when_duration_s_set(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        mock_child = MagicMock()
+        mock_parent = MagicMock(spec=["create_child", "end", "post"])
+        mock_parent.create_child.return_value = mock_child
+
+        fixed_start = datetime(2026, 3, 24, 12, 0, 0)
+        records = [_make_tool_call("tool_use", "Bash", {"command": "ls"}, start_time=fixed_start, duration_s=5.0)]
+        with patch("langsmith.RunTree", return_value=mock_parent):
+            emit_tool_call_traces(records, "task:2.1", {})
+
+        expected_end = fixed_start + timedelta(seconds=5.0)
+        mock_child.end.assert_called_once_with(outputs={"command": "ls"}, end_time=expected_end)
+
+    def test_end_time_absent_when_duration_s_not_set(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        mock_child = MagicMock()
+        mock_parent = MagicMock(spec=["create_child", "end", "post"])
+        mock_parent.create_child.return_value = mock_child
+
+        records = [_make_tool_call("tool_use", "Read", {"file_path": "/x.py"})]
+        with patch("langsmith.RunTree", return_value=mock_parent):
+            emit_tool_call_traces(records, "task:2.1", {})
+
+        mock_child.end.assert_called_once_with(outputs={"file_path": "/x.py"})
+
+    def test_end_time_absent_when_start_time_missing(self, monkeypatch):
+        """duration_s present but start_time missing: fall back to no end_time."""
+        self._set_tracing_active(monkeypatch)
+        mock_child = MagicMock()
+        mock_parent = MagicMock(spec=["create_child", "end", "post"])
+        mock_parent.create_child.return_value = mock_child
+
+        record = ToolCallRecord(
+            type="tool_use",  # type: ignore[arg-type]
+            tool_name="Glob",
+            tool_input={"pattern": "*.py"},
+            timestamp="12:00:00",
+            duration_s=3.0,
+        )
+        with patch("langsmith.RunTree", return_value=mock_parent):
+            emit_tool_call_traces([record], "task:2.1", {})
+
+        mock_child.end.assert_called_once_with(outputs={"pattern": "*.py"})
 
 
 class TestAddTraceMetadataNoPackage:
