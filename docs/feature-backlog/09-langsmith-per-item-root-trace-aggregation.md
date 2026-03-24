@@ -40,20 +40,46 @@ LangSmith aggregates all tool calls, task steps, and costs under a single trace.
 
 ## Implementation Notes
 
-- Create the root `RunTree` in the `intake_analyze` or `scan_backlog` node when a
-  new item is picked up; store its `id` in `PipelineState` (new field:
-  `langsmith_root_run_id: Optional[str]`).
-- Pass `parent_run_id=root_run_id` to `RunTree(...)` inside `emit_tool_call_traces`;
-  add an optional `parent_run_id` parameter to `emit_tool_call_traces`.
-- Call `root_run.end()` and `root_run.post()` in the `archive` node after the item
-  is fully processed, so LangSmith records the total wall-clock duration.
-- The root run's `inputs` should carry item metadata (item type, slug, plan name);
-  its `outputs` should carry final cost and token totals from `PipelineState`.
-- When `_tracing_active` is False, `langsmith_root_run_id` remains None and all
-  existing behaviour is unchanged.
-- This feature and feature 03 (tool call duration tracking via `tool_use_id` pairing)
-  are complementary: 03 gives accurate child span durations; this feature gives the
-  parent context that makes those durations interpretable.
+**Root trace creation — use `scan_backlog`, not `intake_analyze`:**
+All item types (defect, feature, analysis) pass through `scan_backlog` as the true
+pipeline entry point. `intake_analyze` is a pass-through for features (no Claude call),
+so creating the root trace there would misrepresent the trace start time for the most
+common item type. `scan_backlog` is the correct and consistent creation point for all
+types.
+
+**Persisting the trace ID in the item file:**
+`PipelineState` is held in the LangGraph SQLite checkpoint and is not durable across
+process restarts that lose the checkpoint. The root trace ID must also be written into
+the backlog item's markdown file as a metadata line (e.g.
+`## LangSmith Trace: <uuid>`) when the root `RunTree` is created. On pipeline restart,
+`scan_backlog` reads this field — if present, it reconstructs the `RunTree` with the
+existing ID (using `RunTree(id=existing_id, ...)`) rather than creating a new one,
+ensuring all spans for the item stay under the same trace even across restarts or
+quota-pause cycles.
+
+**State field:**
+Add `langsmith_root_run_id: Optional[str]` to `PipelineState`. Populated by
+`scan_backlog` (from the item file if already present, or freshly generated), cleared
+by `archive` after the root run is posted.
+
+**`emit_tool_call_traces` signature change:**
+Add optional `parent_run_id: Optional[str] = None` parameter. When provided, pass it
+to `RunTree(parent_run_id=parent_run_id, ...)`.
+
+**Lifecycle:**
+- `scan_backlog`: create root `RunTree`, write ID to item file, store in state
+- Each `emit_tool_call_traces` call: nest under root via `parent_run_id`
+- `archive`: call `root_run.end(outputs={cost, tokens})` and `root_run.post()`; remove
+  the `## LangSmith Trace:` line from the item file before archiving
+
+**When tracing is inactive:**
+`langsmith_root_run_id` remains None, no file writes occur, all existing behaviour
+is unchanged.
+
+**Relationship to other features:**
+Feature 03 (tool call duration via `tool_use_id` pairing) gives accurate child span
+durations; this feature provides the parent context that makes those durations
+interpretable as a timeline.
 
 ## Source
 
