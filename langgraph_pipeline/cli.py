@@ -33,12 +33,13 @@ from langgraph_pipeline.pipeline.graph import PIPELINE_THREAD_ID, pipeline_graph
 from langgraph_pipeline.pipeline.nodes.scan import scan_backlog as scan_backlog_fn
 from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.claude_cli import call_claude
-from langgraph_pipeline.shared.config import load_orchestrator_config
+from langgraph_pipeline.shared.config import get_max_parallel_items, load_orchestrator_config
 from langgraph_pipeline.shared.dotenv import load_dotenv_files
 from langgraph_pipeline.shared.langsmith import configure_tracing
 from langgraph_pipeline.shared.paths import LANGGRAPH_PID_FILE_PATH
 from langgraph_pipeline.shared.quota import QUOTA_PROBE_INTERVAL_SECONDS, probe_quota_available
 from langgraph_pipeline.slack import SlackNotifier
+from langgraph_pipeline.supervisor import run_supervisor_loop
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -215,12 +216,15 @@ def _register_signal_handlers(shutdown_event: threading.Event) -> None:
 # ─── Startup banner ───────────────────────────────────────────────────────────
 
 
-def _log_startup_banner(args: argparse.Namespace, config: dict) -> None:
+def _log_startup_banner(
+    args: argparse.Namespace, config: dict, max_parallel_items: int
+) -> None:
     """Log a startup banner summarising version and active configuration.
 
     Args:
         args: Parsed CLI arguments.
         config: Loaded orchestrator config dict.
+        max_parallel_items: Number of parallel workers from config.
     """
     logger.info("=" * 60)
     logger.info("LangGraph Pipeline Runner v%s", VERSION)
@@ -241,6 +245,8 @@ def _log_startup_banner(args: argparse.Namespace, config: dict) -> None:
     logger.info("Log level     : %s", args.log_level)
     project_name = config.get("project_name", "(not configured)")
     logger.info("Project       : %s", project_name)
+    if max_parallel_items > 1:
+        logger.info("Workers       : %d", max_parallel_items)
     logger.info("=" * 60)
 
 
@@ -507,25 +513,34 @@ def _run_scan_loop(
     dry_run: bool,
     shutdown_event: threading.Event,
     slack: Optional[SlackNotifier] = None,
+    max_parallel_items: int = 1,
 ) -> int:
     """Run the continuous scan loop until shutdown or budget exhaustion.
 
-    Opens the pipeline_graph() context manager once and invokes the graph
-    repeatedly. Sleeps between iterations when no item was found. Checks the
-    shutdown event and budget cap between each invocation. Enters the quota
-    probe idle loop when quota exhaustion is detected.
+    When max_parallel_items > 1, delegates to run_supervisor_loop() which
+    dispatches N concurrent worker subprocesses. When max_parallel_items == 1,
+    uses the existing sequential single-item graph-invoke loop.
 
     Args:
         budget_cap_usd: Budget cap in USD, or None.
         dry_run: When True, log each iteration without executing.
         shutdown_event: Set by signal handlers to request clean exit.
         slack: SlackNotifier instance, or None if Slack is disabled.
+        max_parallel_items: Number of parallel workers; 1 means sequential mode.
 
     Returns:
         EXIT_CODE_CLEAN on graceful shutdown,
         EXIT_CODE_BUDGET_EXHAUSTED when cap is reached,
         EXIT_CODE_ERROR on unhandled exception.
     """
+    if max_parallel_items > 1:
+        return run_supervisor_loop(
+            max_workers=max_parallel_items,
+            budget_cap_usd=budget_cap_usd,
+            dry_run=dry_run,
+            shutdown_event=shutdown_event,
+            slack=slack,
+        )
     if dry_run:
         logger.info("[DRY RUN] Continuous scan loop — no graph invocations will be made.")
         while not shutdown_event.is_set():
@@ -608,7 +623,8 @@ def main() -> int:
     _configure_logging(args.log_level)
 
     config = load_orchestrator_config()
-    _log_startup_banner(args, config)
+    max_parallel_items = get_max_parallel_items(config)
+    _log_startup_banner(args, config, max_parallel_items)
 
     if not args.no_tracing:
         if configure_tracing():
@@ -654,6 +670,7 @@ def main() -> int:
                 args.dry_run,
                 shutdown_event,
                 slack,
+                max_parallel_items,
             )
     finally:
         _remove_pid_file()
