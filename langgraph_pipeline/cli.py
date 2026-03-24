@@ -37,6 +37,7 @@ from langgraph_pipeline.shared.config import get_max_parallel_items, load_orches
 from langgraph_pipeline.shared.dotenv import load_dotenv_files
 from langgraph_pipeline.shared.langsmith import configure_tracing
 from langgraph_pipeline.shared.paths import LANGGRAPH_PID_FILE_PATH
+from langgraph_pipeline.shared.hot_reload import CodeChangeMonitor, _perform_restart
 from langgraph_pipeline.shared.quota import QUOTA_PROBE_INTERVAL_SECONDS, probe_quota_available
 from langgraph_pipeline.slack import SlackNotifier
 from langgraph_pipeline.supervisor import run_supervisor_loop
@@ -247,6 +248,8 @@ def _log_startup_banner(
     logger.info("Project       : %s", project_name)
     if max_parallel_items > 1:
         logger.info("Workers       : %d", max_parallel_items)
+    if not args.single_item and not args.once:
+        logger.info("Hot-reload    : active (watching source files)")
     logger.info("=" * 60)
 
 
@@ -551,48 +554,58 @@ def _run_scan_loop(
 
     try:
         thread_config = {"configurable": {"thread_id": PIPELINE_THREAD_ID}}
+        code_monitor = CodeChangeMonitor()
+        code_monitor.start()
 
-        with pipeline_graph() as graph:
-            while not shutdown_event.is_set():
-                # Lightweight pre-scan: no graph, no tracing, just check directories.
-                pre_scanned = _pre_scan(budget_cap_usd)
+        try:
+            with pipeline_graph() as graph:
+                while not shutdown_event.is_set():
+                    # Lightweight pre-scan: no graph, no tracing, just check directories.
+                    pre_scanned = _pre_scan(budget_cap_usd)
 
-                if pre_scanned is None:
-                    logger.debug(
-                        "No backlog item found. Sleeping %ds before next scan.",
-                        SCAN_SLEEP_SECONDS,
+                    if pre_scanned is None:
+                        logger.debug(
+                            "No backlog item found. Sleeping %ds before next scan.",
+                            SCAN_SLEEP_SECONDS,
+                        )
+                        shutdown_event.wait(SCAN_SLEEP_SECONDS)
+                        continue
+
+                    # Item found — invoke the full graph (with tracing).
+                    logger.info(
+                        "Processing [%s] %s",
+                        pre_scanned.get("item_type"),
+                        pre_scanned.get("item_slug"),
                     )
-                    shutdown_event.wait(SCAN_SLEEP_SECONDS)
-                    continue
 
-                # Item found — invoke the full graph (with tracing).
-                logger.info(
-                    "Processing [%s] %s",
-                    pre_scanned.get("item_type"),
-                    pre_scanned.get("item_slug"),
-                )
+                    final_state: PipelineState = graph.invoke(
+                        pre_scanned, config=thread_config
+                    )
 
-                final_state: PipelineState = graph.invoke(
-                    pre_scanned, config=thread_config
-                )
+                    if final_state.get("quota_exhausted"):
+                        _run_quota_probe_loop(shutdown_event, slack)
+                        if code_monitor.restart_pending.is_set():
+                            _perform_restart(code_monitor)
+                        continue
 
-                if final_state.get("quota_exhausted"):
-                    _run_quota_probe_loop(shutdown_event, slack)
-                    continue
+                    cost = final_state.get("session_cost_usd", 0.0)
+                    logger.debug(
+                        "Graph invocation complete: cost=~$%.4f tokens_in=%d tokens_out=%d",
+                        cost,
+                        final_state.get("session_input_tokens", 0),
+                        final_state.get("session_output_tokens", 0),
+                    )
 
-                cost = final_state.get("session_cost_usd", 0.0)
-                logger.debug(
-                    "Graph invocation complete: cost=~$%.4f tokens_in=%d tokens_out=%d",
-                    cost,
-                    final_state.get("session_input_tokens", 0),
-                    final_state.get("session_output_tokens", 0),
-                )
+                    if _is_budget_exhausted(final_state, budget_cap_usd):
+                        return EXIT_CODE_BUDGET_EXHAUSTED
 
-                if _is_budget_exhausted(final_state, budget_cap_usd):
-                    return EXIT_CODE_BUDGET_EXHAUSTED
+                    if code_monitor.restart_pending.is_set():
+                        _perform_restart(code_monitor)
 
-                if shutdown_event.is_set():
-                    break
+                    if shutdown_event.is_set():
+                        break
+        finally:
+            code_monitor.stop()
 
         logger.info("Shutdown event set — exiting scan loop.")
         return EXIT_CODE_CLEAN
