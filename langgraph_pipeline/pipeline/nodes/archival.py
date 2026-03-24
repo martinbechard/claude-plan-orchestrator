@@ -23,7 +23,11 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 from langgraph_pipeline.pipeline.state import PipelineState
-from langgraph_pipeline.shared.langsmith import add_trace_metadata
+from langgraph_pipeline.shared.langsmith import (
+    LANGSMITH_TRACE_PATTERN,
+    add_trace_metadata,
+    finalize_root_run,
+)
 from langgraph_pipeline.shared.paths import COMPLETED_DIRS
 from langgraph_pipeline.slack.notifier import SlackNotifier
 
@@ -123,6 +127,27 @@ def _build_slack_message(
     return msg, SLACK_LEVEL_SUCCESS
 
 
+def _strip_trace_id_line(item_path: str) -> None:
+    """Remove the LangSmith trace ID marker line from an item file before archiving.
+
+    Completed item files in completed-backlog should not carry ephemeral trace
+    metadata. Normalizes trailing newlines after removal. No-op when the file
+    contains no trace line or cannot be read.
+
+    Args:
+        item_path: Path to the item markdown file to modify in-place.
+    """
+    try:
+        with open(item_path) as f:
+            content = f.read()
+        stripped = LANGSMITH_TRACE_PATTERN.sub("", content)
+        stripped = stripped.rstrip("\n") + "\n"
+        with open(item_path, "w") as f:
+            f.write(stripped)
+    except OSError as exc:
+        logger.debug("_strip_trace_id_line failed (non-fatal): %s", exc)
+
+
 def _git_commit_archival(item_slug: str, item_type: str, outcome: str) -> None:
     """Stage and commit archival changes (moved/deleted files) to git.
 
@@ -163,9 +188,11 @@ def archive(state: PipelineState) -> dict:
 
     Steps:
     1. Determine outcome (completed vs exhausted based on verification history).
-    2. Move the item file from the active backlog to the completed-backlog.
-    3. Remove the plan YAML file from .claude/plans/.
-    4. Send a Slack notification with the outcome summary.
+    2. Finalize the LangSmith root trace and strip the trace ID line from the item file.
+    3. Move the item file from the active backlog to the completed-backlog.
+    4. Remove the plan YAML file from .claude/plans/.
+    5. Send a Slack notification with the outcome summary.
+    6. Commit archival changes to git.
 
     Returns an empty dict — the pipeline is done processing this item and no
     further state mutations are needed.
@@ -175,28 +202,34 @@ def archive(state: PipelineState) -> dict:
     item_type: str = state.get("item_type", "feature")
     item_name: str = state.get("item_name", item_slug)
     plan_path: Optional[str] = state.get("plan_path")
+    langsmith_root_run_id: Optional[str] = state.get("langsmith_root_run_id")
 
     outcome = _determine_outcome(state)
 
     print(f"[archive] Archiving {item_slug} as {outcome}")
 
-    # Step 1: Move item to completed-backlog.
+    # Step 1: Finalize the root LangSmith trace and strip the trace ID line.
+    finalize_root_run(langsmith_root_run_id, {"item_slug": item_slug, "outcome": outcome})
+    if item_path:
+        _strip_trace_id_line(item_path)
+
+    # Step 2: Move item to completed-backlog.
     if item_path:
         dest = _move_item_to_completed(item_path, item_type)
         if dest:
             print(f"[archive] Moved {item_path} -> {dest}")
 
-    # Step 2: Remove plan YAML.
+    # Step 3: Remove plan YAML.
     _remove_plan_yaml(plan_path)
     if plan_path:
         print(f"[archive] Removed plan YAML: {plan_path}")
 
-    # Step 3: Slack notification.
+    # Step 4: Slack notification.
     message, level = _build_slack_message(item_name, item_type, outcome)
     notifier = SlackNotifier()
     notifier.send_status(message, level=level)
 
-    # Step 4: Commit archival changes to git.
+    # Step 5: Commit archival changes to git.
     _git_commit_archival(item_slug, item_type, outcome)
 
     add_trace_metadata({

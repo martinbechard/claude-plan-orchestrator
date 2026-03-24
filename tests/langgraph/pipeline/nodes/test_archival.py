@@ -18,6 +18,7 @@ from langgraph_pipeline.pipeline.nodes.archival import (
     _last_verification_outcome,
     _move_item_to_completed,
     _remove_plan_yaml,
+    _strip_trace_id_line,
     archive,
 )
 
@@ -300,3 +301,112 @@ class TestArchive:
             result = archive(state)  # Should not raise
 
         assert result == {}
+
+
+# ─── _strip_trace_id_line ─────────────────────────────────────────────────────
+
+
+class TestStripTraceIdLine:
+    def test_removes_trace_line_from_file(self, tmp_path):
+        item_file = tmp_path / "01-bug.md"
+        trace_id = "12345678-1234-1234-1234-123456789abc"
+        item_file.write_text(f"# Bug\n\nSome content.\n\n## LangSmith Trace: {trace_id}\n")
+
+        _strip_trace_id_line(str(item_file))
+
+        result = item_file.read_text()
+        assert "LangSmith Trace" not in result
+        assert trace_id not in result
+        assert "Some content." in result
+
+    def test_noop_when_no_trace_line_present(self, tmp_path):
+        item_file = tmp_path / "01-bug.md"
+        original = "# Bug\n\nNo trace line here.\n"
+        item_file.write_text(original)
+
+        _strip_trace_id_line(str(item_file))
+
+        assert item_file.read_text() == "# Bug\n\nNo trace line here.\n"
+
+    def test_no_error_when_file_missing(self, tmp_path):
+        _strip_trace_id_line(str(tmp_path / "nonexistent.md"))  # Should not raise
+
+    def test_normalizes_trailing_newlines(self, tmp_path):
+        item_file = tmp_path / "01-bug.md"
+        trace_id = "12345678-1234-1234-1234-123456789abc"
+        item_file.write_text(f"# Bug\n\n## LangSmith Trace: {trace_id}\n")
+
+        _strip_trace_id_line(str(item_file))
+
+        result = item_file.read_text()
+        assert result.endswith("\n")
+        assert not result.endswith("\n\n")
+
+
+# ─── archive node — trace finalization ────────────────────────────────────────
+
+
+class TestArchiveTraceFinalization:
+    def test_calls_finalize_root_run_with_run_id(self, tmp_path):
+        src_file = tmp_path / "01-bug.md"
+        src_file.write_text("# Bug\n")
+        trace_id = "12345678-1234-1234-1234-123456789abc"
+        state = _make_state(
+            item_path=str(src_file),
+            plan_path=None,
+            langsmith_root_run_id=trace_id,
+        )
+        dest_dir = tmp_path / "completed"
+
+        with patch("langgraph_pipeline.pipeline.nodes.archival.SlackNotifier") as mock_cls, \
+             patch("langgraph_pipeline.pipeline.nodes.archival.finalize_root_run") as mock_finalize, \
+             patch(
+                 "langgraph_pipeline.pipeline.nodes.archival.COMPLETED_DIRS",
+                 {"defect": str(dest_dir), "feature": str(dest_dir)},
+             ):
+            mock_cls.return_value = MagicMock()
+            archive(state)
+
+        mock_finalize.assert_called_once_with(
+            trace_id,
+            {"item_slug": "01-bug", "outcome": ARCHIVE_OUTCOME_SUCCESS},
+        )
+
+    def test_calls_finalize_root_run_with_none_when_no_run_id(self, tmp_path):
+        state = _make_state(item_path="", plan_path=None)
+
+        with patch("langgraph_pipeline.pipeline.nodes.archival.SlackNotifier") as mock_cls, \
+             patch("langgraph_pipeline.pipeline.nodes.archival.finalize_root_run") as mock_finalize:
+            mock_cls.return_value = MagicMock()
+            archive(state)
+
+        mock_finalize.assert_called_once()
+        call_args = mock_finalize.call_args[0]
+        assert call_args[0] is None
+
+    def test_strips_trace_id_line_before_move(self, tmp_path):
+        trace_id = "12345678-1234-1234-1234-123456789abc"
+        src_file = tmp_path / "01-bug.md"
+        src_file.write_text(f"# Bug\n\nContent.\n\n## LangSmith Trace: {trace_id}\n")
+        dest_dir = tmp_path / "completed" / "defects"
+
+        state = _make_state(
+            item_path=str(src_file),
+            plan_path=None,
+            langsmith_root_run_id=trace_id,
+        )
+
+        with patch("langgraph_pipeline.pipeline.nodes.archival.SlackNotifier") as mock_cls, \
+             patch("langgraph_pipeline.pipeline.nodes.archival.finalize_root_run"), \
+             patch(
+                 "langgraph_pipeline.pipeline.nodes.archival.COMPLETED_DIRS",
+                 {"defect": str(dest_dir), "feature": str(dest_dir)},
+             ):
+            mock_cls.return_value = MagicMock()
+            archive(state)
+
+        archived_file = dest_dir / "01-bug.md"
+        assert archived_file.exists()
+        archived_content = archived_file.read_text()
+        assert "LangSmith Trace" not in archived_content
+        assert "Content." in archived_content
