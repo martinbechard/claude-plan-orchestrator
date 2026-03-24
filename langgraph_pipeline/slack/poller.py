@@ -583,6 +583,28 @@ class SlackPoller:
             self._intake_history = self._intake_history[-INTAKE_HISTORY_MAX_ENTRIES:]
         self._save_intake_history()
 
+    def _is_own_signed_message(self, text: str) -> bool:
+        """Check if message text ends with one of our own agent signatures.
+
+        Every outbound message is signed with ' \u2014 *AgentName*'. If we see
+        our own agent name in the signature position, this is our own message
+        echoed back via polling.
+
+        Args:
+            text: Slack message text to examine.
+
+        Returns:
+            True if the message is signed by one of our own agents.
+        """
+        if not self._agent_identity:
+            return False
+        our_names = self._agent_identity.all_names()
+        for name in our_names:
+            # Check for signature pattern: — *AgentName* at end of text
+            if f"\u2014 *{name}*" in text:
+                return True
+        return False
+
     def _is_chain_loop_artifact(self, text: str) -> bool:
         """Check if message text references a recently created backlog item.
 
@@ -978,6 +1000,15 @@ class SlackPoller:
             # Dedup: skip already-processed messages
             if ts and ts in self._processed_message_ts:
                 print(f"[SLACK] Filter: skip already-processed ts={ts}")
+                continue
+
+            # A0: Self-signed message filter — skip messages signed by our own agents.
+            # Every outbound message ends with ' — *AgentName*'. If we see our own
+            # signature, this is our own message echoed back.
+            if self._is_own_signed_message(text):
+                print(f"[SLACK] Filter: skip self-signed #{ch_log}: {preview!r}")
+                if ts:
+                    self._processed_message_ts.add(ts)
                 continue
 
             # A3: Content-based notification pattern filter
