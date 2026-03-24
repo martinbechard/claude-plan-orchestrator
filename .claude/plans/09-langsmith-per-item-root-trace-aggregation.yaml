@@ -97,10 +97,17 @@ sections:
       call + state field), execute_plan (initial_task_state mapping), and task_runner
       (parent_run_id= kwarg to emit_tool_call_traces). Added 4 new scan_backlog tests;
       1070 tests pass.
+    validation_attempts: 1
+    validation_findings: 'All requirements satisfied: create_root_run called in scan_backlog
+      for both in-progress and new items; langsmith_root_run_id=None on empty backlog;
+      field threaded to execute_plan initial_task_state; passed as parent_run_id=
+      to emit_tool_call_traces in task_runner. 3 new langsmith scan tests all pass.
+      1388 tests pass total; 3 pre-existing failures in test_plan_orchestrator/test_slack_notifier
+      are unrelated to this task.'
   - id: '2.2'
     name: Finalize root trace in archive and strip trace ID line from item file
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: docs/feature-backlog/09-langsmith-per-item-root-trace-aggregation.md
 
       Design doc: docs/plans/2026-03-24-09-langsmith-per-item-root-trace-aggregation-design.md
@@ -114,3 +121,6 @@ sections:
 
       Update tests/langgraph/pipeline/nodes/test_archival.py to cover trace finalization
       and metadata line stripping. Run pytest to verify no regressions.'
+    last_attempt: '2026-03-24T18:26:43.895961'
+    attempts: 1
+    model_used: sonnet
