@@ -3664,6 +3664,7 @@ class SlackNotifier:
         self._intake_timestamps: list[float] = []  # A4: global intake rate limiter
         self._intake_history: list[dict] = []  # A1: chain detection history
         self._rag: Optional[BacklogRAG] = None  # B2: ChromaDB RAG for dedup
+        self._bot_user_id: Optional[str] = None  # A0: identity-based self-skip
 
         try:
             with open(config_path, "r") as f:
@@ -3704,6 +3705,8 @@ class SlackNotifier:
             # Config file missing or invalid - remain disabled
             pass
 
+        self._resolve_own_bot_id()
+
     def is_enabled(self) -> bool:
         """Check if Slack notifications are enabled.
 
@@ -3711,6 +3714,38 @@ class SlackNotifier:
             True if enabled and configured, False otherwise
         """
         return self._enabled
+
+    def _resolve_own_bot_id(self) -> None:
+        """Resolve and store the bot's own Slack user ID via auth.test.
+
+        Called once during __init__. On success, sets self._bot_user_id so
+        that _handle_polled_messages can apply the A0 identity-based self-skip.
+        On any failure (network, API error), logs a warning and leaves
+        self._bot_user_id as None (graceful degradation — content-based
+        guards remain active).
+
+        Reference: docs/plans/2026-03-24-01-in-the-mpact-project-i-submitted-a-feature-request-and-the-orchestrator-respons-design.md
+        """
+        if not self._bot_token:
+            return
+        try:
+            req = urllib.request.Request(
+                "https://slack.com/api/auth.test",
+                data=b"{}",
+                headers={
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Authorization": f"Bearer {self._bot_token}",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read())
+            if result.get("ok", False):
+                self._bot_user_id = result.get("user_id")
+                print(f"[SLACK] Bot user ID resolved: {self._bot_user_id}")
+            else:
+                print(f"[SLACK] Warning: auth.test failed: {result.get('error', 'unknown')}")
+        except Exception as e:
+            print(f"[SLACK] Warning: could not resolve bot user ID: {e}")
 
     def set_identity(self, identity: AgentIdentity, role: str) -> None:
         """Configure agent identity and active role for message signing.
@@ -5537,6 +5572,15 @@ class SlackNotifier:
             # Dedup: skip already-processed messages
             if ts and ts in self._processed_message_ts:
                 print(f"[SLACK] Filter: skip already-processed ts={ts}")
+                continue
+
+            # A0: Identity-based self-skip — unconditionally skip any message
+            # whose user field matches the bot's own Slack user ID.
+            # Immune to message format changes and process restarts.
+            if self._bot_user_id and msg.get("user") == self._bot_user_id:
+                print(f"[SLACK] Filter: skip own-bot-user #{ch_log}: {preview!r}")
+                if ts:
+                    self._processed_message_ts.add(ts)
                 continue
 
             # A3: Content-based notification pattern filter — skip messages
