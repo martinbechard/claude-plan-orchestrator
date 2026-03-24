@@ -12,6 +12,7 @@ When no items are found, returns an empty item_path so the has_items conditional
 edge routes the graph to END (sleep/wait cycle).
 """
 
+import os
 import re
 from pathlib import Path
 from typing import Optional
@@ -22,6 +23,8 @@ from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.paths import (
     ANALYSIS_DIR,
+    BACKLOG_DIRS,
+    CLAIMED_DIR,
     DEFECT_DIR,
     FEATURE_DIR,
     PLANS_DIR,
@@ -156,6 +159,44 @@ def _item_type_from_path(filepath: str) -> str:
     if "feature" in path_lower:
         return "feature"
     return "analysis"
+
+
+# ─── Item claiming ────────────────────────────────────────────────────────────
+
+
+def claim_item(item_path: str) -> bool:
+    """Atomically claim a backlog item by moving it into CLAIMED_DIR.
+
+    Uses os.rename(), which is atomic on POSIX: exactly one process wins the
+    race; all others receive FileNotFoundError and return False.
+
+    Returns True when the item was successfully claimed.
+    Returns False when another process claimed it first (FileNotFoundError).
+    Propagates any other OSError (permissions, cross-device move, etc.).
+    """
+    os.makedirs(CLAIMED_DIR, exist_ok=True)
+    basename = os.path.basename(item_path)
+    claimed_path = os.path.join(CLAIMED_DIR, basename)
+    try:
+        os.rename(item_path, claimed_path)
+        return True
+    except FileNotFoundError:
+        return False
+
+
+def unclaim_item(claimed_path: str, item_type: str) -> None:
+    """Return a claimed item to its original backlog directory.
+
+    Called by the supervisor when a worker crashes, so the item re-enters
+    the backlog and can be picked up by a subsequent scan.
+
+    Raises KeyError if item_type is not a recognised backlog type.
+    Propagates OSError if the rename fails.
+    """
+    backlog_dir = BACKLOG_DIRS[item_type]
+    basename = os.path.basename(claimed_path)
+    original_path = os.path.join(backlog_dir, basename)
+    os.rename(claimed_path, original_path)
 
 
 # ─── Node ─────────────────────────────────────────────────────────────────────

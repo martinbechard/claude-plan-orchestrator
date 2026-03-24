@@ -17,7 +17,9 @@ from langgraph_pipeline.pipeline.nodes.scan import (
     _item_type_from_path,
     _scan_directory,
     _source_item_for_plan,
+    claim_item,
     scan_backlog,
+    unclaim_item,
 )
 
 
@@ -199,6 +201,64 @@ class TestSourceItemForPlan:
 
     def test_returns_none_for_missing_file(self):
         assert _source_item_for_plan("/nonexistent.yaml") is None
+
+
+# ─── claim_item / unclaim_item ────────────────────────────────────────────────
+
+
+class TestClaimItem:
+    def test_moves_file_to_claimed_dir_and_returns_true(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        claimed_dir = tmp_path / ".claimed"
+        monkeypatch.setattr(scan_mod, "CLAIMED_DIR", str(claimed_dir))
+        item = tmp_path / "01-my-bug.md"
+        item.write_text("# Bug\n")
+        result = claim_item(str(item))
+        assert result is True
+        assert not item.exists()
+        assert (claimed_dir / "01-my-bug.md").exists()
+
+    def test_creates_claimed_dir_when_absent(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        claimed_dir = tmp_path / ".claimed"
+        monkeypatch.setattr(scan_mod, "CLAIMED_DIR", str(claimed_dir))
+        item = tmp_path / "01-feat.md"
+        item.write_text("# Feat\n")
+        assert not claimed_dir.exists()
+        claim_item(str(item))
+        assert claimed_dir.exists()
+
+    def test_returns_false_when_file_already_gone(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        claimed_dir = tmp_path / ".claimed"
+        monkeypatch.setattr(scan_mod, "CLAIMED_DIR", str(claimed_dir))
+        result = claim_item(str(tmp_path / "nonexistent.md"))
+        assert result is False
+
+
+class TestUnclaimItem:
+    def test_moves_file_back_to_backlog_directory(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        claimed_dir = tmp_path / ".claimed"
+        claimed_dir.mkdir()
+        defect_dir = tmp_path / "defects"
+        defect_dir.mkdir()
+        monkeypatch.setattr(scan_mod, "CLAIMED_DIR", str(claimed_dir))
+        monkeypatch.setattr(scan_mod, "BACKLOG_DIRS", {"defect": str(defect_dir)})
+        claimed_file = claimed_dir / "01-my-bug.md"
+        claimed_file.write_text("# Bug\n")
+        unclaim_item(str(claimed_file), "defect")
+        assert not claimed_file.exists()
+        assert (defect_dir / "01-my-bug.md").exists()
+
+    def test_raises_key_error_for_unknown_item_type(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        claimed_dir = tmp_path / ".claimed"
+        claimed_dir.mkdir()
+        monkeypatch.setattr(scan_mod, "CLAIMED_DIR", str(claimed_dir))
+        monkeypatch.setattr(scan_mod, "BACKLOG_DIRS", {"defect": "docs/defect-backlog"})
+        with pytest.raises(KeyError):
+            unclaim_item(str(claimed_dir / "01-item.md"), "unknown")
 
 
 # ─── _item_type_from_path ─────────────────────────────────────────────────────
