@@ -200,6 +200,18 @@ def cleanup_worktree(worktree_path: Path) -> bool:
         return False
 
 
+def _file_exists_in_ref(ref: str, file_path: str) -> bool:
+    """Return True if file_path exists as a blob in the given git ref.
+
+    Uses git cat-file -e for a zero-output existence check (cheapest git query).
+    """
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{ref}:{file_path}"],
+        capture_output=True,
+    )
+    return result.returncode == 0
+
+
 def copy_worktree_artifacts(
     worktree_path: Path, task_id: str
 ) -> tuple[bool, str, list[str]]:
@@ -247,6 +259,14 @@ def copy_worktree_artifacts(
                 continue
 
             if status in ("A", "M", "C"):
+                if _file_exists_in_ref(fork_point, file_path) and not _file_exists_in_ref(
+                    "HEAD", file_path
+                ):
+                    print(
+                        f"[WARNING] Skipping {file_path}: deleted from main after worktree fork"
+                    )
+                    files_skipped.append(file_path)
+                    continue
                 src = worktree_path / file_path
                 dst = Path(file_path)
                 if src.exists():
@@ -264,6 +284,14 @@ def copy_worktree_artifacts(
                 if len(parts) >= 3:
                     old_path = parts[1]
                     new_path = parts[2]
+                    if _file_exists_in_ref(fork_point, new_path) and not _file_exists_in_ref(
+                        "HEAD", new_path
+                    ):
+                        print(
+                            f"[WARNING] Skipping rename target {new_path}: deleted from main after worktree fork"
+                        )
+                        files_skipped.append(new_path)
+                        continue
                     src = worktree_path / new_path
                     if src.exists():
                         Path(new_path).parent.mkdir(parents=True, exist_ok=True)

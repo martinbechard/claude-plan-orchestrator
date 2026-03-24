@@ -16,6 +16,7 @@ from langgraph_pipeline.shared.git import (
     STASH_EXCLUDE_PLANS_PATHSPEC,
     WORKTREE_BASE_DIR,
     _WORKTREE_SKIP_PREFIXES,
+    _file_exists_in_ref,
     cleanup_worktree,
     copy_worktree_artifacts,
     create_worktree,
@@ -49,6 +50,36 @@ class TestConstants:
 
     def test_skip_prefixes_contains_agent_claims(self):
         assert any("agent-claims" in p for p in _WORKTREE_SKIP_PREFIXES)
+
+
+# ─── _file_exists_in_ref ──────────────────────────────────────────────────────
+
+
+class TestFileExistsInRef:
+    @patch("langgraph_pipeline.shared.git.subprocess.run")
+    def test_returns_true_when_cat_file_exits_zero(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0)
+        assert _file_exists_in_ref("HEAD", "some/file.py") is True
+
+    @patch("langgraph_pipeline.shared.git.subprocess.run")
+    def test_returns_false_when_cat_file_exits_nonzero(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=1)
+        assert _file_exists_in_ref("abc123", "deleted/file.py") is False
+
+    @patch("langgraph_pipeline.shared.git.subprocess.run")
+    def test_uses_cat_file_dash_e_command(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0)
+        _file_exists_in_ref("HEAD", "src/foo.py")
+        cmd = mock_run.call_args[0][0]
+        assert "cat-file" in cmd
+        assert "-e" in cmd
+
+    @patch("langgraph_pipeline.shared.git.subprocess.run")
+    def test_formats_ref_colon_path(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0)
+        _file_exists_in_ref("abc123", "docs/backlog/16.md")
+        cmd = mock_run.call_args[0][0]
+        assert "abc123:docs/backlog/16.md" in cmd
 
 
 # ─── git_stash_working_changes ────────────────────────────────────────────────
@@ -265,11 +296,21 @@ class TestCleanupWorktree:
 
 
 class TestCopyWorktreeArtifacts:
-    def _make_run_results(self, fork="abc123", diff_output=""):
+    def _make_run_results(self, fork="abc123", diff_output="", extra=None):
+        """Build side_effect list for subprocess.run calls in copy_worktree_artifacts.
+
+        extra: additional MagicMock results injected between diff and branch_del,
+               used for cat-file existence checks in the deletion guard.
+        """
         fork_result = MagicMock(returncode=0, stdout=fork, stderr="")
         diff_result = MagicMock(returncode=0, stdout=diff_output, stderr="")
         branch_del = MagicMock(returncode=0)
-        return [fork_result, diff_result, branch_del]
+        middle = extra or []
+        return [fork_result, diff_result] + middle + [branch_del]
+
+    def _cat_file(self, exists: bool) -> MagicMock:
+        """Build a mock cat-file subprocess result."""
+        return MagicMock(returncode=0 if exists else 1)
 
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     def test_returns_true_with_no_changes(self, mock_run):
@@ -283,14 +324,17 @@ class TestCopyWorktreeArtifacts:
     @patch("langgraph_pipeline.shared.git.Path.exists", return_value=True)
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     def test_copies_added_files(self, mock_run, mock_exists, mock_mkdir, mock_copy):
+        # A-status: file not at fork_point (cat-file returns 1) → short-circuit → copy
         diff_output = "A\tsome/file.py\n"
-        mock_run.side_effect = self._make_run_results(diff_output=diff_output)
+        extra = [self._cat_file(exists=False)]  # fork check: not at fork → new file
+        mock_run.side_effect = self._make_run_results(diff_output=diff_output, extra=extra)
         success, msg, files = copy_worktree_artifacts(Path(".worktrees/plan"), "1.1")
         assert success is True
         assert "some/file.py" in files
 
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     def test_skips_plans_dir_files(self, mock_run):
+        # Prefix-skipped files never reach the cat-file guard
         diff_output = "M\t.claude/plans/02-extract.yaml\n"
         mock_run.side_effect = self._make_run_results(diff_output=diff_output)
         success, msg, files = copy_worktree_artifacts(Path(".worktrees/plan"), "1.1")
@@ -299,6 +343,7 @@ class TestCopyWorktreeArtifacts:
 
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     def test_skips_subagent_status_files(self, mock_run):
+        # Prefix-skipped files never reach the cat-file guard
         diff_output = "A\t.claude/subagent-status/agent.json\n"
         mock_run.side_effect = self._make_run_results(diff_output=diff_output)
         success, msg, files = copy_worktree_artifacts(Path(".worktrees/plan"), "1.1")
@@ -314,6 +359,7 @@ class TestCopyWorktreeArtifacts:
     @patch("langgraph_pipeline.shared.git.Path.exists", return_value=True)
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     def test_deletes_removed_files(self, mock_run, mock_exists, mock_unlink):
+        # D-status files bypass the cat-file guard entirely
         diff_output = "D\tsome/old_file.py\n"
         mock_run.side_effect = self._make_run_results(diff_output=diff_output)
         success, msg, files = copy_worktree_artifacts(Path(".worktrees/plan"), "1.1")
@@ -325,8 +371,10 @@ class TestCopyWorktreeArtifacts:
     @patch("langgraph_pipeline.shared.git.Path.exists", return_value=True)
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     def test_handles_modified_files(self, mock_run, mock_exists, mock_mkdir, mock_copy):
+        # M-status: file existed at fork (check 1=True) and still in HEAD (check 2=True) → copy
         diff_output = "M\tsrc/module.py\n"
-        mock_run.side_effect = self._make_run_results(diff_output=diff_output)
+        extra = [self._cat_file(exists=True), self._cat_file(exists=True)]
+        mock_run.side_effect = self._make_run_results(diff_output=diff_output, extra=extra)
         success, msg, files = copy_worktree_artifacts(Path(".worktrees/plan"), "1.1")
         assert "src/module.py" in files
 
@@ -335,8 +383,10 @@ class TestCopyWorktreeArtifacts:
     @patch("langgraph_pipeline.shared.git.Path.exists", return_value=True)
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     def test_handles_renamed_files(self, mock_run, mock_exists, mock_mkdir, mock_copy):
+        # R-status new_path: not at fork_point (new path in rename) → short-circuit → copy
         diff_output = "R100\told/path.py\tnew/path.py\n"
-        mock_run.side_effect = self._make_run_results(diff_output=diff_output)
+        extra = [self._cat_file(exists=False)]  # new_path not at fork → copy normally
+        mock_run.side_effect = self._make_run_results(diff_output=diff_output, extra=extra)
         success, msg, files = copy_worktree_artifacts(Path(".worktrees/plan"), "1.1")
         assert "new/path.py" in files
 
@@ -345,8 +395,10 @@ class TestCopyWorktreeArtifacts:
     @patch("langgraph_pipeline.shared.git.Path.exists", return_value=True)
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     def test_deletes_branch_on_success(self, mock_run, mock_exists, mock_mkdir, mock_copy):
+        # A-status: file not at fork → short-circuit cat-file → copy
         diff_output = "A\tsome/file.py\n"
-        mock_run.side_effect = self._make_run_results(diff_output=diff_output)
+        extra = [self._cat_file(exists=False)]
+        mock_run.side_effect = self._make_run_results(diff_output=diff_output, extra=extra)
         copy_worktree_artifacts(Path(".worktrees/plan"), "2.3")
         delete_call = mock_run.call_args_list[-1][0][0]
         assert "branch" in delete_call
@@ -355,19 +407,66 @@ class TestCopyWorktreeArtifacts:
 
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     def test_summary_message_describes_changes(self, mock_run):
+        # A-status: file not at fork → short-circuit → copy
         diff_output = "A\tsome/file.py\n"
         fork_result = MagicMock(returncode=0, stdout="abc", stderr="")
         diff_result = MagicMock(returncode=0, stdout=diff_output, stderr="")
+        cat_file_fork = MagicMock(returncode=1)  # not at fork → copy
+        branch_del = MagicMock(returncode=0)
         exists_patch = patch(
             "langgraph_pipeline.shared.git.Path.exists", return_value=True
         )
         mkdir_patch = patch("langgraph_pipeline.shared.git.Path.mkdir")
         copy_patch = patch("langgraph_pipeline.shared.git.shutil.copy2")
-        branch_del = MagicMock(returncode=0)
-        mock_run.side_effect = [fork_result, diff_result, branch_del]
+        mock_run.side_effect = [fork_result, diff_result, cat_file_fork, branch_del]
         with exists_patch, mkdir_patch, copy_patch:
             _, msg, _ = copy_worktree_artifacts(Path(".worktrees/plan"), "1.1")
         assert "copied" in msg
+
+    @patch("langgraph_pipeline.shared.git.shutil.copy2")
+    @patch("langgraph_pipeline.shared.git.Path.mkdir")
+    @patch("langgraph_pipeline.shared.git.Path.exists", return_value=True)
+    @patch("langgraph_pipeline.shared.git.subprocess.run")
+    def test_skips_file_deleted_from_main_after_fork(
+        self, mock_run, mock_exists, mock_mkdir, mock_copy
+    ):
+        # M-status: file existed at fork (check 1=True) but deleted from main HEAD (check 2=False) → skip
+        diff_output = "M\tdocs/feature-backlog/16.md\n"
+        extra = [self._cat_file(exists=True), self._cat_file(exists=False)]
+        mock_run.side_effect = self._make_run_results(diff_output=diff_output, extra=extra)
+        success, msg, files = copy_worktree_artifacts(Path(".worktrees/plan"), "1.1")
+        assert success is True
+        assert "docs/feature-backlog/16.md" not in files
+        mock_copy.assert_not_called()
+
+    @patch("langgraph_pipeline.shared.git.shutil.copy2")
+    @patch("langgraph_pipeline.shared.git.Path.mkdir")
+    @patch("langgraph_pipeline.shared.git.Path.exists", return_value=True)
+    @patch("langgraph_pipeline.shared.git.subprocess.run")
+    def test_skipped_deletion_guard_files_appear_in_summary(
+        self, mock_run, mock_exists, mock_mkdir, mock_copy
+    ):
+        # Skipped files (deleted in main after fork) are reflected in the summary message
+        diff_output = "M\tdocs/feature-backlog/16.md\n"
+        extra = [self._cat_file(exists=True), self._cat_file(exists=False)]
+        mock_run.side_effect = self._make_run_results(diff_output=diff_output, extra=extra)
+        _, msg, _ = copy_worktree_artifacts(Path(".worktrees/plan"), "1.1")
+        assert "skipped" in msg
+
+    @patch("langgraph_pipeline.shared.git.shutil.copy2")
+    @patch("langgraph_pipeline.shared.git.Path.mkdir")
+    @patch("langgraph_pipeline.shared.git.Path.exists", return_value=True)
+    @patch("langgraph_pipeline.shared.git.subprocess.run")
+    def test_genuinely_new_added_file_not_affected_by_deletion_guard(
+        self, mock_run, mock_exists, mock_mkdir, mock_copy
+    ):
+        # A-status for a file not at fork_point → cat-file returns 1 → short-circuit → copy without skip
+        diff_output = "A\tnew/feature.py\n"
+        extra = [self._cat_file(exists=False)]  # not at fork → genuinely new
+        mock_run.side_effect = self._make_run_results(diff_output=diff_output, extra=extra)
+        success, msg, files = copy_worktree_artifacts(Path(".worktrees/plan"), "1.1")
+        assert success is True
+        assert "new/feature.py" in files
 
 
 # ─── git_commit_files ─────────────────────────────────────────────────────────
