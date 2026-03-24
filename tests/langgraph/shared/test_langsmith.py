@@ -347,35 +347,6 @@ def _make_tool_call(
     )
 
 
-def _patch_langsmith_with_parent(parent_mock: MagicMock):
-    """Context manager that injects a mock langsmith.run_trees returning parent_mock."""
-    import sys
-    mock_rt = MagicMock()
-    mock_rt.get_current_run_tree.return_value = parent_mock
-    mock_ls = MagicMock()
-    mock_ls.run_trees = mock_rt
-
-    class _Ctx:
-        def __enter__(self):
-            self._prev_ls = sys.modules.get("langsmith")
-            self._prev_rt = sys.modules.get("langsmith.run_trees")
-            sys.modules["langsmith"] = mock_ls
-            sys.modules["langsmith.run_trees"] = mock_rt
-            return mock_rt
-
-        def __exit__(self, *_):
-            if self._prev_ls is None:
-                sys.modules.pop("langsmith", None)
-            else:
-                sys.modules["langsmith"] = self._prev_ls
-            if self._prev_rt is None:
-                sys.modules.pop("langsmith.run_trees", None)
-            else:
-                sys.modules["langsmith.run_trees"] = self._prev_rt
-
-    return _Ctx()
-
-
 class TestEmitToolCallTracesWhenInactive:
     def test_does_not_raise_when_tracing_inactive(self, monkeypatch):
         _clean_env(monkeypatch)
@@ -400,28 +371,30 @@ class TestEmitToolCallTracesWithMockedLangSmith:
     def test_creates_child_run_for_each_tool_call(self, monkeypatch):
         self._set_tracing_active(monkeypatch)
         mock_child = MagicMock()
-        mock_parent = MagicMock()
+        mock_parent = MagicMock(spec=["create_child", "end", "post"])
         mock_parent.create_child.return_value = mock_child
 
         records = [
             _make_tool_call("tool_use", "Bash", {"command": "ls"}),
             _make_tool_call("tool_use", "Read", {"file_path": "/x.py"}),
         ]
-        with _patch_langsmith_with_parent(mock_parent):
+        with patch("langsmith.RunTree", return_value=mock_parent):
             emit_tool_call_traces(records, "task:1.1", {"task_id": "1.1"})
 
         assert mock_parent.create_child.call_count == 2
         assert mock_child.end.call_count == 2
         assert mock_child.post.call_count == 2
+        mock_parent.end.assert_called_once()
+        mock_parent.post.assert_called_once()
 
     def test_tool_use_run_type_is_tool(self, monkeypatch):
         self._set_tracing_active(monkeypatch)
         mock_child = MagicMock()
-        mock_parent = MagicMock()
+        mock_parent = MagicMock(spec=["create_child", "end", "post"])
         mock_parent.create_child.return_value = mock_child
 
         records = [_make_tool_call("tool_use", "Bash", {"command": "ls"})]
-        with _patch_langsmith_with_parent(mock_parent):
+        with patch("langsmith.RunTree", return_value=mock_parent):
             emit_tool_call_traces(records, "task:1.1", {})
 
         call_kwargs = mock_parent.create_child.call_args.kwargs
@@ -431,11 +404,11 @@ class TestEmitToolCallTracesWithMockedLangSmith:
     def test_text_record_run_type_is_llm(self, monkeypatch):
         self._set_tracing_active(monkeypatch)
         mock_child = MagicMock()
-        mock_parent = MagicMock()
+        mock_parent = MagicMock(spec=["create_child", "end", "post"])
         mock_parent.create_child.return_value = mock_child
 
         records = [_make_tool_call("text", "", {"text": "Hello"})]
-        with _patch_langsmith_with_parent(mock_parent):
+        with patch("langsmith.RunTree", return_value=mock_parent):
             emit_tool_call_traces(records, "task:1.1", {})
 
         call_kwargs = mock_parent.create_child.call_args.kwargs
@@ -445,39 +418,17 @@ class TestEmitToolCallTracesWithMockedLangSmith:
     def test_metadata_attached_to_each_child_extra(self, monkeypatch):
         self._set_tracing_active(monkeypatch)
         mock_child = MagicMock()
-        mock_parent = MagicMock()
+        mock_parent = MagicMock(spec=["create_child", "end", "post"])
         mock_parent.create_child.return_value = mock_child
 
         records = [_make_tool_call("tool_use", "Glob", {"pattern": "*.py"}, "13:00:00")]
-        with _patch_langsmith_with_parent(mock_parent):
+        with patch("langsmith.RunTree", return_value=mock_parent):
             emit_tool_call_traces(records, "task:1.1", {"task_id": "1.1", "model": "sonnet"})
 
         extra = mock_parent.create_child.call_args.kwargs["extra"]
         assert extra["metadata"]["task_id"] == "1.1"
         assert extra["metadata"]["model"] == "sonnet"
         assert extra["metadata"]["timestamp"] == "13:00:00"
-
-    def test_skips_when_no_current_run_tree(self, monkeypatch):
-        self._set_tracing_active(monkeypatch)
-        mock_rt = MagicMock()
-        mock_rt.get_current_run_tree.return_value = None
-        mock_ls = MagicMock()
-        mock_ls.run_trees = mock_rt
-
-        import sys
-        prev = sys.modules.get("langsmith")
-        sys.modules["langsmith"] = mock_ls
-        try:
-            emit_tool_call_traces([_make_tool_call()], "task:1.1", {})
-        finally:
-            if prev is None:
-                sys.modules.pop("langsmith", None)
-            else:
-                sys.modules["langsmith"] = prev
-
-        mock_rt.get_current_run_tree.assert_called_once()
-        mock_rt.create_child = MagicMock()  # verify not called
-        mock_rt.create_child.assert_not_called()
 
     def test_does_not_raise_when_langsmith_import_fails(self, monkeypatch):
         self._set_tracing_active(monkeypatch)
@@ -492,15 +443,28 @@ class TestEmitToolCallTracesWithMockedLangSmith:
             else:
                 sys.modules["langsmith"] = prev
 
+    def test_parent_run_name_and_type(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        mock_parent = MagicMock(spec=["create_child", "end", "post"])
+        mock_parent.create_child.return_value = MagicMock()
+
+        records = [_make_tool_call()]
+        with patch("langsmith.RunTree", return_value=mock_parent) as mock_cls:
+            emit_tool_call_traces(records, "task:1.1", {"task_id": "1.1"})
+
+        call_kwargs = mock_cls.call_args.kwargs
+        assert call_kwargs["name"] == "task:1.1"
+        assert call_kwargs["run_type"] == "chain"
+
 
 class TestAddTraceMetadataNoPackage:
     def test_does_not_raise_when_langsmith_not_installed(self):
-        with patch.dict("sys.modules", {"langsmith": None, "langsmith.run_trees": None}):
+        with patch.dict("sys.modules", {"langsmith": None, "langsmith.run_helpers": None}):
             add_trace_metadata({"node_name": "test_node", "graph_level": "pipeline"})
 
-    def test_does_not_raise_when_langsmith_run_trees_missing(self):
+    def test_does_not_raise_when_run_helpers_missing(self):
         mock_langsmith = MagicMock()
-        del mock_langsmith.run_trees
+        del mock_langsmith.run_helpers
         with patch.dict("sys.modules", {"langsmith": mock_langsmith}):
             add_trace_metadata({"cost": 0.01})
 
@@ -508,56 +472,24 @@ class TestAddTraceMetadataNoPackage:
 class TestAddTraceMetadataWithPackage:
     def test_calls_add_metadata_on_current_run(self):
         mock_run = MagicMock()
-        mock_run_trees = MagicMock()
-        mock_run_trees.get_current_run_tree.return_value = mock_run
+        mock_run_helpers = MagicMock()
+        mock_run_helpers.get_current_run_tree.return_value = mock_run
 
-        mock_langsmith = MagicMock()
-        mock_langsmith.run_trees = mock_run_trees
-
-        with patch.dict("sys.modules", {"langsmith": mock_langsmith, "langsmith.run_trees": mock_run_trees}):
-            with patch("langgraph_pipeline.shared.langsmith.run_trees", mock_run_trees, create=True):
-                def patched_add(metadata):
-                    try:
-                        current_run = mock_run_trees.get_current_run_tree()
-                        if current_run is not None:
-                            current_run.add_metadata(metadata)
-                    except ImportError:
-                        pass
-
-                patched_add({"node_name": "plan_creation", "total_cost_usd": 0.05})
+        with patch.dict("sys.modules", {"langsmith.run_helpers": mock_run_helpers}):
+            add_trace_metadata({"node_name": "plan_creation", "total_cost_usd": 0.05})
 
         mock_run.add_metadata.assert_called_once_with(
             {"node_name": "plan_creation", "total_cost_usd": 0.05}
         )
 
     def test_skips_when_no_current_run(self):
-        mock_run_trees = MagicMock()
-        mock_run_trees.get_current_run_tree.return_value = None
+        mock_run_helpers = MagicMock()
+        mock_run_helpers.get_current_run_tree.return_value = None
 
-        def patched_add(metadata):
-            try:
-                current_run = mock_run_trees.get_current_run_tree()
-                if current_run is not None:
-                    current_run.add_metadata(metadata)
-            except ImportError:
-                pass
+        with patch.dict("sys.modules", {"langsmith.run_helpers": mock_run_helpers}):
+            add_trace_metadata({"node_name": "task_runner"})
 
-        patched_add({"node_name": "task_runner"})
-        mock_run_trees.get_current_run_tree.assert_called_once()
+        mock_run_helpers.get_current_run_tree.assert_called_once()
 
     def test_does_not_raise_on_unexpected_exception(self):
-        mock_run_trees = MagicMock()
-        mock_run_trees.get_current_run_tree.side_effect = RuntimeError("API error")
-
-        def patched_add(metadata):
-            try:
-                from langsmith import run_trees as rt  # noqa: F401
-                current_run = mock_run_trees.get_current_run_tree()
-                if current_run is not None:
-                    current_run.add_metadata(metadata)
-            except ImportError:
-                pass
-            except Exception:
-                pass
-
-        patched_add({"node_name": "executor"})
+        add_trace_metadata({"node_name": "executor"})  # No langsmith installed -- should not raise

@@ -148,26 +148,30 @@ def emit_tool_call_traces(
     run_name: str,
     metadata: dict[str, Any],
 ) -> None:
-    """Emit LangSmith child runs for each tool call collected during streaming.
+    """Emit a LangSmith trace with child runs for each tool call.
 
-    Creates one child run per ToolCallRecord attached to the current LangSmith
-    run context. Degrades gracefully when langsmith is not installed or tracing
-    is inactive. All RunTree construction happens on the caller's thread (never
-    the streaming thread) to avoid thread-safety issues.
+    Creates a standalone RunTree (not attached to the graph's trace context)
+    with one child run per ToolCallRecord. The parent run represents the
+    task execution; children represent individual tool calls and text blocks.
+
+    Degrades gracefully when langsmith is not installed or tracing is inactive.
 
     Args:
         tool_calls: Events collected by stream_json_output during task execution.
-        run_name: Label for the trace group (e.g., "execute_task:1.1").
-        metadata: Task-level metadata attached to each child run's extra field.
+        run_name: Label for the parent run (e.g., "execute_task:1.1").
+        metadata: Task-level metadata attached to each child run.
     """
     if not _tracing_active or not tool_calls:
         return
     try:
-        from langsmith import run_trees as _rt  # type: ignore[import]
+        from langsmith import RunTree  # type: ignore[import]
 
-        parent = _rt.get_current_run_tree()
-        if parent is None:
-            return
+        parent = RunTree(
+            name=run_name,
+            run_type="chain",
+            inputs={"task_metadata": metadata},
+            extra={"metadata": metadata},
+        )
 
         for record in tool_calls:
             is_tool = record["type"] == "tool_use"
@@ -177,8 +181,12 @@ def emit_tool_call_traces(
                 inputs=record["tool_input"],
                 extra={"metadata": {**metadata, "timestamp": record["timestamp"]}},
             )
-            child.end()
+            child.end(outputs=record["tool_input"])
             child.post()
+
+        parent.end()
+        parent.post()
+
     except ImportError:
         pass  # langsmith package not installed -- degrade silently
     except Exception as exc:
@@ -197,9 +205,9 @@ def add_trace_metadata(metadata: dict[str, Any]) -> None:
             total_cost_usd, input_tokens, output_tokens, model).
     """
     try:
-        from langsmith import run_trees  # type: ignore[import]
+        from langsmith.run_helpers import get_current_run_tree  # type: ignore[import]
 
-        current_run = run_trees.get_current_run_tree()
+        current_run = get_current_run_tree()
         if current_run is not None:
             current_run.add_metadata(metadata)
     except ImportError:
