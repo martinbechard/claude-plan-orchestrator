@@ -515,7 +515,8 @@ def main() -> int:
         try:
             slack = SlackNotifier()
             if slack.is_enabled():
-                logger.info("Slack notifications enabled.")
+                slack.start_background_polling()
+                logger.info("Slack notifications and polling enabled.")
             else:
                 logger.info("Slack configured but not enabled (check slack.local.yaml).")
         except Exception as exc:
