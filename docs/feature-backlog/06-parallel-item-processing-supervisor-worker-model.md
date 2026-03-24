@@ -67,8 +67,11 @@ management centrally owned by a single supervisor.
 
 ## Implementation Notes
 
-- New config key: `pipeline.max_parallel_items` (int, default 1) in
-  `orchestrator-config.yaml`.
+- New config key: `pipeline.max_parallel_items` (int, default 4) in
+  `orchestrator-config.yaml`. Four workers is the recommended default: it saturates
+  typical Claude Code quota without overwhelming the git index or Slack rate limits,
+  and matches common dual/quad-core dev machine concurrency. Set to 1 to restore
+  strictly sequential behaviour.
 - Supervisor logic lives in `langgraph_pipeline/cli.py` (or a new
   `langgraph_pipeline/supervisor.py`); the existing scan/sleep loop becomes a
   dispatch loop.
