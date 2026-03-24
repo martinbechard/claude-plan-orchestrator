@@ -74,3 +74,6 @@ class PipelineState(TypedDict):
     # ── In-graph intake counters (separate from disk-persisted throttle) ──────
     intake_count_defects: int
     intake_count_features: int
+
+    # ── LangSmith root trace ──────────────────────────────────────────────────
+    langsmith_root_run_id: Optional[str]  # UUID of the shared root RunTree for this item

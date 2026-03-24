@@ -75,6 +75,9 @@ class TaskState(TypedDict):
     # ── Quota exhaustion flag ─────────────────────────────────────────────────
     quota_exhausted: bool  # True when Claude reports exhaustion with no reset time
 
+    # ── LangSmith root trace ──────────────────────────────────────────────────
+    langsmith_root_run_id: Optional[str]  # UUID of the shared root RunTree from PipelineState
+
     # ── Cost accumulators (shared with parent pipeline) ───────────────────────
     plan_cost_usd: float
     plan_input_tokens: int

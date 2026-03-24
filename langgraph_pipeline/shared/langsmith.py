@@ -11,8 +11,10 @@ When enabled, both LANGSMITH_API_KEY and LANGSMITH_WORKSPACE_ID must be set
 
 import logging
 import os
+import re
+import uuid
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from langgraph_pipeline.shared.config import load_orchestrator_config
 
@@ -34,6 +36,13 @@ TRACING_DISABLED_VALUE = "false"
 # Node names that produce high-frequency runs with no meaningful signal.
 # should_trace() returns False for these to suppress custom metadata emission.
 NOISY_NODE_NAMES = frozenset({"scan_backlog", "sleep", "wait"})
+
+# Marker line written to item files to persist the root trace UUID across restarts.
+LANGSMITH_TRACE_LINE_PREFIX = "## LangSmith Trace: "
+LANGSMITH_TRACE_PATTERN = re.compile(
+    r"^## LangSmith Trace: ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$",
+    re.MULTILINE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -148,12 +157,14 @@ def emit_tool_call_traces(
     tool_calls: "list[ToolCallRecord]",
     run_name: str,
     metadata: dict[str, Any],
+    parent_run_id: Optional[str] = None,
 ) -> None:
     """Emit a LangSmith trace with child runs for each tool call.
 
-    Creates a standalone RunTree (not attached to the graph's trace context)
-    with one child run per ToolCallRecord. The parent run represents the
-    task execution; children represent individual tool calls and text blocks.
+    Creates a RunTree with one child run per ToolCallRecord. The parent run
+    represents the task execution; children represent individual tool calls and
+    text blocks. When parent_run_id is provided the run is attached under the
+    shared root trace for the work item.
 
     Degrades gracefully when langsmith is not installed or tracing is inactive.
 
@@ -161,18 +172,23 @@ def emit_tool_call_traces(
         tool_calls: Events collected by stream_json_output during task execution.
         run_name: Label for the parent run (e.g., "execute_task:1.1").
         metadata: Task-level metadata attached to each child run.
+        parent_run_id: Optional UUID of the root RunTree to nest this run under.
     """
     if not _tracing_active or not tool_calls:
         return
     try:
         from langsmith import RunTree  # type: ignore[import]
 
-        parent = RunTree(
-            name=run_name,
-            run_type="chain",
-            inputs={"task_metadata": metadata},
-            extra={"metadata": metadata},
-        )
+        run_tree_kwargs: dict[str, Any] = {
+            "name": run_name,
+            "run_type": "chain",
+            "inputs": {"task_metadata": metadata},
+            "extra": {"metadata": metadata},
+        }
+        if parent_run_id is not None:
+            run_tree_kwargs["parent_run_id"] = parent_run_id
+
+        parent = RunTree(**run_tree_kwargs)
 
         for record in tool_calls:
             is_tool = record["type"] == "tool_use"
@@ -198,6 +214,75 @@ def emit_tool_call_traces(
         pass  # langsmith package not installed -- degrade silently
     except Exception as exc:
         logger.debug("emit_tool_call_traces failed (non-fatal): %s", exc)
+
+
+def create_root_run(item_slug: str, item_path: str) -> tuple[Any, Optional[str]]:
+    """Create or recover the shared root RunTree for a work item.
+
+    Reads item_path for an existing "## LangSmith Trace: <uuid>" line.  If
+    found, reconstructs the RunTree using that UUID so all subsequent spans are
+    grouped under the same top-level trace.  If not found, creates a fresh
+    RunTree, generates a UUID, and writes the marker line to item_path.
+
+    Degrades silently when tracing is inactive or langsmith is not installed,
+    returning (None, None) so callers can pass the UUID directly into state
+    without a None-check.
+
+    Args:
+        item_slug: Human-readable name for the root run (e.g. "my-feature").
+        item_path: Absolute path to the item markdown file.
+
+    Returns:
+        (run_tree, uuid_str) when tracing is active; (None, None) otherwise.
+    """
+    if not _tracing_active:
+        return None, None
+    try:
+        from langsmith import RunTree  # type: ignore[import]
+
+        existing_id = _read_trace_id_from_file(item_path)
+        if existing_id:
+            run_tree = RunTree(id=existing_id, name=item_slug, run_type="chain")
+            return run_tree, existing_id
+
+        new_id = str(uuid.uuid4())
+        run_tree = RunTree(id=new_id, name=item_slug, run_type="chain")
+        _write_trace_id_to_file(item_path, new_id)
+        return run_tree, new_id
+
+    except ImportError:
+        return None, None
+    except Exception as exc:
+        logger.debug("create_root_run failed (non-fatal): %s", exc)
+        return None, None
+
+
+def finalize_root_run(root_run_id: Optional[str], outputs: dict[str, Any]) -> None:
+    """End and post the shared root RunTree for a completed work item.
+
+    Reconstructs the RunTree by UUID, calls end() with the supplied outputs,
+    then posts it to LangSmith so the trace is marked complete.
+
+    Degrades silently when tracing is inactive, root_run_id is None, or
+    langsmith is not installed.
+
+    Args:
+        root_run_id: UUID string returned by create_root_run, or None.
+        outputs: Final outputs to attach (e.g. {"item_slug": slug, "outcome": "PASS"}).
+    """
+    if not _tracing_active or not root_run_id:
+        return
+    try:
+        from langsmith import RunTree  # type: ignore[import]
+
+        root_run = RunTree(id=root_run_id, name="root", run_type="chain")
+        root_run.end(outputs=outputs)
+        root_run.post()
+
+    except ImportError:
+        pass
+    except Exception as exc:
+        logger.debug("finalize_root_run failed (non-fatal): %s", exc)
 
 
 def add_trace_metadata(metadata: dict[str, Any]) -> None:
@@ -232,3 +317,32 @@ def _resolve_value(env_var: str, config_section: dict, config_key: str) -> str:
     if env_val:
         return env_val
     return config_section.get(config_key, "")
+
+
+def _read_trace_id_from_file(item_path: str) -> Optional[str]:
+    """Return the LangSmith trace UUID from an item file, or None if absent."""
+    try:
+        with open(item_path) as f:
+            content = f.read()
+        match = LANGSMITH_TRACE_PATTERN.search(content)
+        return match.group(1) if match else None
+    except OSError:
+        return None
+
+
+def _write_trace_id_to_file(item_path: str, trace_id: str) -> None:
+    """Write or update the LangSmith trace ID marker line in an item file."""
+    try:
+        with open(item_path) as f:
+            content = f.read()
+
+        new_line = f"{LANGSMITH_TRACE_LINE_PREFIX}{trace_id}"
+        if LANGSMITH_TRACE_PATTERN.search(content):
+            content = LANGSMITH_TRACE_PATTERN.sub(new_line, content)
+        else:
+            content = content.rstrip("\n") + f"\n\n{new_line}\n"
+
+        with open(item_path, "w") as f:
+            f.write(content)
+    except OSError as exc:
+        logger.debug("_write_trace_id_to_file failed (non-fatal): %s", exc)

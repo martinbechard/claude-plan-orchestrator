@@ -18,12 +18,16 @@ from langgraph_pipeline.shared.langsmith import (
     ENV_LANGSMITH_PROJECT,
     ENV_LANGSMITH_TRACING,
     ENV_LANGSMITH_WORKSPACE_ID,
+    LANGSMITH_TRACE_LINE_PREFIX,
+    LANGSMITH_TRACE_PATTERN,
     NOISY_NODE_NAMES,
     TRACING_DISABLED_VALUE,
     TRACING_ENABLED_VALUE,
     add_trace_metadata,
     configure_tracing,
+    create_root_run,
     emit_tool_call_traces,
+    finalize_root_run,
     reset_tracing_state,
     should_trace,
 )
@@ -546,3 +550,210 @@ class TestAddTraceMetadataWithPackage:
 
     def test_does_not_raise_on_unexpected_exception(self):
         add_trace_metadata({"node_name": "executor"})  # No langsmith installed -- should not raise
+
+
+# ─── emit_tool_call_traces: parent_run_id forwarding ─────────────────────────
+
+
+class TestEmitToolCallTracesParentRunId:
+    def _set_tracing_active(self, monkeypatch):
+        import langgraph_pipeline.shared.langsmith as ls_mod
+        monkeypatch.setattr(ls_mod, "_tracing_active", True)
+        monkeypatch.setattr(ls_mod, "_tracing_configured", True)
+
+    def test_passes_parent_run_id_to_run_tree(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        mock_parent = MagicMock(spec=["create_child", "end", "post"])
+        mock_parent.create_child.return_value = MagicMock()
+
+        records = [_make_tool_call()]
+        with patch("langsmith.RunTree", return_value=mock_parent) as mock_cls:
+            emit_tool_call_traces(records, "task:1.1", {"task_id": "1.1"}, parent_run_id="test-uuid-123")
+
+        call_kwargs = mock_cls.call_args.kwargs
+        assert call_kwargs["parent_run_id"] == "test-uuid-123"
+
+    def test_omits_parent_run_id_when_none(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        mock_parent = MagicMock(spec=["create_child", "end", "post"])
+        mock_parent.create_child.return_value = MagicMock()
+
+        records = [_make_tool_call()]
+        with patch("langsmith.RunTree", return_value=mock_parent) as mock_cls:
+            emit_tool_call_traces(records, "task:1.1", {"task_id": "1.1"})
+
+        call_kwargs = mock_cls.call_args.kwargs
+        assert "parent_run_id" not in call_kwargs
+
+    def test_omits_parent_run_id_when_explicitly_none(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        mock_parent = MagicMock(spec=["create_child", "end", "post"])
+        mock_parent.create_child.return_value = MagicMock()
+
+        records = [_make_tool_call()]
+        with patch("langsmith.RunTree", return_value=mock_parent) as mock_cls:
+            emit_tool_call_traces(records, "task:1.1", {}, parent_run_id=None)
+
+        call_kwargs = mock_cls.call_args.kwargs
+        assert "parent_run_id" not in call_kwargs
+
+
+# ─── create_root_run ──────────────────────────────────────────────────────────
+
+
+class TestCreateRootRun:
+    def _set_tracing_active(self, monkeypatch):
+        import langgraph_pipeline.shared.langsmith as ls_mod
+        monkeypatch.setattr(ls_mod, "_tracing_active", True)
+        monkeypatch.setattr(ls_mod, "_tracing_configured", True)
+
+    def test_returns_none_none_when_tracing_inactive(self, tmp_path):
+        item_file = tmp_path / "item.md"
+        item_file.write_text("# My Feature\n")
+        run_tree, run_id = create_root_run("my-feature", str(item_file))
+        assert run_tree is None
+        assert run_id is None
+
+    def test_returns_none_none_when_langsmith_not_installed(self, monkeypatch, tmp_path):
+        self._set_tracing_active(monkeypatch)
+        item_file = tmp_path / "item.md"
+        item_file.write_text("# My Feature\n")
+        with patch.dict("sys.modules", {"langsmith": None}):
+            run_tree, run_id = create_root_run("my-feature", str(item_file))
+        assert run_tree is None
+        assert run_id is None
+
+    def test_fresh_creation_writes_uuid_to_file(self, monkeypatch, tmp_path):
+        self._set_tracing_active(monkeypatch)
+        item_file = tmp_path / "item.md"
+        item_file.write_text("# My Feature\n")
+        mock_run = MagicMock()
+
+        with patch("langsmith.RunTree", return_value=mock_run) as mock_cls:
+            run_tree, run_id = create_root_run("my-feature", str(item_file))
+
+        assert run_tree is mock_run
+        assert run_id is not None
+        content = item_file.read_text()
+        assert f"{LANGSMITH_TRACE_LINE_PREFIX}{run_id}" in content
+        # Verify UUID passed to RunTree constructor
+        assert mock_cls.call_args.kwargs["id"] == run_id
+
+    def test_fresh_creation_uuid_matches_pattern(self, monkeypatch, tmp_path):
+        self._set_tracing_active(monkeypatch)
+        item_file = tmp_path / "item.md"
+        item_file.write_text("# My Feature\n")
+        mock_run = MagicMock()
+
+        with patch("langsmith.RunTree", return_value=mock_run):
+            _, run_id = create_root_run("my-feature", str(item_file))
+
+        assert LANGSMITH_TRACE_PATTERN.search(f"## LangSmith Trace: {run_id}") is not None
+
+    def test_recovery_reads_existing_uuid_from_file(self, monkeypatch, tmp_path):
+        self._set_tracing_active(monkeypatch)
+        existing_uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        item_file = tmp_path / "item.md"
+        item_file.write_text(f"# My Feature\n\n## LangSmith Trace: {existing_uuid}\n")
+        mock_run = MagicMock()
+
+        with patch("langsmith.RunTree", return_value=mock_run) as mock_cls:
+            run_tree, run_id = create_root_run("my-feature", str(item_file))
+
+        assert run_id == existing_uuid
+        assert mock_cls.call_args.kwargs["id"] == existing_uuid
+        # File should still have the same UUID (not overwritten)
+        assert existing_uuid in item_file.read_text()
+
+    def test_recovery_does_not_rewrite_file(self, monkeypatch, tmp_path):
+        self._set_tracing_active(monkeypatch)
+        existing_uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        original_content = f"# My Feature\n\n## LangSmith Trace: {existing_uuid}\n"
+        item_file = tmp_path / "item.md"
+        item_file.write_text(original_content)
+        mock_run = MagicMock()
+
+        with patch("langsmith.RunTree", return_value=mock_run):
+            create_root_run("my-feature", str(item_file))
+
+        assert item_file.read_text() == original_content
+
+    def test_run_name_is_item_slug(self, monkeypatch, tmp_path):
+        self._set_tracing_active(monkeypatch)
+        item_file = tmp_path / "item.md"
+        item_file.write_text("# My Feature\n")
+        mock_run = MagicMock()
+
+        with patch("langsmith.RunTree", return_value=mock_run) as mock_cls:
+            create_root_run("my-feature-slug", str(item_file))
+
+        assert mock_cls.call_args.kwargs["name"] == "my-feature-slug"
+
+    def test_degrades_silently_on_exception(self, monkeypatch, tmp_path):
+        self._set_tracing_active(monkeypatch)
+        item_file = tmp_path / "item.md"
+        item_file.write_text("# My Feature\n")
+
+        with patch("langsmith.RunTree", side_effect=RuntimeError("LangSmith error")):
+            run_tree, run_id = create_root_run("my-feature", str(item_file))
+
+        assert run_tree is None
+        assert run_id is None
+
+
+# ─── finalize_root_run ────────────────────────────────────────────────────────
+
+
+class TestFinalizeRootRun:
+    def _set_tracing_active(self, monkeypatch):
+        import langgraph_pipeline.shared.langsmith as ls_mod
+        monkeypatch.setattr(ls_mod, "_tracing_active", True)
+        monkeypatch.setattr(ls_mod, "_tracing_configured", True)
+
+    def test_does_nothing_when_tracing_inactive(self):
+        # Should not raise even without langsmith installed
+        finalize_root_run("some-uuid", {"outcome": "PASS"})
+
+    def test_does_nothing_when_root_run_id_is_none(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        with patch("langsmith.RunTree") as mock_cls:
+            finalize_root_run(None, {"outcome": "PASS"})
+        mock_cls.assert_not_called()
+
+    def test_does_nothing_when_langsmith_not_installed(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        with patch.dict("sys.modules", {"langsmith": None}):
+            finalize_root_run("some-uuid", {"outcome": "PASS"})  # Should not raise
+
+    def test_reconstructs_run_by_id(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        mock_run = MagicMock()
+
+        with patch("langsmith.RunTree", return_value=mock_run) as mock_cls:
+            finalize_root_run("test-uuid-456", {"outcome": "PASS", "item_slug": "my-item"})
+
+        assert mock_cls.call_args.kwargs["id"] == "test-uuid-456"
+
+    def test_calls_end_with_outputs(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        mock_run = MagicMock()
+        outputs = {"outcome": "PASS", "item_slug": "my-item"}
+
+        with patch("langsmith.RunTree", return_value=mock_run):
+            finalize_root_run("test-uuid-456", outputs)
+
+        mock_run.end.assert_called_once_with(outputs=outputs)
+
+    def test_calls_post(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        mock_run = MagicMock()
+
+        with patch("langsmith.RunTree", return_value=mock_run):
+            finalize_root_run("test-uuid-456", {"outcome": "FAIL"})
+
+        mock_run.post.assert_called_once()
+
+    def test_degrades_silently_on_exception(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        with patch("langsmith.RunTree", side_effect=RuntimeError("LangSmith error")):
+            finalize_root_run("test-uuid-456", {"outcome": "PASS"})  # Should not raise
