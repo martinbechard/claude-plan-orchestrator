@@ -1,6 +1,6 @@
 # Track tool call durations in LangSmith traces
 
-## Status: Open
+## Status: Completed
 
 ## Priority: Low
 
