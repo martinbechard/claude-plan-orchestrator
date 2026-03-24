@@ -21,7 +21,11 @@ sections:
   - id: '1.1'
     name: Create verification block template
     agent: coder
+<<<<<<< Updated upstream
     status: completed
+=======
+    status: in_progress
+>>>>>>> Stashed changes
     description: "Create a reference template for verification blocks in functional\
       \ spec files.\n\nReference: docs/plans/2026-02-18-spec-aware-validator-with-e2e-logging-design.md\n\
       \nSteps:\n1. Create the file docs/templates/verification-block.md with the following\
@@ -45,11 +49,14 @@ sections:
       \ \"docs: add verification block template for functional specs\"\n\nFiles: docs/templates/verification-block.md\n"
     attempts: 1
     last_attempt: '2026-02-18T20:16:52.365573'
+<<<<<<< Updated upstream
     model_used: sonnet
     completed_at: '2026-02-18T20:18:25.113320'
     result_message: 'Created docs/templates/verification-block.md with full format
       reference, field explanations, and three examples (Testable, Non-E2E, Blocked).
       Committed as ''docs: add verification block template for functional specs''.'
+=======
+>>>>>>> Stashed changes
 - id: phase-2
   name: Phase 2 - Implementation
   status: completed
@@ -57,7 +64,11 @@ sections:
   - id: '2.1'
     name: Add spec-aware config constants and parse_verification_blocks helper
     agent: coder
+<<<<<<< Updated upstream
     status: completed
+=======
+    status: pending
+>>>>>>> Stashed changes
     description: "Add spec-aware validation configuration to plan-orchestrator.py\
       \ and a helper\nfunction to parse verification blocks from functional spec markdown\
       \ files.\n\nReference: docs/plans/2026-02-18-spec-aware-validator-with-e2e-logging-design.md\n\
@@ -89,6 +100,7 @@ sections:
       \ doraise=True); print('syntax OK')\"\n\n6. Git commit:\n   git add scripts/plan-orchestrator.py\n\
       \   git commit -m \"feat: add spec-aware config and parse_verification_blocks\
       \ helper\"\n\nFiles: scripts/plan-orchestrator.py\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T20:18:27.552538'
     model_used: sonnet
@@ -96,6 +108,8 @@ sections:
     result_message: Added DEFAULT_SPEC_DIR and DEFAULT_E2E_COMMAND constants, read
       SPEC_DIR and E2E_COMMAND from orchestrator config, and added parse_verification_blocks()
       helper with module-level compiled regex patterns. Syntax verified OK.
+=======
+>>>>>>> Stashed changes
   - id: '2.2'
     name: Update build_validation_prompt to include spec-aware context
     agent: coder
@@ -132,6 +146,7 @@ sections:
       \ doraise=True); print('syntax OK')\"\n\n4. Git commit:\n   git add scripts/plan-orchestrator.py\n\
       \   git commit -m \"feat: include spec-aware E2E context in validation prompt\"\
       \n\nFiles: scripts/plan-orchestrator.py\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T20:20:46.739291'
     model_used: sonnet
@@ -139,6 +154,8 @@ sections:
     result_message: Updated build_validation_prompt() to conditionally include spec-aware
       E2E validation context when SPEC_DIR is configured. The spec_context block is
       injected between the standard validation checks and the output format section.
+=======
+>>>>>>> Stashed changes
   - id: '2.3'
     name: Update validator agent with spec-aware instructions
     agent: coder
@@ -169,6 +186,7 @@ sections:
       \ your own.\n\n5. Git commit:\n   git add .claude/agents/validator.md\n   git\
       \ commit -m \"feat: add spec-aware E2E validation to validator agent\"\n\nFiles:\
       \ .claude/agents/validator.md\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T20:22:37.365403'
     model_used: sonnet
@@ -180,6 +198,12 @@ sections:
     name: Create e2e-analyzer agent
     agent: coder
     status: completed
+=======
+  - id: '2.4'
+    name: Create e2e-analyzer agent
+    agent: coder
+    status: pending
+>>>>>>> Stashed changes
     description: "Create a new agent for on-demand analysis of accumulated E2E test\
       \ logs.\n\nReference: docs/plans/2026-02-18-spec-aware-validator-with-e2e-logging-design.md\n\
       \nSteps:\n1. Read .claude/agents/validator.md and .claude/agents/issue-verifier.md\n\
@@ -215,6 +239,7 @@ sections:
       \ when done.\n\n3. Git commit:\n   git add .claude/agents/e2e-analyzer.md\n\
       \   git commit -m \"feat: add e2e-analyzer agent for test log analysis\"\n\n\
       Files: .claude/agents/e2e-analyzer.md\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T20:24:59.923360'
     model_used: sonnet
@@ -223,6 +248,8 @@ sections:
       and full analysis body covering summary reports, flaky test detection, regression
       detection, and run comparison. Committed as feat: add e2e-analyzer agent for
       test log analysis.'
+=======
+>>>>>>> Stashed changes
 - id: phase-3
   name: Phase 3 - Unit Tests
   status: completed
@@ -257,6 +284,7 @@ sections:
       \ block is skipped (returns empty list)\n\n3. Run the tests:\n   ~/.pyenv/versions/3.11.*/bin/python\
       \ -m pytest tests/test_plan_orchestrator.py -v -k parse_verification\n   Fix\
       \ any failures before marking this task complete.\n\nFiles: tests/test_plan_orchestrator.py\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T20:26:51.813579'
     model_used: sonnet
@@ -264,6 +292,8 @@ sections:
     result_message: Added 6 unit tests for parse_verification_blocks() covering single
       testable block, multiple blocks, no blocks, multiple test files, blocked type,
       and missing fields. All 38 tests pass.
+=======
+>>>>>>> Stashed changes
   - id: '3.2'
     name: Add unit tests for spec-aware build_validation_prompt
     agent: coder
@@ -294,6 +324,7 @@ sections:
       \ \"Verdict: PASS\"\n\n4. Run the tests:\n   ~/.pyenv/versions/3.11.*/bin/python\
       \ -m pytest tests/test_plan_orchestrator.py -v -k spec\n   Fix any failures\
       \ before marking this task complete.\n\nFiles: tests/test_plan_orchestrator.py\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T20:29:50.275640'
     model_used: sonnet
@@ -301,6 +332,8 @@ sections:
     result_message: 'Added 3 unit tests for build_validation_prompt: spec context
       present when SPEC_DIR set, absent when empty, and standard checks still present
       alongside spec context. All 41 tests pass.'
+=======
+>>>>>>> Stashed changes
 - id: phase-4
   name: Phase 4 - Plugin Version Bump
   status: completed
@@ -324,6 +357,7 @@ sections:
       \ specs with testable verification blocks.\n4. Git commit both files:\n   git\
       \ add plugin.json RELEASE-NOTES.md\n   git commit -m \"chore: bump version for\
       \ spec-aware-validator feature\"\n\nFiles: plugin.json, RELEASE-NOTES.md\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T20:34:30.258989'
     model_used: sonnet
@@ -332,6 +366,8 @@ sections:
       1.3.0 release notes entry covering spec-aware validator, e2e-analyzer agent,
       and verification block template. Resolved stale merge conflict in YAML plan.
       Committed all changes.
+=======
+>>>>>>> Stashed changes
 - id: phase-5
   name: Phase 5 - Final Verification
   status: completed
@@ -367,6 +403,7 @@ sections:
       \nIf any check fails, report the specific failure with details.\n\nFiles: scripts/plan-orchestrator.py,\
       \ .claude/agents/validator.md,\n  .claude/agents/e2e-analyzer.md, docs/templates/verification-block.md,\n\
       \  tests/test_plan_orchestrator.py, plugin.json, RELEASE-NOTES.md\n"
+<<<<<<< Updated upstream
     attempts: 1
     last_attempt: '2026-02-18T20:36:17.205206'
     model_used: sonnet
@@ -375,3 +412,5 @@ sections:
       SPEC_DIR/E2E_COMMAND/parse_verification_blocks verified, validator.md has Spec-Aware
       section, e2e-analyzer.md exists, verification-block.md template exists, dry-run
       exits 0'
+=======
+>>>>>>> Stashed changes
