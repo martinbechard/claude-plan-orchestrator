@@ -602,6 +602,12 @@ identity:
     qa: MyProject-QA
 ```
 
+**Next.js projects:** Set `build_command` to clear the `.next` cache before building. Next.js caches compiled chunks aggressively, and stale cache from a previous build can cause phantom build failures after code changes, wasting tokens on unnecessary debugging retries:
+
+```yaml
+build_command: "rm -rf .next && pnpm run build"
+```
+
 ### Slack Configuration
 
 Slack credentials and preferences are stored in `.claude/slack.local.yaml` (created by `scripts/setup-slack.py`):
