@@ -116,6 +116,11 @@ class TestIsDefect:
         state = {}
         assert is_defect(state) == NODE_ARCHIVE
 
+    def test_quota_exhausted_routes_end(self):
+        # quota_exhausted takes priority over item_type — item must stay on disk
+        state = _make_state(item_type="defect", quota_exhausted=True)
+        assert is_defect(state) == END
+
 
 class TestCyclesExhausted:
     """cycles_exhausted returns True only when verification_cycle >= MAX."""

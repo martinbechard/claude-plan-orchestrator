@@ -142,6 +142,11 @@ class TestCircuitCheck:
         state = _make_state(consecutive_failures=None)
         assert circuit_check(state) == ROUTE_CONTINUE
 
+    def test_quota_exhausted_routes_circuit_break(self):
+        # quota_exhausted takes priority — circuit breaks even with zero failures
+        state = _make_state(quota_exhausted=True, consecutive_failures=0)
+        assert circuit_check(state) == ROUTE_CIRCUIT_BREAK
+
 
 # ─── Tests: retry_check ───────────────────────────────────────────────────────
 

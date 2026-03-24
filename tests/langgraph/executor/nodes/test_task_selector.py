@@ -343,6 +343,15 @@ class TestFindNextTaskNode:
 
         assert result["current_task_id"] == "1.2"
 
+    def test_quota_exhausted_stops_task_selection(self):
+        # Supplying plan_data directly avoids disk I/O — quota guard fires before task scan
+        plan = _make_plan(_make_task("1.1"))
+        state = _make_state(quota_exhausted=True, plan_data=plan)
+
+        result = find_next_task(state)
+
+        assert result["current_task_id"] is None
+
     def test_plan_data_returned_in_result(self, tmp_path):
         plan = _make_plan(_make_task("1.1"))
         plan_file = tmp_path / "plan.yaml"
