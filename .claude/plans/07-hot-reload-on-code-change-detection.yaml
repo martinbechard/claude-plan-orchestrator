@@ -1,11 +1,10 @@
 meta:
   name: 'Feature: Hot-Reload Pipeline on Source Code Change Detection'
-  description: >-
-    Port the CodeChangeMonitor hot-reload mechanism from scripts/auto-pipeline.py to the
-    LangGraph pipeline. Adds a new langgraph_pipeline/shared/hot_reload.py module with
-    SHA-256 file hashing, background CodeChangeMonitor thread, and os.execv restart.
-    Wires the monitor into cli.py's continuous scan loop so code changes trigger a clean
-    self-restart at the next safe inter-item boundary.
+  description: Port the CodeChangeMonitor hot-reload mechanism from scripts/auto-pipeline.py
+    to the LangGraph pipeline. Adds a new langgraph_pipeline/shared/hot_reload.py
+    module with SHA-256 file hashing, background CodeChangeMonitor thread, and os.execv
+    restart. Wires the monitor into cli.py's continuous scan loop so code changes
+    trigger a clean self-restart at the next safe inter-item boundary.
   plan_doc: docs/plans/2026-03-24-07-hot-reload-on-code-change-detection-design.md
   source_item: docs/feature-backlog/07-hot-reload-on-code-change-detection.md
   created: '2026-03-24'
@@ -13,71 +12,115 @@ meta:
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
 sections:
-  - id: phase-1
-    name: Phase 1 - hot_reload shared module
+- id: phase-1
+  name: Phase 1 - hot_reload shared module
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Create langgraph_pipeline/shared/hot_reload.py
+    agent: coder
+    status: in_progress
+    description: 'Implement the work item: docs/feature-backlog/07-hot-reload-on-code-change-detection.md
+      Design doc: docs/plans/2026-03-24-07-hot-reload-on-code-change-detection-design.md
+
+
+      Create langgraph_pipeline/shared/hot_reload.py containing all hot-reload utilities
+      ported from scripts/auto-pipeline.py:
+
+      - CODE_CHANGE_POLL_INTERVAL_SECONDS constant
+
+      - HOT_RELOAD_WATCHED_FILES list (all .py under langgraph_pipeline/ + scripts/auto-pipeline.py)
+
+      - _compute_file_hash(filepath) function
+
+      - snapshot_source_hashes() function
+
+      - check_code_changed(baseline) function
+
+      - CodeChangeMonitor class (daemon thread, restart_pending event)
+
+      - _perform_restart(code_monitor) function using os.execv
+
+
+      The existing implementation in scripts/auto-pipeline.py is the reference. Run
+      python -m py_compile on the new file and pytest to verify no regressions.'
+    last_attempt: '2026-03-24T17:57:12.554473'
+    attempts: 1
+    model_used: sonnet
+- id: phase-2
+  name: Phase 2 - Wire monitor into cli.py
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Integrate CodeChangeMonitor into _run_scan_loop in cli.py
+    agent: coder
     status: pending
-    tasks:
-      - id: '1.1'
-        name: Create langgraph_pipeline/shared/hot_reload.py
-        agent: coder
-        status: pending
-        description: "Implement the work item: docs/feature-backlog/07-hot-reload-on-code-change-detection.md\
-          \ Design doc: docs/plans/2026-03-24-07-hot-reload-on-code-change-detection-design.md\n\
-          \nCreate langgraph_pipeline/shared/hot_reload.py containing all hot-reload\
-          \ utilities ported from scripts/auto-pipeline.py:\n- CODE_CHANGE_POLL_INTERVAL_SECONDS\
-          \ constant\n- HOT_RELOAD_WATCHED_FILES list (all .py under langgraph_pipeline/\
-          \ + scripts/auto-pipeline.py)\n- _compute_file_hash(filepath) function\n\
-          - snapshot_source_hashes() function\n- check_code_changed(baseline) function\n\
-          - CodeChangeMonitor class (daemon thread, restart_pending event)\n- _perform_restart(code_monitor)\
-          \ function using os.execv\n\nThe existing implementation in scripts/auto-pipeline.py\
-          \ is the reference. Run python -m py_compile on the new file and pytest to\
-          \ verify no regressions."
-  - id: phase-2
-    name: Phase 2 - Wire monitor into cli.py
+    description: 'Implement the work item: docs/feature-backlog/07-hot-reload-on-code-change-detection.md
+      Design doc: docs/plans/2026-03-24-07-hot-reload-on-code-change-detection-design.md
+
+
+      Modify langgraph_pipeline/cli.py to integrate the CodeChangeMonitor:
+
+      1. Import CodeChangeMonitor and _perform_restart from langgraph_pipeline.shared.hot_reload
+
+      2. In _run_scan_loop: create and start CodeChangeMonitor before the while loop
+
+      3. After each graph.invoke() and after the quota-probe loop, check code_monitor.restart_pending.is_set()
+      and call _perform_restart(code_monitor) if True
+
+      4. Stop the monitor in the finally block
+
+      5. Update the startup banner to mention hot-reload is active in continuous mode
+
+
+      Restart must only occur between complete graph invocations (never mid-task).
+      Run pytest to verify no regressions.'
+- id: phase-3
+  name: Phase 3 - Tests
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Add unit tests in tests/test_hot_reload.py
+    agent: coder
     status: pending
-    tasks:
-      - id: '2.1'
-        name: Integrate CodeChangeMonitor into _run_scan_loop in cli.py
-        agent: coder
-        status: pending
-        description: "Implement the work item: docs/feature-backlog/07-hot-reload-on-code-change-detection.md\
-          \ Design doc: docs/plans/2026-03-24-07-hot-reload-on-code-change-detection-design.md\n\
-          \nModify langgraph_pipeline/cli.py to integrate the CodeChangeMonitor:\n\
-          1. Import CodeChangeMonitor and _perform_restart from langgraph_pipeline.shared.hot_reload\n\
-          2. In _run_scan_loop: create and start CodeChangeMonitor before the while loop\n\
-          3. After each graph.invoke() and after the quota-probe loop, check\
-          \ code_monitor.restart_pending.is_set() and call _perform_restart(code_monitor)\
-          \ if True\n4. Stop the monitor in the finally block\n5. Update the startup\
-          \ banner to mention hot-reload is active in continuous mode\n\nRestart must\
-          \ only occur between complete graph invocations (never mid-task). Run pytest\
-          \ to verify no regressions."
-  - id: phase-3
-    name: Phase 3 - Tests
-    status: pending
-    tasks:
-      - id: '3.1'
-        name: Add unit tests in tests/test_hot_reload.py
-        agent: coder
-        status: pending
-        description: "Implement the work item: docs/feature-backlog/07-hot-reload-on-code-change-detection.md\
-          \ Design doc: docs/plans/2026-03-24-07-hot-reload-on-code-change-detection-design.md\n\
-          \nCreate tests/test_hot_reload.py with unit tests for langgraph_pipeline/shared/hot_reload.py.\n\
-          \nUse the existing tests/test_auto_pipeline.py tests for CodeChangeMonitor\
-          \ and file hashing as the reference (they cover the same logic). Follow\
-          \ the same pytest conventions, tempfile usage, and monkeypatching patterns\
-          \ as that file.\n\nRequired test cases:\n- _compute_file_hash returns consistent\
-          \ SHA-256 for known content\n- _compute_file_hash returns empty string for\
-          \ missing file\n- snapshot_source_hashes captures hashes for a known file\
-          \ list\n- check_code_changed returns False when files are unchanged\n- check_code_changed\
-          \ returns True after file modification\n- CodeChangeMonitor starts and stops\
-          \ cleanly\n- CodeChangeMonitor detects file modifications and sets restart_pending\n\
-          - CodeChangeMonitor does not set restart_pending when files are unchanged\n\
-          - CodeChangeMonitor uses CODE_CHANGE_POLL_INTERVAL_SECONDS as default poll_interval\n\
-          \nAll tests must pass. Run pytest tests/test_hot_reload.py -v to verify."
+    description: 'Implement the work item: docs/feature-backlog/07-hot-reload-on-code-change-detection.md
+      Design doc: docs/plans/2026-03-24-07-hot-reload-on-code-change-detection-design.md
+
+
+      Create tests/test_hot_reload.py with unit tests for langgraph_pipeline/shared/hot_reload.py.
+
+
+      Use the existing tests/test_auto_pipeline.py tests for CodeChangeMonitor and
+      file hashing as the reference (they cover the same logic). Follow the same pytest
+      conventions, tempfile usage, and monkeypatching patterns as that file.
+
+
+      Required test cases:
+
+      - _compute_file_hash returns consistent SHA-256 for known content
+
+      - _compute_file_hash returns empty string for missing file
+
+      - snapshot_source_hashes captures hashes for a known file list
+
+      - check_code_changed returns False when files are unchanged
+
+      - check_code_changed returns True after file modification
+
+      - CodeChangeMonitor starts and stops cleanly
+
+      - CodeChangeMonitor detects file modifications and sets restart_pending
+
+      - CodeChangeMonitor does not set restart_pending when files are unchanged
+
+      - CodeChangeMonitor uses CODE_CHANGE_POLL_INTERVAL_SECONDS as default poll_interval
+
+
+      All tests must pass. Run pytest tests/test_hot_reload.py -v to verify.'
