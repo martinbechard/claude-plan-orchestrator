@@ -1,0 +1,31 @@
+meta:
+  name: 'Defect Fix: Worktree copy-back restores files deleted in main since worktree creation'
+  description: >
+    Guard copy_worktree_artifacts in git.py so that files deleted from main
+    after the worktree was created are not silently restored when the worktree
+    results are copied back. Uses git cat-file -e to check existence at the
+    fork point and at current HEAD before copying each file.
+  plan_doc: docs/plans/2026-03-24-02-worktree-copy-back-restores-files-deleted-in-main-since-worktree-creation-design.md
+  source_item: "docs/defect-backlog/02-worktree-copy-back-restores-files-deleted-in-main-since-worktree-creation.md"
+  created: '2026-03-24'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+      - coder
+      - e2e-test-agent
+      - frontend-coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+
+sections:
+  - id: phase-1
+    name: Phase 1 - Fix and Tests
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: Guard copy-back against files deleted from main post-fork
+        agent: coder
+        status: pending
+        description: "Implement the fix and tests described in the work item and design doc:\ndocs/defect-backlog/02-worktree-copy-back-restores-files-deleted-in-main-since-worktree-creation.md\ndocs/plans/2026-03-24-02-worktree-copy-back-restores-files-deleted-in-main-since-worktree-creation-design.md"
