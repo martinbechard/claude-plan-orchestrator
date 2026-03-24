@@ -36,10 +36,16 @@ from langgraph_pipeline.shared.paths import STATUS_FILE_PATH, TASK_LOG_DIR
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
+import logging
+
 CLAUDE_TIMEOUT_SECONDS = 900      # 15 minutes per task
 DEFAULT_AGENTS_DIR = ".claude/agents"
 DEFAULT_BUILD_COMMAND = "pnpm run build"
+DEFAULT_DEV_SERVER_PORT = 3000
+DEFAULT_DEV_SERVER_COMMAND = "pnpm dev"
 STRIPPED_ENV_VAR = "CLAUDECODE"   # removed so Claude can spawn from Claude Code
+
+logger = logging.getLogger(__name__)
 
 # Status values the agent writes to task-status.json
 _STATUS_COMPLETED = "completed"
@@ -347,6 +353,52 @@ def _read_status_file() -> Optional[dict]:
         return None
 
 
+# ─── Dev Server Management ───────────────────────────────────────────────────
+
+
+def _stop_dev_server(port: int) -> None:
+    """Kill any process listening on the configured dev server port.
+
+    Uses lsof to find the PID and sends SIGTERM. Non-fatal if nothing
+    is running on the port or if the kill fails.
+    """
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        pids = result.stdout.strip()
+        if not pids:
+            return
+        for pid in pids.splitlines():
+            pid = pid.strip()
+            if pid:
+                subprocess.run(["kill", pid], capture_output=True, timeout=5)
+        logger.info("Stopped dev server on port %d (PIDs: %s)", port, pids.replace("\n", ", "))
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        logger.debug("Could not stop dev server on port %d: %s", port, exc)
+
+
+def _start_dev_server(command: str, port: int) -> None:
+    """Start the dev server in the background.
+
+    Spawns the command as a detached subprocess. Non-fatal if the command
+    fails to start.
+    """
+    try:
+        subprocess.Popen(
+            command,
+            shell=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        logger.info("Started dev server: %s (port %d)", command, port)
+    except OSError as exc:
+        logger.warning("Could not start dev server: %s", exc)
+
+
 # ─── Node ─────────────────────────────────────────────────────────────────────
 
 
@@ -408,11 +460,16 @@ def execute_task(state: TaskState) -> dict:
     config = load_orchestrator_config()
     build_command = config.get("build_command", DEFAULT_BUILD_COMMAND)
     agents_dir = config.get("agents_dir", DEFAULT_AGENTS_DIR)
+    dev_server_port = int(config.get("dev_server_port", DEFAULT_DEV_SERVER_PORT))
+    dev_server_command = config.get("dev_server_command", DEFAULT_DEV_SERVER_COMMAND)
     prompt = _build_prompt(plan_data, section, task, plan_path, task_attempt, build_command, agents_dir)
 
     # Map tier to full model name for --model flag
     model_cli_name = MODEL_TIER_TO_CLI_NAME.get(effective_model, effective_model)
     print(f"[execute_task] Running task {task_id!r} with model {model_cli_name!r}")
+
+    # Stop dev server before task execution to avoid cache/runtime conflicts
+    _stop_dev_server(dev_server_port)
 
     # Execute Claude CLI
     _exec_start = time.time()
@@ -464,6 +521,9 @@ def execute_task(state: TaskState) -> dict:
         new_failures = state.get("consecutive_failures") or 0
     else:
         new_failures = record_failure(state.get("consecutive_failures") or 0)
+
+    # Restart dev server after task execution
+    _start_dev_server(dev_server_command, dev_server_port)
 
     task_result = TaskResult(
         task_id=task_id,
