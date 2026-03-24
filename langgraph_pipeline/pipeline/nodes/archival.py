@@ -14,9 +14,13 @@ The archive node handles three outcome types:
   - Defect with FAIL verification and exhausted cycles: marked as exhausted.
 """
 
+import logging
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
@@ -119,6 +123,38 @@ def _build_slack_message(
     return msg, SLACK_LEVEL_SUCCESS
 
 
+def _git_commit_archival(item_slug: str, item_type: str, outcome: str) -> None:
+    """Stage and commit archival changes (moved/deleted files) to git.
+
+    Stages the completed-backlog destination, deleted backlog source, and
+    deleted plan YAML. If there are no staged changes, no commit is created.
+    """
+    try:
+        # Stage all archival-related paths
+        subprocess.run(
+            ["git", "add", "-A",
+             "docs/completed-backlog/", "docs/defect-backlog/",
+             "docs/feature-backlog/", ".claude/plans/"],
+            capture_output=True, timeout=10,
+        )
+        # Check if there's anything staged
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            capture_output=True, timeout=10,
+        )
+        if result.returncode == 0:
+            return  # Nothing staged
+
+        message = f"chore: archive {item_type} {item_slug} ({outcome})"
+        subprocess.run(
+            ["git", "commit", "-m", message],
+            capture_output=True, timeout=10,
+        )
+        logger.info("Committed archival: %s", message)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        logger.warning("Git commit for archival failed (non-fatal): %s", exc)
+
+
 # ─── Node ─────────────────────────────────────────────────────────────────────
 
 
@@ -159,6 +195,9 @@ def archive(state: PipelineState) -> dict:
     message, level = _build_slack_message(item_name, item_type, outcome)
     notifier = SlackNotifier()
     notifier.send_status(message, level=level)
+
+    # Step 4: Commit archival changes to git.
+    _git_commit_archival(item_slug, item_type, outcome)
 
     add_trace_metadata({
         "node_name": "archive",
