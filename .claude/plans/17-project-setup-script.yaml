@@ -84,6 +84,8 @@ sections:
     result_message: Implemented configure_interactive(), check_chrome_mcp(), setup_slack_via_mcp(),
       run_smoke_test() and wired all phases into main() with --no-slack and --no-claude
       flag support. Syntax verified.
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
 - id: phase-3
   name: Phase 3 - Unit tests for file scaffolding
   status: pending
@@ -93,7 +95,7 @@ sections:
     agent: coder
     depends_on:
     - '2.1'
-    status: pending
+    status: completed
     description: "Implement the work item: .claude/plans/.claimed/17-project-setup-script.md\n\
       Design reference: docs/plans/2026-03-25-17-project-setup-script-design.md\n\
       This task adds unit tests for the file scaffolding logic in setup-project.py.\n\
@@ -108,3 +110,9 @@ sections:
       \ .gitkeep not added\n   when backlog dir already exists\nUse tmp_path to build\
       \ a minimal fake source tree and an empty target directory.\nRun tests and fix\
       \ any failures.\nFiles: tests/test_setup_project.py\n"
+    last_attempt: '2026-03-25T18:22:41.064289'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-25T18:24:31.960042'
+    result_message: Created tests/test_setup_project.py with 8 unit tests covering
+      all Phase 1 scaffolding logic. All tests pass.
