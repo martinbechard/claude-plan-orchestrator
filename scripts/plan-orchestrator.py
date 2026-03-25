@@ -69,6 +69,7 @@ UX_DESIGN_MAX_ROUNDS = 3
 DEFAULT_PLAN_PATH = ".claude/plans/pipeline-optimization.yaml"
 STATUS_FILE_PATH = ".claude/plans/task-status.json"
 TASK_LOG_DIR = Path(".claude/plans/logs")
+COST_LOG_DIR = Path("docs/reports/execution-costs")
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
 SUSPENDED_DIR = ".claude/suspended"
 SUSPENSION_TIMEOUT_MINUTES = 1440  # 24 hours default
@@ -907,6 +908,15 @@ class TaskUsage:
 
 
 @dataclass
+class ToolCallRecord:
+    """A single tool call made during a Claude task execution."""
+    tool: str
+    file_path: Optional[str] = None   # for Read/Edit/Write/Grep/Glob
+    command: Optional[str] = None     # for Bash
+    result_bytes: Optional[int] = None  # bytes returned by tool_result
+
+
+@dataclass
 class TaskResult:
     """Result of a task execution."""
     success: bool
@@ -917,15 +927,7 @@ class TaskResult:
     suspended: bool = False
     rate_limit_reset_time: Optional[datetime] = None
     usage: Optional[TaskUsage] = None
-
-
-@dataclass
-class ToolCallRecord:
-    """A single tool call made during a Claude task execution."""
-    tool: str
-    file_path: Optional[str] = None   # for Read/Edit/Write/Grep/Glob
-    command: Optional[str] = None     # for Bash
-    result_bytes: Optional[int] = None  # bytes returned by tool_result
+    tool_calls: Optional[list[ToolCallRecord]] = None
 
 
 def parse_task_usage(result_data: dict) -> TaskUsage:
@@ -948,6 +950,58 @@ def parse_task_usage(result_data: dict) -> TaskUsage:
         num_turns=result_data.get("num_turns", 0),
         duration_api_ms=result_data.get("duration_api_ms", 0),
     )
+
+
+def write_execution_cost_log(
+    item_slug: str,
+    item_type: str,
+    task_id: str,
+    agent_type: str,
+    model: str,
+    usage: TaskUsage,
+    duration_s: float,
+    tool_calls: list[ToolCallRecord],
+) -> None:
+    """Append a per-task cost record to docs/reports/execution-costs/<item_slug>.json.
+
+    Creates the log file on the first call for a given item_slug with the outer
+    structure (item_slug, item_type, tasks[]). On subsequent calls, loads the
+    existing file, appends the new task record, and writes it back atomically.
+
+    Design: docs/plans/2026-03-24-12-structured-execution-cost-log-and-analysis-design.md
+    """
+    COST_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_path = COST_LOG_DIR / f"{item_slug}.json"
+
+    if log_path.exists():
+        with open(log_path, "r", encoding="utf-8") as f:
+            log_data = json.load(f)
+    else:
+        log_data = {"item_slug": item_slug, "item_type": item_type, "tasks": []}
+
+    tool_call_dicts = [
+        {k: v for k, v in {
+            "tool": tc.tool,
+            "file_path": tc.file_path,
+            "command": tc.command,
+            "result_bytes": tc.result_bytes,
+        }.items() if v is not None}
+        for tc in tool_calls
+    ]
+
+    log_data["tasks"].append({
+        "task_id": task_id,
+        "agent_type": agent_type,
+        "model": model,
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "cost_usd": usage.total_cost_usd,
+        "duration_s": round(duration_s, 1),
+        "tool_calls": tool_call_dicts,
+    })
+
+    with open(log_path, "w", encoding="utf-8") as f:
+        json.dump(log_data, f, indent=2)
 
 
 class PlanUsageTracker:
@@ -3578,6 +3632,7 @@ def run_claude_task(prompt: str, dry_run: bool = False, model: str = "", agent_n
                 pass  # Non-JSON output, no usage data available
 
         task_usage = parse_task_usage(result_capture) if result_capture else None
+        task_tool_calls: list[ToolCallRecord] = result_capture.get("tool_calls", []) if result_capture else []
 
         # Save output to log file for debugging
         log_file = TASK_LOG_DIR / f"task-{datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
@@ -3620,7 +3675,8 @@ def run_claude_task(prompt: str, dry_run: bool = False, model: str = "", agent_n
                     duration_seconds=duration,
                     rate_limited=True,
                     rate_limit_reset_time=reset_time,
-                    usage=task_usage
+                    usage=task_usage,
+                    tool_calls=task_tool_calls
                 )
 
             error_msg = stderr_collector.get_output()[:500] if stderr_collector.bytes_received > 0 else "Unknown error"
@@ -3628,7 +3684,8 @@ def run_claude_task(prompt: str, dry_run: bool = False, model: str = "", agent_n
                 success=False,
                 message=f"Claude exited with code {returncode}: {error_msg}",
                 duration_seconds=duration,
-                usage=task_usage
+                usage=task_usage,
+                tool_calls=task_tool_calls
             )
 
         # Check the status file for task result
@@ -3649,7 +3706,8 @@ def run_claude_task(prompt: str, dry_run: bool = False, model: str = "", agent_n
                 message=status.get("message", "Task completed"),
                 duration_seconds=duration,
                 plan_modified=plan_modified,
-                usage=task_usage
+                usage=task_usage,
+                tool_calls=task_tool_calls
             )
         elif status and status.get("status") == "suspended":
             verbose_log("Task status: SUSPENDED", "STATUS")
@@ -3659,7 +3717,8 @@ def run_claude_task(prompt: str, dry_run: bool = False, model: str = "", agent_n
                 message=status.get("message", "Task suspended"),
                 duration_seconds=duration,
                 plan_modified=plan_modified,
-                usage=task_usage
+                usage=task_usage,
+                tool_calls=task_tool_calls
             )
         elif status and status.get("status") == "failed":
             verbose_log("Task status: FAILED", "STATUS")
@@ -3668,7 +3727,8 @@ def run_claude_task(prompt: str, dry_run: bool = False, model: str = "", agent_n
                 message=status.get("message", "Task failed"),
                 duration_seconds=duration,
                 plan_modified=plan_modified,
-                usage=task_usage
+                usage=task_usage,
+                tool_calls=task_tool_calls
             )
         else:
             verbose_log("Task status: UNKNOWN (no status file)", "STATUS")
@@ -3677,7 +3737,8 @@ def run_claude_task(prompt: str, dry_run: bool = False, model: str = "", agent_n
                 success=False,
                 message="No status file written by Claude",
                 duration_seconds=duration,
-                usage=task_usage
+                usage=task_usage,
+                tool_calls=task_tool_calls
             )
 
     except subprocess.TimeoutExpired:
@@ -6429,6 +6490,16 @@ def run_orchestrator(
             if task_result.usage:
                 usage_tracker.record(task_id, task_result.usage, model=effective_model)
                 print(usage_tracker.format_summary_line(task_id))
+                write_execution_cost_log(
+                    item_slug=Path(plan_path).stem,
+                    item_type=meta.get("item_type", "feature"),
+                    task_id=task_id,
+                    agent_type=agent_name,
+                    model=effective_model,
+                    usage=task_result.usage,
+                    duration_s=task_result.duration_seconds,
+                    tool_calls=task_result.tool_calls or [],
+                )
 
             if budget_config.is_enabled:
                 print(budget_guard.format_status())
