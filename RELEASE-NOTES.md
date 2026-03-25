@@ -1,5 +1,18 @@
 # Release Notes
 
+## 1.9.2 (2026-03-25)
+
+### Fixes
+- **Prevent duplicate worker spawning:** `claim_item()` now detects when the source
+  path equals the claimed path and skips the redundant move, preventing the supervisor
+  from spawning two workers for the same item.
+- **Filter in-progress items from backlog scan:** `scan_backlog()` now excludes paths
+  under `CLAIMED_DIR` so items already being processed are not re-claimed in a
+  subsequent scan cycle.
+- **Restore orphans to correct backlog directory:** A item-type sidecar file is written
+  at claim time so the orphan unclaim logic knows which backlog directory to restore
+  the item to, rather than defaulting to the wrong location.
+
 ## 1.9.1 (2026-03-25)
 
 ### Fixes
