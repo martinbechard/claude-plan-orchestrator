@@ -16,7 +16,7 @@ DEFAULT_TEST_COMMAND = "pnpm test"
 DEFAULT_DEV_SERVER_COMMAND = "pnpm dev"
 DEFAULT_AGENTS_DIR = ".claude/agents/"
 DEFAULT_E2E_COMMAND = "npx playwright test"
-DEFAULT_MAX_PARALLEL_ITEMS = 1
+DEFAULT_MAX_PARALLEL_ITEMS = 4
 
 
 def get_max_parallel_items(config: dict) -> int:
