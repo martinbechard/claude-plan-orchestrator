@@ -30,6 +30,11 @@ BACKLOG_DIRS = {
     "analysis": ANALYSIS_DIR,
 }
 
+# ─── Ideas intake directories ─────────────────────────────────────────────────
+
+IDEAS_DIR = "docs/ideas"
+IDEAS_PROCESSED_DIR = "docs/ideas/processed"
+
 # ─── Parallel item processing ─────────────────────────────────────────────────
 
 CLAIMED_DIR = ".claude/plans/.claimed"
