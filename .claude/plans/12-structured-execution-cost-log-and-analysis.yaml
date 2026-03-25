@@ -174,12 +174,14 @@ sections:
       Files: tests/test_execution_cost_log.py
 
       '
-    last_attempt: '2026-03-24T21:17:03.069102'
-    attempts: 1
-    model_used: sonnet
-    completed_at: '2026-03-24T21:18:40.458388'
-    result_message: 'Created tests/test_execution_cost_log.py with 17 unit tests covering
-      all 5 required scopes: (a) ToolCallRecord creation with/without optional fields,
-      (b) write_execution_cost_log first-call file creation with correct structure,
-      (c) append on subsequent calls, (d) tool_use/tool_result pairing with result_bytes,
-      (e) item slug from plan path stem. All 17 tests pass.'
+    last_attempt: '2026-03-24T21:19:59.826926'
+    attempts: 2
+    model_used: opus
+    completed_at: '2026-03-24T21:20:35.009288'
+    result_message: 'All 17 unit tests pass covering: (a) ToolCallRecord with/without
+      optional fields, (b) write_execution_cost_log first-call file creation, (c)
+      append on subsequent calls, (d) tool_use/tool_result pairing with result_bytes,
+      (e) item slug from plan path stem, plus _make_tool_call_record field mapping.'
+    validation_attempts: 1
+    validation_findings: 'Validator ''validator'' failed to execute: No status file
+      written by Claude'
