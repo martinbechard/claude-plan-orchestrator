@@ -93,7 +93,7 @@ sections:
   - id: '3.1'
     name: Create FastAPI router and mount it in server.py
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '2.1'
     description: "Implement the work item: .claude/plans/.claimed/14-langsmith-tracing-proxy.md\n\
@@ -114,6 +114,12 @@ sections:
     last_attempt: '2026-03-25T00:38:24.718263'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-25T00:43:03.833546'
+    result_message: Created langgraph_pipeline/web/routes/proxy.py (GET /proxy and
+      GET /proxy/{run_id} endpoints, 404 when proxy disabled) and updated server.py
+      create_app() to accept config and conditionally mount proxy router when web.proxy.enabled
+      is true. orchestrator-config.yaml web.proxy section skipped (file is access-controlled).
+      Import verified. All 49 tests pass.
 - id: phase-4
   name: Phase 4 - HTML templates
   status: pending
