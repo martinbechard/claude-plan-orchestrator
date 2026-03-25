@@ -46,6 +46,7 @@ INTAKE_CLARITY_THRESHOLD = 3
 
 # Timeout for Claude subprocess calls during intake analysis.
 INTAKE_ANALYSIS_TIMEOUT_SECONDS = 120
+INTAKE_MODEL = "claude-haiku-4-5-20251001"  # Haiku sufficient for classification tasks
 
 # Similarity threshold for RAG deduplication (0.0 – 1.0).
 RAG_SIMILARITY_THRESHOLD = 0.75
@@ -164,7 +165,7 @@ def _invoke_claude(prompt: str, timeout: int = INTAKE_ANALYSIS_TIMEOUT_SECONDS) 
     """
     try:
         result = subprocess.run(
-            ["claude", "--print", prompt],
+            ["claude", "--model", INTAKE_MODEL, "--print", prompt],
             capture_output=True,
             text=True,
             timeout=timeout,

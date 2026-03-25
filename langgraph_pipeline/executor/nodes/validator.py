@@ -45,6 +45,10 @@ MODEL_TIER_TO_CLI_NAME: dict[str, str] = {
     "opus": "claude-opus-4-6",
 }
 
+# Validators must be at least sonnet — haiku is not reliable enough for judging.
+VALIDATOR_MODEL_FLOOR = "sonnet"
+MODEL_TIER_ORDER = ("haiku", "sonnet", "opus")
+
 # Task status that qualifies for validation
 _TASK_STATUS_COMPLETED = "completed"
 
@@ -277,7 +281,13 @@ def validate_task(state: TaskState) -> dict:
     plan_data: dict = state.get("plan_data") or {}
     plan_path: str = state["plan_path"]
     task_attempt: int = state.get("task_attempt") or 1
-    effective_model: str = state.get("effective_model") or "sonnet"
+    task_model: str = state.get("effective_model") or "sonnet"
+    # Enforce sonnet as the minimum model for validation — haiku is not reliable as a judge.
+    effective_model = (
+        task_model
+        if MODEL_TIER_ORDER.index(task_model) >= MODEL_TIER_ORDER.index(VALIDATOR_MODEL_FLOOR)
+        else VALIDATOR_MODEL_FLOOR
+    )
 
     validation_config = plan_data.get("meta", {}).get("validation", {})
     if not validation_config.get("enabled", False):

@@ -31,8 +31,8 @@ from langgraph_pipeline.worker import _write_result
 
 
 class TestGetMaxParallelItems:
-    def test_default_is_one(self):
-        assert DEFAULT_MAX_PARALLEL_ITEMS == 1
+    def test_default_is_four(self):
+        assert DEFAULT_MAX_PARALLEL_ITEMS == 4
 
     def test_default_when_pipeline_key_absent(self):
         assert get_max_parallel_items({}) == DEFAULT_MAX_PARALLEL_ITEMS

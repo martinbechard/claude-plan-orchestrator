@@ -32,6 +32,7 @@ CLAUDE_BINARY = "claude"
 DESIGN_DIR = "docs/plans"
 DESIGN_DOC_DATE_FORMAT = "%Y-%m-%d"
 PLAN_CREATION_TIMEOUT_SECONDS = 600
+PLANNER_MODEL = "claude-sonnet-4-6"  # Design quality requires sonnet minimum
 
 # Planner permission profile: reads, greps, globes, writes files, and runs shell commands.
 PLANNER_ALLOWED_TOOLS = ["Read", "Grep", "Glob", "Write", "Bash"]
@@ -118,6 +119,7 @@ def _build_planner_command(prompt: str) -> list[str]:
         cmd += ["--permission-mode", "acceptEdits"]
     else:
         cmd += ["--dangerously-skip-permissions"]
+    cmd += ["--model", PLANNER_MODEL]
     cmd += ["--print", prompt]
     return cmd
 
