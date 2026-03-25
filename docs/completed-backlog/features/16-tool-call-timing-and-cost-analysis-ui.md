@@ -75,5 +75,3 @@ the same data that improves over time as more items are processed.
 - `langgraph_pipeline/web/templates/analysis.html`
 - `langgraph_pipeline/web/static/analysis.js` (minimal: expand/collapse, sort)
 - `tests/langgraph/web/test_cost_log_reader.py`
-
-## LangSmith Trace: 995857e2-d4fd-4d14-89e0-7b4f0c30c35d
