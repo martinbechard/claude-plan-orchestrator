@@ -51,6 +51,20 @@ _tracing_configured = False
 _tracing_active = False
 
 
+def _get_tracing_proxy() -> Any:
+    """Return the active TracingProxy singleton, or None when unavailable.
+
+    Uses a lazy import so the web module is not required when the proxy
+    is not configured; any import error degrades silently to None.
+    """
+    try:
+        from langgraph_pipeline.web.proxy import get_proxy  # type: ignore[import]
+
+        return get_proxy()
+    except Exception:
+        return None
+
+
 # ─── Public API ───────────────────────────────────────────────────────────────
 
 
@@ -206,9 +220,44 @@ def emit_tool_call_traces(
             else:
                 child.end(outputs=record["tool_input"])
             child.post()
+            try:
+                proxy = _get_tracing_proxy()
+                if proxy is not None:
+                    child_end_iso: Optional[str] = None
+                    if duration_s is not None and start_time is not None:
+                        child_end_iso = (start_time + timedelta(seconds=duration_s)).isoformat()
+                    proxy.record_run(
+                        run_id=str(child.id),
+                        parent_run_id=str(parent.id),
+                        name=record["tool_name"] if is_tool else "assistant_text",
+                        inputs=record["tool_input"],
+                        outputs=record["tool_input"],
+                        metadata={**metadata, "timestamp": record["timestamp"]},
+                        error=None,
+                        start_time=start_time.isoformat() if start_time is not None else None,
+                        end_time=child_end_iso,
+                    )
+            except Exception as proxy_exc:
+                logger.debug("proxy record_run (child) failed (non-fatal): %s", proxy_exc)
 
         parent.end()
         parent.post()
+        try:
+            proxy = _get_tracing_proxy()
+            if proxy is not None:
+                proxy.record_run(
+                    run_id=str(parent.id),
+                    parent_run_id=parent_run_id,
+                    name=run_name,
+                    inputs={"task_metadata": metadata},
+                    outputs=None,
+                    metadata=metadata,
+                    error=None,
+                    start_time=None,
+                    end_time=None,
+                )
+        except Exception as proxy_exc:
+            logger.debug("proxy record_run (parent) failed (non-fatal): %s", proxy_exc)
 
     except ImportError:
         pass  # langsmith package not installed -- degrade silently
@@ -243,12 +292,30 @@ def create_root_run(item_slug: str, item_path: str) -> tuple[Any, Optional[str]]
         existing_id = _read_trace_id_from_file(item_path)
         if existing_id:
             run_tree = RunTree(id=existing_id, name=item_slug, run_type="chain")
-            return run_tree, existing_id
+            trace_id = existing_id
+        else:
+            trace_id = str(uuid.uuid4())
+            run_tree = RunTree(id=trace_id, name=item_slug, run_type="chain")
+            _write_trace_id_to_file(item_path, trace_id)
 
-        new_id = str(uuid.uuid4())
-        run_tree = RunTree(id=new_id, name=item_slug, run_type="chain")
-        _write_trace_id_to_file(item_path, new_id)
-        return run_tree, new_id
+        try:
+            proxy = _get_tracing_proxy()
+            if proxy is not None:
+                proxy.record_run(
+                    run_id=trace_id,
+                    parent_run_id=None,
+                    name=item_slug,
+                    inputs={"item_slug": item_slug, "item_path": item_path},
+                    outputs=None,
+                    metadata=None,
+                    error=None,
+                    start_time=None,
+                    end_time=None,
+                )
+        except Exception as proxy_exc:
+            logger.debug("proxy record_run (root) failed (non-fatal): %s", proxy_exc)
+
+        return run_tree, trace_id
 
     except ImportError:
         return None, None
@@ -278,6 +345,22 @@ def finalize_root_run(root_run_id: Optional[str], outputs: dict[str, Any]) -> No
         root_run = RunTree(id=root_run_id, name="root", run_type="chain")
         root_run.end(outputs=outputs)
         root_run.post()
+        try:
+            proxy = _get_tracing_proxy()
+            if proxy is not None:
+                proxy.record_run(
+                    run_id=root_run_id,
+                    parent_run_id=None,
+                    name="root",
+                    inputs=None,
+                    outputs=outputs,
+                    metadata=None,
+                    error=None,
+                    start_time=None,
+                    end_time=None,
+                )
+        except Exception as proxy_exc:
+            logger.debug("proxy record_run (finalize) failed (non-fatal): %s", proxy_exc)
 
     except ImportError:
         pass
