@@ -121,6 +121,13 @@ sections:
       filter links, per-item cost table with expand/collapse task detail rows (data-*
       attrs for analysis.js sort), wasted reads panel (hidden when empty), duration
       histogram note. Jinja2 syntax verified.'
+    validation_attempts: 1
+    validation_findings: 'analysis.html meets all task requirements: extends base.html,
+      no-data empty state, top_files_svg and agent_cost_svg inline SVG embeds, agent
+      filter links with active highlighting, per-item cost table with expand/collapse
+      task detail rows (analysis.js), wasted-reads panel hidden when empty, duration
+      histogram note. Jinja2 template syntax valid. Build passes. Pre-existing test
+      failures unrelated to this task.'
 - id: phase-3
   name: Phase 3 - JS, Nav, and Wiring
   status: pending
@@ -128,7 +135,7 @@ sections:
   - id: '3.1'
     name: Create analysis.js and update nav and server
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.2'
     description: "Implement the work item: .claude/plans/.claimed/16-tool-call-timing-and-cost-analysis-ui.md\n\
@@ -144,6 +151,12 @@ sections:
       Verify syntax:\n  python3 -c \"import py_compile; py_compile.compile('langgraph_pipeline/web/server.py',\
       \ doraise=True)\"\n  python3 -c \"import py_compile; py_compile.compile('langgraph_pipeline/web/routes/analysis.py',\
       \ doraise=True)\"\n"
+    last_attempt: '2026-03-25T02:32:26.874337'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-25T02:35:21.165849'
+    result_message: Created analysis.js (toggleRow + sortTable), mounted analysis
+      router in server.py, added Cost Analysis nav link to base.html
 - id: phase-4
   name: Phase 4 - Unit Tests
   status: pending
