@@ -134,7 +134,7 @@ sections:
   - id: '4.1'
     name: Create proxy_list.html template with filter bar and pagination
     agent: frontend-coder
-    status: in_progress
+    status: completed
     depends_on:
     - '3.1'
     description: "Implement the work item: .claude/plans/.claimed/14-langsmith-tracing-proxy.md\n\
@@ -151,10 +151,18 @@ sections:
     last_attempt: '2026-03-25T00:47:21.917252'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-25T00:54:47.134111'
+    result_message: 'Created proxy_list.html: filter bar (run name search, model dropdown
+      with Claude model names, date pickers via GET form), table with status badges
+      and expandable detail rows (metadata_json in pre block + link to trace detail),
+      pagination with filter-preserving prev/next links, empty state. Fixed pre-existing
+      broken template that used non-existent fromjson/duration_to Jinja2 filters and
+      display_* fields not present in raw TracingProxy.list_runs() data. All template
+      smoke tests pass (200 OK, run name, badges, filter, pagination).'
   - id: '4.2'
     name: Create proxy_trace.html template with SVG Gantt chart
     agent: frontend-coder
-    status: completed
+    status: pending
     depends_on:
     - '4.1'
     description: "Implement the work item: .claude/plans/.claimed/14-langsmith-tracing-proxy.md\n\
@@ -169,17 +177,6 @@ sections:
       \ chain=grey)\n     * Time axis with tick marks\n   - Collapsible sections (HTML\
       \ details/summary) for:\n     inputs_json, outputs_json, metadata_json\n   -\
       \ Back link to /proxy\nFiles: langgraph_pipeline/web/templates/proxy_trace.html\n"
-    last_attempt: '2026-03-25T00:47:31.626047'
-    attempts: 1
-    model_used: sonnet
-    completed_at: '2026-03-25T00:53:53.440877'
-    result_message: 'proxy_trace.html created with all required elements: extends
-      base.html, run header card (name, start time, duration, model, status badge,
-      run ID, child count), inline SVG Gantt chart with color-coded bars (LLM=green,
-      Tool=blue, Other=grey), 5-tick time axis, alternating row backgrounds, duration
-      labels in wide bars, and collapsible inputs/outputs/metadata JSON sections via
-      HTML details/summary. Build passes. Test failures are pre-existing (unrelated
-      to this task).'
 - id: phase-5
   name: Phase 5 - Unit tests
   status: pending
