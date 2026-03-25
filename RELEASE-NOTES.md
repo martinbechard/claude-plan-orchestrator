@@ -1,5 +1,12 @@
 # Release Notes
 
+## 1.9.1 (2026-03-25)
+
+### Fixes
+- **Max validation attempts returns WARN:** When validation is abandoned after
+  exhausting all retry attempts, the verdict is now WARN instead of PASS,
+  accurately reflecting inconclusive validation in the plan record.
+
 ## 1.9.0 (2026-03-24)
 
 ### New Features
