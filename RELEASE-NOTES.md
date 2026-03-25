@@ -1,5 +1,14 @@
 # Release Notes
 
+## 1.9.3 (2026-03-25)
+
+### Fixes
+- **Ideas intake in parallel mode:** `run_supervisor_loop()` now calls
+  `process_ideas(dry_run)` at the top of each iteration, matching the placement
+  in the sequential scan loop. Ideas dropped in `docs/ideas/` are processed
+  regardless of whether the pipeline runs with `max_parallel_items == 1` or
+  `max_parallel_items > 1`.
+
 ## 1.9.2 (2026-03-25)
 
 ### Fixes

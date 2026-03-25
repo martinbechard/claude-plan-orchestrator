@@ -29,6 +29,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
+from langgraph_pipeline.pipeline.nodes.idea_classifier import process_ideas
 from langgraph_pipeline.pipeline.nodes.scan import (
     CLAIM_META_SUFFIX,
     claim_item,
@@ -462,6 +463,9 @@ def run_supervisor_loop(
 
     try:
         while not shutdown_event.is_set():
+            ideas_processed = process_ideas(dry_run)
+            if ideas_processed > 0:
+                logger.info("Ideas intake: processed %d idea(s)", ideas_processed)
             # Step 1: Reap any finished workers (non-blocking).
             if active_workers:
                 budget_exceeded = _reap_finished_workers(
