@@ -1,0 +1,27 @@
+{# langgraph_pipeline/web/templates/base.html
+   Base Jinja2 layout for the Plan Orchestrator web UI.
+   Blocks: title, extra_head, content
+   Design: docs/plans/2026-03-25-13-embedded-web-server-infrastructure-design.md #}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Plan Orchestrator{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <nav aria-label="Main navigation">
+    <span class="brand">Plan Orchestrator</span>
+    <a href="/proxy"
+       {% if request.url.path.startswith('/proxy') %}class="active" aria-current="page"{% endif %}>
+      Traces
+    </a>
+    <a href="/health">Health</a>
+  </nav>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

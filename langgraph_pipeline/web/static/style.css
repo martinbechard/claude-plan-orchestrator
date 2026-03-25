@@ -1,0 +1,320 @@
+/* langgraph_pipeline/web/static/style.css
+   Minimal CSS reset and nav styles for the Plan Orchestrator web UI.
+   Design: docs/plans/2026-03-25-13-embedded-web-server-infrastructure-design.md */
+
+/* ── Reset ──────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #1a1a2e;
+    background: #f5f7fa;
+}
+
+a { color: #3b6fcf; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Nav ────────────────────────────────────────────────────────────────── */
+nav {
+    background: #1a1a2e;
+    padding: 0 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    height: 48px;
+}
+
+nav .brand {
+    color: #e8e8f0;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+}
+
+nav a {
+    color: #9090b0;
+    font-size: 13px;
+    padding: 0.25rem 0;
+}
+
+nav a:hover { color: #e8e8f0; text-decoration: none; }
+nav a.active { color: #7eb8f7; border-bottom: 2px solid #7eb8f7; }
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+main {
+    max-width: 1200px;
+    margin: 1.5rem auto;
+    padding: 0 1.5rem;
+}
+
+h1 { font-size: 20px; font-weight: 600; margin: 0 0 1rem; }
+h2 { font-size: 16px; font-weight: 600; margin: 1.5rem 0 0.75rem; }
+
+/* ── Filter bar ─────────────────────────────────────────────────────────── */
+.filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: flex-end;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.filter-bar label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 12px;
+    color: #666;
+    font-weight: 500;
+}
+
+.filter-bar input,
+.filter-bar select {
+    height: 32px;
+    border: 1px solid #d0d5dd;
+    border-radius: 4px;
+    padding: 0 8px;
+    font-size: 13px;
+    min-width: 140px;
+    background: #fff;
+}
+
+.filter-bar button {
+    height: 32px;
+    padding: 0 14px;
+    background: #3b6fcf;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    align-self: flex-end;
+}
+
+.filter-bar button:hover { background: #2d5ab8; }
+
+.filter-bar .reset-link {
+    align-self: flex-end;
+    font-size: 12px;
+    color: #888;
+    padding: 0 4px;
+    line-height: 32px;
+}
+
+/* ── Table ──────────────────────────────────────────────────────────────── */
+.table-wrap {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+thead th {
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #374151;
+    white-space: nowrap;
+}
+
+tbody tr { border-bottom: 1px solid #f0f0f0; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover > td { background: #fafbff; }
+
+td {
+    padding: 8px 12px;
+    vertical-align: top;
+}
+
+td.name a { font-weight: 500; }
+
+/* ── Status badge ───────────────────────────────────────────────────────── */
+.badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.badge-success { background: #d1fae5; color: #065f46; }
+.badge-error   { background: #fee2e2; color: #991b1b; }
+.badge-unknown { background: #f3f4f6; color: #6b7280; }
+
+/* ── Expandable row details ─────────────────────────────────────────────── */
+.row-details {
+    padding: 0;
+    background: #f8fafc;
+}
+
+.row-details > details {
+    padding: 8px 12px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.row-details summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: #555;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.row-details summary::before {
+    content: "▶";
+    font-size: 9px;
+    color: #aaa;
+}
+
+details[open] > summary::before { content: "▼"; }
+
+.row-details pre {
+    margin: 8px 0 0;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: #334155;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* ── Pagination ─────────────────────────────────────────────────────────── */
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 0;
+    font-size: 13px;
+    color: #555;
+}
+
+.pagination a {
+    padding: 4px 12px;
+    border: 1px solid #d0d5dd;
+    border-radius: 4px;
+    color: #3b6fcf;
+    background: #fff;
+}
+
+.pagination a:hover {
+    background: #f0f5ff;
+    text-decoration: none;
+}
+
+.pagination .disabled {
+    padding: 4px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    color: #c0c0c0;
+    background: #fafafa;
+    cursor: default;
+}
+
+/* ── Empty state ────────────────────────────────────────────────────────── */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #888;
+    font-size: 14px;
+}
+
+.empty-state .icon { font-size: 32px; margin-bottom: 0.5rem; }
+
+/* ── Gantt chart area ───────────────────────────────────────────────────── */
+.gantt-wrap {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+}
+
+svg.gantt text { font-family: inherit; }
+
+/* ── Detail header card ─────────────────────────────────────────────────── */
+.detail-header {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+.detail-header .run-name {
+    font-size: 16px;
+    font-weight: 600;
+    flex: 1 1 100%;
+}
+
+.detail-meta { font-size: 12px; color: #555; }
+.detail-meta span { display: block; font-size: 13px; font-weight: 500; color: #1a1a2e; }
+
+/* ── JSON collapsible blocks ────────────────────────────────────────────── */
+.json-block {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+}
+
+.json-block > details > summary {
+    padding: 10px 14px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    list-style: none;
+    background: #f8fafc;
+    border-bottom: 1px solid transparent;
+}
+
+.json-block > details[open] > summary {
+    border-bottom-color: #e2e8f0;
+}
+
+.json-block > details > summary::marker { display: none; }
+.json-block > details > summary::before {
+    content: "▶ ";
+    font-size: 10px;
+    color: #aaa;
+}
+.json-block > details[open] > summary::before { content: "▼ "; }
+
+.json-block pre {
+    margin: 0;
+    padding: 12px 14px;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: #334155;
+    max-height: 400px;
+    overflow-y: auto;
+}

@@ -11,6 +11,8 @@ Endpoints:
 Both endpoints return HTTP 404 when the proxy is disabled (get_proxy() is None).
 """
 
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -27,11 +29,81 @@ _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 
 HTTP_NOT_FOUND = 404
 
+# ─── Jinja2 Setup ─────────────────────────────────────────────────────────────
+
+templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+
+
+def _fromjson(value: Optional[str]) -> Optional[dict]:
+    """Jinja2 filter: parse a JSON string into a Python dict (or None on failure)."""
+    if not value:
+        return None
+    try:
+        return json.loads(value)
+    except (ValueError, TypeError):
+        return None
+
+
+templates.env.filters["fromjson"] = _fromjson
+
 # ─── Setup ────────────────────────────────────────────────────────────────────
 
 router = APIRouter()
 
-templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+_ISO_FMT = "%Y-%m-%dT%H:%M:%S"
+_ISO_FMT_WITH_TZ = "%Y-%m-%dT%H:%M:%S%z"
+
+
+def _parse_iso(ts: Optional[str]) -> Optional[datetime]:
+    """Parse an ISO-8601 timestamp string to a datetime, returning None on error."""
+    if not ts:
+        return None
+    for fmt in (_ISO_FMT_WITH_TZ, _ISO_FMT):
+        try:
+            return datetime.strptime(ts[:19], _ISO_FMT).replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    return None
+
+
+def _format_duration(start: Optional[str], end: Optional[str]) -> str:
+    """Return a human-readable duration string (e.g. '1.23 s' or '2m 05s')."""
+    dt_start = _parse_iso(start)
+    dt_end = _parse_iso(end)
+    if dt_start is None or dt_end is None:
+        return "—"
+    delta = (dt_end - dt_start).total_seconds()
+    if delta < 0:
+        return "—"
+    if delta < 60:
+        return f"{delta:.2f}s"
+    minutes = int(delta // 60)
+    seconds = int(delta % 60)
+    return f"{minutes}m {seconds:02d}s"
+
+
+def _enrich_run(run: dict) -> dict:
+    """Add pre-computed display fields to a run dict for template rendering.
+
+    Adds: display_duration, display_slug, display_model, display_cost.
+    """
+    run = dict(run)
+    run["display_duration"] = _format_duration(run.get("start_time"), run.get("end_time"))
+
+    meta: dict = {}
+    if run.get("metadata_json"):
+        try:
+            meta = json.loads(run["metadata_json"])
+        except (ValueError, TypeError):
+            meta = {}
+
+    run["display_slug"] = meta.get("slug") or meta.get("item_slug") or ""
+    run["display_model"] = meta.get("model") or meta.get("model_name") or ""
+    cost = meta.get("cost") or meta.get("total_cost")
+    run["display_cost"] = f"~${float(cost):.4f}" if cost is not None else ""
+    return run
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -66,13 +138,14 @@ def proxy_list(
     if proxy is None:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Proxy not enabled")
 
-    runs = proxy.list_runs(
+    raw_runs = proxy.list_runs(
         page=page,
         slug=slug,
         model=model,
         date_from=date_from,
         date_to=date_to,
     )
+    runs = [_enrich_run(r) for r in raw_runs]
     return templates.TemplateResponse(
         "proxy_list.html",
         {
@@ -114,7 +187,7 @@ def proxy_trace(request: Request, run_id: str) -> HTMLResponse:
         "proxy_trace.html",
         {
             "request": request,
-            "run": run,
-            "children": children,
+            "run": _enrich_run(run),
+            "children": [_enrich_run(c) for c in children],
         },
     )

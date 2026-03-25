@@ -1,0 +1,179 @@
+{# langgraph_pipeline/web/templates/proxy_list.html
+   Paginated LangSmith trace list with filter bar and expandable row details.
+   Context variables:
+     runs       list[dict]  — rows from TracingProxy.list_runs(), enriched with
+                              display_duration, display_slug, display_model, display_cost
+     page       int         — current 1-based page number
+     slug       str         — active slug filter value
+     model      str         — active model filter value
+     date_from  str         — active date-from filter value
+     date_to    str         — active date-to filter value
+   Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md #}
+{% extends "base.html" %}
+
+{% block title %}Traces — Plan Orchestrator{% endblock %}
+
+{% block content %}
+<h1>LangSmith Traces</h1>
+
+{# ── Filter bar ────────────────────────────────────────────────────────────── #}
+<form class="filter-bar" method="get" action="/proxy" role="search"
+      aria-label="Filter traces">
+
+  <label>
+    Slug
+    <input type="text" name="slug" value="{{ slug }}"
+           placeholder="e.g. my-item" aria-label="Filter by item slug">
+  </label>
+
+  <label>
+    Model
+    <input type="text" name="model" value="{{ model }}"
+           placeholder="e.g. claude-sonnet" aria-label="Filter by model name">
+  </label>
+
+  <label>
+    From
+    <input type="date" name="date_from" value="{{ date_from }}"
+           aria-label="Start date">
+  </label>
+
+  <label>
+    To
+    <input type="date" name="date_to" value="{{ date_to }}"
+           aria-label="End date">
+  </label>
+
+  <button type="submit">Apply</button>
+
+  {% if slug or model or date_from or date_to %}
+  <a class="reset-link" href="/proxy">Clear filters</a>
+  {% endif %}
+</form>
+
+{# ── Trace table or empty state ────────────────────────────────────────────── #}
+{% if runs %}
+<div class="table-wrap" role="region" aria-label="Trace list">
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Run name</th>
+        <th scope="col">Item slug</th>
+        <th scope="col">Start time</th>
+        <th scope="col">Duration</th>
+        <th scope="col">Cost</th>
+        <th scope="col">Model</th>
+        <th scope="col">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for run in runs %}
+
+      {# Determine status badge ─────────────────────────────────────────────── #}
+      {% if run.error %}
+        {% set badge_class = "badge-error" %}
+        {% set badge_label = "Error" %}
+      {% elif run.end_time %}
+        {% set badge_class = "badge-success" %}
+        {% set badge_label = "Success" %}
+      {% else %}
+        {% set badge_class = "badge-unknown" %}
+        {% set badge_label = "Running" %}
+      {% endif %}
+
+      {# Main data row ──────────────────────────────────────────────────────── #}
+      <tr>
+        <td class="name">
+          <a href="/proxy/{{ run.run_id }}">{{ run.name }}</a>
+        </td>
+        <td>{{ run.display_slug or "—" }}</td>
+        <td>
+          {% if run.start_time %}
+            {{ run.start_time[:10] }} {{ run.start_time[11:19] }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td>{{ run.display_duration }}</td>
+        <td>{{ run.display_cost or "—" }}</td>
+        <td>{{ run.display_model or "—" }}</td>
+        <td>
+          <span class="badge {{ badge_class }}" role="status">{{ badge_label }}</span>
+        </td>
+      </tr>
+
+      {# Expandable detail row ──────────────────────────────────────────────── #}
+      <tr class="row-details">
+        <td colspan="7">
+          <details>
+            <summary>Details</summary>
+            <div style="padding:6px 0 2px;">
+              {% if run.metadata_json %}
+                {% set meta = run.metadata_json | fromjson %}
+                {% if meta %}
+                  <pre>{{ run.metadata_json }}</pre>
+                {% else %}
+                  <pre>{{ run.metadata_json }}</pre>
+                {% endif %}
+              {% else %}
+                <p style="font-size:12px;color:#888;margin:4px 0 0;">
+                  No metadata recorded.
+                </p>
+              {% endif %}
+            </div>
+          </details>
+        </td>
+      </tr>
+
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# ── Pagination ────────────────────────────────────────────────────────────── #}
+{# has_next: if the page returned a full PAGE_SIZE_DEFAULT (50) rows there may be more #}
+{% set has_prev = page > 1 %}
+{% set has_next = runs | length == 50 %}
+
+{% set qs_parts = [] %}
+{% if slug %}{% set _ = qs_parts.append("slug=" ~ slug) %}{% endif %}
+{% if model %}{% set _ = qs_parts.append("model=" ~ model) %}{% endif %}
+{% if date_from %}{% set _ = qs_parts.append("date_from=" ~ date_from) %}{% endif %}
+{% if date_to %}{% set _ = qs_parts.append("date_to=" ~ date_to) %}{% endif %}
+{% set qs_base = qs_parts | join("&") %}
+
+<nav class="pagination" aria-label="Pagination">
+  {% if has_prev %}
+    {% set prev_page = page - 1 %}
+    {% set prev_qs = (qs_base ~ "&page=" ~ prev_page) if qs_base else ("page=" ~ prev_page) %}
+    <a href="/proxy?{{ prev_qs }}" rel="prev" aria-label="Previous page">&larr; Previous</a>
+  {% else %}
+    <span class="disabled" aria-disabled="true">&larr; Previous</span>
+  {% endif %}
+
+  <span>Page {{ page }}</span>
+
+  {% if has_next %}
+    {% set next_page = page + 1 %}
+    {% set next_qs = (qs_base ~ "&page=" ~ next_page) if qs_base else ("page=" ~ next_page) %}
+    <a href="/proxy?{{ next_qs }}" rel="next" aria-label="Next page">Next &rarr;</a>
+  {% else %}
+    <span class="disabled" aria-disabled="true">Next &rarr;</span>
+  {% endif %}
+</nav>
+
+{% else %}
+{# ── Empty state ───────────────────────────────────────────────────────────── #}
+<div class="empty-state" role="status" aria-live="polite">
+  <div class="icon">&#128203;</div>
+  {% if slug or model or date_from or date_to %}
+    <p>No traces match the current filters.</p>
+    <p><a href="/proxy">Clear filters</a> to see all traces.</p>
+  {% else %}
+    <p>No traces recorded yet.</p>
+    <p>Traces appear here once the proxy intercepts LangSmith calls.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}
