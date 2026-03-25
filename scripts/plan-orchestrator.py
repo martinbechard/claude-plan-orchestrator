@@ -919,6 +919,15 @@ class TaskResult:
     usage: Optional[TaskUsage] = None
 
 
+@dataclass
+class ToolCallRecord:
+    """A single tool call made during a Claude task execution."""
+    tool: str
+    file_path: Optional[str] = None   # for Read/Edit/Write/Grep/Glob
+    command: Optional[str] = None     # for Bash
+    result_bytes: Optional[int] = None  # bytes returned by tool_result
+
+
 def parse_task_usage(result_data: dict) -> TaskUsage:
     """Extract token usage from a Claude CLI result JSON object.
 
@@ -3277,6 +3286,55 @@ def stream_output(pipe, prefix: str, collector: OutputCollector, show_full: bool
             verbose_log(f"Error streaming {prefix}: {e}", "ERROR")
 
 
+def _make_tool_call_record(tool_name: str, tool_input: dict) -> ToolCallRecord:
+    """Create a ToolCallRecord from a tool_use block's name and input fields."""
+    file_path: Optional[str] = None
+    command: Optional[str] = None
+    if tool_name in ("Read", "Edit", "Write"):
+        file_path = tool_input.get("file_path")
+    elif tool_name in ("Grep", "Glob"):
+        file_path = tool_input.get("path")
+    elif tool_name == "Bash":
+        command = tool_input.get("command")
+    return ToolCallRecord(tool=tool_name, file_path=file_path, command=command)
+
+
+def _extract_tool_calls_from_json_output(result_json: dict) -> list[ToolCallRecord]:
+    """Extract tool call records from non-verbose (--output-format json) CLI output.
+
+    Iterates over messages[].content[] blocks, pairing tool_use entries with their
+    corresponding tool_result entries via tool_use_id to populate result_bytes.
+    """
+    tool_calls: list[ToolCallRecord] = []
+    pending: dict[str, ToolCallRecord] = {}
+
+    for message in result_json.get("messages", []):
+        role = message.get("role", "")
+        content = message.get("content", [])
+        if not isinstance(content, list):
+            continue
+
+        if role == "assistant":
+            for block in content:
+                if block.get("type") == "tool_use":
+                    tool_id = block.get("id", "")
+                    record = _make_tool_call_record(block.get("name", ""), block.get("input", {}))
+                    tool_calls.append(record)
+                    if tool_id:
+                        pending[tool_id] = record
+
+        elif role == "user":
+            for block in content:
+                if block.get("type") == "tool_result":
+                    tool_id = block.get("tool_use_id", "")
+                    if tool_id in pending:
+                        result_content = block.get("content", "")
+                        pending[tool_id].result_bytes = len(json.dumps(result_content))
+                        del pending[tool_id]
+
+    return tool_calls
+
+
 def stream_json_output(pipe, collector: OutputCollector, result_capture: dict) -> None:
     """Stream output from Claude CLI in stream-json format, showing tool use and text in real-time.
 
@@ -3286,6 +3344,9 @@ def stream_json_output(pipe, collector: OutputCollector, result_capture: dict) -
         result_capture: A mutable dict that will be populated with the full result event data
             when the 'result' event is received. The caller reads this after thread join.
     """
+    tool_calls: list[ToolCallRecord] = []
+    pending: dict[str, ToolCallRecord] = {}  # tool_use_id -> record awaiting tool_result
+
     try:
         for line in iter(pipe.readline, ''):
             if not line:
@@ -3324,6 +3385,22 @@ def stream_json_output(pipe, collector: OutputCollector, result_capture: dict) -
                         else:
                             detail = ""
                         print(f"  [{ts}] [Tool] {tool_name}: {detail}", flush=True)
+                        # Collect tool call record for cost analysis
+                        tool_id = block.get("id", "")
+                        record = _make_tool_call_record(tool_name, tool_input)
+                        tool_calls.append(record)
+                        if tool_id:
+                            pending[tool_id] = record
+
+            elif event_type == "user":
+                msg = event.get("message", {})
+                for block in msg.get("content", []):
+                    if block.get("type") == "tool_result":
+                        tool_id = block.get("tool_use_id", "")
+                        if tool_id in pending:
+                            result_content = block.get("content", "")
+                            pending[tool_id].result_bytes = len(json.dumps(result_content))
+                            del pending[tool_id]
 
             elif event_type == "result":
                 cost = event.get("total_cost_usd", 0)
@@ -3335,6 +3412,8 @@ def stream_json_output(pipe, collector: OutputCollector, result_capture: dict) -
     except Exception as e:
         if VERBOSE:
             verbose_log(f"Error streaming JSON: {e}", "ERROR")
+
+    result_capture["tool_calls"] = tool_calls
 
 
 def run_claude_task(prompt: str, dry_run: bool = False, model: str = "", agent_name: str = "") -> TaskResult:
@@ -3494,6 +3573,7 @@ def run_claude_task(prompt: str, dry_run: bool = False, model: str = "", agent_n
             try:
                 result_json = json.loads(stdout_collector.get_output())
                 result_capture.update(result_json)
+                result_capture["tool_calls"] = _extract_tool_calls_from_json_output(result_json)
             except (json.JSONDecodeError, ValueError):
                 pass  # Non-JSON output, no usage data available
 
