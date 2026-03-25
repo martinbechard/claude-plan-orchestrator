@@ -45,6 +45,13 @@ sections:
       and create_suspension_marker, extracts question/question_context/source_item
       from status_dict/plan_data, derives slug and item_type, calls create_suspension_marker()
       when slug and question are both non-empty, logs the marker path.'
+    validation_attempts: 1
+    validation_findings: 'All requirements satisfied: Path and create_suspension_marker
+      imported, suspension block in task_runner.py correctly extracts question/question_context/source_item,
+      derives slug and item_type, calls create_suspension_marker when slug and question
+      are non-empty, and logs the marker path. Build and syntax checks pass. Pre-existing
+      test collection errors in test_auto_pipeline.py and test_completed_archive.py
+      are unrelated to this task.'
 - id: phase-2
   name: Phase 2 - Slack Posting and Reinstatement in cli.py
   status: pending
@@ -52,7 +59,7 @@ sections:
   - id: '2.1'
     name: Add suspension helper functions to cli.py
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.1'
     description: 'Implement the work item: docs/feature-backlog/10-ux-designer-opus-sonnet-loop-with-slack-suspension.md
@@ -86,6 +93,14 @@ sections:
       6. Verify build: python -m py_compile langgraph_pipeline/cli.py
 
       '
+    last_attempt: '2026-03-24T20:25:39.520540'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T20:29:25.452505'
+    result_message: Added _post_pending_suspension_questions(slack) and _reinstate_answered_suspensions()
+      to cli.py. Both called at top of _run_scan_loop() while loop before _pre_scan().
+      Added glob/json/yaml imports, SUSPENDED_GLOB constant, and SUSPENDED_DIR/clear_suspension_marker
+      imports. Build verified with py_compile.
 - id: phase-3
   name: Phase 3 - ux-designer Agent Resumption Logic
   status: pending
