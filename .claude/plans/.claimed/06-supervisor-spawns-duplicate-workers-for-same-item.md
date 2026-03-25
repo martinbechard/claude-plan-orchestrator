@@ -118,3 +118,5 @@ unclaim always restores to the correct directory.
   items (lower priority, e.g., analyses) never start.
 - **Wrong item type:** misclassified unclaim can permanently strand an item in
   the wrong backlog directory.
+
+## LangSmith Trace: 648a361a-17f6-48e1-bf57-aee2e19c62bc
