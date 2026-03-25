@@ -1,5 +1,14 @@
 # Release Notes
 
+## 1.8.2 (2026-03-24)
+
+### Improvements
+- **Spec-aware validator (complete):** Validator now reads SPEC_DIR from
+  orchestrator-config.yaml, runs E2E tests referenced in Verification blocks
+  of changed functional spec files, and saves timestamped JSON results to
+  logs/e2e/. Validation prompts are enriched with spec context extracted from
+  functional specifications matching changed files.
+
 ## 1.8.1 (2026-02-25)
 
 ### Improvements
