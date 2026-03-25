@@ -1413,6 +1413,49 @@ def test_build_validation_prompt_still_has_standard_checks(monkeypatch):
     assert "Verdict: PASS" in result
 
 
+def test_build_validation_prompt_includes_spec_context(monkeypatch):
+    """Spec-aware context is injected when SPEC_DIR is configured."""
+    monkeypatch.setattr(mod, "SPEC_DIR", "docs/specs/")
+
+    task = {"id": "1.1", "name": "Test task", "description": "A task"}
+    section = {"id": "phase-1", "name": "Phase 1"}
+    task_result = _make_minimal_task_result()
+
+    result = build_validation_prompt(task, section, task_result, "validator")
+
+    assert "Spec-Aware Validation" in result
+    assert "docs/specs/" in result
+
+
+def test_build_validation_prompt_omits_spec_when_unconfigured(monkeypatch):
+    """Spec-aware context is absent when SPEC_DIR is empty."""
+    monkeypatch.setattr(mod, "SPEC_DIR", "")
+
+    task = {"id": "1.1", "name": "Test task", "description": "A task"}
+    section = {"id": "phase-1", "name": "Phase 1"}
+    task_result = _make_minimal_task_result()
+
+    result = build_validation_prompt(task, section, task_result, "validator")
+
+    assert "Spec-Aware Validation" not in result
+
+
+def test_build_validation_prompt_standard_checks_with_spec(monkeypatch):
+    """Standard build/test commands remain present alongside spec context."""
+    monkeypatch.setattr(mod, "SPEC_DIR", "docs/specs/")
+    monkeypatch.setattr(mod, "BUILD_COMMAND", "pnpm run build")
+    monkeypatch.setattr(mod, "TEST_COMMAND", "pnpm test")
+
+    task = {"id": "1.1", "name": "Test task", "description": "A task"}
+    section = {"id": "phase-1", "name": "Phase 1"}
+    task_result = _make_minimal_task_result()
+
+    result = build_validation_prompt(task, section, task_result, "validator")
+
+    assert "pnpm run build" in result
+    assert "pnpm test" in result
+
+
 # --- suspension marker tests ---
 
 _SUSPENSION_SLUG = "test-item-slug"
