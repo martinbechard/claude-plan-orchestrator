@@ -316,10 +316,10 @@ def validate_task(state: TaskState) -> dict:
     if validation_attempts > max_validation_attempts:
         print(
             f"[validate_task] Max validation attempts ({max_validation_attempts}) reached "
-            f"for task {task_id!r}; treating as PASS"
+            f"for task {task_id!r}; treating as WARN"
         )
         _save_plan_yaml(plan_path, plan_data)
-        return {"last_validation_verdict": "PASS", "plan_data": plan_data}
+        return {"last_validation_verdict": "WARN", "plan_data": plan_data}
 
     validators = validation_config.get("validators", [DEFAULT_VALIDATOR_AGENT])
     validator_agent = validators[0] if validators else DEFAULT_VALIDATOR_AGENT
