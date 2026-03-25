@@ -82,6 +82,18 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Path where the JSON result will be written before exit.",
     )
     parser.add_argument(
+        "--item-type",
+        default="feature",
+        choices=["defect", "feature", "analysis"],
+        help="Type of the backlog item. Forwarded from the supervisor.",
+    )
+    parser.add_argument(
+        "--item-slug",
+        default="",
+        metavar="SLUG",
+        help="Slug of the backlog item. Forwarded from the supervisor.",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -93,23 +105,27 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 # ─── State builder ────────────────────────────────────────────────────────────
 
 
-def _build_initial_state(item_path: str) -> PipelineState:
+def _build_initial_state(item_path: str, item_type: str, item_slug: str) -> PipelineState:
     """Build the initial PipelineState for the worker's graph invocation.
 
     Workers receive no budget cap — the supervisor enforces the budget after
-    reading each worker result.
+    reading each worker result. item_type and item_slug are forwarded from the
+    supervisor rather than re-derived from the path, because the claimed path
+    no longer contains the original backlog directory name.
 
     Args:
-        item_path: Path to the backlog item being processed.
+        item_path: Path to the backlog item being processed (inside .claimed/).
+        item_type: Type of the backlog item (defect, feature, analysis).
+        item_slug: Slug of the backlog item derived from the original filename.
 
     Returns:
-        Minimal PipelineState with item_path populated and budget_cap_usd=None.
+        PipelineState with item_path, item_slug, item_type populated.
     """
     state: PipelineState = {
         "item_path": item_path,
-        "item_slug": "",
-        "item_type": "feature",
-        "item_name": "",
+        "item_slug": item_slug,
+        "item_type": item_type,
+        "item_name": item_slug.replace("-", " ").title(),
         "plan_path": None,
         "design_doc_path": None,
         "verification_cycle": 0,
@@ -218,6 +234,8 @@ def main() -> int:
 
     pid = os.getpid()
     item_path: str = args.item_path
+    item_type: str = args.item_type
+    item_slug: str = args.item_slug
     result_file: str = args.result_file
     db_path: str = _WORKER_DB_TEMPLATE.format(pid=pid)
     thread_id: str = _WORKER_THREAD_ID_TEMPLATE.format(pid=pid)
@@ -228,7 +246,7 @@ def main() -> int:
     final_state: Optional[PipelineState] = None
 
     try:
-        initial_state = _build_initial_state(item_path)
+        initial_state = _build_initial_state(item_path, item_type, item_slug)
         thread_config = {"configurable": {"thread_id": thread_id}}
 
         with pipeline_graph(db_path=db_path) as graph:

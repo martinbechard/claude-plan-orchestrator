@@ -356,7 +356,7 @@ class TestValidateTask:
         result = validate_task(state)
         assert result["last_validation_verdict"] == "PASS"
 
-    def test_returns_pass_when_max_validation_attempts_exceeded(self, tmp_path):
+    def test_returns_warn_when_max_validation_attempts_exceeded(self, tmp_path):
         task = _make_task("1.1", validation_attempts=2)
         plan = _make_plan_with_validation(task)
         plan_path = self._make_plan_file(tmp_path, plan)
@@ -364,7 +364,7 @@ class TestValidateTask:
             plan_path=plan_path, plan_data=plan, current_task_id="1.1"
         )
         result = validate_task(state)
-        assert result["last_validation_verdict"] == "PASS"
+        assert result["last_validation_verdict"] == "WARN"
 
     def test_increments_validation_attempts_counter(self, tmp_path):
         task = _make_task("1.1", validation_attempts=2)
