@@ -127,7 +127,7 @@ sections:
   - id: '4.1'
     name: Create proxy_list.html template with filter bar and pagination
     agent: frontend-coder
-    status: completed
+    status: in_progress
     depends_on:
     - '3.1'
     description: "Implement the work item: .claude/plans/.claimed/14-langsmith-tracing-proxy.md\n\
@@ -144,17 +144,10 @@ sections:
     last_attempt: '2026-03-25T00:46:40.705077'
     attempts: 1
     model_used: sonnet
-    completed_at: '2026-03-25T00:51:26.893253'
-    result_message: Created base.html (Feature 13 base layout), style.css (design
-      tokens), and proxy_list.html (filter bar with slug/model/date inputs via GET
-      form, trace table with 7 columns, expandable details/summary rows, pagination,
-      empty state). Updated routes/proxy.py to add fromjson Jinja2 filter and _enrich_run()
-      helper that pre-computes display_duration/slug/model/cost fields. All 1098 langgraph
-      tests pass.
   - id: '4.2'
     name: Create proxy_trace.html template with SVG Gantt chart
     agent: frontend-coder
-    status: pending
+    status: completed
     depends_on:
     - '4.1'
     description: "Implement the work item: .claude/plans/.claimed/14-langsmith-tracing-proxy.md\n\
@@ -169,6 +162,16 @@ sections:
       \ chain=grey)\n     * Time axis with tick marks\n   - Collapsible sections (HTML\
       \ details/summary) for:\n     inputs_json, outputs_json, metadata_json\n   -\
       \ Back link to /proxy\nFiles: langgraph_pipeline/web/templates/proxy_trace.html\n"
+    last_attempt: '2026-03-25T00:46:46.725364'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-25T00:52:31.235680'
+    result_message: 'Created langgraph_pipeline/web/templates/proxy_trace.html with:
+      run header card (name, start time, duration, run ID, child count, status badge),
+      inline SVG Gantt chart with color-coded bars (LLM=green, Tool=blue, Other=grey),
+      time axis with 5 ticks, alternating row backgrounds, duration labels inside
+      wide bars, and collapsible inputs/outputs/metadata JSON sections via HTML details/summary.
+      Template verified with Jinja2 parse and render checks. Committed as e28ba219.'
 - id: phase-5
   name: Phase 5 - Unit tests
   status: pending
