@@ -122,5 +122,3 @@ The script:
   (no project-specific values, all fields commented out with explanations)
 - `tests/test_setup_project.py` — unit tests for file scaffolding logic
   (phases 2–3 are integration-only, not unit tested)
-
-## LangSmith Trace: a8c7ce98-2fc2-4974-9fe3-0ff9a6f8185c
