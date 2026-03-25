@@ -60,6 +60,7 @@ DEFAULT_TEST_COMMAND = "pnpm test"
 DEFAULT_DEV_SERVER_COMMAND = "pnpm dev"
 DEFAULT_AGENTS_DIR = ".claude/agents/"
 DEFAULT_E2E_COMMAND = "npx playwright test"
+DEFAULT_SPEC_DIR = ""
 
 # UX design loop configuration
 UX_DESIGN_MAX_ROUNDS = 3
@@ -373,6 +374,7 @@ TEST_COMMAND = _config.get("test_command", DEFAULT_TEST_COMMAND)
 DEV_SERVER_COMMAND = _config.get("dev_server_command", DEFAULT_DEV_SERVER_COMMAND)
 AGENTS_DIR = _config.get("agents_dir", DEFAULT_AGENTS_DIR)
 E2E_COMMAND = _config.get("e2e_command", DEFAULT_E2E_COMMAND)
+SPEC_DIR = _config.get("spec_dir", DEFAULT_SPEC_DIR)
 
 def parse_agent_frontmatter(content: str) -> tuple[dict, str]:
     """Parse YAML frontmatter from an agent definition markdown file.
@@ -1696,6 +1698,40 @@ def build_validation_prompt(
         if path:
             source_item = f"\n## Work Item\n\nRead this file for requirements and validation expectations: {path}\n"
 
+    spec_context = ""
+    if SPEC_DIR:
+        spec_context = f"""
+
+## Spec-Aware Validation (E2E Tests)
+
+This project has functional specifications in: {SPEC_DIR}
+E2E test command: {E2E_COMMAND}
+
+After the standard validation checks above, perform these additional steps:
+
+1. Run: git diff --name-only HEAD~1 HEAD
+   Look for any files under {SPEC_DIR} in the diff output.
+
+2. If spec files were modified, read each changed spec file and find all
+   ### Verification blocks.
+
+3. For each block with **Type: Testable** and a **Test file(s):** reference:
+   - Run the E2E test: {E2E_COMMAND} <test_file> --reporter=json
+   - Capture the JSON output to logs/e2e/ with a timestamped filename
+     (format: YYYY-MM-DDTHHMMSS.json)
+   - Parse the JSON to determine pass/fail counts
+
+4. Include E2E test results in your findings:
+   - [PASS] E2E: <test_file> - all N tests passed
+   - [FAIL] E2E: <test_file> - M of N tests failed
+
+5. If no spec files were changed in the diff, skip E2E testing and note:
+   - [PASS] E2E: No functional spec changes detected, E2E tests skipped
+
+6. E2E failures should result in a WARN verdict (not FAIL) unless the
+   failing tests are directly related to the task requirements.
+"""
+
     return f"""{agent_body}
 
 ---
@@ -1716,7 +1752,7 @@ Duration: {duration:.1f}s
 Build: {BUILD_COMMAND}
 Unit tests: {TEST_COMMAND}
 E2E tests: {E2E_COMMAND}
-
+{spec_context}
 IMPORTANT: Write .claude/plans/task-status.json when done.
 """
 
