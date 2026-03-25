@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Optional
 
 from langgraph_pipeline.pipeline.nodes.scan import (
+    CLAIM_META_SUFFIX,
     claim_item,
     scan_backlog,
     unclaim_item,
@@ -106,15 +107,24 @@ def _unclaim_orphaned_items() -> None:
         CLAIMED_DIR,
     )
     for md_file in orphans:
-        # Infer type from path (will always be feature for ambiguous slugs —
-        # acceptable since items will be re-prioritised on next scan).
-        path_str = str(md_file).lower()
-        if "defect" in path_str:
-            item_type = "defect"
-        elif "analysis" in path_str:
-            item_type = "analysis"
+        sidecar_path = md_file.parent / (md_file.name + CLAIM_META_SUFFIX)
+        if sidecar_path.exists():
+            try:
+                with open(sidecar_path, "r") as f:
+                    meta = json.load(f)
+                item_type = meta.get("item_type", "feature")
+                sidecar_path.unlink()
+            except (OSError, json.JSONDecodeError):
+                item_type = "feature"
         else:
-            item_type = "feature"
+            # Fall back to slug-heuristic when no sidecar is present.
+            path_str = str(md_file).lower()
+            if "defect" in path_str:
+                item_type = "defect"
+            elif "analysis" in path_str:
+                item_type = "analysis"
+            else:
+                item_type = "feature"
         try:
             unclaim_item(str(md_file), item_type)
             logger.info("Returned orphan %s to %s backlog.", md_file.name, item_type)

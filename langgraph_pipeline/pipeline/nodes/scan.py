@@ -12,6 +12,7 @@ When no items are found, returns an empty item_path so the has_items conditional
 edge routes the graph to END (sleep/wait cycle).
 """
 
+import json
 import logging
 import os
 import re
@@ -202,9 +203,13 @@ def claim_item(item_path: str, item_type: str = "feature") -> bool:
 
     try:
         os.rename(item_path, claimed_path)
-        return True
     except FileNotFoundError:
         return False
+
+    sidecar_path = os.path.join(CLAIMED_DIR, basename + CLAIM_META_SUFFIX)
+    with open(sidecar_path, "w") as f:
+        json.dump({"item_type": item_type}, f)
+    return True
 
 
 def unclaim_item(claimed_path: str, item_type: str) -> None:
@@ -220,6 +225,12 @@ def unclaim_item(claimed_path: str, item_type: str) -> None:
     basename = os.path.basename(claimed_path)
     original_path = os.path.join(backlog_dir, basename)
     os.rename(claimed_path, original_path)
+
+    sidecar = os.path.join(os.path.dirname(claimed_path), basename + CLAIM_META_SUFFIX)
+    try:
+        os.remove(sidecar)
+    except FileNotFoundError:
+        pass
 
 
 # ─── Node ─────────────────────────────────────────────────────────────────────

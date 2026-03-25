@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 import pytest
 
-from langgraph_pipeline.pipeline.nodes.scan import claim_item, unclaim_item
+from langgraph_pipeline.pipeline.nodes.scan import CLAIM_META_SUFFIX, claim_item, unclaim_item
 from langgraph_pipeline.shared.config import DEFAULT_MAX_PARALLEL_ITEMS, get_max_parallel_items
 from langgraph_pipeline.supervisor import (
     _read_result_file,
@@ -120,6 +120,37 @@ class TestClaimItem:
         assert result is False
         assert already_claimed.exists()
 
+    def test_writes_claim_meta_sidecar(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+
+        claimed_dir = tmp_path / ".claimed"
+        monkeypatch.setattr(scan_mod, "CLAIMED_DIR", str(claimed_dir))
+        item = tmp_path / "01-bug.md"
+        item.write_text("# Bug\n")
+
+        result = claim_item(str(item), "defect")
+
+        assert result is True
+        sidecar = claimed_dir / ("01-bug.md" + CLAIM_META_SUFFIX)
+        assert sidecar.exists()
+        data = json.loads(sidecar.read_text())
+        assert data == {"item_type": "defect"}
+
+    def test_no_sidecar_on_same_path_claim(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+
+        claimed_dir = tmp_path / ".claimed"
+        claimed_dir.mkdir()
+        monkeypatch.setattr(scan_mod, "CLAIMED_DIR", str(claimed_dir))
+        already_claimed = claimed_dir / "01-bug.md"
+        already_claimed.write_text("# Bug\n")
+
+        result = claim_item(str(already_claimed), "defect")
+
+        assert result is False
+        sidecar = claimed_dir / ("01-bug.md" + CLAIM_META_SUFFIX)
+        assert not sidecar.exists()
+
     def test_scan_directory_skips_claimed_dir_files(self, tmp_path, monkeypatch):
         import langgraph_pipeline.pipeline.nodes.scan as scan_mod
         from langgraph_pipeline.pipeline.nodes.scan import _scan_directory
@@ -153,6 +184,26 @@ class TestUnclaimItem:
 
         assert not claimed_file.exists()
         assert (defect_dir / "01-bug.md").exists()
+
+    def test_removes_sidecar_on_unclaim(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+
+        claimed_dir = tmp_path / ".claimed"
+        claimed_dir.mkdir()
+        defect_dir = tmp_path / "defects"
+        defect_dir.mkdir()
+        monkeypatch.setattr(scan_mod, "BACKLOG_DIRS", {"defect": str(defect_dir)})
+        monkeypatch.setattr(scan_mod, "CLAIMED_DIR", str(claimed_dir))
+        claimed_file = claimed_dir / "01-bug.md"
+        claimed_file.write_text("# Bug\n")
+        sidecar = claimed_dir / ("01-bug.md" + CLAIM_META_SUFFIX)
+        sidecar.write_text(json.dumps({"item_type": "defect"}))
+
+        unclaim_item(str(claimed_file), "defect")
+
+        assert not claimed_file.exists()
+        assert (defect_dir / "01-bug.md").exists()
+        assert not sidecar.exists()
 
     def test_raises_key_error_for_unknown_item_type(self, tmp_path, monkeypatch):
         import langgraph_pipeline.pipeline.nodes.scan as scan_mod
@@ -380,3 +431,51 @@ class TestReapFinishedWorkers:
 
         assert budget_exceeded is False
         assert fake_pid not in active_workers
+
+
+# ─── _unclaim_orphaned_items ──────────────────────────────────────────────────
+
+
+class TestUnclaimOrphanedItems:
+    """Tests for _unclaim_orphaned_items: sidecar-based and heuristic type resolution."""
+
+    def test_uses_sidecar_for_item_type_when_present(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        import langgraph_pipeline.supervisor as supervisor_mod
+
+        claimed_dir = tmp_path / ".claimed"
+        claimed_dir.mkdir()
+        defect_dir = tmp_path / "defects"
+        defect_dir.mkdir()
+        monkeypatch.setattr(scan_mod, "BACKLOG_DIRS", {"defect": str(defect_dir)})
+        monkeypatch.setattr(supervisor_mod, "CLAIMED_DIR", str(claimed_dir))
+
+        orphan = claimed_dir / "01-something.md"
+        orphan.write_text("# Orphan\n")
+        sidecar = claimed_dir / ("01-something.md" + CLAIM_META_SUFFIX)
+        sidecar.write_text(json.dumps({"item_type": "defect"}))
+
+        supervisor_mod._unclaim_orphaned_items()
+
+        assert not orphan.exists()
+        assert (defect_dir / "01-something.md").exists()
+        assert not sidecar.exists()
+
+    def test_falls_back_to_heuristic_when_no_sidecar(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        import langgraph_pipeline.supervisor as supervisor_mod
+
+        claimed_dir = tmp_path / ".claimed"
+        claimed_dir.mkdir()
+        feature_dir = tmp_path / "features"
+        feature_dir.mkdir()
+        monkeypatch.setattr(scan_mod, "BACKLOG_DIRS", {"feature": str(feature_dir)})
+        monkeypatch.setattr(supervisor_mod, "CLAIMED_DIR", str(claimed_dir))
+
+        orphan = claimed_dir / "01-ambiguous.md"
+        orphan.write_text("# Ambiguous\n")
+
+        supervisor_mod._unclaim_orphaned_items()
+
+        assert not orphan.exists()
+        assert (feature_dir / "01-ambiguous.md").exists()
