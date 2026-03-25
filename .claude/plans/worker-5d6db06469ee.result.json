@@ -1,0 +1,9 @@
+{
+  "success": false,
+  "item_path": ".claude/plans/.claimed/13-embedded-web-server-infrastructure.md",
+  "cost_usd": 0.0,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "duration_s": 1.8092549580032937,
+  "message": "Claude quota exhausted \u2014 item left for retry"
+}

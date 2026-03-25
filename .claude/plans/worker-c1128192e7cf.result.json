@@ -1,0 +1,9 @@
+{
+  "success": false,
+  "item_path": ".claude/plans/.claimed/14-langsmith-tracing-proxy.md",
+  "cost_usd": 0.0,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "duration_s": 1.6274568749940954,
+  "message": "Claude quota exhausted \u2014 item left for retry"
+}
