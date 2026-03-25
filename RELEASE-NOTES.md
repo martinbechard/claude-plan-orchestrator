@@ -1,5 +1,15 @@
 # Release Notes
 
+## 1.9.0 (2026-03-24)
+
+### New Features
+- **Ideas intake pipeline:** Drop rough notes in docs/ideas/ and they are
+  automatically classified (feature, defect, or invalid) and converted into
+  properly formatted backlog items by a Claude session. Includes an
+  idea_classifier module with keyword and heuristic-based classification,
+  comprehensive unit tests, and seamless integration with the existing
+  auto-pipeline backlog directories.
+
 ## 1.8.2 (2026-03-24)
 
 ### Improvements
