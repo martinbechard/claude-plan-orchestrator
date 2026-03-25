@@ -1,5 +1,18 @@
 # Release Notes
 
+## 1.10.0 (2026-03-25)
+
+### New Features
+- **Spec-aware validator:** `validator.md` now reads functional spec verification
+  blocks and runs referenced Playwright E2E tests when spec files are changed.
+  Results are captured as timestamped JSON files in `logs/e2e/` for trend analysis.
+- **E2E analyzer agent:** New on-demand agent (`e2e-analyzer`) for reviewing
+  accumulated E2E test logs to identify flaky tests, detect regressions, and
+  summarize pass/fail trends across runs.
+- **Verification block template:** Reference format for annotating functional specs
+  with structured, machine-readable verification blocks at
+  `docs/templates/verification-block.md`.
+
 ## 1.9.3 (2026-03-25)
 
 ### Fixes
