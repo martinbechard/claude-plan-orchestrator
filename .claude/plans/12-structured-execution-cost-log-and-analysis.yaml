@@ -1,11 +1,12 @@
 meta:
   name: Structured Execution Cost Log and Automated Analysis
-  description: >
-    Adds per-task structured cost logs (JSON) capturing token counts, tool calls
-    with file paths, and result sizes. After each task, appends a record to
-    docs/reports/execution-costs/<item-slug>.json. Also adds an analysis backlog
-    template that triggers the pipeline to aggregate the logs and post a Slack
-    report identifying token/time waste patterns.
+  description: 'Adds per-task structured cost logs (JSON) capturing token counts,
+    tool calls with file paths, and result sizes. After each task, appends a record
+    to docs/reports/execution-costs/<item-slug>.json. Also adds an analysis backlog
+    template that triggers the pipeline to aggregate the logs and post a Slack report
+    identifying token/time waste patterns.
+
+    '
   plan_doc: docs/plans/2026-03-24-12-structured-execution-cost-log-and-analysis-design.md
   source_item: docs/feature-backlog/12-structured-execution-cost-log-and-analysis.md
   created: '2026-03-24'
@@ -14,81 +15,127 @@ meta:
   validation:
     enabled: true
     run_after:
-      - coder
+    - coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
-
 sections:
-  - id: phase-1
-    name: Phase 1 - ToolCallRecord and stream collection
-    status: pending
-    tasks:
-      - id: '1.1'
-        name: Add ToolCallRecord dataclass and extend stream_json_output to collect tool calls
-        agent: coder
-        status: pending
-        description: "Implement the work item: docs/feature-backlog/12-structured-execution-cost-log-and-analysis.md\n\
-          Read the design doc: docs/plans/2026-03-24-12-structured-execution-cost-log-and-analysis-design.md\n\
-          Scope: Add the ToolCallRecord dataclass to scripts/plan-orchestrator.py and extend\n\
-          stream_json_output() to collect tool_use/tool_result events into result_capture['tool_calls'].\n\
-          Also add non-verbose mode extraction from the JSON output path.\n\
-          Files: scripts/plan-orchestrator.py\n"
+- id: phase-1
+  name: Phase 1 - ToolCallRecord and stream collection
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add ToolCallRecord dataclass and extend stream_json_output to collect tool
+      calls
+    agent: coder
+    status: completed
+    description: 'Implement the work item: docs/feature-backlog/12-structured-execution-cost-log-and-analysis.md
 
-  - id: phase-2
-    name: Phase 2 - Cost log writer
-    status: pending
-    tasks:
-      - id: '2.1'
-        name: Implement write_execution_cost_log and integrate into run_claude_task
-        agent: coder
-        status: pending
-        depends_on:
-          - '1.1'
-        description: "Implement the work item: docs/feature-backlog/12-structured-execution-cost-log-and-analysis.md\n\
-          Read the design doc: docs/plans/2026-03-24-12-structured-execution-cost-log-and-analysis-design.md\n\
-          Scope: Add write_execution_cost_log() to scripts/plan-orchestrator.py. Add optional\n\
-          tool_calls field to TaskResult. Call write_execution_cost_log() in the main execution\n\
-          loop after recording usage (item_slug from Path(plan_path).stem, item_type from meta).\n\
-          Files: scripts/plan-orchestrator.py\n"
+      Read the design doc: docs/plans/2026-03-24-12-structured-execution-cost-log-and-analysis-design.md
 
-  - id: phase-3
-    name: Phase 3 - Analysis backlog template
-    status: pending
-    tasks:
-      - id: '3.1'
-        name: Create analysis backlog template for cost log analysis
-        agent: coder
-        status: pending
-        depends_on:
-          - '2.1'
-        description: "Implement the work item: docs/feature-backlog/12-structured-execution-cost-log-and-analysis.md\n\
-          Read the design doc: docs/plans/2026-03-24-12-structured-execution-cost-log-and-analysis-design.md\n\
-          Scope: Create docs/analysis-backlog/cost-analysis.md as a reusable analysis item\n\
-          template. The template instructs the analysis agent to read all files under\n\
-          docs/reports/execution-costs/, aggregate read volume by file path, rank agent types\n\
-          by token cost, identify intra-item repeated reads, and post a ranked Slack report\n\
-          with concrete restructuring recommendations.\n\
-          Files: docs/analysis-backlog/cost-analysis.md\n"
+      Scope: Add the ToolCallRecord dataclass to scripts/plan-orchestrator.py and
+      extend
 
-  - id: phase-4
-    name: Phase 4 - Unit tests
+      stream_json_output() to collect tool_use/tool_result events into result_capture[''tool_calls''].
+
+      Also add non-verbose mode extraction from the JSON output path.
+
+      Files: scripts/plan-orchestrator.py
+
+      '
+    last_attempt: '2026-03-24T21:04:23.675339'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T21:07:05.353503'
+    result_message: Added ToolCallRecord dataclass; extended stream_json_output()
+      to collect tool_use/tool_result pairs into result_capture['tool_calls']; added
+      _extract_tool_calls_from_json_output() for non-verbose JSON mode with same pairing
+      logic; wired into run_claude_task(). Build clean.
+- id: phase-2
+  name: Phase 2 - Cost log writer
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Implement write_execution_cost_log and integrate into run_claude_task
+    agent: coder
     status: pending
-    tasks:
-      - id: '4.1'
-        name: Write unit tests for cost log writer and tool call extraction
-        agent: coder
-        status: pending
-        depends_on:
-          - '2.1'
-        description: "Implement the work item: docs/feature-backlog/12-structured-execution-cost-log-and-analysis.md\n\
-          Read the design doc: docs/plans/2026-03-24-12-structured-execution-cost-log-and-analysis-design.md\n\
-          Scope: Create tests/test_execution_cost_log.py with unit tests covering:\n\
-          (a) ToolCallRecord creation with and without optional fields\n\
-          (b) write_execution_cost_log creates file on first call with correct structure\n\
-          (c) write_execution_cost_log appends task records on subsequent calls\n\
-          (d) tool_use/tool_result pairing produces correct result_bytes\n\
-          (e) item slug is correctly derived from plan file path stem\n\
-          Run: ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_execution_cost_log.py -v\n\
-          Fix any failures before marking complete.\n\
-          Files: tests/test_execution_cost_log.py\n"
+    depends_on:
+    - '1.1'
+    description: 'Implement the work item: docs/feature-backlog/12-structured-execution-cost-log-and-analysis.md
+
+      Read the design doc: docs/plans/2026-03-24-12-structured-execution-cost-log-and-analysis-design.md
+
+      Scope: Add write_execution_cost_log() to scripts/plan-orchestrator.py. Add optional
+
+      tool_calls field to TaskResult. Call write_execution_cost_log() in the main
+      execution
+
+      loop after recording usage (item_slug from Path(plan_path).stem, item_type from
+      meta).
+
+      Files: scripts/plan-orchestrator.py
+
+      '
+- id: phase-3
+  name: Phase 3 - Analysis backlog template
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Create analysis backlog template for cost log analysis
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.1'
+    description: 'Implement the work item: docs/feature-backlog/12-structured-execution-cost-log-and-analysis.md
+
+      Read the design doc: docs/plans/2026-03-24-12-structured-execution-cost-log-and-analysis-design.md
+
+      Scope: Create docs/analysis-backlog/cost-analysis.md as a reusable analysis
+      item
+
+      template. The template instructs the analysis agent to read all files under
+
+      docs/reports/execution-costs/, aggregate read volume by file path, rank agent
+      types
+
+      by token cost, identify intra-item repeated reads, and post a ranked Slack report
+
+      with concrete restructuring recommendations.
+
+      Files: docs/analysis-backlog/cost-analysis.md
+
+      '
+- id: phase-4
+  name: Phase 4 - Unit tests
+  status: pending
+  tasks:
+  - id: '4.1'
+    name: Write unit tests for cost log writer and tool call extraction
+    agent: coder
+    status: pending
+    depends_on:
+    - '2.1'
+    description: 'Implement the work item: docs/feature-backlog/12-structured-execution-cost-log-and-analysis.md
+
+      Read the design doc: docs/plans/2026-03-24-12-structured-execution-cost-log-and-analysis-design.md
+
+      Scope: Create tests/test_execution_cost_log.py with unit tests covering:
+
+      (a) ToolCallRecord creation with and without optional fields
+
+      (b) write_execution_cost_log creates file on first call with correct structure
+
+      (c) write_execution_cost_log appends task records on subsequent calls
+
+      (d) tool_use/tool_result pairing produces correct result_bytes
+
+      (e) item slug is correctly derived from plan file path stem
+
+      Run: ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_execution_cost_log.py
+      -v
+
+      Fix any failures before marking complete.
+
+      Files: tests/test_execution_cost_log.py
+
+      '
