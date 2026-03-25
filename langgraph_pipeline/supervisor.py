@@ -26,6 +26,7 @@ import sys
 import threading
 import time
 import uuid
+from pathlib import Path
 from typing import Optional
 
 from langgraph_pipeline.pipeline.nodes.scan import (
@@ -34,7 +35,7 @@ from langgraph_pipeline.pipeline.nodes.scan import (
     unclaim_item,
 )
 from langgraph_pipeline.pipeline.state import PipelineState
-from langgraph_pipeline.shared.paths import CLAIMED_DIR, WORKER_RESULT_DIR
+from langgraph_pipeline.shared.paths import BACKLOG_DIRS, CLAIMED_DIR, WORKER_RESULT_DIR
 from langgraph_pipeline.slack.notifier import SlackNotifier
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -74,6 +75,51 @@ def _make_result_file_path() -> str:
     """
     uid = uuid.uuid4().hex[:12]
     return os.path.join(WORKER_RESULT_DIR, _RESULT_FILE_TEMPLATE.format(uid=uid))
+
+
+def _unclaim_orphaned_items() -> None:
+    """Return any items in CLAIMED_DIR to their backlog on supervisor startup.
+
+    When the supervisor restarts after a crash or restart, items that were
+    claimed by now-dead workers remain in CLAIMED_DIR. Without cleanup, those
+    items are invisible to scan_backlog (which only scans the backlog dirs) and
+    are never processed again.
+
+    This function is called once at supervisor startup, before the dispatch
+    loop begins. It moves every .md file in CLAIMED_DIR back to its original
+    backlog directory based on the item type inferred from the filename context.
+    We use the same type-inference logic as _item_type_from_path: default to
+    "feature" for ambiguous items, since the worst case is the item re-enters
+    the backlog and gets reclassified on the next scan.
+    """
+    claimed_dir = Path(CLAIMED_DIR)
+    if not claimed_dir.exists():
+        return
+
+    orphans = list(claimed_dir.glob("*.md"))
+    if not orphans:
+        return
+
+    logger.warning(
+        "Startup: found %d orphaned item(s) in %s — returning to backlog.",
+        len(orphans),
+        CLAIMED_DIR,
+    )
+    for md_file in orphans:
+        # Infer type from path (will always be feature for ambiguous slugs —
+        # acceptable since items will be re-prioritised on next scan).
+        path_str = str(md_file).lower()
+        if "defect" in path_str:
+            item_type = "defect"
+        elif "analysis" in path_str:
+            item_type = "analysis"
+        else:
+            item_type = "feature"
+        try:
+            unclaim_item(str(md_file), item_type)
+            logger.info("Returned orphan %s to %s backlog.", md_file.name, item_type)
+        except (OSError, KeyError) as exc:
+            logger.warning("Could not return orphan %s: %s", md_file.name, exc)
 
 
 def _build_scan_state() -> PipelineState:
@@ -138,11 +184,14 @@ def _remove_result_file(result_file: str) -> None:
         logger.warning("Could not remove result file %s: %s", result_file, exc)
 
 
-def _spawn_worker(claimed_path: str, result_file: str) -> subprocess.Popen:
+def _spawn_worker(claimed_path: str, result_file: str, item_type: str, item_slug: str) -> subprocess.Popen:
     """Spawn a worker subprocess for the given claimed item.
 
-    Runs `python -m langgraph_pipeline.worker` with --item-path and
-    --result-file. Returns the Popen object (PID available via .pid).
+    Runs `python -m langgraph_pipeline.worker` with --item-path,
+    --result-file, --item-type, and --item-slug. The slug and type are
+    forwarded explicitly because the claimed path no longer contains the
+    original backlog directory name needed to derive them.
+    Returns the Popen object (PID available via .pid).
     """
     cmd = [
         sys.executable,
@@ -152,6 +201,10 @@ def _spawn_worker(claimed_path: str, result_file: str) -> subprocess.Popen:
         claimed_path,
         "--result-file",
         result_file,
+        "--item-type",
+        item_type,
+        "--item-slug",
+        item_slug,
     ]
     logger.info("Spawning worker: item=%s result=%s", claimed_path, result_file)
     return subprocess.Popen(cmd)
@@ -310,7 +363,7 @@ def _try_dispatch_one(active_workers: dict[int, WorkerRecord]) -> bool:
     if candidate is None:
         return False
 
-    item_path, _slug, item_type = candidate
+    item_path, item_slug, item_type = candidate
 
     claimed = claim_item(item_path)
     if not claimed:
@@ -321,7 +374,7 @@ def _try_dispatch_one(active_workers: dict[int, WorkerRecord]) -> bool:
     result_file = _make_result_file_path()
 
     try:
-        proc = _spawn_worker(claimed_path, result_file)
+        proc = _spawn_worker(claimed_path, result_file, item_type, item_slug)
         pid = proc.pid
         active_workers[pid] = (claimed_path, result_file, item_type, time.monotonic())
         logger.info(
@@ -385,6 +438,9 @@ def run_supervisor_loop(
     active_workers: dict[int, WorkerRecord] = {}
     cumulative_cost_usd: list[float] = [0.0]
     budget_exceeded = False
+
+    # Cleanup: return any items orphaned in CLAIMED_DIR by a previous run.
+    _unclaim_orphaned_items()
 
     logger.info(
         "Supervisor starting: max_workers=%d budget_cap=%s",
