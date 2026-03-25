@@ -59,6 +59,14 @@ sections:
     result_message: Added IDEAS_DIR and IDEAS_PROCESSED_DIR to paths.py; created idea_classifier.py
       with scan_ideas, classify_idea, and process_ideas functions. Syntax verified
       and committed.
+    validation_attempts: 1
+    validation_findings: All requirements met. Build OK. Syntax verified. Pre-existing
+      test collection errors (test_auto_pipeline.py, test_completed_archive.py) are
+      unrelated to this task — confirmed by stash test showing same failures before
+      changes. paths.py has IDEAS_DIR and IDEAS_PROCESSED_DIR after BACKLOG_DIRS block.
+      idea_classifier.py has all required constants, prompt template with all placeholders,
+      scan_ideas/classify_idea/process_ideas with correct signatures and logic. File
+      headers comply with CODING-RULES.md.
 - id: phase-2
   name: Phase 2 - CLI integration
   status: pending
@@ -66,7 +74,7 @@ sections:
   - id: '2.1'
     name: Wire process_ideas into the CLI scan loop
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.1'
     description: "Implement the work item: docs/feature-backlog/ideas-intake-pipeline.md\n\
@@ -80,6 +88,12 @@ sections:
       \ %d idea(s) into backlog\", ideas_processed)\n\n2. Verify syntax:\n   python3\
       \ -c \"import py_compile; py_compile.compile('langgraph_pipeline/cli.py', doraise=True);\
       \ print('syntax OK')\"\n\nFiles: langgraph_pipeline/cli.py\n"
+    last_attempt: '2026-03-24T22:26:44.696719'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T22:27:32.947788'
+    result_message: Added process_ideas import and call in _run_scan_loop() between
+      _post_pending_suspension_questions and _pre_scan; syntax verified OK; committed.
 - id: phase-3
   name: Phase 3 - Unit tests
   status: pending
