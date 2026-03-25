@@ -27,7 +27,7 @@ sections:
   - id: '1.1'
     name: Fix claim_item same-path guard and add CLAIMED_DIR scan filter
     agent: coder
-    status: in_progress
+    status: completed
     description: "Implement the work item: .claude/plans/.claimed/06-supervisor-spawns-duplicate-workers-for-same-item.md\n\
       \nRead the design doc first: docs/plans/2026-03-25-06-supervisor-spawns-duplicate-workers-for-same-item-design.md\n\
       \nFix 1 and Fix 2 from the design doc:\n\nIn langgraph_pipeline/pipeline/nodes/scan.py:\n\
@@ -55,6 +55,11 @@ sections:
     last_attempt: '2026-03-25T00:29:48.141580'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-25T00:32:47.782312'
+    result_message: Added CLAIM_META_SUFFIX constant, same-path guard in claim_item(),
+      CLAIMED_DIR filter in _scan_directory(), source_item CLAIMED_DIR guard in scan_backlog(),
+      item_type forwarding in _try_dispatch_one(). Added 2 new tests. All 67 targeted
+      tests pass.
 - id: phase-2
   name: Phase 2 - Item Type Sidecar for Accurate Unclaim
   status: pending
