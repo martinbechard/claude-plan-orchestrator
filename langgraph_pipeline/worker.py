@@ -269,6 +269,7 @@ def main() -> int:
                 duration_s=duration_s,
                 message="Claude quota exhausted — item left for retry",
             )
+            _cleanup_worker_db(db_path)
             return EXIT_CODE_ERROR
 
         logger.info(

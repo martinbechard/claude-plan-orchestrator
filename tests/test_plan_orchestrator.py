@@ -195,7 +195,7 @@ def test_create_backlog_item_returns_dict(tmp_path):
         assert os.path.exists(result["filepath"])
 
         # Verify filename format
-        assert result["filename"].startswith("1-")
+        assert result["filename"].startswith("01-")
         assert result["filename"].endswith(".md")
 
     finally:
@@ -225,7 +225,7 @@ def test_create_backlog_item_increments_number(tmp_path):
 
         # Should be numbered 2
         assert result["item_number"] == 2
-        assert result["filename"].startswith("2-")
+        assert result["filename"].startswith("02-")
 
     finally:
         os.chdir(original_cwd)

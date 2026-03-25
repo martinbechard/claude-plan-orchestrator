@@ -1112,11 +1112,11 @@ def test_create_backlog_feature(tmp_path, monkeypatch):
 
     # Verify metadata
     assert result['item_number'] == 1
-    assert result['filename'].startswith("1-")
+    assert result['filename'].startswith("01-")
 
-    # Verify filename starts with "1-"
+    # Verify filename starts with "01-"
     filename = os.path.basename(result['filepath'])
-    assert filename.startswith("1-")
+    assert filename.startswith("01-")
     assert filename.endswith(".md")
 
     # Verify file content

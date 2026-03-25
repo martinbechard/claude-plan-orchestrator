@@ -1,5 +1,12 @@
 # Release Notes
 
+## 1.10.1 (2026-03-25)
+
+### Bug Fixes
+- **Worker DB cleanup on quota exhaustion:** Pipeline worker subprocesses now remove
+  their SQLite checkpoint DB when failing due to Claude quota exhaustion, preventing
+  accumulation of orphaned `.claude/pipeline-worker-*.db` files.
+
 ## 1.10.0 (2026-03-25)
 
 ### New Features
