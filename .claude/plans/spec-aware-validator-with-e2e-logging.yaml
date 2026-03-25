@@ -52,7 +52,7 @@ sections:
   - id: '2.1'
     name: Fix test failures and collection errors
     agent: coder
-    status: in_progress
+    status: failed
     depends_on:
     - '1.1'
     description: "Fix all test failures described in 'What Remains > 2' of the design\
@@ -67,6 +67,7 @@ sections:
     last_attempt: '2026-03-25T02:50:17.236223'
     attempts: 1
     model_used: sonnet
+    result_message: Unknown status
 - id: phase-3
   name: Phase 3 - Plugin Version Bump
   status: pending
@@ -74,7 +75,7 @@ sections:
   - id: '3.1'
     name: Bump plugin version to 1.10.0
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.1'
     description: "Bump plugin.json version from 1.9.3 to 1.10.0 and add RELEASE-NOTES.md\
@@ -87,3 +88,8 @@ sections:
       \ format at docs/templates/verification-block.md.\n\nGit commit: git add plugin.json\
       \ RELEASE-NOTES.md\ngit commit -m 'chore: bump version to 1.10.0 for spec-aware\
       \ validator feature'\n"
+    last_attempt: '2026-03-25T03:05:17.754986'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-25T03:06:13.229403'
+    result_message: 'PASS: All good'
