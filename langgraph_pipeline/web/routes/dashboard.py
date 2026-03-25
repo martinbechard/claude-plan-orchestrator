@@ -49,7 +49,7 @@ def dashboard(request: Request) -> HTMLResponse:
     Returns:
         Rendered dashboard.html template.
     """
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+    return templates.TemplateResponse(request, "dashboard.html")
 
 
 @router.get("/api/stream")
