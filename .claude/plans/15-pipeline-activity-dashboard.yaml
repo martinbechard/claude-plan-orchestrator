@@ -48,6 +48,12 @@ sections:
       capped at 50, total_processed counter), add_active_worker/remove_active_worker/add_error/snapshot()
       methods, queue_count computed by globbing BACKLOG_DIRS, and module-level singleton
       via get_dashboard_state()/reset_dashboard_state().
+    validation_attempts: 1
+    validation_findings: DashboardState module fully satisfies all task requirements.
+      WorkerInfo/CompletionRecord dataclasses correct, DashboardState has all required
+      fields and methods, snapshot() uses BACKLOG_DIRS glob (no scan graph), singleton
+      functions present. Build and syntax checks pass. Two pre-existing test errors
+      confirmed unrelated to this task.
 - id: phase-2
   name: Phase 2 - Dashboard Router and SSE Endpoint
   status: pending
@@ -55,7 +61,7 @@ sections:
   - id: '2.1'
     name: Create dashboard FastAPI router
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '1.1'
     description: "Implement the work item: .claude/plans/.claimed/15-pipeline-activity-dashboard.md\n\
@@ -70,6 +76,9 @@ sections:
       \  unconditionally inside create_app() (after the health endpoint, before proxy\
       \ check)\nVerify syntax: python3 -c \"import py_compile; py_compile.compile('langgraph_pipeline/web/routes/dashboard.py',\
       \ doraise=True)\"\n"
+    last_attempt: '2026-03-25T02:17:05.571988'
+    attempts: 1
+    model_used: sonnet
 - id: phase-3
   name: Phase 3 - Dashboard HTML Template and JS
   status: pending
