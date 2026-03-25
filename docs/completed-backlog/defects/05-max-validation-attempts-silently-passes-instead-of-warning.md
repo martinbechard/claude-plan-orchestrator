@@ -45,5 +45,3 @@ Also update the log message from "treating as PASS" to "treating as WARN".
 ## Verification Log
 
 *(empty — no fix attempts yet)*
-
-## LangSmith Trace: aa0d41fa-3f99-4d99-a458-3bf5cbfed913
