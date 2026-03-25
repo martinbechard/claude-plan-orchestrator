@@ -1,0 +1,302 @@
+{# langgraph_pipeline/web/templates/proxy_trace.html
+   Trace detail page: run header, SVG Gantt chart, collapsible JSON blocks.
+   Context variables:
+     run       dict        — single row from TracingProxy.get_run()
+     children  list[dict]  — rows from TracingProxy.get_children()
+   Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md #}
+{% extends "base.html" %}
+
+{% block title %}{{ run.name }} — Plan Orchestrator{% endblock %}
+
+{% block content %}
+
+{# ── Back link ──────────────────────────────────────────────────────────── #}
+<p style="margin-bottom:1rem;">
+  <a href="/proxy" aria-label="Back to trace list">&larr; Back to traces</a>
+</p>
+
+{# ── Status badge helpers ───────────────────────────────────────────────── #}
+{% if run.error %}
+  {% set badge_class = "badge-error" %}
+  {% set badge_label = "Error" %}
+{% elif run.end_time %}
+  {% set badge_class = "badge-success" %}
+  {% set badge_label = "Success" %}
+{% else %}
+  {% set badge_class = "badge-unknown" %}
+  {% set badge_label = "Running" %}
+{% endif %}
+
+{# ── Duration helper macro (seconds precision from HH:MM:SS substrings) ── #}
+{# Returns (end_secs - start_secs) for ISO timestamps on the same calendar day #}
+{% macro secs(ts) -%}
+  {%- if ts and ts | length >= 19 -%}
+    {{- (ts[11:13] | int) * 3600 + (ts[14:16] | int) * 60 + (ts[17:19] | int) -}}
+  {%- else -%}
+    0
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro fmt_duration(start_ts, end_ts) -%}
+  {%- if start_ts and end_ts -%}
+    {%- set dur = (secs(end_ts) | int) - (secs(start_ts) | int) -%}
+    {%- if dur < 0 -%}—
+    {%- elif dur >= 3600 -%}{{- (dur // 3600) }}h {{ (dur % 3600) // 60 }}m {{ dur % 60 }}s
+    {%- elif dur >= 60 -%}{{- (dur // 60) }}m {{ dur % 60 }}s
+    {%- else -%}{{- dur }}s
+    {%- endif -%}
+  {%- else -%}—{%- endif -%}
+{%- endmacro %}
+
+{# ── Header card ───────────────────────────────────────────────────────── #}
+<div class="detail-header">
+  <div class="run-name">
+    {{ run.name }}
+    <span class="badge {{ badge_class }}" role="status">{{ badge_label }}</span>
+  </div>
+
+  <div class="detail-meta">
+    Start time
+    <span>
+      {% if run.start_time %}
+        {{ run.start_time[:19] | replace("T", " ") }}
+      {% else %}
+        —
+      {% endif %}
+    </span>
+  </div>
+
+  <div class="detail-meta">
+    Duration
+    <span>{{ run.display_duration if run.display_duration else fmt_duration(run.start_time, run.end_time) }}</span>
+  </div>
+
+  {% if run.display_model %}
+  <div class="detail-meta">
+    Model
+    <span>{{ run.display_model }}</span>
+  </div>
+  {% endif %}
+
+  <div class="detail-meta">
+    Run ID
+    <span style="font-family:monospace; font-size:11px;">{{ run.run_id }}</span>
+  </div>
+
+  <div class="detail-meta">
+    Child runs
+    <span>{{ children | length }}</span>
+  </div>
+
+  {% if run.error %}
+  <div class="detail-meta" style="flex:1 1 100%;">
+    Error
+    <span style="color:#991b1b; font-size:12px;">{{ run.error }}</span>
+  </div>
+  {% endif %}
+</div>
+
+{# ── SVG Gantt chart ────────────────────────────────────────────────────── #}
+{% if children %}
+
+{# ── Layout constants ──────────────────────────────────────────────────── #}
+{% set LABEL_W = 190 %}
+{% set CHART_W = 620 %}
+{% set PAD_RIGHT = 20 %}
+{% set PAD_TOP = 10 %}
+{% set ROW_H = 30 %}
+{% set BAR_H = 18 %}
+{% set BAR_Y_OFF = 6 %}
+{% set AXIS_H = 36 %}
+{% set TICK_H = 6 %}
+{% set N_TICKS = 5 %}
+
+{% set SVG_W = LABEL_W + CHART_W + PAD_RIGHT %}
+{% set SVG_H = PAD_TOP + (children | length) * ROW_H + AXIS_H %}
+
+{# ── Time bounds ───────────────────────────────────────────────────────── #}
+{% set parent_s = secs(run.start_time) | int %}
+{% set parent_end_s = secs(run.end_time) | int if run.end_time else parent_s %}
+
+{# Expand bounds to cover all children #}
+{% set ns = namespace(min_s=parent_s, max_s=parent_end_s) %}
+{% for child in children %}
+  {% set cs = secs(child.start_time) | int %}
+  {% set ce = secs(child.end_time) | int if child.end_time else cs %}
+  {% if cs < ns.min_s %}{% set ns.min_s = cs %}{% endif %}
+  {% if ce > ns.max_s %}{% set ns.max_s = ce %}{% endif %}
+{% endfor %}
+
+{% set span_s = [ns.max_s - ns.min_s, 1] | max %}
+
+{# ── Bar colour by inferred run type ──────────────────────────────────── #}
+{% macro bar_color(name) -%}
+  {%- set n = name | lower -%}
+  {%- if "llm" in n or "chat" in n or "claude" in n or "gpt" in n or "model" in n -%}
+    #16a34a
+  {%- elif "tool" in n or "function" in n or "retriev" in n or "search" in n -%}
+    #2563eb
+  {%- else -%}
+    #64748b
+  {%- endif -%}
+{%- endmacro %}
+
+{# ── Text colour (contrast on fill) ──────────────────────────────────── #}
+{% macro text_color(name) -%}
+  {%- set n = name | lower -%}
+  {%- if "llm" in n or "chat" in n or "claude" in n or "gpt" in n or "model" in n -%}
+    #052e16
+  {%- elif "tool" in n or "function" in n or "retriev" in n or "search" in n -%}
+    #eff6ff
+  {%- else -%}
+    #f8fafc
+  {%- endif -%}
+{%- endmacro %}
+
+<h2>Timeline</h2>
+<div class="gantt-wrap" role="img" aria-label="Gantt chart of child runs">
+  <svg class="gantt"
+       width="{{ SVG_W }}"
+       height="{{ SVG_H }}"
+       viewBox="0 0 {{ SVG_W }} {{ SVG_H }}"
+       xmlns="http://www.w3.org/2000/svg">
+
+    {# ── Background grid lines ──────────────────────────────────────── #}
+    {% for i in range(N_TICKS + 1) %}
+      {% set gx = LABEL_W + (i * CHART_W // N_TICKS) %}
+      <line x1="{{ gx }}" y1="{{ PAD_TOP }}"
+            x2="{{ gx }}" y2="{{ PAD_TOP + (children | length) * ROW_H }}"
+            stroke="#e2e8f0" stroke-width="1"/>
+    {% endfor %}
+
+    {# ── Child run bars ────────────────────────────────────────────── #}
+    {% for child in children %}
+      {% set row_y = PAD_TOP + loop.index0 * ROW_H %}
+      {% set bar_y = row_y + BAR_Y_OFF %}
+
+      {# Compute bar x position and width #}
+      {% set cs = secs(child.start_time) | int %}
+      {% set ce = secs(child.end_time) | int if child.end_time else cs + 1 %}
+      {% set bar_x = LABEL_W + ((cs - ns.min_s) * CHART_W // span_s) %}
+      {% set bar_w = [((ce - cs) * CHART_W // span_s), 4] | max %}
+
+      {# Clamp bar_x to chart area #}
+      {% set bar_x = [bar_x, LABEL_W] | max %}
+      {% set bar_x = [bar_x, LABEL_W + CHART_W - 4] | min %}
+
+      {# Truncate label text to fit in label column #}
+      {% set max_label_chars = 24 %}
+      {% set label_text = child.name[:max_label_chars] ~ ("…" if child.name | length > max_label_chars else "") %}
+
+      {# Row background (alternating) #}
+      {% if loop.index0 % 2 == 0 %}
+        <rect x="0" y="{{ row_y }}" width="{{ SVG_W }}" height="{{ ROW_H }}"
+              fill="#f8fafc" opacity="0.5"/>
+      {% endif %}
+
+      {# Label #}
+      <text x="{{ LABEL_W - 8 }}" y="{{ bar_y + BAR_H // 2 + 4 }}"
+            text-anchor="end"
+            font-size="11"
+            fill="#374151"
+            aria-hidden="true">{{ label_text }}</text>
+
+      {# Bar #}
+      <rect x="{{ bar_x }}"
+            y="{{ bar_y }}"
+            width="{{ bar_w }}"
+            height="{{ BAR_H }}"
+            rx="3"
+            fill="{{ bar_color(child.name) }}"
+            aria-label="{{ child.name }}: {{ fmt_duration(child.start_time, child.end_time) }}"/>
+
+      {# Duration label inside bar (only if bar is wide enough) #}
+      {% if bar_w >= 40 %}
+        {% set dur_label = fmt_duration(child.start_time, child.end_time) %}
+        <text x="{{ bar_x + bar_w // 2 }}"
+              y="{{ bar_y + BAR_H // 2 + 4 }}"
+              text-anchor="middle"
+              font-size="10"
+              fill="{{ text_color(child.name) }}"
+              aria-hidden="true">{{ dur_label }}</text>
+      {% endif %}
+    {% endfor %}
+
+    {# ── Time axis ─────────────────────────────────────────────────── #}
+    {% set axis_y = PAD_TOP + (children | length) * ROW_H + 1 %}
+    <line x1="{{ LABEL_W }}" y1="{{ axis_y }}"
+          x2="{{ LABEL_W + CHART_W }}" y2="{{ axis_y }}"
+          stroke="#94a3b8" stroke-width="1"/>
+
+    {% for i in range(N_TICKS + 1) %}
+      {% set tx = LABEL_W + (i * CHART_W // N_TICKS) %}
+      {% set tick_s = ns.min_s + (i * span_s // N_TICKS) %}
+      {% set tick_h = tick_s // 3600 %}
+      {% set tick_m = (tick_s % 3600) // 60 %}
+      {% set tick_sec = tick_s % 60 %}
+
+      <line x1="{{ tx }}" y1="{{ axis_y }}"
+            x2="{{ tx }}" y2="{{ axis_y + TICK_H }}"
+            stroke="#94a3b8" stroke-width="1"/>
+
+      <text x="{{ tx }}" y="{{ axis_y + TICK_H + 12 }}"
+            text-anchor="middle"
+            font-size="10"
+            fill="#6b7280"
+            aria-hidden="true">
+        {{ "%02d" | format(tick_h) }}:{{ "%02d" | format(tick_m) }}:{{ "%02d" | format(tick_sec) }}
+      </text>
+    {% endfor %}
+
+    {# ── Legend ────────────────────────────────────────────────────── #}
+    {% set legend_y = SVG_H - 2 %}
+    <rect x="{{ LABEL_W }}" y="{{ legend_y - 10 }}" width="10" height="10" rx="2" fill="#16a34a"/>
+    <text x="{{ LABEL_W + 14 }}" y="{{ legend_y }}" font-size="10" fill="#6b7280">LLM</text>
+    <rect x="{{ LABEL_W + 55 }}" y="{{ legend_y - 10 }}" width="10" height="10" rx="2" fill="#2563eb"/>
+    <text x="{{ LABEL_W + 69 }}" y="{{ legend_y }}" font-size="10" fill="#6b7280">Tool</text>
+    <rect x="{{ LABEL_W + 110 }}" y="{{ legend_y - 10 }}" width="10" height="10" rx="2" fill="#64748b"/>
+    <text x="{{ LABEL_W + 124 }}" y="{{ legend_y }}" font-size="10" fill="#6b7280">Other</text>
+  </svg>
+</div>
+
+{% else %}
+<div class="empty-state" role="status">
+  <p>No child runs recorded for this trace.</p>
+</div>
+{% endif %}
+
+{# ── Collapsible JSON blocks ────────────────────────────────────────────── #}
+<h2>Run data</h2>
+
+{% if run.inputs_json %}
+<div class="json-block">
+  <details>
+    <summary>Inputs</summary>
+    <pre>{{ run.inputs_json }}</pre>
+  </details>
+</div>
+{% endif %}
+
+{% if run.outputs_json %}
+<div class="json-block">
+  <details>
+    <summary>Outputs</summary>
+    <pre>{{ run.outputs_json }}</pre>
+  </details>
+</div>
+{% endif %}
+
+{% if run.metadata_json %}
+<div class="json-block">
+  <details>
+    <summary>Metadata</summary>
+    <pre>{{ run.metadata_json }}</pre>
+  </details>
+</div>
+{% endif %}
+
+{% if not run.inputs_json and not run.outputs_json and not run.metadata_json %}
+<p style="color:#888; font-size:13px;">No inputs, outputs, or metadata recorded for this run.</p>
+{% endif %}
+
+{% endblock %}
