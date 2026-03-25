@@ -1,0 +1,42 @@
+meta:
+  name: Port execution cost log to LangGraph pipeline
+  description: >
+    Create langgraph_pipeline/shared/cost_log.py, add COST_LOG_DIR to paths.py,
+    wire write_execution_cost_log() into execute_task, and add a CLAUDE.md note
+    that scripts/plan-orchestrator.py is legacy.
+  source_item: ".claude/plans/.claimed/04-planner-targets-legacy-script-instead-of-langgraph-pipeline.md"
+  plan_doc: "docs/plans/2026-03-24-04-planner-targets-legacy-script-instead-of-langgraph-pipeline-design.md"
+  created: '2026-03-24'
+  max_attempts_default: 3
+  validation:
+    enabled: true
+    run_after:
+      - coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+
+sections:
+  - id: phase-1
+    name: Phase 1 - Port cost log to LangGraph shared layer
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: Create cost_log shared module and add COST_LOG_DIR to paths
+        agent: coder
+        status: pending
+        description: "Implement the work item: .claude/plans/.claimed/04-planner-targets-legacy-script-instead-of-langgraph-pipeline.md\n\
+          \nDesign reference: docs/plans/2026-03-24-04-planner-targets-legacy-script-instead-of-langgraph-pipeline-design.md\n\
+          \nCreate langgraph_pipeline/shared/cost_log.py with write_execution_cost_log(),\
+          \ add COST_LOG_DIR = Path('docs/reports/execution-costs') to langgraph_pipeline/shared/paths.py."
+
+      - id: '1.2'
+        name: Wire write_execution_cost_log into execute_task and update CLAUDE.md
+        agent: coder
+        status: pending
+        description: "Implement the work item: .claude/plans/.claimed/04-planner-targets-legacy-script-instead-of-langgraph-pipeline.md\n\
+          \nDesign reference: docs/plans/2026-03-24-04-planner-targets-legacy-script-instead-of-langgraph-pipeline-design.md\n\
+          \nImport write_execution_cost_log from langgraph_pipeline.shared.cost_log\
+          \ in task_runner.py and call it after emit_tool_call_traces(). Add a note\
+          \ to CLAUDE.md that scripts/plan-orchestrator.py is the legacy execution\
+          \ path and all new pipeline features go in langgraph_pipeline/."
