@@ -18,6 +18,10 @@
        {% if request.url.path == '/dashboard' %}class="active" aria-current="page"{% endif %}>
       Dashboard
     </a>
+    <a href="/analysis"
+       {% if request.url.path.startswith('/analysis') %}class="active" aria-current="page"{% endif %}>
+      Cost Analysis
+    </a>
     <a href="/proxy"
        {% if request.url.path.startswith('/proxy') %}class="active" aria-current="page"{% endif %}>
       Traces
