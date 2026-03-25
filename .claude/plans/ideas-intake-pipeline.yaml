@@ -94,6 +94,10 @@ sections:
     completed_at: '2026-03-24T22:27:32.947788'
     result_message: Added process_ideas import and call in _run_scan_loop() between
       _post_pending_suspension_questions and _pre_scan; syntax verified OK; committed.
+    validation_attempts: 1
+    validation_findings: Import and call correctly placed in _run_scan_loop(); build
+      and syntax checks pass; 1429 tests pass; 3 pre-existing failures in test_plan_orchestrator.py
+      and test_slack_notifier.py are unrelated to task 2.1 changes.
 - id: phase-3
   name: Phase 3 - Unit tests
   status: pending
@@ -101,7 +105,7 @@ sections:
   - id: '3.1'
     name: Add unit tests for idea_classifier module
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.1'
     description: "Implement the work item: docs/feature-backlog/ideas-intake-pipeline.md\n\
@@ -125,6 +129,13 @@ sections:
       Use monkeypatch for IDEAS_DIR, IDEAS_PROCESSED_DIR, and subprocess.run.\n\n\
       Run tests and fix any failures:\n  ~/.pyenv/versions/3.11.*/bin/python -m pytest\
       \ tests/test_idea_classifier.py -v\n\nFiles: tests/test_idea_classifier.py\n"
+    last_attempt: '2026-03-24T22:29:41.497292'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T22:30:56.883154'
+    result_message: Created tests/test_idea_classifier.py with 12 tests covering all
+      three public functions (scan_ideas, classify_idea, process_ideas). All 12 tests
+      pass.
 - id: phase-4
   name: Phase 4 - Plugin version bump
   status: pending
