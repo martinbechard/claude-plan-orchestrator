@@ -1,19 +1,16 @@
 {# langgraph_pipeline/web/templates/proxy_list.html
    Paginated LangSmith trace list with filter bar and expandable row details.
    Context variables:
-     runs       list[dict]  — raw rows from TracingProxy.list_runs()
-                              fields: run_id, name, start_time, end_time,
-                              metadata_json, error, created_at (all strings or None)
-     page       int         — current 1-based page number
-     slug       str         — active slug filter value (substring on name)
-     model      str         — active model filter value (substring in metadata_json)
-     date_from  str         — active date-from filter value (ISO date)
-     date_to    str         — active date-to filter value (ISO date)
+     runs        list[dict]  — enriched rows from _enrich_run(); each row has
+                               display_duration, display_cost, display_model,
+                               display_slug, child_count (int), plus raw DB fields
+     page        int         — current 1-based page number
+     total_pages int         — total number of pages
+     slug        str         — active slug filter value (substring on name)
+     model       str         — active model filter value (substring in metadata_json)
+     date_from   str         — active date-from filter value (ISO date)
+     date_to     str         — active date-to filter value (ISO date)
    Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md
-
-   Note: metadata_json is a raw JSON string from SQLite.  Jinja2 has no built-in
-   JSON parser, so cost/model/slug are shown as "—" in the table; full metadata
-   is visible in the expandable row and the detail page.
 #}
 {% extends "base.html" %}
 
@@ -104,10 +101,10 @@
           <a href="/proxy/{{ run.run_id | e }}">{{ run.name | e }}</a>
         </td>
 
-        {# Item slug: first whitespace-delimited token of the run name, which
-           by pipeline convention is the item slug ("slug: description"). #}
         <td>
-          {% if run.name %}
+          {% if run.display_slug %}
+            {{ run.display_slug | e }}
+          {% elif run.name %}
             {{ run.name.split(" ")[0] | e }}
           {% else %}
             &mdash;
@@ -124,12 +121,9 @@
           {% endif %}
         </td>
 
-        {# Duration, cost, model require JSON/datetime parsing not available in
-           vanilla Jinja2.  Full details are in the expandable row below and on
-           the trace detail page. #}
-        <td>&mdash;</td>
-        <td>&mdash;</td>
-        <td>&mdash;</td>
+        <td>{{ run.display_duration if run.display_duration else "&mdash;" | safe }}</td>
+        <td>{{ run.display_cost if run.display_cost else "&mdash;" | safe }}</td>
+        <td>{{ run.display_model | e if run.display_model else "&mdash;" | safe }}</td>
 
         <td>
           <span class="badge {{ badge_class }}" role="status">{{ badge_label }}</span>
@@ -141,7 +135,7 @@
         <td colspan="7">
           <details>
             <summary>
-              Details &mdash;
+              Details ({{ run.child_count }} child run{{ "s" if run.child_count != 1 else "" }}) &mdash;
               <a href="/proxy/{{ run.run_id | e }}"
                  aria-label="Open full trace for {{ run.name | e }}">
                 open full trace &rarr;
@@ -169,10 +163,8 @@
 </div>
 
 {# ── Pagination ────────────────────────────────────────────────────────────── #}
-{# has_next: page returned a full PAGE_SIZE_DEFAULT (50) rows, so more may exist.
-   A "Next" click that returns an empty page is harmless — the empty state handles it. #}
 {% set has_prev = page > 1 %}
-{% set has_next = runs | length >= 50 %}
+{% set has_next = page < total_pages %}
 
 {% set qs_parts = [] %}
 {% if slug %}{% set _ = qs_parts.append("slug=" ~ slug) %}{% endif %}
@@ -190,7 +182,7 @@
     <span class="disabled" aria-disabled="true">&larr; Previous</span>
   {% endif %}
 
-  <span>Page {{ page }}</span>
+  <span>Page {{ page }} of {{ total_pages }}</span>
 
   {% if has_next %}
     {% set next_page = page + 1 %}

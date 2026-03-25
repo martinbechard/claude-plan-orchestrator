@@ -159,7 +159,10 @@ class TracingProxy:
                 "start_time": start_time,
                 "end_time": end_time,
             }
-            self._forward_async(payload)
+            try:
+                self._forward_async(payload)
+            except Exception:
+                logger.debug("TracingProxy: failed to schedule forward for run_id=%s", run_id, exc_info=True)
 
     # ─── Async Forwarder ──────────────────────────────────────────────────────
 
@@ -265,6 +268,61 @@ class TracingProxy:
         with self._connect() as conn:
             row = conn.execute(sql, [run_id]).fetchone()
         return dict(row) if row else None
+
+    def count_runs(
+        self,
+        slug: str = "",
+        model: str = "",
+        date_from: str = "",
+        date_to: str = "",
+    ) -> int:
+        """Return total count of root runs matching the given filters.
+
+        Uses the same filter logic as list_runs but returns only the count.
+        """
+        conditions = ["parent_run_id IS NULL"]
+        params: list = []
+
+        if slug:
+            conditions.append("name LIKE ?")
+            params.append(f"%{slug}%")
+        if model:
+            conditions.append("metadata_json LIKE ?")
+            params.append(f"%{model}%")
+        if date_from:
+            conditions.append("created_at >= ?")
+            params.append(date_from)
+        if date_to:
+            conditions.append("created_at <= ?")
+            params.append(date_to)
+
+        where = " AND ".join(conditions)
+        sql = f"SELECT COUNT(*) FROM traces WHERE {where}"
+        with self._connect() as conn:
+            row = conn.execute(sql, params).fetchone()
+        return row[0] if row else 0
+
+    def count_children_batch(self, run_ids: list[str]) -> dict[str, int]:
+        """Return child run counts for a batch of parent run_ids.
+
+        Args:
+            run_ids: List of parent run identifiers.
+
+        Returns:
+            Dict mapping run_id to child count.
+        """
+        if not run_ids:
+            return {}
+        placeholders = ",".join("?" for _ in run_ids)
+        sql = f"""
+            SELECT parent_run_id, COUNT(*) as cnt
+            FROM traces
+            WHERE parent_run_id IN ({placeholders})
+            GROUP BY parent_run_id
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql, run_ids).fetchall()
+        return {row[0]: row[1] for row in rows}
 
     def get_children(self, run_id: str) -> list[dict]:
         """Return all direct child runs for the given parent run_id.

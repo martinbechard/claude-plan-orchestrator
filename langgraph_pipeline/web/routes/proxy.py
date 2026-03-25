@@ -12,6 +12,7 @@ Both endpoints return HTTP 404 when the proxy is disabled (get_proxy() is None).
 """
 
 import json
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -21,7 +22,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
-from langgraph_pipeline.web.proxy import get_proxy
+from langgraph_pipeline.web.proxy import PAGE_SIZE_DEFAULT, get_proxy
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -146,12 +147,26 @@ def proxy_list(
         date_to=date_to,
     )
     runs = [_enrich_run(r) for r in raw_runs]
+
+    # Child run counts in a single batch query
+    run_ids = [r["run_id"] for r in runs if r.get("run_id")]
+    child_counts = proxy.count_children_batch(run_ids)
+    for run in runs:
+        run["child_count"] = child_counts.get(run.get("run_id", ""), 0)
+
+    # Total pages for pagination
+    total_count = proxy.count_runs(
+        slug=slug, model=model, date_from=date_from, date_to=date_to
+    )
+    total_pages = max(1, math.ceil(total_count / PAGE_SIZE_DEFAULT))
+
     return templates.TemplateResponse(
         "proxy_list.html",
         {
             "request": request,
             "runs": runs,
             "page": page,
+            "total_pages": total_pages,
             "slug": slug,
             "model": model,
             "date_from": date_from,
