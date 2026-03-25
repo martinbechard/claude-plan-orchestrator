@@ -23,7 +23,7 @@ sections:
   - id: '1.1'
     name: Create CostLogReader and aggregation helpers
     agent: coder
-    status: pending
+    status: completed
     description: "Implement the work item: .claude/plans/.claimed/16-tool-call-timing-and-cost-analysis-ui.md\n\
       Design reference: docs/plans/2026-03-25-16-tool-call-timing-and-cost-analysis-ui-design.md\n\
       This task creates the data layer module.\nFile to create: langgraph_pipeline/web/cost_log_reader.py\n\
@@ -39,6 +39,13 @@ sections:
       \  a horizontal SVG bar chart as a string; encodes file path in title attr\n\
       Verify syntax: python3 -c \"import py_compile; py_compile.compile('langgraph_pipeline/web/cost_log_reader.py',\
       \ doraise=True)\"\n"
+    last_attempt: '2026-03-25T02:13:00.561609'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-25T02:16:02.973792'
+    result_message: Created langgraph_pipeline/web/cost_log_reader.py with CostLogReader,
+      all aggregation dataclasses (CostData, ItemCost, TaskCost, WastedRead), and
+      svg_bar_chart(). Two-pass load_all() detects wasted reads. Syntax verified.
 - id: phase-2
   name: Phase 2 - Analysis Route and Template
   status: pending
@@ -49,16 +56,30 @@ sections:
     status: pending
     depends_on:
     - '1.1'
-    description: "Implement the work item: .claude/plans/.claimed/16-tool-call-timing-and-cost-analysis-ui.md\n\
-      Design reference: docs/plans/2026-03-25-16-tool-call-timing-and-cost-analysis-ui-design.md\n\
-      This task creates the /analysis FastAPI router.\nFile to create: langgraph_pipeline/web/routes/analysis.py\n\
-      - APIRouter with GET /analysis endpoint\n- Accepts optional ?agent= query param\
-      \ to filter per-item table by agent type\n- Calls CostLogReader().load_all()\
-      \ on every request (no caching)\n- Generates SVG charts via svg_bar_chart()\
-      \ from cost_log_reader\n- Returns Jinja2TemplateResponse('analysis.html') with\
-      \ all chart data\n- When CostData.has_data is False, passes has_data=False to\
-      \ template\nVerify syntax: python3 -c \"import py_compile; py_compile.compile('langgraph_pipeline/web/routes/analysis.py',\
-      \ doraise=True)\"\n"
+    description: 'Implement the work item: .claude/plans/.claimed/16-tool-call-timing-and-cost-analysis-ui.md
+
+      Design reference: docs/plans/2026-03-25-16-tool-call-timing-and-cost-analysis-ui-design.md
+
+      This task creates the /analysis FastAPI router.
+
+      File to create: langgraph_pipeline/web/routes/analysis.py
+
+      - APIRouter with GET /analysis endpoint
+
+      - Accepts optional ?agent= query param to filter per-item table by agent type
+
+      - Calls CostLogReader().load_all() on every request (no caching)
+
+      - Generates SVG charts via svg_bar_chart() from cost_log_reader
+
+      - Returns Jinja2TemplateResponse(''analysis.html'') with all chart data
+
+      - When CostData.has_data is False, passes has_data=False to template
+
+      Verify syntax: python3 -c "import py_compile; py_compile.compile(''langgraph_pipeline/web/routes/analysis.py'',
+      doraise=True)"
+
+      '
   - id: '2.2'
     name: Create analysis HTML template
     agent: frontend-coder
