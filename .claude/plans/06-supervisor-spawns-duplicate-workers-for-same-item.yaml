@@ -60,6 +60,10 @@ sections:
       CLAIMED_DIR filter in _scan_directory(), source_item CLAIMED_DIR guard in scan_backlog(),
       item_type forwarding in _try_dispatch_one(). Added 2 new tests. All 67 targeted
       tests pass.
+    validation_attempts: 1
+    validation_findings: All 6 code requirements implemented correctly. Both new tests
+      pass. 67/67 targeted tests pass. 3 full-suite failures are pre-existing (unrelated
+      to this task, confirmed by stash check).
 - id: phase-2
   name: Phase 2 - Item Type Sidecar for Accurate Unclaim
   status: pending
@@ -103,23 +107,20 @@ sections:
       \ tests/langgraph/test_parallel_items.py\n  git commit -m 'fix: write item-type\
       \ sidecar at claim time for accurate orphan restoration'\n\nFiles: langgraph_pipeline/pipeline/nodes/scan.py,\
       \ langgraph_pipeline/supervisor.py,\n       tests/langgraph/test_parallel_items.py\n"
-    last_attempt: '2026-03-25T00:35:11.530232'
+    last_attempt: '2026-03-25T00:35:16.541372'
     attempts: 1
     model_used: sonnet
-    completed_at: '2026-03-25T00:37:50.175343'
-    result_message: Added item-type sidecar to claim_item (writes .claim-meta.json)
-      and unclaim_item (deletes it best-effort). Updated _unclaim_orphaned_items in
-      supervisor.py to read sidecar first, falling back to slug heuristic. Added 5
-      new tests covering sidecar write, no-sidecar on same-path claim, sidecar delete
-      on unclaim, sidecar-based orphan restoration, and heuristic fallback. All 1098
-      langgraph tests pass.
+    completed_at: '2026-03-25T00:38:16.268492'
+    result_message: Wired TracingProxy into emit_tool_call_traces, create_root_run,
+      and finalize_root_run. Added _get_tracing_proxy() lazy-import helper. All 64
+      existing tests pass, SDK paths unchanged.
     validation_attempts: 1
-    validation_findings: Build passes. All 1098 langgraph tests pass (2 pre-existing
-      collection errors in test_auto_pipeline.py/test_completed_archive.py unrelated
-      to this task). scan.py writes CLAIM_META_SUFFIX sidecar after successful rename
-      and deletes it best-effort in unclaim_item. supervisor.py imports CLAIM_META_SUFFIX
-      and _unclaim_orphaned_items reads sidecar first, falls back to slug heuristic.
-      All 5 required new tests present and passing.
+    validation_findings: All requirements implemented and verified. Build passes.
+      33/33 task-specific tests pass. 1098/1098 langgraph tests pass. 2 pre-existing
+      failures in test_auto_pipeline.py and test_completed_archive.py are unrelated
+      to this task. sidecar write in claim_item, sidecar delete in unclaim_item, sidecar-first
+      resolution in _unclaim_orphaned_items, CLAIM_META_SUFFIX import in supervisor
+      -- all present and correct. All 5 required new tests implemented and passing.
 - id: phase-3
   name: Phase 3 - Plugin Version Bump
   status: pending
@@ -138,9 +139,10 @@ sections:
       \ at claim time so orphan unclaim restores to the correct backlog directory\n\
       \nGit commit:\n  git add plugin.json RELEASE-NOTES.md\n  git commit -m 'chore:\
       \ bump version for duplicate-worker fix'\n\nFiles: plugin.json, RELEASE-NOTES.md\n"
-    last_attempt: '2026-03-25T00:39:27.619157'
+    last_attempt: '2026-03-25T00:40:08.011499'
     attempts: 1
     model_used: sonnet
-    completed_at: '2026-03-25T00:40:13.848022'
-    result_message: Bumped plugin version from 1.9.1 to 1.9.2 and added release notes
-      entry for the three duplicate-worker fixes
+    completed_at: '2026-03-25T00:40:35.194078'
+    result_message: 'Version already bumped to 1.9.2 and RELEASE-NOTES.md updated
+      with duplicate-worker fix entries. Commit ''chore: bump version for duplicate-worker
+      fix'' already present in git history.'
