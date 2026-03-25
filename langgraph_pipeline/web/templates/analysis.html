@@ -1,0 +1,271 @@
+{# langgraph_pipeline/web/templates/analysis.html
+   Read-only cost and token-usage analysis page.
+   Context variables (has_data=True):
+     top_files_svg    str            — inline SVG: top files by read volume
+     agent_cost_svg   str            — inline SVG: token cost by agent type
+     cost_by_item     list[ItemCost] — per-item aggregations, sorted by cost desc
+       .item_slug      str
+       .item_type      str
+       .agent_types    list[str]
+       .input_tokens   int
+       .output_tokens  int
+       .cost_usd       float
+       .num_tasks      int
+       .num_wasted_reads int
+       .tasks          list[TaskCost]
+         .task_id      str
+         .agent_type   str
+         .model        str
+         .input_tokens int
+         .output_tokens int
+         .cost_usd     float
+         .duration_s   float
+     wasted_reads     list[WastedRead] — sorted by task_count desc
+       .item_slug      str
+       .file_path      str
+       .task_count     int
+     agent_filter     str|None       — active ?agent= filter value
+     all_agent_types  list[str]      — sorted list of all agent types
+   Context variables (has_data=False):
+     has_data         False
+   Design: docs/plans/2026-03-25-16-tool-call-timing-and-cost-analysis-ui-design.md #}
+{% extends "base.html" %}
+
+{% block title %}Cost Analysis — Plan Orchestrator{% endblock %}
+
+{% block extra_head %}
+<style>
+  .analysis-chart { margin-bottom: 2rem; overflow-x: auto; }
+  .agent-filter-bar { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+  .agent-filter-bar a { font-size: 12px; padding: 2px 8px; border-radius: 3px;
+    background: #eef1f5; color: #333; text-decoration: none; border: 1px solid #ccc; }
+  .agent-filter-bar a:hover { background: #d8e3f0; }
+  .agent-filter-bar a.active { background: #4e79a7; color: #fff; border-color: #3a5f88; font-weight: 600; }
+  .agent-filter-bar a.clear { background: #f5f5f5; color: #666; }
+  .task-detail-row { display: none; }
+  .task-detail-row.expanded { display: table-row; }
+  .task-detail-cell { padding: 0 !important; background: #f8f9fb; }
+  .task-subtable { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .task-subtable th, .task-subtable td { padding: 4px 10px; border-bottom: 1px solid #e0e0e0; }
+  .task-subtable th { background: #edf0f5; font-weight: 600; color: #555; }
+  .expand-btn { cursor: pointer; background: none; border: 1px solid #ccc;
+    border-radius: 3px; padding: 1px 6px; font-size: 11px; color: #555; }
+  .expand-btn:hover { background: #eef1f5; }
+  .badge-item-type { font-size: 11px; padding: 1px 6px; border-radius: 3px;
+    background: #e8f0fe; color: #3b5bdb; border: 1px solid #b8caff; }
+  .num-wasted { color: #c0392b; font-weight: 600; }
+  .duration-note { background: #fffbe6; border: 1px solid #ffe58f;
+    border-radius: 4px; padding: 0.75rem 1rem; font-size: 13px; color: #7a5f00;
+    margin-top: 1rem; }
+  .chart-section { margin-bottom: 2.5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Cost Analysis</h1>
+<p style="font-size:13px;color:#666;margin-top:-0.5rem;">
+  API-Equivalent Estimates — subscription charges may differ.
+</p>
+
+{# ── No data yet ─────────────────────────────────────────────────────────────── #}
+{% if not has_data %}
+<div class="empty-state" role="status" aria-live="polite">
+  <div class="icon" aria-hidden="true">&#128202;</div>
+  <p>No cost data yet.</p>
+  <p style="font-size:12px;color:#aaa;margin-top:0.25rem;">
+    Cost logs appear here once the pipeline processes items with the cost log writer enabled.
+    Files are written to <code>docs/reports/execution-costs/</code> by the plan orchestrator.
+  </p>
+</div>
+{% else %}
+
+{# ── Top files by read volume ────────────────────────────────────────────────── #}
+<section class="chart-section" aria-labelledby="hd-top-files">
+  <h2 id="hd-top-files">Top Files by Read Volume</h2>
+  <div class="analysis-chart" aria-label="Top files by read volume chart">
+    {{ top_files_svg | safe }}
+  </div>
+</section>
+
+{# ── Token cost by agent type ────────────────────────────────────────────────── #}
+<section class="chart-section" aria-labelledby="hd-agent-cost">
+  <h2 id="hd-agent-cost">Token Cost by Agent Type</h2>
+  <div class="analysis-chart" aria-label="Token cost by agent type chart">
+    {{ agent_cost_svg | safe }}
+  </div>
+
+  {# Filter links — one per agent type, plus a Clear link when filter is active #}
+  <nav class="agent-filter-bar" aria-label="Filter per-item table by agent type">
+    <span style="font-size:12px;color:#666;align-self:center;">Filter by agent:</span>
+    {% for agent_type in all_agent_types %}
+    <a href="/analysis?agent={{ agent_type | urlencode }}"
+       {% if agent_filter == agent_type %}class="active" aria-current="true"{% endif %}
+       aria-label="Filter to {{ agent_type }} agent">{{ agent_type }}</a>
+    {% endfor %}
+    {% if agent_filter %}
+    <a href="/analysis" class="clear" aria-label="Clear agent filter">&#10005; Clear filter</a>
+    {% endif %}
+  </nav>
+</section>
+
+{# ── Per-item cost table ──────────────────────────────────────────────────────── #}
+<section aria-labelledby="hd-item-costs">
+  <h2 id="hd-item-costs">Per-Item Cost
+    {% if agent_filter %}
+    <span style="font-size:14px;font-weight:400;color:#4e79a7;">&mdash; showing {{ agent_filter }} only</span>
+    {% endif %}
+  </h2>
+
+  {% if cost_by_item %}
+  <div class="table-wrap" role="region" aria-label="Per-item cost breakdown">
+    <table id="item-cost-table">
+      <thead>
+        <tr>
+          <th scope="col"></th>
+          <th scope="col" data-sortable="item_slug">Item</th>
+          <th scope="col" data-sortable="agent_types">Agent Types</th>
+          <th scope="col" data-sortable="input_tokens">Input Tokens</th>
+          <th scope="col" data-sortable="output_tokens">Output Tokens</th>
+          <th scope="col" data-sortable="cost_usd">Cost (~$)</th>
+          <th scope="col" data-sortable="num_tasks">Tasks</th>
+          <th scope="col" data-sortable="num_wasted_reads">Wasted Reads</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in cost_by_item %}
+        {# ── Item summary row ──────────────────────────────────────────────── #}
+        <tr class="item-row"
+            data-item-slug="{{ item.item_slug | e }}"
+            data-item-type="{{ item.item_type | e }}"
+            data-agent-types="{{ item.agent_types | join(',') | e }}"
+            data-input-tokens="{{ item.input_tokens }}"
+            data-output-tokens="{{ item.output_tokens }}"
+            data-cost-usd="{{ item.cost_usd }}"
+            data-num-tasks="{{ item.num_tasks }}"
+            data-num-wasted-reads="{{ item.num_wasted_reads }}">
+          <td>
+            {% if item.tasks %}
+            <button class="expand-btn"
+                    aria-expanded="false"
+                    aria-controls="task-detail-{{ loop.index }}"
+                    aria-label="Toggle task breakdown for {{ item.item_slug | e }}">
+              &#9654;
+            </button>
+            {% endif %}
+          </td>
+          <td>
+            {{ item.item_slug | e }}
+            {% if item.item_type %}
+            <span class="badge-item-type">{{ item.item_type | e }}</span>
+            {% endif %}
+          </td>
+          <td>{{ item.agent_types | join(', ') | e }}</td>
+          <td>{{ "{:,}".format(item.input_tokens) }}</td>
+          <td>{{ "{:,}".format(item.output_tokens) }}</td>
+          <td>~${{ "%.4f" | format(item.cost_usd) }}</td>
+          <td>{{ item.num_tasks }}</td>
+          <td>
+            {% if item.num_wasted_reads > 0 %}
+            <span class="num-wasted" title="{{ item.num_wasted_reads }} files read in multiple tasks">
+              {{ item.num_wasted_reads }}
+            </span>
+            {% else %}
+            0
+            {% endif %}
+          </td>
+        </tr>
+
+        {# ── Per-task detail row (hidden until toggled) ───────────────────── #}
+        {% if item.tasks %}
+        <tr id="task-detail-{{ loop.index }}" class="task-detail-row"
+            aria-label="Task breakdown for {{ item.item_slug | e }}">
+          <td class="task-detail-cell" colspan="8">
+            <table class="task-subtable">
+              <thead>
+                <tr>
+                  <th scope="col">Task ID</th>
+                  <th scope="col">Agent</th>
+                  <th scope="col">Model</th>
+                  <th scope="col">Input Tokens</th>
+                  <th scope="col">Output Tokens</th>
+                  <th scope="col">Cost (~$)</th>
+                  <th scope="col">Duration (s)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for task in item.tasks %}
+                <tr>
+                  <td>{{ task.task_id | e }}</td>
+                  <td>{{ task.agent_type | e }}</td>
+                  <td>{{ task.model | e }}</td>
+                  <td>{{ "{:,}".format(task.input_tokens) }}</td>
+                  <td>{{ "{:,}".format(task.output_tokens) }}</td>
+                  <td>~${{ "%.4f" | format(task.cost_usd) }}</td>
+                  <td>{{ "%.1f" | format(task.duration_s) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+        {% endif %}
+
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state" role="status">
+    <p>No items match the current filter.</p>
+    {% if agent_filter %}
+    <p><a href="/analysis">Clear filter</a> to see all items.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+
+{# ── Wasted reads panel ──────────────────────────────────────────────────────── #}
+{% if wasted_reads %}
+<section aria-labelledby="hd-wasted-reads" style="margin-top:2rem;">
+  <h2 id="hd-wasted-reads">Wasted Reads</h2>
+  <p style="font-size:13px;color:#666;margin-top:-0.25rem;">
+    Files read in 2 or more distinct tasks within the same item — candidates for earlier caching or consolidation.
+  </p>
+  <div class="table-wrap" role="region" aria-label="Wasted reads table">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Item</th>
+          <th scope="col">File Path</th>
+          <th scope="col">Task Count</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for wr in wasted_reads %}
+        <tr>
+          <td>{{ wr.item_slug | e }}</td>
+          <td><code title="{{ wr.file_path | e }}">{{ wr.file_path | e }}</code></td>
+          <td>{{ wr.task_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{# ── Duration histogram note ─────────────────────────────────────────────────── #}
+<section aria-labelledby="hd-duration" style="margin-top:2rem;">
+  <h2 id="hd-duration">Tool-Call Duration Histogram</h2>
+  <div class="duration-note" role="note">
+    Per-tool-call duration data is not yet available. The current cost log schema
+    records <code>duration_s</code> at the task level, not per individual tool call.
+    This histogram will be enabled once the log schema is extended to include
+    per-tool-call timing.
+  </div>
+</section>
+
+{% endif %}{# end has_data #}
+
+<script src="/static/analysis.js" defer></script>
+{% endblock %}
