@@ -48,12 +48,6 @@ sections:
       capped at 50, total_processed counter), add_active_worker/remove_active_worker/add_error/snapshot()
       methods, queue_count computed by globbing BACKLOG_DIRS, and module-level singleton
       via get_dashboard_state()/reset_dashboard_state().
-    validation_attempts: 1
-    validation_findings: DashboardState module fully satisfies all task requirements.
-      WorkerInfo/CompletionRecord dataclasses correct, DashboardState has all required
-      fields and methods, snapshot() uses BACKLOG_DIRS glob (no scan graph), singleton
-      functions present. Build and syntax checks pass. Two pre-existing test errors
-      confirmed unrelated to this task.
 - id: phase-2
   name: Phase 2 - Dashboard Router and SSE Endpoint
   status: pending
@@ -76,13 +70,14 @@ sections:
       \  unconditionally inside create_app() (after the health endpoint, before proxy\
       \ check)\nVerify syntax: python3 -c \"import py_compile; py_compile.compile('langgraph_pipeline/web/routes/dashboard.py',\
       \ doraise=True)\"\n"
-    last_attempt: '2026-03-25T02:17:05.571988'
+    last_attempt: '2026-03-25T02:16:11.379848'
     attempts: 1
     model_used: sonnet
-    completed_at: '2026-03-25T02:18:55.387871'
-    result_message: dashboard.py router (SSE_INTERVAL_SECONDS=2, GET /dashboard, GET
-      /api/stream) and server.py wiring were already implemented and committed in
-      prior attempt (commit 4f3e5fb9). Syntax verified OK for dashboard.py and server.py.
+    completed_at: '2026-03-25T02:17:58.127425'
+    result_message: Created langgraph_pipeline/web/routes/dashboard.py with GET /dashboard
+      (Jinja2 HTML) and GET /api/stream (SSE StreamingResponse, async generator, exits
+      on disconnect). Updated server.py to unconditionally mount dashboard_router
+      after the health endpoint.
     validation_attempts: 1
     validation_findings: dashboard.py created with SSE_INTERVAL_SECONDS=2, GET /dashboard
       and GET /api/stream endpoints. server.py unconditionally mounts dashboard_router
@@ -112,21 +107,23 @@ sections:
       \ libraries.\nUpdate langgraph_pipeline/web/static/style.css with styles for:\n\
       \  worker cards, outcome badges (success/warn/fail), item-type badges\n  (defect/feature/analysis\
       \ colour-coded), collapsible error panel.\n"
-    last_attempt: '2026-03-25T02:20:17.168006'
+    last_attempt: '2026-03-25T02:20:20.237876'
     attempts: 1
     model_used: sonnet
-    completed_at: '2026-03-25T02:21:38.802700'
-    result_message: 'dashboard.html, dashboard.js, and style.css already created by
-      prior attempt. Fixed duplicate stylesheet link in extra_head block. All files
-      implement: session summary bar, active workers grid, recent completions table,
-      collapsible error panel, three template elements, EventSource SSE consumer with
-      renderAll(), worker/outcome/item-type badge styles.'
+    completed_at: '2026-03-25T02:23:57.736681'
+    result_message: 'dashboard.html, dashboard.js, and style.css all implemented.
+      dashboard.html extends base.html with session summary bar (pinned top), active
+      workers panel, recent completions table, and collapsible error stream panel,
+      plus four template elements (#tpl-worker-card, #tpl-completion-row, #tpl-error-row,
+      inline session summary). dashboard.js opens EventSource("/api/stream"), handles
+      state events with renderAll(), stamps templates for each panel. style.css includes
+      all worker card, outcome badge, item-type badge, and error panel styles.'
     validation_attempts: 1
-    validation_findings: 'Frontend assets created and functional. Build passes. Two
-      pre-existing test collection errors (unrelated to this task - caused by earlier
-      auto_pipeline.py refactor). Minor gaps: worker cards omit cost ticker and model
-      tier fields from backlog req 4; queue count is in session summary bar rather
-      than a dedicated panel section.'
+    validation_findings: 'All 5 required changes present in supervisor.py: import,
+      add_active_worker in _try_dispatch_one(), remove_active_worker+add_error in
+      crash path (fail), remove_active_worker in success path, add_error+remove_active_worker
+      in handled-failure path (warn). Build and syntax checks pass. 5 pre-existing
+      test failures confirmed unrelated to this task.'
 - id: phase-4
   name: Phase 4 - Supervisor Integration
   status: pending
@@ -148,13 +145,13 @@ sections:
       \ call get_dashboard_state().add_error(message)\nVerify syntax: python3 -c \"\
       import py_compile; py_compile.compile('langgraph_pipeline/supervisor.py', doraise=True)\"\
       \n"
-    last_attempt: '2026-03-25T02:25:12.241090'
+    last_attempt: '2026-03-25T02:26:34.940507'
     attempts: 1
     model_used: sonnet
-    completed_at: '2026-03-25T02:25:54.565041'
-    result_message: 'DashboardState integration already implemented in supervisor.py:
-      import, add_active_worker, remove_active_worker, and add_error calls are all
-      wired correctly. Syntax verified clean.'
+    completed_at: '2026-03-25T02:27:27.332650'
+    result_message: Created langgraph_pipeline/web/routes/analysis.py with GET /analysis
+      endpoint, optional ?agent= filter, SVG chart generation via svg_bar_chart(),
+      and Jinja2TemplateResponse with all chart data. Syntax verified. Committed.
 - id: phase-5
   name: Phase 5 - Unit Tests
   status: pending
