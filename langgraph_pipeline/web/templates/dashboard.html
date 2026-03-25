@@ -1,0 +1,128 @@
+{# langgraph_pipeline/web/templates/dashboard.html
+   Live pipeline activity dashboard driven by SSE.
+   Context variables: none (all data arrives via EventSource('/api/stream'))
+   Design: docs/plans/2026-03-25-15-pipeline-activity-dashboard-design.md #}
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Plan Orchestrator{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/style.css">
+{% endblock %}
+
+{% block content %}
+{# ── Session summary bar (pinned top) ───────────────────────────────────────── #}
+<section class="session-summary" aria-label="Session summary">
+  <div class="session-summary-grid">
+    <div class="session-stat">
+      <span class="session-stat-label">Active Workers</span>
+      <span class="session-stat-value" id="stat-active">—</span>
+    </div>
+    <div class="session-stat">
+      <span class="session-stat-label">Queue</span>
+      <span class="session-stat-value" id="stat-queue">—</span>
+    </div>
+    <div class="session-stat">
+      <span class="session-stat-label">Processed</span>
+      <span class="session-stat-value" id="stat-processed">—</span>
+    </div>
+    <div class="session-stat">
+      <span class="session-stat-label">Session Cost</span>
+      <span class="session-stat-value" id="stat-cost">—</span>
+    </div>
+    <div class="session-stat">
+      <span class="session-stat-label">Uptime</span>
+      <span class="session-stat-value" id="stat-uptime">—</span>
+    </div>
+    <div class="session-stat session-stat--connection">
+      <span class="session-stat-label">Live</span>
+      <span class="connection-dot" id="connection-dot" aria-label="Disconnected" title="Disconnected"></span>
+    </div>
+  </div>
+</section>
+
+{# ── Active workers panel ───────────────────────────────────────────────────── #}
+<section aria-labelledby="hd-workers">
+  <h2 id="hd-workers">Active Workers</h2>
+  <div id="workers-container" class="worker-grid" aria-live="polite" aria-label="Active workers">
+    <div class="empty-state" id="workers-empty">
+      <div class="icon" aria-hidden="true">&#9881;</div>
+      <p>No active workers</p>
+    </div>
+  </div>
+</section>
+
+{# ── Recent completions panel ───────────────────────────────────────────────── #}
+<section aria-labelledby="hd-completions">
+  <h2 id="hd-completions">Recent Completions</h2>
+  <div class="table-wrap" id="completions-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Item</th>
+          <th scope="col">Type</th>
+          <th scope="col">Outcome</th>
+          <th scope="col">Cost</th>
+          <th scope="col">Duration</th>
+          <th scope="col">Finished</th>
+        </tr>
+      </thead>
+      <tbody id="completions-container" aria-live="polite" aria-label="Recent completions">
+        <tr id="completions-empty">
+          <td colspan="6" class="empty-state">
+            <p>No completions yet</p>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{# ── Error stream panel (collapsible) ──────────────────────────────────────── #}
+<section aria-labelledby="hd-errors">
+  <details class="error-panel" id="error-panel">
+    <summary id="hd-errors">
+      Error Stream
+      <span class="error-count-badge" id="error-count-badge" aria-live="polite"></span>
+    </summary>
+    <div class="error-list" id="errors-container" aria-label="Error stream" role="log" aria-live="polite">
+      <p class="empty-state" id="errors-empty">No errors recorded</p>
+    </div>
+  </details>
+</section>
+
+{# ── Templates ──────────────────────────────────────────────────────────────── #}
+
+{# Worker card template — one instance per active_workers entry #}
+<template id="tpl-worker-card">
+  <article class="worker-card" aria-label="Worker">
+    <div class="worker-card-header">
+      <span class="worker-slug"></span>
+      <span class="badge item-type-badge"></span>
+    </div>
+    <div class="worker-card-body">
+      <span class="worker-elapsed" aria-label="Elapsed time"></span>
+      <span class="worker-pid" aria-label="Process ID"></span>
+    </div>
+  </article>
+</template>
+
+{# Completion row template — one <tr> per recent_completions entry #}
+<template id="tpl-completion-row">
+  <tr>
+    <td class="completion-slug"></td>
+    <td><span class="badge item-type-badge"></span></td>
+    <td><span class="badge outcome-badge"></span></td>
+    <td class="completion-cost"></td>
+    <td class="completion-duration"></td>
+    <td class="completion-finished"></td>
+  </tr>
+</template>
+
+{# Error row template — one <p> per recent_errors entry #}
+<template id="tpl-error-row">
+  <p class="error-row"></p>
+</template>
+
+<script src="/static/dashboard.js" defer></script>
+{% endblock %}
