@@ -169,7 +169,7 @@ sections:
   - id: '4.1'
     name: Add unit tests for CostLogReader
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '3.1'
     description: "Implement the work item: .claude/plans/.claimed/16-tool-call-timing-and-cost-analysis-ui.md\n\
@@ -191,3 +191,8 @@ sections:
     last_attempt: '2026-03-25T02:36:27.712677'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-25T02:38:12.498084'
+    result_message: Created tests/langgraph/web/test_cost_log_reader.py with 9 tests
+      covering CostLogReader.load_all() (empty dir, single file, top-20 cap, wasted
+      reads detection, no false positives), svg_bar_chart(), and /analysis endpoint
+      (no-data and with-data). All 9 tests pass.
