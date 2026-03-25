@@ -156,7 +156,7 @@ sections:
   - id: '4.1'
     name: Add unit tests for suspension wiring
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '2.1'
     description: 'Implement the work item: docs/feature-backlog/10-ux-designer-opus-sonnet-loop-with-slack-suspension.md
@@ -186,3 +186,12 @@ sections:
     last_attempt: '2026-03-24T20:34:47.208536'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-24T20:37:17.831568'
+    result_message: 'Added 12 unit tests in tests/langgraph/test_suspension_wiring.py
+      covering: _reinstate_answered_suspensions (answered markers reinstate task with
+      human_answer/human_question, unanswered skipped, missing plan_path/task_id handled),
+      _post_pending_suspension_questions (markers without thread_ts trigger Slack
+      post and marker update, existing thread_ts skipped, slack=None and slack not
+      enabled skip posting), task_runner marker creation (suspended status with question
+      creates marker with correct args, defect source_item sets defect type, empty
+      source_item/question skip marker). All 1089 tests pass.'
