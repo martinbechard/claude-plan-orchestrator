@@ -16,6 +16,7 @@ import subprocess
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import yaml
@@ -34,6 +35,7 @@ from langgraph_pipeline.shared.claude_cli import (
 from langgraph_pipeline.shared.config import load_orchestrator_config
 from langgraph_pipeline.shared.git import git_commit_files
 from langgraph_pipeline.shared.paths import STATUS_FILE_PATH, TASK_LOG_DIR
+from langgraph_pipeline.shared.suspension import create_suspension_marker
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -515,6 +517,16 @@ def execute_task(state: TaskState) -> dict:
         task["completed_at"] = datetime.now().isoformat()
     elif outcome == _STATUS_SUSPENDED:
         task["status"] = "suspended"
+        question = status_dict.get("question", "")
+        question_context = status_dict.get("question_context", "")
+        source_item = plan_data.get("meta", {}).get("source_item", "") if plan_data else ""
+        slug = Path(source_item).stem if source_item else ""
+        item_type = "defect" if source_item and "defect" in source_item.lower() else "feature"
+        if slug and question:
+            marker_path = create_suspension_marker(
+                slug, item_type, source_item, plan_path, task_id, question, question_context
+            )
+            logger.info("Suspension marker created: %s", marker_path)
     else:
         task["status"] = "failed"
     task["result_message"] = result_message
