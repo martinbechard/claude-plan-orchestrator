@@ -99,3 +99,5 @@ Key fields:
 - The analyzer agent is invoked on-demand (not part of the validation pipeline).
 - Projects without functional specs or verification blocks are unaffected; the
   validator falls back to its current generic behavior.
+
+## LangSmith Trace: be511e46-0620-4d59-98f5-be6a9699757d
