@@ -10,9 +10,9 @@ meta:
   validation:
     enabled: true
     run_after:
-      - coder
+    - coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
 sections:
 - id: phase-1
@@ -22,76 +22,49 @@ sections:
   - id: '1.1'
     name: Add SPEC_DIR constant and enrich build_validation_prompt
     agent: coder
-    status: pending
-    description: |
-      Implement the work item: docs/feature-backlog/11-spec-aware-validator-with-e2e-logging.md
-      Design reference: docs/plans/2026-03-24-11-spec-aware-validator-with-e2e-logging-design.md
-
-      This task adds SPEC_DIR config support and injects spec-aware context into
-      the validation prompt in scripts/plan-orchestrator.py.
-
-      Steps:
-      1. Read scripts/plan-orchestrator.py. Find the constants section around lines 55-62
-         where DEFAULT_AGENTS_DIR and DEFAULT_E2E_COMMAND are defined.
-
-      2. After DEFAULT_AGENTS_DIR (line 61), add:
-         DEFAULT_SPEC_DIR = ""
-
-      3. Find the config reading section around lines 369-375 where E2E_COMMAND is read.
-         After the E2E_COMMAND line, add:
-         SPEC_DIR = _config.get("spec_dir", DEFAULT_SPEC_DIR)
-
-      4. Find the build_validation_prompt() function (around line 1661). Locate the
-         return f-string. Before the IMPORTANT line that says "Write .claude/plans/task-status.json
-         when done", insert a conditional spec-aware context block:
-
-         a. Before the return statement, build a spec_context variable:
-
-            spec_context = ""
-            if SPEC_DIR:
-                spec_context = f"""
-
-      ## Spec-Aware Validation (E2E Tests)
-
-      This project has functional specifications in: {SPEC_DIR}
-      E2E test command: {E2E_COMMAND}
-
-      After the standard validation checks above, perform these additional steps:
-
-      1. Run: git diff --name-only HEAD~1 HEAD
-         Look for any files under {SPEC_DIR} in the diff output.
-
-      2. If spec files were modified, read each changed spec file and find all
-         ### Verification blocks.
-
-      3. For each block with **Type: Testable** and a **Test file(s):** reference:
-         - Run the E2E test: {E2E_COMMAND} <test_file> --reporter=json
-         - Capture the JSON output to logs/e2e/ with a timestamped filename
-           (format: YYYY-MM-DDTHHMMSS.json)
-         - Parse the JSON to determine pass/fail counts
-
-      4. Include E2E test results in your findings:
-         - [PASS] E2E: <test_file> - all N tests passed
-         - [FAIL] E2E: <test_file> - M of N tests failed
-
-      5. If no spec files were changed in the diff, skip E2E testing and note:
-         - [PASS] E2E: No functional spec changes detected, E2E tests skipped
-
-      6. E2E failures should result in a WARN verdict (not FAIL) unless the
-         failing tests are directly related to the task requirements.
-      """
-
-         b. Include spec_context in the returned f-string just before the
-            "IMPORTANT: Write .claude/plans/task-status.json" line.
-
-      5. Verify syntax:
-         python3 -c "import py_compile; py_compile.compile('scripts/plan-orchestrator.py', doraise=True); print('syntax OK')"
-
-      6. Git commit:
-         git add scripts/plan-orchestrator.py
-         git commit -m "feat: add SPEC_DIR config and spec-aware validation prompt enrichment"
-
-      Files: scripts/plan-orchestrator.py
+    status: completed
+    description: "Implement the work item: docs/feature-backlog/11-spec-aware-validator-with-e2e-logging.md\n\
+      Design reference: docs/plans/2026-03-24-11-spec-aware-validator-with-e2e-logging-design.md\n\
+      \nThis task adds SPEC_DIR config support and injects spec-aware context into\n\
+      the validation prompt in scripts/plan-orchestrator.py.\n\nSteps:\n1. Read scripts/plan-orchestrator.py.\
+      \ Find the constants section around lines 55-62\n   where DEFAULT_AGENTS_DIR\
+      \ and DEFAULT_E2E_COMMAND are defined.\n\n2. After DEFAULT_AGENTS_DIR (line\
+      \ 61), add:\n   DEFAULT_SPEC_DIR = \"\"\n\n3. Find the config reading section\
+      \ around lines 369-375 where E2E_COMMAND is read.\n   After the E2E_COMMAND\
+      \ line, add:\n   SPEC_DIR = _config.get(\"spec_dir\", DEFAULT_SPEC_DIR)\n\n\
+      4. Find the build_validation_prompt() function (around line 1661). Locate the\n\
+      \   return f-string. Before the IMPORTANT line that says \"Write .claude/plans/task-status.json\n\
+      \   when done\", insert a conditional spec-aware context block:\n\n   a. Before\
+      \ the return statement, build a spec_context variable:\n\n      spec_context\
+      \ = \"\"\n      if SPEC_DIR:\n          spec_context = f\"\"\"\n\n## Spec-Aware\
+      \ Validation (E2E Tests)\n\nThis project has functional specifications in: {SPEC_DIR}\n\
+      E2E test command: {E2E_COMMAND}\n\nAfter the standard validation checks above,\
+      \ perform these additional steps:\n\n1. Run: git diff --name-only HEAD~1 HEAD\n\
+      \   Look for any files under {SPEC_DIR} in the diff output.\n\n2. If spec files\
+      \ were modified, read each changed spec file and find all\n   ### Verification\
+      \ blocks.\n\n3. For each block with **Type: Testable** and a **Test file(s):**\
+      \ reference:\n   - Run the E2E test: {E2E_COMMAND} <test_file> --reporter=json\n\
+      \   - Capture the JSON output to logs/e2e/ with a timestamped filename\n   \
+      \  (format: YYYY-MM-DDTHHMMSS.json)\n   - Parse the JSON to determine pass/fail\
+      \ counts\n\n4. Include E2E test results in your findings:\n   - [PASS] E2E:\
+      \ <test_file> - all N tests passed\n   - [FAIL] E2E: <test_file> - M of N tests\
+      \ failed\n\n5. If no spec files were changed in the diff, skip E2E testing and\
+      \ note:\n   - [PASS] E2E: No functional spec changes detected, E2E tests skipped\n\
+      \n6. E2E failures should result in a WARN verdict (not FAIL) unless the\n  \
+      \ failing tests are directly related to the task requirements.\n\"\"\"\n\n \
+      \  b. Include spec_context in the returned f-string just before the\n      \"\
+      IMPORTANT: Write .claude/plans/task-status.json\" line.\n\n5. Verify syntax:\n\
+      \   python3 -c \"import py_compile; py_compile.compile('scripts/plan-orchestrator.py',\
+      \ doraise=True); print('syntax OK')\"\n\n6. Git commit:\n   git add scripts/plan-orchestrator.py\n\
+      \   git commit -m \"feat: add SPEC_DIR config and spec-aware validation prompt\
+      \ enrichment\"\n\nFiles: scripts/plan-orchestrator.py\n"
+    last_attempt: '2026-03-24T20:52:01.001030'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T20:53:01.276080'
+    result_message: Added DEFAULT_SPEC_DIR constant, SPEC_DIR config read from orchestrator-config.yaml,
+      and spec_context injection into build_validation_prompt() that triggers E2E
+      spec validation when SPEC_DIR is configured.
 - id: phase-2
   name: Phase 2 - Validator Agent Update
   status: pending
@@ -101,45 +74,31 @@ sections:
     agent: coder
     status: pending
     depends_on:
-      - '1.1'
-    description: |
-      Implement the work item: docs/feature-backlog/11-spec-aware-validator-with-e2e-logging.md
-      Design reference: docs/plans/2026-03-24-11-spec-aware-validator-with-e2e-logging-design.md
-
-      This task updates .claude/agents/validator.md to add spec-aware validation
-      instructions between the unit tests step and the existing E2E step.
-
-      Steps:
-      1. Read .claude/agents/validator.md to understand its current structure.
-
-      2. In the "## Validation Steps" section, after "### Step 2: Unit Tests"
-         and before "### Step 3: E2E Test", insert a new step:
-
-         ### Step 3: Spec-Aware E2E (if configured)
-         If the validation prompt includes a "Spec-Aware Validation" section:
-         a. Run git diff --name-only HEAD~1 HEAD to find changed files
-         b. Filter for files under the spec directory named in the prompt
-         c. For each changed spec file, read it and find ### Verification blocks
-         d. For each block with Type: Testable and a Test file(s): reference:
-            - Run the E2E test command with --reporter=json
-            - Save JSON output to logs/e2e/<YYYY-MM-DDTHHMMSS>.json
-            - Parse pass/fail counts from the JSON
-         e. If no spec files changed, note that spec-aware E2E was skipped
-         If the prompt does not include a Spec-Aware Validation section, skip this step.
-
-      3. Renumber the existing steps 3, 4, and 5 to become 4, 5, and 6.
-
-      4. In the "## Constraints" section, add:
-         - When running spec-aware E2E tests, always use --reporter=json and
-           save output to logs/e2e/ with a timestamped filename (YYYY-MM-DDTHHMMSS.json).
-         - Only run spec-aware E2E when the validation prompt includes a
-           Spec-Aware Validation section. Do not search for spec files independently.
-
-      5. Git commit:
-         git add .claude/agents/validator.md
-         git commit -m "feat: add spec-aware E2E step to validator agent"
-
-      Files: .claude/agents/validator.md
+    - '1.1'
+    description: "Implement the work item: docs/feature-backlog/11-spec-aware-validator-with-e2e-logging.md\n\
+      Design reference: docs/plans/2026-03-24-11-spec-aware-validator-with-e2e-logging-design.md\n\
+      \nThis task updates .claude/agents/validator.md to add spec-aware validation\n\
+      instructions between the unit tests step and the existing E2E step.\n\nSteps:\n\
+      1. Read .claude/agents/validator.md to understand its current structure.\n\n\
+      2. In the \"## Validation Steps\" section, after \"### Step 2: Unit Tests\"\n\
+      \   and before \"### Step 3: E2E Test\", insert a new step:\n\n   ### Step 3:\
+      \ Spec-Aware E2E (if configured)\n   If the validation prompt includes a \"\
+      Spec-Aware Validation\" section:\n   a. Run git diff --name-only HEAD~1 HEAD\
+      \ to find changed files\n   b. Filter for files under the spec directory named\
+      \ in the prompt\n   c. For each changed spec file, read it and find ### Verification\
+      \ blocks\n   d. For each block with Type: Testable and a Test file(s): reference:\n\
+      \      - Run the E2E test command with --reporter=json\n      - Save JSON output\
+      \ to logs/e2e/<YYYY-MM-DDTHHMMSS>.json\n      - Parse pass/fail counts from\
+      \ the JSON\n   e. If no spec files changed, note that spec-aware E2E was skipped\n\
+      \   If the prompt does not include a Spec-Aware Validation section, skip this\
+      \ step.\n\n3. Renumber the existing steps 3, 4, and 5 to become 4, 5, and 6.\n\
+      \n4. In the \"## Constraints\" section, add:\n   - When running spec-aware E2E\
+      \ tests, always use --reporter=json and\n     save output to logs/e2e/ with\
+      \ a timestamped filename (YYYY-MM-DDTHHMMSS.json).\n   - Only run spec-aware\
+      \ E2E when the validation prompt includes a\n     Spec-Aware Validation section.\
+      \ Do not search for spec files independently.\n\n5. Git commit:\n   git add\
+      \ .claude/agents/validator.md\n   git commit -m \"feat: add spec-aware E2E step\
+      \ to validator agent\"\n\nFiles: .claude/agents/validator.md\n"
 - id: phase-3
   name: Phase 3 - Unit Tests
   status: pending
@@ -149,47 +108,28 @@ sections:
     agent: coder
     status: pending
     depends_on:
-      - '1.1'
-    description: |
-      Implement the work item: docs/feature-backlog/11-spec-aware-validator-with-e2e-logging.md
-      Design reference: docs/plans/2026-03-24-11-spec-aware-validator-with-e2e-logging-design.md
-
-      This task adds unit tests verifying that build_validation_prompt() injects
-      spec-aware context when SPEC_DIR is configured, and omits it when not.
-
-      Steps:
-      1. Read tests/test_plan_orchestrator.py to understand existing test patterns
-         for build_validation_prompt() (look for test_build_validation_prompt_*).
-
-      2. Read scripts/plan-orchestrator.py to check the updated build_validation_prompt()
-         signature and the SPEC_DIR module-level variable.
-
-      3. Add the following tests after the existing build_validation_prompt tests:
-
-         a. test_build_validation_prompt_includes_spec_context(monkeypatch):
-            - Monkeypatch the module's SPEC_DIR to "docs/specs/"
-            - Create minimal task, section, and TaskResult objects (reuse patterns
-              from existing build_validation_prompt tests)
-            - Call build_validation_prompt(task, section, task_result, "validator")
-            - Assert result contains "Spec-Aware Validation"
-            - Assert result contains "docs/specs/"
-
-         b. test_build_validation_prompt_omits_spec_when_unconfigured(monkeypatch):
-            - Monkeypatch SPEC_DIR to "" (empty string)
-            - Call build_validation_prompt()
-            - Assert result does NOT contain "Spec-Aware Validation"
-
-         c. test_build_validation_prompt_standard_checks_with_spec(monkeypatch):
-            - Monkeypatch SPEC_DIR to "docs/specs/"
-            - Call build_validation_prompt()
-            - Assert result contains BUILD_COMMAND
-            - Assert result contains TEST_COMMAND
-
-      4. Run the tests:
-         ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_plan_orchestrator.py -v -k "spec_context or spec_when"
-         Fix any failures before marking complete.
-
-      Files: tests/test_plan_orchestrator.py
+    - '1.1'
+    description: "Implement the work item: docs/feature-backlog/11-spec-aware-validator-with-e2e-logging.md\n\
+      Design reference: docs/plans/2026-03-24-11-spec-aware-validator-with-e2e-logging-design.md\n\
+      \nThis task adds unit tests verifying that build_validation_prompt() injects\n\
+      spec-aware context when SPEC_DIR is configured, and omits it when not.\n\nSteps:\n\
+      1. Read tests/test_plan_orchestrator.py to understand existing test patterns\n\
+      \   for build_validation_prompt() (look for test_build_validation_prompt_*).\n\
+      \n2. Read scripts/plan-orchestrator.py to check the updated build_validation_prompt()\n\
+      \   signature and the SPEC_DIR module-level variable.\n\n3. Add the following\
+      \ tests after the existing build_validation_prompt tests:\n\n   a. test_build_validation_prompt_includes_spec_context(monkeypatch):\n\
+      \      - Monkeypatch the module's SPEC_DIR to \"docs/specs/\"\n      - Create\
+      \ minimal task, section, and TaskResult objects (reuse patterns\n        from\
+      \ existing build_validation_prompt tests)\n      - Call build_validation_prompt(task,\
+      \ section, task_result, \"validator\")\n      - Assert result contains \"Spec-Aware\
+      \ Validation\"\n      - Assert result contains \"docs/specs/\"\n\n   b. test_build_validation_prompt_omits_spec_when_unconfigured(monkeypatch):\n\
+      \      - Monkeypatch SPEC_DIR to \"\" (empty string)\n      - Call build_validation_prompt()\n\
+      \      - Assert result does NOT contain \"Spec-Aware Validation\"\n\n   c. test_build_validation_prompt_standard_checks_with_spec(monkeypatch):\n\
+      \      - Monkeypatch SPEC_DIR to \"docs/specs/\"\n      - Call build_validation_prompt()\n\
+      \      - Assert result contains BUILD_COMMAND\n      - Assert result contains\
+      \ TEST_COMMAND\n\n4. Run the tests:\n   ~/.pyenv/versions/3.11.*/bin/python\
+      \ -m pytest tests/test_plan_orchestrator.py -v -k \"spec_context or spec_when\"\
+      \n   Fix any failures before marking complete.\n\nFiles: tests/test_plan_orchestrator.py\n"
 - id: phase-4
   name: Phase 4 - Plugin Version Bump
   status: pending
@@ -199,24 +139,16 @@ sections:
     agent: coder
     status: pending
     depends_on:
-      - '2.1'
-      - '3.1'
-    description: |
-      Implement the work item: docs/feature-backlog/11-spec-aware-validator-with-e2e-logging.md
-
-      Bump the plugin version in plugin.json and update RELEASE-NOTES.md for the
-      spec-aware validator completion.
-
-      Steps:
-      1. Read plugin.json to find the current version.
-      2. Bump the patch version (completing a partially-shipped feature).
-      3. Read RELEASE-NOTES.md. Add a new entry at the top:
-         - Spec-aware validator (complete): Validator now reads SPEC_DIR from
-           orchestrator-config.yaml, runs E2E tests referenced in Verification
-           blocks of changed functional spec files, and saves timestamped JSON
-           results to logs/e2e/.
-      4. Git commit both files:
-         git add plugin.json RELEASE-NOTES.md
-         git commit -m "chore: bump version for spec-aware-validator completion"
-
-      Files: plugin.json, RELEASE-NOTES.md
+    - '2.1'
+    - '3.1'
+    description: "Implement the work item: docs/feature-backlog/11-spec-aware-validator-with-e2e-logging.md\n\
+      \nBump the plugin version in plugin.json and update RELEASE-NOTES.md for the\n\
+      spec-aware validator completion.\n\nSteps:\n1. Read plugin.json to find the\
+      \ current version.\n2. Bump the patch version (completing a partially-shipped\
+      \ feature).\n3. Read RELEASE-NOTES.md. Add a new entry at the top:\n   - Spec-aware\
+      \ validator (complete): Validator now reads SPEC_DIR from\n     orchestrator-config.yaml,\
+      \ runs E2E tests referenced in Verification\n     blocks of changed functional\
+      \ spec files, and saves timestamped JSON\n     results to logs/e2e/.\n4. Git\
+      \ commit both files:\n   git add plugin.json RELEASE-NOTES.md\n   git commit\
+      \ -m \"chore: bump version for spec-aware-validator completion\"\n\nFiles: plugin.json,\
+      \ RELEASE-NOTES.md\n"
