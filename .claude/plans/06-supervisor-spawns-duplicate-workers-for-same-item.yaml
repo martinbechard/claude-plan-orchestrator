@@ -60,10 +60,6 @@ sections:
       CLAIMED_DIR filter in _scan_directory(), source_item CLAIMED_DIR guard in scan_backlog(),
       item_type forwarding in _try_dispatch_one(). Added 2 new tests. All 67 targeted
       tests pass.
-    validation_attempts: 1
-    validation_findings: All 6 code requirements implemented correctly. Both new tests
-      pass. 67/67 targeted tests pass. 3 full-suite failures are pre-existing (unrelated
-      to this task, confirmed by stash check).
 - id: phase-2
   name: Phase 2 - Item Type Sidecar for Accurate Unclaim
   status: pending
@@ -71,7 +67,7 @@ sections:
   - id: '2.1'
     name: Add item-type sidecar to claim/unclaim for correct type restoration
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '1.1'
     description: "Implement Fix 3 from the design doc:\n  docs/plans/2026-03-25-06-supervisor-spawns-duplicate-workers-for-same-item-design.md\n\
@@ -107,9 +103,16 @@ sections:
       \ tests/langgraph/test_parallel_items.py\n  git commit -m 'fix: write item-type\
       \ sidecar at claim time for accurate orphan restoration'\n\nFiles: langgraph_pipeline/pipeline/nodes/scan.py,\
       \ langgraph_pipeline/supervisor.py,\n       tests/langgraph/test_parallel_items.py\n"
-    last_attempt: '2026-03-25T00:35:16.541372'
+    last_attempt: '2026-03-25T00:35:11.530232'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-25T00:37:50.175343'
+    result_message: Added item-type sidecar to claim_item (writes .claim-meta.json)
+      and unclaim_item (deletes it best-effort). Updated _unclaim_orphaned_items in
+      supervisor.py to read sidecar first, falling back to slug heuristic. Added 5
+      new tests covering sidecar write, no-sidecar on same-path claim, sidecar delete
+      on unclaim, sidecar-based orphan restoration, and heuristic fallback. All 1098
+      langgraph tests pass.
 - id: phase-3
   name: Phase 3 - Plugin Version Bump
   status: pending
