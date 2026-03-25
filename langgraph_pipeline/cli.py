@@ -34,6 +34,7 @@ from typing import Optional
 import yaml
 
 from langgraph_pipeline.pipeline.graph import PIPELINE_THREAD_ID, pipeline_graph
+from langgraph_pipeline.pipeline.nodes.idea_classifier import process_ideas
 from langgraph_pipeline.pipeline.nodes.scan import scan_backlog as scan_backlog_fn
 from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.claude_cli import call_claude
@@ -698,6 +699,11 @@ def _run_scan_loop(
                 while not shutdown_event.is_set():
                     _reinstate_answered_suspensions()
                     _post_pending_suspension_questions(slack)
+                    ideas_processed = process_ideas(dry_run)
+                    if ideas_processed > 0:
+                        logger.info(
+                            "Ideas intake: processed %d idea(s) into backlog", ideas_processed
+                        )
                     # Lightweight pre-scan: no graph, no tracing, just check directories.
                     pre_scanned = _pre_scan(budget_cap_usd)
 
