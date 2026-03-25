@@ -1,9 +1,9 @@
 meta:
   name: Project Setup Script with Interactive Configuration
-  description: Standalone scripts/setup-project.py that bootstraps a new project
-    with claude-plan-orchestrator by copying files, launching a Claude Code session
-    for interactive configuration, optionally creating a Slack app via Chrome MCP,
-    and running a smoke test.
+  description: Standalone scripts/setup-project.py that bootstraps a new project with
+    claude-plan-orchestrator by copying files, launching a Claude Code session for
+    interactive configuration, optionally creating a Slack app via Chrome MCP, and
+    running a smoke test.
   source_item: .claude/plans/.claimed/17-project-setup-script.md
   plan_doc: docs/plans/2026-03-25-17-project-setup-script-design.md
   created: '2026-03-25'
@@ -23,27 +23,26 @@ sections:
   - id: '1.1'
     name: Create config template and Phase 1 file scaffolding
     agent: coder
-    status: pending
+    status: failed
     description: "Implement the work item: .claude/plans/.claimed/17-project-setup-script.md\n\
       Design reference: docs/plans/2026-03-25-17-project-setup-script-design.md\n\
-      This task covers Phase 1 of the setup script.\n\
-      Steps:\n\
-      1. Create scripts/setup-templates/orchestrator-config.yaml as a clean template\n\
-      \   with all fields from .claude/orchestrator-config.yaml, every field commented\n\
-      \   out with explanations, and no project-specific values.\n\
-      2. Create scripts/setup-project.py with:\n\
-      \   - argparse CLI supporting --force, --no-slack, --no-claude flags\n\
-      \   - SOURCE_ROOT constant = Path(__file__).parent.parent\n\
-      \   - scaffold_files(target, force) function that copies:\n\
-      \       .claude/orchestrator-config.yaml (from scripts/setup-templates/)\n\
-      \       .claude/agents/ directory (all agent .md files)\n\
-      \       docs/defect-backlog/, docs/feature-backlog/, docs/analysis-backlog/\n\
-      \         (create dirs with .gitkeep if missing)\n\
-      \       procedure-coding-rules.md\n\
+      This task covers Phase 1 of the setup script.\nSteps:\n1. Create scripts/setup-templates/orchestrator-config.yaml\
+      \ as a clean template\n   with all fields from .claude/orchestrator-config.yaml,\
+      \ every field commented\n   out with explanations, and no project-specific values.\n\
+      2. Create scripts/setup-project.py with:\n   - argparse CLI supporting --force,\
+      \ --no-slack, --no-claude flags\n   - SOURCE_ROOT constant = Path(__file__).parent.parent\n\
+      \   - scaffold_files(target, force) function that copies:\n       .claude/orchestrator-config.yaml\
+      \ (from scripts/setup-templates/)\n       .claude/agents/ directory (all agent\
+      \ .md files)\n       docs/defect-backlog/, docs/feature-backlog/, docs/analysis-backlog/\n\
+      \         (create dirs with .gitkeep if missing)\n       procedure-coding-rules.md\n\
       \   - Skip existing files unless force=True; print summary of copied vs skipped\n\
       \   - main() that calls scaffold_files() then exits (stubs for Phases 2-4)\n\
-      3. Verify syntax: python3 -c \"import py_compile; py_compile.compile('scripts/setup-project.py', doraise=True)\"\n\
-      Files: scripts/setup-project.py, scripts/setup-templates/orchestrator-config.yaml\n"
+      3. Verify syntax: python3 -c \"import py_compile; py_compile.compile('scripts/setup-project.py',\
+      \ doraise=True)\"\nFiles: scripts/setup-project.py, scripts/setup-templates/orchestrator-config.yaml\n"
+    last_attempt: '2026-03-25T18:04:25.390986'
+    attempts: 1
+    model_used: sonnet
+    result_message: No status file written by Claude
 - id: phase-2
   name: Phase 2 - Claude Code interactive config and smoke test
   status: pending
@@ -53,34 +52,38 @@ sections:
     agent: coder
     depends_on:
     - '1.1'
-    status: pending
+    status: completed
     description: "Implement the work item: .claude/plans/.claimed/17-project-setup-script.md\n\
       Design reference: docs/plans/2026-03-25-17-project-setup-script-design.md\n\
-      This task completes scripts/setup-project.py with Phases 2-4.\n\
-      Steps:\n\
-      1. Add configure_interactive(target) function that builds a prompt instructing\n\
+      This task completes scripts/setup-project.py with Phases 2-4.\nSteps:\n1. Add\
+      \ configure_interactive(target) function that builds a prompt instructing\n\
       \   the Claude Code session to read orchestrator-config.yaml, ask the user\n\
       \   (via AskUserQuestion) for project name, agent display names, LangSmith\n\
       \   tracing (API key if yes, written to .env.local), web UI (port if yes),\n\
       \   build command, test command, and Slack integration desire, then write\n\
-      \   answers into orchestrator-config.yaml. Invoke with:\n\
-      \     claude --print <prompt> --dangerously-skip-permissions\n\
-      \   Stream output; capture return code and stderr.\n\
-      2. Add check_chrome_mcp() that returns True if Chrome MCP is available\n\
-      \   (probe via subprocess or MCP config inspection). On False, print manual\n\
-      \   Slack setup fallback instructions.\n\
-      3. Add setup_slack_via_mcp(target, project_name) that invokes a second\n\
-      \   claude --print session with a prompt to use Chrome MCP to open\n\
-      \   https://api.slack.com/apps, create the app, add bot scopes, install,\n\
-      \   copy Bot User OAuth Token and Signing Secret into slack.local.yaml,\n\
-      \   collect channel names from user, and write them to orchestrator-config.yaml.\n\
-      4. Add run_smoke_test(target, slack_configured) that runs:\n\
-      \     python -m langgraph_pipeline --dry-run [--no-slack]\n\
-      \   in the target directory, prints success summary with next steps on pass,\n\
-      \   or error output with DEBUG hint on failure.\n\
-      5. Wire all phases into main() respecting --no-slack and --no-claude flags.\n\
-      6. Verify syntax: python3 -c \"import py_compile; py_compile.compile('scripts/setup-project.py', doraise=True)\"\n\
-      Files: scripts/setup-project.py\n"
+      \   answers into orchestrator-config.yaml. Invoke with:\n     claude --print\
+      \ <prompt> --dangerously-skip-permissions\n   Stream output; capture return\
+      \ code and stderr.\n2. Add check_chrome_mcp() that returns True if Chrome MCP\
+      \ is available\n   (probe via subprocess or MCP config inspection). On False,\
+      \ print manual\n   Slack setup fallback instructions.\n3. Add setup_slack_via_mcp(target,\
+      \ project_name) that invokes a second\n   claude --print session with a prompt\
+      \ to use Chrome MCP to open\n   https://api.slack.com/apps, create the app,\
+      \ add bot scopes, install,\n   copy Bot User OAuth Token and Signing Secret\
+      \ into slack.local.yaml,\n   collect channel names from user, and write them\
+      \ to orchestrator-config.yaml.\n4. Add run_smoke_test(target, slack_configured)\
+      \ that runs:\n     python -m langgraph_pipeline --dry-run [--no-slack]\n   in\
+      \ the target directory, prints success summary with next steps on pass,\n  \
+      \ or error output with DEBUG hint on failure.\n5. Wire all phases into main()\
+      \ respecting --no-slack and --no-claude flags.\n6. Verify syntax: python3 -c\
+      \ \"import py_compile; py_compile.compile('scripts/setup-project.py', doraise=True)\"\
+      \nFiles: scripts/setup-project.py\n"
+    last_attempt: '2026-03-25T18:05:44.825338'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-25T18:07:39.725348'
+    result_message: Implemented configure_interactive(), check_chrome_mcp(), setup_slack_via_mcp(),
+      run_smoke_test() and wired all phases into main() with --no-slack and --no-claude
+      flag support. Syntax verified.
 - id: phase-3
   name: Phase 3 - Unit tests for file scaffolding
   status: pending
@@ -94,16 +97,14 @@ sections:
     description: "Implement the work item: .claude/plans/.claimed/17-project-setup-script.md\n\
       Design reference: docs/plans/2026-03-25-17-project-setup-script-design.md\n\
       This task adds unit tests for the file scaffolding logic in setup-project.py.\n\
-      Test cases for tests/test_setup_project.py:\n\
-      - test_scaffold_copies_config_template: config template is copied to .claude/\n\
-      - test_scaffold_copies_agents: all agent .md files are copied to .claude/agents/\n\
-      - test_scaffold_creates_backlog_dirs: three backlog dirs created with .gitkeep\n\
-      - test_scaffold_copies_coding_rules: procedure-coding-rules.md is copied\n\
-      - test_scaffold_skips_existing_without_force: existing file not overwritten\n\
-      - test_scaffold_overwrites_with_force: --force causes existing file to be overwritten\n\
-      - test_scaffold_prints_summary: summary lists copied and skipped files\n\
-      - test_scaffold_gitkeep_not_recreated_in_existing_dir: .gitkeep not added\n\
-      \   when backlog dir already exists\n\
-      Use tmp_path to build a minimal fake source tree and an empty target directory.\n\
-      Run tests and fix any failures.\n\
-      Files: tests/test_setup_project.py\n"
+      Test cases for tests/test_setup_project.py:\n- test_scaffold_copies_config_template:\
+      \ config template is copied to .claude/\n- test_scaffold_copies_agents: all\
+      \ agent .md files are copied to .claude/agents/\n- test_scaffold_creates_backlog_dirs:\
+      \ three backlog dirs created with .gitkeep\n- test_scaffold_copies_coding_rules:\
+      \ procedure-coding-rules.md is copied\n- test_scaffold_skips_existing_without_force:\
+      \ existing file not overwritten\n- test_scaffold_overwrites_with_force: --force\
+      \ causes existing file to be overwritten\n- test_scaffold_prints_summary: summary\
+      \ lists copied and skipped files\n- test_scaffold_gitkeep_not_recreated_in_existing_dir:\
+      \ .gitkeep not added\n   when backlog dir already exists\nUse tmp_path to build\
+      \ a minimal fake source tree and an empty target directory.\nRun tests and fix\
+      \ any failures.\nFiles: tests/test_setup_project.py\n"
