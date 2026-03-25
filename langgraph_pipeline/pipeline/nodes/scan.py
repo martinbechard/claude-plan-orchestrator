@@ -12,6 +12,7 @@ When no items are found, returns an empty item_path so the has_items conditional
 edge routes the graph to END (sleep/wait cycle).
 """
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -39,8 +40,10 @@ COMPLETED_STATUS_PATTERN = re.compile(
     r"^##\s*Status:\s*(Fixed|Completed)", re.IGNORECASE | re.MULTILINE
 )
 
-# Backlog slug pattern: two or more leading digits, then hyphenated words.
-BACKLOG_SLUG_PATTERN = re.compile(r"^\d{2,}-[\w-]+$")
+# Backlog slug pattern: any slug starting with a word character (letter, digit,
+# or underscore) followed by word characters and hyphens. Accepts single-digit
+# prefixes (e.g. 9-foo) and prose slugs (e.g. cost-analysis).
+BACKLOG_SLUG_PATTERN = re.compile(r"^[\w][\w-]*$")
 
 # Priority-ordered (item_type, directory) pairs for scanning.
 BACKLOG_SCAN_ORDER = [
@@ -80,6 +83,11 @@ def _scan_directory(directory: str, item_type: str) -> list[tuple[str, str, str]
 
         slug = md_file.stem
         if not BACKLOG_SLUG_PATTERN.match(slug):
+            logging.warning(
+                "scan_backlog: skipping %s — slug %r does not match expected pattern",
+                md_file,
+                slug,
+            )
             continue
 
         if _is_item_completed(str(md_file)):

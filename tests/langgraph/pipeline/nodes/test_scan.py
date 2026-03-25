@@ -122,10 +122,27 @@ class TestScanDirectory:
         result = _scan_directory(str(tmp_path), "defect")
         assert result == []
 
-    def test_skips_files_without_slug_pattern(self, tmp_path):
-        _write_md(tmp_path / "no-number-prefix.md")
+    def test_accepts_prose_slugs_without_number_prefix(self, tmp_path):
+        _write_md(tmp_path / "cost-analysis.md")
         result = _scan_directory(str(tmp_path), "defect")
+        assert len(result) == 1
+        assert result[0][1] == "cost-analysis"
+
+    def test_accepts_single_digit_prefix(self, tmp_path):
+        _write_md(tmp_path / "9-my-bug.md")
+        result = _scan_directory(str(tmp_path), "defect")
+        assert len(result) == 1
+        assert result[0][1] == "9-my-bug"
+
+    def test_skips_and_warns_for_slug_with_spaces(self, tmp_path, caplog):
+        import logging
+        # Create the file via Path.touch since filenames with spaces are valid on the FS.
+        bad_file = tmp_path / "has spaces.md"
+        bad_file.write_text("# Bad\n\n## Status: Open\n")
+        with caplog.at_level(logging.WARNING):
+            result = _scan_directory(str(tmp_path), "defect")
         assert result == []
+        assert any("has spaces" in r.message for r in caplog.records)
 
     def test_skips_completed_items(self, tmp_path):
         _write_md(tmp_path / "01-done.md", "## Status: Fixed\n")
