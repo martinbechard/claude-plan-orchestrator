@@ -1,14 +1,20 @@
 {# langgraph_pipeline/web/templates/proxy_list.html
    Paginated LangSmith trace list with filter bar and expandable row details.
    Context variables:
-     runs       list[dict]  — rows from TracingProxy.list_runs(), enriched with
-                              display_duration, display_slug, display_model, display_cost
+     runs       list[dict]  — raw rows from TracingProxy.list_runs()
+                              fields: run_id, name, start_time, end_time,
+                              metadata_json, error, created_at (all strings or None)
      page       int         — current 1-based page number
-     slug       str         — active slug filter value
-     model      str         — active model filter value
-     date_from  str         — active date-from filter value
-     date_to    str         — active date-to filter value
-   Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md #}
+     slug       str         — active slug filter value (substring on name)
+     model      str         — active model filter value (substring in metadata_json)
+     date_from  str         — active date-from filter value (ISO date)
+     date_to    str         — active date-to filter value (ISO date)
+   Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md
+
+   Note: metadata_json is a raw JSON string from SQLite.  Jinja2 has no built-in
+   JSON parser, so cost/model/slug are shown as "—" in the table; full metadata
+   is visible in the expandable row and the detail page.
+#}
 {% extends "base.html" %}
 
 {% block title %}Traces — Plan Orchestrator{% endblock %}
@@ -21,33 +27,44 @@
       aria-label="Filter traces">
 
   <label>
-    Slug
-    <input type="text" name="slug" value="{{ slug }}"
-           placeholder="e.g. my-item" aria-label="Filter by item slug">
+    Run name
+    <input type="search" name="slug" value="{{ slug | e }}"
+           placeholder="Substring match&hellip;" aria-label="Filter by run name substring">
   </label>
 
   <label>
     Model
-    <input type="text" name="model" value="{{ model }}"
-           placeholder="e.g. claude-sonnet" aria-label="Filter by model name">
+    <select name="model" aria-label="Filter by model">
+      <option value="">All models</option>
+      {% for m in [
+        "claude-opus-4-6",
+        "claude-sonnet-4-6",
+        "claude-haiku-4-5-20251001",
+        "claude-opus-4-5",
+        "claude-sonnet-4-5",
+        "claude-haiku-4-5"
+      ] %}
+        <option value="{{ m }}" {% if model == m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
   </label>
 
   <label>
     From
-    <input type="date" name="date_from" value="{{ date_from }}"
+    <input type="date" name="date_from" value="{{ date_from | e }}"
            aria-label="Start date">
   </label>
 
   <label>
     To
-    <input type="date" name="date_to" value="{{ date_to }}"
+    <input type="date" name="date_to" value="{{ date_to | e }}"
            aria-label="End date">
   </label>
 
   <button type="submit">Apply</button>
 
   {% if slug or model or date_from or date_to %}
-  <a class="reset-link" href="/proxy">Clear filters</a>
+  <a class="reset-link" href="/proxy" aria-label="Clear all filters">Clear filters</a>
   {% endif %}
 </form>
 
@@ -84,37 +101,58 @@
       {# Main data row ──────────────────────────────────────────────────────── #}
       <tr>
         <td class="name">
-          <a href="/proxy/{{ run.run_id }}">{{ run.name }}</a>
+          <a href="/proxy/{{ run.run_id | e }}">{{ run.name | e }}</a>
         </td>
-        <td>{{ run.display_slug or "—" }}</td>
+
+        {# Item slug: first whitespace-delimited token of the run name, which
+           by pipeline convention is the item slug ("slug: description"). #}
         <td>
-          {% if run.start_time %}
-            {{ run.start_time[:10] }} {{ run.start_time[11:19] }}
+          {% if run.name %}
+            {{ run.name.split(" ")[0] | e }}
           {% else %}
-            —
+            &mdash;
           {% endif %}
         </td>
-        <td>{{ run.display_duration }}</td>
-        <td>{{ run.display_cost or "—" }}</td>
-        <td>{{ run.display_model or "—" }}</td>
+
+        <td>
+          {% if run.start_time %}
+            <time datetime="{{ run.start_time | e }}">
+              {{ run.start_time[:10] | e }} {{ run.start_time[11:19] | e }}
+            </time>
+          {% else %}
+            &mdash;
+          {% endif %}
+        </td>
+
+        {# Duration, cost, model require JSON/datetime parsing not available in
+           vanilla Jinja2.  Full details are in the expandable row below and on
+           the trace detail page. #}
+        <td>&mdash;</td>
+        <td>&mdash;</td>
+        <td>&mdash;</td>
+
         <td>
           <span class="badge {{ badge_class }}" role="status">{{ badge_label }}</span>
         </td>
       </tr>
 
       {# Expandable detail row ──────────────────────────────────────────────── #}
-      <tr class="row-details">
+      <tr class="row-details" aria-label="Details for {{ run.name | e }}">
         <td colspan="7">
           <details>
-            <summary>Details</summary>
+            <summary>
+              Details &mdash;
+              <a href="/proxy/{{ run.run_id | e }}"
+                 aria-label="Open full trace for {{ run.name | e }}">
+                open full trace &rarr;
+              </a>
+            </summary>
             <div style="padding:6px 0 2px;">
+              <strong style="font-size:12px;color:#555;display:block;margin-bottom:4px;">
+                Metadata JSON
+              </strong>
               {% if run.metadata_json %}
-                {% set meta = run.metadata_json | fromjson %}
-                {% if meta %}
-                  <pre>{{ run.metadata_json }}</pre>
-                {% else %}
-                  <pre>{{ run.metadata_json }}</pre>
-                {% endif %}
+                <pre aria-label="Metadata JSON for {{ run.name | e }}">{{ run.metadata_json | e }}</pre>
               {% else %}
                 <p style="font-size:12px;color:#888;margin:4px 0 0;">
                   No metadata recorded.
@@ -131,9 +169,10 @@
 </div>
 
 {# ── Pagination ────────────────────────────────────────────────────────────── #}
-{# has_next: if the page returned a full PAGE_SIZE_DEFAULT (50) rows there may be more #}
+{# has_next: page returned a full PAGE_SIZE_DEFAULT (50) rows, so more may exist.
+   A "Next" click that returns an empty page is harmless — the empty state handles it. #}
 {% set has_prev = page > 1 %}
-{% set has_next = runs | length == 50 %}
+{% set has_next = runs | length >= 50 %}
 
 {% set qs_parts = [] %}
 {% if slug %}{% set _ = qs_parts.append("slug=" ~ slug) %}{% endif %}
@@ -146,7 +185,7 @@
   {% if has_prev %}
     {% set prev_page = page - 1 %}
     {% set prev_qs = (qs_base ~ "&page=" ~ prev_page) if qs_base else ("page=" ~ prev_page) %}
-    <a href="/proxy?{{ prev_qs }}" rel="prev" aria-label="Previous page">&larr; Previous</a>
+    <a href="/proxy?{{ prev_qs }}" rel="prev" aria-label="Go to previous page">&larr; Previous</a>
   {% else %}
     <span class="disabled" aria-disabled="true">&larr; Previous</span>
   {% endif %}
@@ -156,7 +195,7 @@
   {% if has_next %}
     {% set next_page = page + 1 %}
     {% set next_qs = (qs_base ~ "&page=" ~ next_page) if qs_base else ("page=" ~ next_page) %}
-    <a href="/proxy?{{ next_qs }}" rel="next" aria-label="Next page">Next &rarr;</a>
+    <a href="/proxy?{{ next_qs }}" rel="next" aria-label="Go to next page">Next &rarr;</a>
   {% else %}
     <span class="disabled" aria-disabled="true">Next &rarr;</span>
   {% endif %}
@@ -165,13 +204,15 @@
 {% else %}
 {# ── Empty state ───────────────────────────────────────────────────────────── #}
 <div class="empty-state" role="status" aria-live="polite">
-  <div class="icon">&#128203;</div>
+  <div class="icon" aria-hidden="true">&#128203;</div>
   {% if slug or model or date_from or date_to %}
     <p>No traces match the current filters.</p>
     <p><a href="/proxy">Clear filters</a> to see all traces.</p>
   {% else %}
     <p>No traces recorded yet.</p>
-    <p>Traces appear here once the proxy intercepts LangSmith calls.</p>
+    <p style="font-size:12px;color:#aaa;margin-top:0.25rem;">
+      Traces appear here once the proxy intercepts LangSmith calls.
+    </p>
   {% endif %}
 </div>
 {% endif %}
