@@ -22,22 +22,22 @@ sections:
   - id: '1.1'
     name: Add path constants and create idea_classifier module
     agent: coder
-    status: pending
+    status: completed
     description: "Implement the work item: docs/feature-backlog/ideas-intake-pipeline.md\n\
       Design reference: docs/plans/2026-03-24-ideas-intake-pipeline-design.md\n\n\
       Steps:\n1. In langgraph_pipeline/shared/paths.py, add after the BACKLOG_DIRS\
       \ block:\n   IDEAS_DIR = \"docs/ideas\"\n   IDEAS_PROCESSED_DIR = \"docs/ideas/processed\"\
-      \n\n2. Create langgraph_pipeline/pipeline/nodes/idea_classifier.py with:\n\
-      \   - Module docstring referencing the design doc\n   - Import subprocess,\
-      \ os, logging, Path from standard library\n   - Import FEATURE_DIR, DEFECT_DIR,\
+      \n\n2. Create langgraph_pipeline/pipeline/nodes/idea_classifier.py with:\n \
+      \  - Module docstring referencing the design doc\n   - Import subprocess, os,\
+      \ logging, Path from standard library\n   - Import FEATURE_DIR, DEFECT_DIR,\
       \ IDEAS_DIR, IDEAS_PROCESSED_DIR from paths\n   - IDEA_INTAKE_TIMEOUT_SECONDS\
       \ = 300 constant\n   - IDEA_INTAKE_PROMPT template string with placeholders:\n\
-      \     {idea_path}, {feature_dir}, {defect_dir}, {processed_dir}\n     The\
-      \ prompt must instruct Claude to: read the raw idea, classify as feature/defect/multiple,\n\
+      \     {idea_path}, {feature_dir}, {defect_dir}, {processed_dir}\n     The prompt\
+      \ must instruct Claude to: read the raw idea, classify as feature/defect/multiple,\n\
       \     assess priority, write formatted backlog .md files with standard headers\n\
-      \     (## Status: Open or ## Status: Needs Clarification, ## Priority:,\n\
-      \     ## Summary:, ## Scope:, ## Files Affected:), move the original to\n\
-      \     processed_dir, and git commit with message \"intake: classify idea <filename>\"\
+      \     (## Status: Open or ## Status: Needs Clarification, ## Priority:,\n  \
+      \   ## Summary:, ## Scope:, ## Files Affected:), move the original to\n    \
+      \ processed_dir, and git commit with message \"intake: classify idea <filename>\"\
       \n   - scan_ideas() -> list[str]: globs IDEAS_DIR for *.md, skips dotfiles,\n\
       \     skips empty files (os.path.getsize == 0), skips files whose basename\n\
       \     already exists in IDEAS_PROCESSED_DIR; returns empty list if IDEAS_DIR\
@@ -46,12 +46,19 @@ sections:
       \     [\"claude\", \"--dangerously-skip-permissions\", \"--print\", prompt])\n\
       \     with timeout=IDEA_INTAKE_TIMEOUT_SECONDS; on success verifies original\n\
       \     was moved to IDEAS_PROCESSED_DIR and returns True; returns False on\n\
-      \     any failure\n   - process_ideas(dry_run: bool = False) -> int: calls\
-      \ scan_ideas(), processes\n     each sequentially via classify_idea(), logs\
-      \ success/failure, returns\n     count of successfully processed ideas\n\n\
-      3. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('langgraph_pipeline/pipeline/nodes/idea_classifier.py',\
+      \     any failure\n   - process_ideas(dry_run: bool = False) -> int: calls scan_ideas(),\
+      \ processes\n     each sequentially via classify_idea(), logs success/failure,\
+      \ returns\n     count of successfully processed ideas\n\n3. Verify syntax:\n\
+      \   python3 -c \"import py_compile; py_compile.compile('langgraph_pipeline/pipeline/nodes/idea_classifier.py',\
       \ doraise=True); print('syntax OK')\"\n\nFiles: langgraph_pipeline/shared/paths.py,\
       \ langgraph_pipeline/pipeline/nodes/idea_classifier.py\n"
+    last_attempt: '2026-03-24T22:23:45.852765'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T22:25:13.250987'
+    result_message: Added IDEAS_DIR and IDEAS_PROCESSED_DIR to paths.py; created idea_classifier.py
+      with scan_ideas, classify_idea, and process_ideas functions. Syntax verified
+      and committed.
 - id: phase-2
   name: Phase 2 - CLI integration
   status: pending
@@ -64,15 +71,15 @@ sections:
     - '1.1'
     description: "Implement the work item: docs/feature-backlog/ideas-intake-pipeline.md\n\
       Design reference: docs/plans/2026-03-24-ideas-intake-pipeline-design.md\n\n\
-      Steps:\n1. In langgraph_pipeline/cli.py:\n   a. Add import at the top with\
-      \ other node imports:\n      from langgraph_pipeline.pipeline.nodes.idea_classifier\
+      Steps:\n1. In langgraph_pipeline/cli.py:\n   a. Add import at the top with other\
+      \ node imports:\n      from langgraph_pipeline.pipeline.nodes.idea_classifier\
       \ import process_ideas\n   b. In _run_scan_loop(), inside the `while not shutdown_event.is_set()`\
       \ loop,\n      AFTER the _post_pending_suspension_questions(slack) call and\
       \ BEFORE\n      the _pre_scan() call, add:\n\n      ideas_processed = process_ideas(dry_run)\n\
       \      if ideas_processed > 0:\n          logger.info(\"Ideas intake: processed\
       \ %d idea(s) into backlog\", ideas_processed)\n\n2. Verify syntax:\n   python3\
-      \ -c \"import py_compile; py_compile.compile('langgraph_pipeline/cli.py',\
-      \ doraise=True); print('syntax OK')\"\n\nFiles: langgraph_pipeline/cli.py\n"
+      \ -c \"import py_compile; py_compile.compile('langgraph_pipeline/cli.py', doraise=True);\
+      \ print('syntax OK')\"\n\nFiles: langgraph_pipeline/cli.py\n"
 - id: phase-3
   name: Phase 3 - Unit tests
   status: pending
@@ -102,8 +109,8 @@ sections:
       \ classify returns True; assert returns 2\n- test_process_ideas_partial_failure:\
       \ scan returns 2, classify returns True then False;\n  assert returns 1\n\n\
       Use monkeypatch for IDEAS_DIR, IDEAS_PROCESSED_DIR, and subprocess.run.\n\n\
-      Run tests and fix any failures:\n  ~/.pyenv/versions/3.11.*/bin/python -m\
-      \ pytest tests/test_idea_classifier.py -v\n\nFiles: tests/test_idea_classifier.py\n"
+      Run tests and fix any failures:\n  ~/.pyenv/versions/3.11.*/bin/python -m pytest\
+      \ tests/test_idea_classifier.py -v\n\nFiles: tests/test_idea_classifier.py\n"
 - id: phase-4
   name: Phase 4 - Plugin version bump
   status: pending
@@ -117,8 +124,8 @@ sections:
     - '3.1'
     description: "Implement the work item: docs/feature-backlog/ideas-intake-pipeline.md\n\
       \nSteps:\n1. Read plugin.json and find the current version.\n2. Bump the minor\
-      \ version (new feature).\n3. Read RELEASE-NOTES.md and add a new entry at\
-      \ the top summarising:\n   - Ideas intake pipeline: drop rough notes in docs/ideas/\
+      \ version (new feature).\n3. Read RELEASE-NOTES.md and add a new entry at the\
+      \ top summarising:\n   - Ideas intake pipeline: drop rough notes in docs/ideas/\
       \ and they are\n     automatically classified and converted into properly formatted\n\
       \     backlog items by a Claude session.\n4. Git commit:\n   git add plugin.json\
       \ RELEASE-NOTES.md\n   git commit -m \"chore: bump version for ideas-intake-pipeline\
