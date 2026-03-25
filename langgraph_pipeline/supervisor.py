@@ -38,6 +38,7 @@ from langgraph_pipeline.pipeline.nodes.scan import (
 from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.paths import BACKLOG_DIRS, CLAIMED_DIR, WORKER_RESULT_DIR
 from langgraph_pipeline.slack.notifier import SlackNotifier
+from langgraph_pipeline.web.dashboard_state import get_dashboard_state
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -253,13 +254,13 @@ def _reap_one_worker(
 
     if result is None:
         # Worker crashed without writing a result file — return item to backlog.
-        logger.error(
-            "Worker PID %d: crash detected (no result file). "
-            "Unclaiming %s for retry. duration=%.1fs",
-            pid,
-            claimed_path,
-            duration_s,
+        crash_msg = (
+            f"Worker PID {pid}: crash detected (no result file). "
+            f"Item: {claimed_path} duration={duration_s:.1f}s"
         )
+        logger.error(crash_msg)
+        get_dashboard_state().add_error(crash_msg)
+        get_dashboard_state().remove_active_worker(pid, "fail", 0.0, duration_s)
         try:
             unclaim_item(claimed_path, item_type)
             logger.info("Unclaimed %s back to %s backlog.", claimed_path, item_type)
@@ -284,17 +285,16 @@ def _reap_one_worker(
             cost_usd,
             duration_s,
         )
+        get_dashboard_state().remove_active_worker(pid, "success", cost_usd, duration_s)
     else:
         # Handled failure (e.g. quota exhausted) — return item to backlog for retry.
-        logger.warning(
-            "Worker PID %d: handled failure. item=%s cost=~$%.4f "
-            "duration=%.1fs message=%s",
-            pid,
-            item_path,
-            cost_usd,
-            duration_s,
-            message,
+        failure_msg = (
+            f"Worker PID {pid}: handled failure. item={item_path} "
+            f"cost=~${cost_usd:.4f} duration={duration_s:.1f}s message={message}"
         )
+        logger.warning(failure_msg)
+        get_dashboard_state().add_error(failure_msg)
+        get_dashboard_state().remove_active_worker(pid, "warn", cost_usd, duration_s)
         try:
             unclaim_item(claimed_path, item_type)
             logger.info("Unclaimed %s back to %s backlog.", claimed_path, item_type)
@@ -386,7 +386,9 @@ def _try_dispatch_one(active_workers: dict[int, WorkerRecord]) -> bool:
     try:
         proc = _spawn_worker(claimed_path, result_file, item_type, item_slug)
         pid = proc.pid
-        active_workers[pid] = (claimed_path, result_file, item_type, time.monotonic())
+        start_time = time.monotonic()
+        active_workers[pid] = (claimed_path, result_file, item_type, start_time)
+        get_dashboard_state().add_active_worker(pid, item_slug, item_type, start_time)
         logger.info(
             "Dispatched worker PID %d for %s (type=%s)", pid, claimed_path, item_type
         )
