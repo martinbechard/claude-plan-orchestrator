@@ -22,7 +22,7 @@ sections:
   - id: '1.1'
     name: Create web package and server module
     agent: coder
-    status: in_progress
+    status: pending
     description: "Implement the work item: .claude/plans/.claimed/13-embedded-web-server-infrastructure.md\n\
       Design reference: docs/plans/2026-03-25-13-embedded-web-server-infrastructure-design.md\n\
       This task creates the web server package and server module.\nFiles to create:\n\

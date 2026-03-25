@@ -44,6 +44,11 @@ sections:
       langgraph_pipeline/web/server.py with WEB_SERVER_DEFAULT_PORT=7070, create_app(),
       start_web_server(), and stop_web_server(). Static directory created. Syntax
       verified. Committed.
+    validation_attempts: 1
+    validation_findings: Fix committed (fd62d93a). validator.py:322 returns WARN instead
+      of PASS. All 49 validator tests pass including test_returns_warn_when_max_validation_attempts_exceeded.
+      Build OK. 2 pre-existing collection errors in test_auto_pipeline.py and test_completed_archive.py
+      are unrelated to this change.
 - id: phase-2
   name: Phase 2 - Plugin Version Bump
   status: pending
@@ -51,7 +56,7 @@ sections:
   - id: '2.1'
     name: Bump plugin version to 1.9.1 and update release notes
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '1.1'
     description: "Bump the plugin version in plugin.json and update RELEASE-NOTES.md.\n\
@@ -63,3 +68,6 @@ sections:
       \ in the\n     plan record.\n3. Git commit:\n   git add plugin.json RELEASE-NOTES.md\n\
       \   git commit -m 'chore: bump version to 1.9.1 for max-attempts WARN fix'\n\
       \nFiles: plugin.json, RELEASE-NOTES.md\n"
+    last_attempt: '2026-03-25T00:30:55.556155'
+    attempts: 1
+    model_used: sonnet
