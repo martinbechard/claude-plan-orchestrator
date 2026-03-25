@@ -21,6 +21,8 @@ Exit codes:
 """
 
 import argparse
+import glob
+import json
 import logging
 import os
 import signal
@@ -28,6 +30,8 @@ import sys
 import threading
 import time
 from typing import Optional
+
+import yaml
 
 from langgraph_pipeline.pipeline.graph import PIPELINE_THREAD_ID, pipeline_graph
 from langgraph_pipeline.pipeline.nodes.scan import scan_backlog as scan_backlog_fn
@@ -37,6 +41,7 @@ from langgraph_pipeline.shared.config import get_max_parallel_items, load_orches
 from langgraph_pipeline.shared.dotenv import load_dotenv_files
 from langgraph_pipeline.shared.langsmith import configure_tracing
 from langgraph_pipeline.shared.paths import LANGGRAPH_PID_FILE_PATH
+from langgraph_pipeline.shared.suspension import SUSPENDED_DIR, clear_suspension_marker
 from langgraph_pipeline.shared.hot_reload import CodeChangeMonitor, _perform_restart
 from langgraph_pipeline.shared.quota import QUOTA_PROBE_INTERVAL_SECONDS, probe_quota_available
 from langgraph_pipeline.slack import SlackNotifier
@@ -51,6 +56,7 @@ EXIT_CODE_ERROR = 1
 EXIT_CODE_BUDGET_EXHAUSTED = 2
 
 SCAN_SLEEP_SECONDS = 15
+SUSPENDED_GLOB = os.path.join(SUSPENDED_DIR, "*.json")
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
 LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -508,6 +514,136 @@ def _run_once(
         return EXIT_CODE_ERROR
 
 
+# ─── Suspension helpers ───────────────────────────────────────────────────────
+
+
+def _post_pending_suspension_questions(slack: Optional[SlackNotifier]) -> None:
+    """Post Slack questions for suspension markers that have not yet been posted.
+
+    Scans SUSPENDED_DIR for marker files where slack_thread_ts is empty and posts
+    the question to the appropriate Slack channel. Updates the marker with the
+    returned thread_ts and channel_id for reply correlation.
+
+    If slack is None or not enabled, this is a no-op; markers remain for the next cycle.
+
+    Args:
+        slack: SlackNotifier instance, or None if Slack is disabled.
+    """
+    if slack is None or not slack.is_enabled():
+        return
+
+    for marker_path in glob.glob(SUSPENDED_GLOB):
+        try:
+            with open(marker_path) as f:
+                marker = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Could not read suspension marker %s: %s", marker_path, exc)
+            continue
+
+        if marker.get("slack_thread_ts"):
+            continue  # Already posted to Slack
+
+        slug = marker.get("slug", "")
+        item_type = marker.get("item_type", "feature")
+        question = marker.get("question", "")
+        question_context = marker.get("question_context", "")
+
+        if not slug or not question:
+            continue
+
+        thread_ts = slack.post_suspension_question(slug, item_type, question, question_context)
+        if thread_ts:
+            channel_id = slack.get_type_channel_id(item_type)
+            marker["slack_thread_ts"] = thread_ts
+            marker["slack_channel_id"] = channel_id
+            try:
+                with open(marker_path, "w") as f:
+                    json.dump(marker, f, indent=2)
+                logger.info(
+                    "Suspension question posted for %s (thread_ts=%s)", slug, thread_ts
+                )
+            except OSError as exc:
+                logger.warning(
+                    "Could not update suspension marker %s: %s", marker_path, exc
+                )
+        else:
+            logger.warning("Failed to post suspension question for %s", slug)
+
+
+def _reinstate_answered_suspensions() -> None:
+    """Reinstate suspended tasks that have received a human answer via Slack.
+
+    Scans SUSPENDED_DIR for marker files where answer is a non-empty string.
+    For each answered marker, resets the task to pending in the plan YAML,
+    injects human_answer and human_question fields onto the task dict, saves
+    the YAML, and deletes the marker file.
+    """
+    for marker_path in glob.glob(SUSPENDED_GLOB):
+        try:
+            with open(marker_path) as f:
+                marker = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Could not read suspension marker %s: %s", marker_path, exc)
+            continue
+
+        answer = marker.get("answer", "")
+        if not isinstance(answer, str) or not answer.strip():
+            continue  # Not yet answered
+
+        plan_path = marker.get("plan_path", "")
+        task_id = marker.get("task_id", "")
+        slug = marker.get("slug", "")
+
+        if not plan_path or not task_id:
+            logger.warning(
+                "Suspension marker %s missing plan_path or task_id — skipping",
+                marker_path,
+            )
+            continue
+
+        try:
+            with open(plan_path) as f:
+                plan_data = yaml.safe_load(f)
+        except (OSError, yaml.YAMLError) as exc:
+            logger.warning("Could not load plan YAML %s: %s", plan_path, exc)
+            continue
+
+        task = None
+        for section in plan_data.get("sections", []):
+            for t in section.get("tasks", []):
+                if t.get("id") == task_id:
+                    task = t
+                    break
+            if task is not None:
+                break
+
+        if task is None:
+            logger.warning(
+                "Task %s not found in plan %s — skipping reinstatement",
+                task_id,
+                plan_path,
+            )
+            continue
+
+        task["status"] = "pending"
+        task["human_answer"] = answer.strip()
+        task["human_question"] = marker.get("question", "")
+
+        try:
+            with open(plan_path, "w") as f:
+                yaml.dump(
+                    plan_data, f, default_flow_style=False, sort_keys=False, allow_unicode=True
+                )
+        except OSError as exc:
+            logger.warning("Could not save plan YAML %s: %s", plan_path, exc)
+            continue
+
+        clear_suspension_marker(slug)
+        logger.info(
+            "Reinstated task %s in %s with human answer (slug=%s)", task_id, plan_path, slug
+        )
+
+
 # ─── Continuous scan loop ─────────────────────────────────────────────────────
 
 
@@ -560,6 +696,8 @@ def _run_scan_loop(
         try:
             with pipeline_graph() as graph:
                 while not shutdown_event.is_set():
+                    _reinstate_answered_suspensions()
+                    _post_pending_suspension_questions(slack)
                     # Lightweight pre-scan: no graph, no tracing, just check directories.
                     pre_scanned = _pre_scan(budget_cap_usd)
 
