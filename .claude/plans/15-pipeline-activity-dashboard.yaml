@@ -23,7 +23,7 @@ sections:
   - id: '1.1'
     name: Create DashboardState module
     agent: coder
-    status: pending
+    status: completed
     description: "Implement the work item: .claude/plans/.claimed/15-pipeline-activity-dashboard.md\n\
       Design reference: docs/plans/2026-03-25-15-pipeline-activity-dashboard-design.md\n\
       This task creates the thread-safe DashboardState singleton.\nFiles to create:\n\
@@ -33,11 +33,21 @@ sections:
       \  - DashboardState class with threading.Lock, active_workers dict, recent_completions\
       \ list (MAX_RECENT_COMPLETIONS=20), session_cost_usd, session_start, recent_errors\
       \ list (MAX_RECENT_ERRORS=50)\n  - Methods: add_active_worker(), remove_active_worker(),\
-      \ add_error(), snapshot()\n  - snapshot() computes queue_count by globbing\
-      \ *.md in BACKLOG_DIRS (no scan graph)\n  - Module-level singleton via get_dashboard_state()\
+      \ add_error(), snapshot()\n  - snapshot() computes queue_count by globbing *.md\
+      \ in BACKLOG_DIRS (no scan graph)\n  - Module-level singleton via get_dashboard_state()\
       \ and reset_dashboard_state()\nVerify syntax: python3 -c \"import py_compile;\
       \ py_compile.compile('langgraph_pipeline/web/dashboard_state.py', doraise=True)\"\
       \n"
+    last_attempt: '2026-03-25T02:11:00.948573'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-25T02:14:54.607074'
+    result_message: Created langgraph_pipeline/web/dashboard_state.py with WorkerInfo
+      and CompletionRecord dataclasses, DashboardState class (threading.Lock, active_workers,
+      recent_completions capped at 20, session_cost_usd, session_start, recent_errors
+      capped at 50, total_processed counter), add_active_worker/remove_active_worker/add_error/snapshot()
+      methods, queue_count computed by globbing BACKLOG_DIRS, and module-level singleton
+      via get_dashboard_state()/reset_dashboard_state().
 - id: phase-2
   name: Phase 2 - Dashboard Router and SSE Endpoint
   status: pending
@@ -50,8 +60,8 @@ sections:
     - '1.1'
     description: "Implement the work item: .claude/plans/.claimed/15-pipeline-activity-dashboard.md\n\
       Design reference: docs/plans/2026-03-25-15-pipeline-activity-dashboard-design.md\n\
-      This task creates the FastAPI router and SSE endpoint.\nFiles to create:\n\
-      - langgraph_pipeline/web/routes/dashboard.py with:\n  - SSE_INTERVAL_SECONDS\
+      This task creates the FastAPI router and SSE endpoint.\nFiles to create:\n-\
+      \ langgraph_pipeline/web/routes/dashboard.py with:\n  - SSE_INTERVAL_SECONDS\
       \ = 2 constant\n  - GET /dashboard: renders dashboard.html via Jinja2Templates\n\
       \  - GET /api/stream: SSE StreamingResponse; async generator sends event: state\n\
       \    data: <json snapshot> every SSE_INTERVAL_SECONDS; exits on request.is_disconnected()\n\
@@ -96,14 +106,14 @@ sections:
     description: "Implement the work item: .claude/plans/.claimed/15-pipeline-activity-dashboard.md\n\
       Design reference: docs/plans/2026-03-25-15-pipeline-activity-dashboard-design.md\n\
       This task wires the supervisor into DashboardState.\nChanges to langgraph_pipeline/supervisor.py:\n\
-      - Import get_dashboard_state from langgraph_pipeline.web.dashboard_state\n\
-      - In _try_dispatch_one(): after active_workers[pid] = ... call\n  get_dashboard_state().add_active_worker(pid,\
+      - Import get_dashboard_state from langgraph_pipeline.web.dashboard_state\n-\
+      \ In _try_dispatch_one(): after active_workers[pid] = ... call\n  get_dashboard_state().add_active_worker(pid,\
       \ item_slug, item_type, time.monotonic())\n- In _reap_one_worker(): after determining\
       \ success/failure outcome call\n  get_dashboard_state().remove_active_worker(pid,\
       \ outcome, cost_usd, duration_s)\n- In _reap_one_worker() crash/failure paths:\
-      \ call get_dashboard_state().add_error(message)\nVerify syntax: python3 -c\
-      \ \"import py_compile; py_compile.compile('langgraph_pipeline/supervisor.py',\
-      \ doraise=True)\"\n"
+      \ call get_dashboard_state().add_error(message)\nVerify syntax: python3 -c \"\
+      import py_compile; py_compile.compile('langgraph_pipeline/supervisor.py', doraise=True)\"\
+      \n"
 - id: phase-5
   name: Phase 5 - Unit Tests
   status: pending
