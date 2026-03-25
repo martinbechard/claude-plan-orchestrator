@@ -71,5 +71,3 @@ unreadable. The dashboard gives a single clean view of the whole system.
 - `langgraph_pipeline/web/static/dashboard.js`
 - Update `langgraph_pipeline/supervisor.py` — feed `DashboardState` from dispatch loop
 - `tests/langgraph/web/test_dashboard_state.py`
-
-## LangSmith Trace: c75950af-fa68-4c8e-858b-953e05fa8d00
