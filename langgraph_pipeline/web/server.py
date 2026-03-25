@@ -61,6 +61,10 @@ def create_app(config: Optional[dict] = None):
         uptime = time.monotonic() - _start_time if _start_time else 0.0
         return JSONResponse({"status": "ok", "supervisor": {"uptime_seconds": uptime}})
 
+    from langgraph_pipeline.web.routes.dashboard import router as dashboard_router
+
+    app.include_router(dashboard_router)
+
     _STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
