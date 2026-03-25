@@ -32,10 +32,17 @@ _start_time: float = 0.0
 # ─── App Factory ──────────────────────────────────────────────────────────────
 
 
-def create_app():
+def create_app(config: Optional[dict] = None):
     """Build and return the FastAPI application with all routes configured.
 
-    Raises ImportError if fastapi is not installed.
+    When ``config`` contains a ``web.proxy.enabled: true`` key, the TracingProxy
+    is initialised and the /proxy router is mounted.
+
+    Args:
+        config: Full orchestrator config dict (may be None when running without config).
+
+    Raises:
+        ImportError: If fastapi is not installed.
     """
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse, RedirectResponse
@@ -57,14 +64,30 @@ def create_app():
     _STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
+    proxy_config = (config or {}).get("web", {}).get("proxy", {})
+    if proxy_config.get("enabled"):
+        from langgraph_pipeline.web.proxy import init_proxy
+        from langgraph_pipeline.web.routes.proxy import router as proxy_router
+
+        init_proxy(proxy_config)
+        app.include_router(proxy_router)
+        logger.info("Proxy router mounted at /proxy")
+
     return app
 
 
 # ─── Lifecycle ────────────────────────────────────────────────────────────────
 
 
-def start_web_server(port: int = WEB_SERVER_DEFAULT_PORT) -> None:
+def start_web_server(
+    port: int = WEB_SERVER_DEFAULT_PORT,
+    config: Optional[dict] = None,
+) -> None:
     """Start uvicorn in a daemon thread on the given port.
+
+    Args:
+        port: TCP port to bind to.
+        config: Full orchestrator config dict forwarded to create_app().
 
     Logs a warning and returns without raising if fastapi or uvicorn is not installed.
     """
@@ -80,7 +103,7 @@ def start_web_server(port: int = WEB_SERVER_DEFAULT_PORT) -> None:
         return
 
     try:
-        app = create_app()
+        app = create_app(config)
     except ImportError:
         logger.warning(
             "Web server requested but fastapi is not installed; "
@@ -89,8 +112,8 @@ def start_web_server(port: int = WEB_SERVER_DEFAULT_PORT) -> None:
         return
 
     _start_time = time.monotonic()
-    config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning")
-    _server = uvicorn.Server(config)
+    uvicorn_config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning")
+    _server = uvicorn.Server(uvicorn_config)
 
     def _run() -> None:
         _server.run()
