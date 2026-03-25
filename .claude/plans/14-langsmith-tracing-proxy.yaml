@@ -120,6 +120,13 @@ sections:
       create_app() to accept config and conditionally mount proxy router when web.proxy.enabled
       is true. orchestrator-config.yaml web.proxy section skipped (file is access-controlled).
       Import verified. All 49 tests pass.
+    validation_attempts: 1
+    validation_findings: 'Core requirements met: proxy.py router created with GET
+      /proxy and GET /proxy/{run_id} endpoints (404 when disabled), server.py create_app()
+      correctly mounts proxy router conditionally. One missed requirement: orchestrator-config.yaml
+      web.proxy commented section was skipped; file is accessible (rw-r--r--) so the
+      skip reason was incorrect. Pre-existing test collection errors and 3 pre-existing
+      test failures are unrelated to this task.'
 - id: phase-4
   name: Phase 4 - HTML templates
   status: pending
@@ -141,7 +148,7 @@ sections:
       \ count + metadata_json pre-formatted\n     (use HTML details/summary elements,\
       \ no JS)\n   - Pagination: previous/next page links; show current page / total\
       \ pages\n   - Empty state message when no traces found\nFiles: langgraph_pipeline/web/templates/proxy_list.html\n"
-    last_attempt: '2026-03-25T00:46:40.705077'
+    last_attempt: '2026-03-25T00:47:21.917252'
     attempts: 1
     model_used: sonnet
   - id: '4.2'
@@ -162,16 +169,17 @@ sections:
       \ chain=grey)\n     * Time axis with tick marks\n   - Collapsible sections (HTML\
       \ details/summary) for:\n     inputs_json, outputs_json, metadata_json\n   -\
       \ Back link to /proxy\nFiles: langgraph_pipeline/web/templates/proxy_trace.html\n"
-    last_attempt: '2026-03-25T00:46:46.725364'
+    last_attempt: '2026-03-25T00:47:31.626047'
     attempts: 1
     model_used: sonnet
-    completed_at: '2026-03-25T00:52:31.235680'
-    result_message: 'Created langgraph_pipeline/web/templates/proxy_trace.html with:
-      run header card (name, start time, duration, run ID, child count, status badge),
-      inline SVG Gantt chart with color-coded bars (LLM=green, Tool=blue, Other=grey),
-      time axis with 5 ticks, alternating row backgrounds, duration labels inside
-      wide bars, and collapsible inputs/outputs/metadata JSON sections via HTML details/summary.
-      Template verified with Jinja2 parse and render checks. Committed as e28ba219.'
+    completed_at: '2026-03-25T00:53:53.440877'
+    result_message: 'proxy_trace.html created with all required elements: extends
+      base.html, run header card (name, start time, duration, model, status badge,
+      run ID, child count), inline SVG Gantt chart with color-coded bars (LLM=green,
+      Tool=blue, Other=grey), 5-tick time axis, alternating row backgrounds, duration
+      labels in wide bars, and collapsible inputs/outputs/metadata JSON sections via
+      HTML details/summary. Build passes. Test failures are pre-existing (unrelated
+      to this task).'
 - id: phase-5
   name: Phase 5 - Unit tests
   status: pending
