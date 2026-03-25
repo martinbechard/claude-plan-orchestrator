@@ -1,0 +1,66 @@
+# scripts/setup-templates/orchestrator-config.yaml
+# Template: orchestrator configuration for claude-plan-orchestrator
+# Design: docs/plans/2026-03-25-17-project-setup-script-design.md
+#
+# Copy this file to .claude/orchestrator-config.yaml in your project root.
+# All fields are optional -- defaults are used when omitted.
+# Uncomment and fill in any field you want to customize.
+
+# Port the dev server runs on. The auto-pipeline stops/restarts it during
+# orchestrator runs to avoid build cache conflicts, and the plan-orchestrator
+# uses it for post-plan smoke tests.
+# dev_server_port: 3000
+
+# Command used to build/compile the project during verification.
+# Default: "pnpm run build"
+# build_command: "pnpm run build"
+
+# Command used to run the project test suite during verification.
+# Default: "pnpm test"
+# test_command: "pnpm test"
+
+# Command used to start the dev server during verification.
+# Default: "pnpm dev"
+# dev_server_command: "pnpm dev"
+
+# Directory containing agent definition markdown files.
+# Each agent is a .md file with YAML frontmatter (name, description, tools, model).
+# Default: ".claude/agents/"
+# agents_dir: ".claude/agents/"
+
+# Agent identity for shared Slack channels.
+# Display names are appended to outbound messages and used for inbound filtering.
+# If omitted, defaults are derived from the current directory name.
+# identity:
+#   project: my-project-name
+#   agents:
+#     pipeline: MyProject-Pipeline
+#     orchestrator: MyProject-Orchestrator
+#     intake: MyProject-Intake
+#     qa: MyProject-QA
+
+# LangSmith observability configuration.
+# Set enabled: true to activate tracing. Requires LANGSMITH_API_KEY and
+# LANGSMITH_WORKSPACE_ID (set in .env.local or as environment variables).
+# Get a free key at https://smith.langchain.com/settings/api-keys
+# langsmith:
+#   enabled: false
+#   project: "my-project-name"
+#   endpoint: "https://api.smith.langchain.com"  # uncomment for self-hosted
+
+# Pipeline parallelism configuration.
+# max_parallel_items controls how many backlog items are processed concurrently.
+# Set to 1 for strictly sequential processing.
+# pipeline:
+#   max_parallel_items: 4
+
+# Per-task validation configuration.
+# When enabled, the orchestrator spawns a validator agent after each
+# implementation task to independently verify the result.
+# validation:
+#   enabled: false
+#   run_after:
+#     - coder           # Agent types that trigger validation
+#   validators:
+#     - validator       # Validator agent names to run
+#   max_validation_attempts: 1  # Max validation retries per task
