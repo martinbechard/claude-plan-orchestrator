@@ -135,6 +135,11 @@ sections:
       to aggregate execution cost logs, rank files by read volume, rank agent types
       by token cost, identify intra-item repeated reads, and post a structured Slack
       report to orchestrator-notifications.
+    validation_attempts: 1
+    validation_findings: docs/analysis-backlog/cost-analysis.md created correctly.
+      All 5 analysis instructions present (read cost logs, rank files by read volume,
+      rank agent types by tokens, identify intra-item repeated reads, post Slack report).
+      Build passes. Pre-existing test collection errors are unrelated to this task.
 - id: phase-4
   name: Phase 4 - Unit tests
   status: pending
@@ -142,7 +147,7 @@ sections:
   - id: '4.1'
     name: Write unit tests for cost log writer and tool call extraction
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '2.1'
     description: 'Implement the work item: docs/feature-backlog/12-structured-execution-cost-log-and-analysis.md
@@ -169,3 +174,12 @@ sections:
       Files: tests/test_execution_cost_log.py
 
       '
+    last_attempt: '2026-03-24T21:17:03.069102'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T21:18:40.458388'
+    result_message: 'Created tests/test_execution_cost_log.py with 17 unit tests covering
+      all 5 required scopes: (a) ToolCallRecord creation with/without optional fields,
+      (b) write_execution_cost_log first-call file creation with correct structure,
+      (c) append on subsequent calls, (d) tool_use/tool_result pairing with result_bytes,
+      (e) item slug from plan path stem. All 17 tests pass.'
