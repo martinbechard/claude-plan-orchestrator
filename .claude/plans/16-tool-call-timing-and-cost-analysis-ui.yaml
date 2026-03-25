@@ -46,6 +46,12 @@ sections:
     result_message: Created langgraph_pipeline/web/cost_log_reader.py with CostLogReader,
       all aggregation dataclasses (CostData, ItemCost, TaskCost, WastedRead), and
       svg_bar_chart(). Two-pass load_all() detects wasted reads. Syntax verified.
+    validation_attempts: 1
+    validation_findings: 'Frontend assets created and functional. Build passes. Two
+      pre-existing test collection errors (unrelated to this task - caused by earlier
+      auto_pipeline.py refactor). Minor gaps: worker cards omit cost ticker and model
+      tier fields from backlog req 4; queue count is in session summary bar rather
+      than a dedicated panel section.'
 - id: phase-2
   name: Phase 2 - Analysis Route and Template
   status: pending
@@ -53,7 +59,7 @@ sections:
   - id: '2.1'
     name: Create analysis FastAPI router
     agent: coder
-    status: pending
+    status: failed
     depends_on:
     - '1.1'
     description: 'Implement the work item: .claude/plans/.claimed/16-tool-call-timing-and-cost-analysis-ui.md
@@ -80,10 +86,14 @@ sections:
       doraise=True)"
 
       '
+    last_attempt: '2026-03-25T02:25:41.912918'
+    attempts: 1
+    model_used: sonnet
+    result_message: No status file written by Claude
   - id: '2.2'
     name: Create analysis HTML template
     agent: frontend-coder
-    status: pending
+    status: completed
     depends_on:
     - '2.1'
     description: "Implement the work item: .claude/plans/.claimed/16-tool-call-timing-and-cost-analysis-ui.md\n\
@@ -102,6 +112,15 @@ sections:
       \ empty\n- Duration histogram note: explain per-tool-call duration is not yet\n\
       \  available in the log schema\nNo JavaScript framework; no bundler; plain HTML\
       \ only in this file.\n"
+    last_attempt: '2026-03-25T02:27:35.739792'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-25T02:29:59.801993'
+    result_message: 'Created analysis.html Jinja2 template extending base.html. Includes:
+      no-data empty state, top-files SVG chart, agent-cost SVG chart with ?agent=
+      filter links, per-item cost table with expand/collapse task detail rows (data-*
+      attrs for analysis.js sort), wasted reads panel (hidden when empty), duration
+      histogram note. Jinja2 syntax verified.'
 - id: phase-3
   name: Phase 3 - JS, Nav, and Wiring
   status: pending
