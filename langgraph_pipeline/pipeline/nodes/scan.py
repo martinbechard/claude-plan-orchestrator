@@ -35,6 +35,8 @@ from langgraph_pipeline.shared.paths import (
 
 SAMPLE_PLAN_FILENAME = "sample-plan.yaml"
 
+CLAIM_META_SUFFIX = ".claim-meta.json"
+
 # Status patterns in backlog files that indicate already-processed items.
 COMPLETED_STATUS_PATTERN = re.compile(
     r"^##\s*Status:\s*(Fixed|Completed)", re.IGNORECASE | re.MULTILINE
@@ -77,8 +79,13 @@ def _scan_directory(directory: str, item_type: str) -> list[tuple[str, str, str]
     if not dir_path.exists():
         return items
 
+    claimed_dir_resolved = Path(CLAIMED_DIR).resolve()
+
     for md_file in sorted(dir_path.glob("*.md")):
         if md_file.name.startswith("."):
+            continue
+
+        if md_file.resolve().parent == claimed_dir_resolved:
             continue
 
         slug = md_file.stem
@@ -172,19 +179,27 @@ def _item_type_from_path(filepath: str) -> str:
 # ─── Item claiming ────────────────────────────────────────────────────────────
 
 
-def claim_item(item_path: str) -> bool:
+def claim_item(item_path: str, item_type: str = "feature") -> bool:
     """Atomically claim a backlog item by moving it into CLAIMED_DIR.
 
     Uses os.rename(), which is atomic on POSIX: exactly one process wins the
     race; all others receive FileNotFoundError and return False.
 
     Returns True when the item was successfully claimed.
-    Returns False when another process claimed it first (FileNotFoundError).
+    Returns False when the item is already in CLAIMED_DIR (same-path guard)
+    or when another process claimed it first (FileNotFoundError).
     Propagates any other OSError (permissions, cross-device move, etc.).
     """
     os.makedirs(CLAIMED_DIR, exist_ok=True)
     basename = os.path.basename(item_path)
     claimed_path = os.path.join(CLAIMED_DIR, basename)
+
+    if os.path.abspath(item_path) == os.path.abspath(claimed_path):
+        logging.warning(
+            "claim_item: item %s is already in CLAIMED_DIR — skipping.", item_path
+        )
+        return False
+
     try:
         os.rename(item_path, claimed_path)
         return True
@@ -233,11 +248,22 @@ def scan_backlog(state: PipelineState) -> dict:
     if state.get("item_path"):
         return {}
 
+    claimed_dir_resolved = Path(CLAIMED_DIR).resolve()
+
     # Priority 1: Resume in-progress plans.
     in_progress = _find_in_progress_plans()
     if in_progress:
         plan_path = in_progress[0]
         source_item = _source_item_for_plan(plan_path)
+        if source_item and Path(source_item).exists():
+            if Path(source_item).resolve().parent == claimed_dir_resolved:
+                logging.warning(
+                    "scan_backlog: source_item %s is already in CLAIMED_DIR — "
+                    "skipping plan %s (item is already being processed).",
+                    source_item,
+                    plan_path,
+                )
+                source_item = None
         if source_item and Path(source_item).exists():
             filepath = source_item
             slug = Path(filepath).stem

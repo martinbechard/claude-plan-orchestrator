@@ -365,7 +365,7 @@ def _try_dispatch_one(active_workers: dict[int, WorkerRecord]) -> bool:
 
     item_path, item_slug, item_type = candidate
 
-    claimed = claim_item(item_path)
+    claimed = claim_item(item_path, item_type)
     if not claimed:
         logger.debug("Lost claim race on %s — another process claimed it.", item_path)
         return False

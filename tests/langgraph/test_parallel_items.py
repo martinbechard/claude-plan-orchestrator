@@ -106,6 +106,33 @@ class TestClaimItem:
 
         assert claimed_dir.exists()
 
+    def test_returns_false_when_item_already_in_claimed_dir(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+
+        claimed_dir = tmp_path / ".claimed"
+        claimed_dir.mkdir()
+        monkeypatch.setattr(scan_mod, "CLAIMED_DIR", str(claimed_dir))
+        already_claimed = claimed_dir / "01-bug.md"
+        already_claimed.write_text("# Bug\n")
+
+        result = claim_item(str(already_claimed))
+
+        assert result is False
+        assert already_claimed.exists()
+
+    def test_scan_directory_skips_claimed_dir_files(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        from langgraph_pipeline.pipeline.nodes.scan import _scan_directory
+
+        claimed_dir = tmp_path / ".claimed"
+        claimed_dir.mkdir()
+        monkeypatch.setattr(scan_mod, "CLAIMED_DIR", str(claimed_dir))
+        (claimed_dir / "01-bug.md").write_text("# Bug\n")
+
+        items = _scan_directory(str(claimed_dir), "defect")
+
+        assert items == []
+
 
 # ─── unclaim_item ─────────────────────────────────────────────────────────────
 
