@@ -51,6 +51,12 @@ sections:
       to collect tool_use/tool_result pairs into result_capture['tool_calls']; added
       _extract_tool_calls_from_json_output() for non-verbose JSON mode with same pairing
       logic; wired into run_claude_task(). Build clean.
+    validation_attempts: 1
+    validation_findings: 'All three scope requirements met: ToolCallRecord dataclass
+      added at line 922, stream_json_output() extended with tool_use/tool_result pairing
+      into result_capture[''tool_calls''] at line 3416, and _extract_tool_calls_from_json_output()
+      added for non-verbose JSON mode at line 3302 (wired at line 3576). Build clean.
+      Test errors are pre-existing (unrelated to this task''s changes).'
 - id: phase-2
   name: Phase 2 - Cost log writer
   status: pending
@@ -58,7 +64,7 @@ sections:
   - id: '2.1'
     name: Implement write_execution_cost_log and integrate into run_claude_task
     agent: coder
-    status: pending
+    status: completed
     depends_on:
     - '1.1'
     description: 'Implement the work item: docs/feature-backlog/12-structured-execution-cost-log-and-analysis.md
@@ -76,6 +82,15 @@ sections:
       Files: scripts/plan-orchestrator.py
 
       '
+    last_attempt: '2026-03-24T21:08:40.804930'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-24T21:12:32.746001'
+    result_message: Added write_execution_cost_log() to plan-orchestrator.py; added
+      COST_LOG_DIR constant; moved ToolCallRecord before TaskResult for proper typing;
+      added tool_calls field to TaskResult; wired tool_calls through all run_claude_task()
+      returns; called write_execution_cost_log() in main loop after recording usage.
+      Build clean.
 - id: phase-3
   name: Phase 3 - Analysis backlog template
   status: pending
