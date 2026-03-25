@@ -1,11 +1,11 @@
 meta:
   name: Ideas Intake Pipeline
-  description: Add support for a docs/ideas/ folder where users can drop unformatted
-    rough notes. The auto-pipeline detects new files, spawns a Claude session to analyze
-    and classify them, and generates properly formatted backlog items in the correct
-    folder.
-  plan_doc: docs/plans/2026-02-18-ideas-intake-pipeline-design.md
-  created: '2026-02-18'
+  description: Add docs/ideas/ folder support to the LangGraph pipeline. Users drop
+    raw notes there; the pipeline classifies and converts them into properly formatted
+    backlog items, then moves originals to docs/ideas/processed/.
+  source_item: docs/feature-backlog/ideas-intake-pipeline.md
+  plan_doc: docs/plans/2026-03-24-ideas-intake-pipeline-design.md
+  created: '2026-03-24'
   max_attempts_default: 3
   validation:
     enabled: true
@@ -13,272 +13,113 @@ meta:
     - coder
     validators:
     - validator
-    max_validation_attempts: 1
+    max_validation_attempts: 2
 sections:
 - id: phase-1
-  name: Phase 1 - Implementation
-  status: completed
+  name: Phase 1 - Core idea classifier module
+  status: pending
   tasks:
   - id: '1.1'
-    name: Add ideas intake constants and scan function
+    name: Add path constants and create idea_classifier module
     agent: coder
-    status: completed
-    description: "Add the ideas intake constants, directory setup, and scanning\n\
-      function to scripts/auto-pipeline.py.\n\nReference: docs/plans/2026-02-18-ideas-intake-pipeline-design.md\n\
-      \nSteps:\n1. Read scripts/auto-pipeline.py. Find the constants section near\n\
-      \   the top (around lines 59-82, where DEFECT_DIR, FEATURE_DIR, PLANS_DIR,\n\
-      \   LOGS_DIR, and REQUIRED_DIRS are defined).\n\n2. After the DESIGN_DIR constant\
-      \ (line ~68), add:\n\n   IDEAS_DIR = \"docs/ideas\"\n   IDEAS_PROCESSED_DIR\
-      \ = \"docs/ideas/processed\"\n\n3. Add IDEAS_DIR and IDEAS_PROCESSED_DIR to\
-      \ the REQUIRED_DIRS list.\n\n4. Add a scan_ideas() function after the scan_all_backlogs()\n\
-      \   function (around line 703). It should:\n   - Check if IDEAS_DIR exists;\
-      \ return empty list if not\n   - Glob for *.md files in IDEAS_DIR (not recursive,\
-      \ skip dotfiles)\n   - Skip empty files (os.path.getsize() == 0)\n   - Skip\
-      \ files whose basename already exists in IDEAS_PROCESSED_DIR\n   - Return a\
-      \ list of file paths (strings) for unprocessed ideas\n\n5. Verify syntax:\n\
-      \   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
-      \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py\n"
-    attempts: 1
-    last_attempt: '2026-02-18T19:52:27.807913'
-    model_used: sonnet
-    completed_at: '2026-02-18T19:55:00.527047'
-    result_message: Added IDEAS_DIR and IDEAS_PROCESSED_DIR constants, added both
-      to REQUIRED_DIRS, and added scan_ideas() function after scan_all_backlogs().
-      All 236 tests pass.
-  - id: '1.2'
-    name: Add idea intake prompt template and process_idea function
-    agent: coder
-    status: completed
-    depends_on:
-    - '1.1'
-    description: "Add the Claude prompt template for idea classification and the\n\
-      process_idea() function to scripts/auto-pipeline.py.\n\nReference: docs/plans/2026-02-18-ideas-intake-pipeline-design.md\n\
-      \nSteps:\n1. Read scripts/auto-pipeline.py. Find the PLAN_CREATION_PROMPT_TEMPLATE\n\
-      \   (around line 999) and the VERIFICATION_PROMPT_TEMPLATE (around line 1555).\n\
-      \n2. Before PLAN_CREATION_PROMPT_TEMPLATE, add an IDEA_INTAKE_PROMPT_TEMPLATE\n\
-      \   string. The prompt should instruct Claude to:\n   - Read the raw idea file\
-      \ at {idea_path}\n   - Determine if it describes a feature, defect, or multiple\
-      \ items\n   - Assess priority (High, Medium, Low) based on content signals\n\
-      \   - For each item, generate a properly formatted backlog .md file with:\n\
-      \     ## Status: Open  (or ## Status: Needs Clarification if too vague)\n  \
-      \   ## Priority: <assessed priority>\n     ## Summary: <clear one-paragraph\
-      \ summary>\n     ## Scope: <what areas of the codebase are affected>\n     ##\
-      \ Files Affected: <list of files likely needing changes>\n   - Write each item\
-      \ to the correct directory:\n     features -> {feature_dir}/<slug>.md\n    \
-      \ defects -> {defect_dir}/<slug>.md\n   - Use a descriptive filename slug derived\
-      \ from the idea content\n   - Move the original idea file to {processed_dir}/\n\
-      \   - Git commit with message: \"intake: classify idea {idea_filename}\"\n \
-      \  - The template should accept these format variables:\n     idea_path, idea_filename,\
-      \ feature_dir, defect_dir, processed_dir\n\n3. After scan_ideas(), add a process_idea()\
-      \ function that:\n   - Takes idea_path (str) and dry_run (bool) parameters\n\
-      \   - Returns True on success, False on failure\n   - In dry-run mode, logs\
-      \ what would happen and returns True\n   - Formats the IDEA_INTAKE_PROMPT_TEMPLATE\
-      \ with the idea file path\n     and directory constants\n   - Calls run_child_process()\
-      \ with CLAUDE_CMD + [\"--dangerously-skip-permissions\",\n     \"--print\",\
-      \ prompt]\n   - Uses a timeout of PLAN_CREATION_TIMEOUT_SECONDS\n   - Handles\
-      \ rate limiting (return False)\n   - On success, verifies the idea file was\
-      \ moved to processed/\n   - Returns True/False based on success\n\n4. Verify\
-      \ syntax:\n   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
-      \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py\n"
-    attempts: 1
-    last_attempt: '2026-02-18T19:55:03.050412'
-    model_used: sonnet
-    completed_at: '2026-02-18T19:58:34.620479'
-    result_message: Added IDEA_INTAKE_PROMPT_TEMPLATE constant (before PLAN_CREATION_PROMPT_TEMPLATE)
-      and process_idea() function (after scan_ideas()). Template instructs Claude
-      to classify ideas into feature/defect backlog items with priority assessment,
-      proper format, and git commit. Function follows the same run_child_process()
-      pattern as plan creation, with rate-limit handling and processed-file verification.
-  - id: '1.3'
-    name: Add intake_ideas orchestration and wire into main_loop
-    agent: coder
-    status: completed
-    depends_on:
-    - '1.2'
-    description: "Add the intake_ideas() orchestration function and integrate it\n\
-      into the main processing loop in scripts/auto-pipeline.py.\n\nReference: docs/plans/2026-02-18-ideas-intake-pipeline-design.md\n\
-      \nSteps:\n1. Read scripts/auto-pipeline.py. Find the process_idea() function\n\
-      \   added in the previous task.\n\n2. After process_idea(), add an intake_ideas()\
-      \ function that:\n   - Takes dry_run (bool) parameter\n   - Calls scan_ideas()\
-      \ to get the list of unprocessed idea files\n   - If no ideas found, returns\
-      \ 0\n   - Logs \"Found {n} idea(s) to process\" \n   - Processes each idea sequentially\
-      \ via process_idea()\n   - Logs success/failure for each\n   - Returns the count\
-      \ of successfully processed ideas\n\n3. Wire intake_ideas() into main_loop():\n\
-      \   - Find the main_loop() function (around line 1986)\n   - Inside the while\
-      \ True loop, BEFORE the scan_all_backlogs() call\n     (after the in-progress\
-      \ plan resumption block), add:\n\n     # Process any raw ideas before scanning\
-      \ backlogs\n     intake_count = intake_ideas(dry_run)\n     if intake_count\
-      \ > 0:\n         log(f\"Intake: processed {intake_count} idea(s) into backlog\
-      \ items\")\n\n4. Extend the BacklogWatcher setup to also watch IDEAS_DIR:\n\
-      \   - Find where observer.schedule() is called for DEFECT_DIR and FEATURE_DIR\n\
-      \     (around line 2022)\n   - Add IDEAS_DIR to the list of watched directories:\n\
-      \     for watch_dir in [DEFECT_DIR, FEATURE_DIR, IDEAS_DIR]:\n\n5. Verify syntax:\n\
-      \   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
-      \ doraise=True); print('syntax OK')\"\n\nFiles: scripts/auto-pipeline.py\n"
-    attempts: 1
-    last_attempt: '2026-02-18T19:58:36.924373'
-    model_used: sonnet
-    completed_at: '2026-02-18T20:01:09.460478'
-    result_message: Added intake_ideas() orchestration function, wired into main_loop()
-      before scan_all_backlogs(), and extended BacklogWatcher to watch IDEAS_DIR.
-      All 236 tests pass.
+    status: pending
+    description: "Implement the work item: docs/feature-backlog/ideas-intake-pipeline.md\n\
+      Design reference: docs/plans/2026-03-24-ideas-intake-pipeline-design.md\n\n\
+      Steps:\n1. In langgraph_pipeline/shared/paths.py, add after the BACKLOG_DIRS\
+      \ block:\n   IDEAS_DIR = \"docs/ideas\"\n   IDEAS_PROCESSED_DIR = \"docs/ideas/processed\"\
+      \n\n2. Create langgraph_pipeline/pipeline/nodes/idea_classifier.py with:\n\
+      \   - Module docstring referencing the design doc\n   - Import subprocess,\
+      \ os, logging, Path from standard library\n   - Import FEATURE_DIR, DEFECT_DIR,\
+      \ IDEAS_DIR, IDEAS_PROCESSED_DIR from paths\n   - IDEA_INTAKE_TIMEOUT_SECONDS\
+      \ = 300 constant\n   - IDEA_INTAKE_PROMPT template string with placeholders:\n\
+      \     {idea_path}, {feature_dir}, {defect_dir}, {processed_dir}\n     The\
+      \ prompt must instruct Claude to: read the raw idea, classify as feature/defect/multiple,\n\
+      \     assess priority, write formatted backlog .md files with standard headers\n\
+      \     (## Status: Open or ## Status: Needs Clarification, ## Priority:,\n\
+      \     ## Summary:, ## Scope:, ## Files Affected:), move the original to\n\
+      \     processed_dir, and git commit with message \"intake: classify idea <filename>\"\
+      \n   - scan_ideas() -> list[str]: globs IDEAS_DIR for *.md, skips dotfiles,\n\
+      \     skips empty files (os.path.getsize == 0), skips files whose basename\n\
+      \     already exists in IDEAS_PROCESSED_DIR; returns empty list if IDEAS_DIR\
+      \ absent\n   - classify_idea(idea_path: str, dry_run: bool = False) -> bool:\n\
+      \     in dry_run mode logs and returns True; otherwise spawns subprocess.run(\n\
+      \     [\"claude\", \"--dangerously-skip-permissions\", \"--print\", prompt])\n\
+      \     with timeout=IDEA_INTAKE_TIMEOUT_SECONDS; on success verifies original\n\
+      \     was moved to IDEAS_PROCESSED_DIR and returns True; returns False on\n\
+      \     any failure\n   - process_ideas(dry_run: bool = False) -> int: calls\
+      \ scan_ideas(), processes\n     each sequentially via classify_idea(), logs\
+      \ success/failure, returns\n     count of successfully processed ideas\n\n\
+      3. Verify syntax:\n   python3 -c \"import py_compile; py_compile.compile('langgraph_pipeline/pipeline/nodes/idea_classifier.py',\
+      \ doraise=True); print('syntax OK')\"\n\nFiles: langgraph_pipeline/shared/paths.py,\
+      \ langgraph_pipeline/pipeline/nodes/idea_classifier.py\n"
 - id: phase-2
-  name: Phase 2 - Unit Tests
-  status: completed
+  name: Phase 2 - CLI integration
+  status: pending
   tasks:
   - id: '2.1'
-    name: Add unit tests for scan_ideas()
+    name: Wire process_ideas into the CLI scan loop
     agent: coder
-    status: completed
+    status: pending
     depends_on:
     - '1.1'
-    description: "Add unit tests for the scan_ideas() function in auto-pipeline.py.\n\
-      \nReference: docs/plans/2026-02-18-ideas-intake-pipeline-design.md\n\nSteps:\n\
-      1. Read tests/test_auto_pipeline.py to understand existing test patterns.\n\
-      \   Note how the module is imported (likely via importlib).\n\n2. Add the following\
-      \ tests:\n\n   a. test_scan_ideas_returns_md_files():\n      - Use tmp_path\
-      \ fixture to create a temporary ideas directory\n        with a few .md files.\n\
-      \      - Monkeypatch the IDEAS_DIR constant in the auto-pipeline module\n  \
-      \      to point to the tmp_path ideas directory.\n      - Call scan_ideas().\n\
-      \      - Assert the returned list contains the expected file paths.\n\n   b.\
-      \ test_scan_ideas_skips_empty_files():\n      - Create an empty .md file and\
-      \ a non-empty .md file.\n      - Monkeypatch IDEAS_DIR.\n      - Call scan_ideas().\n\
-      \      - Assert only the non-empty file is returned.\n\n   c. test_scan_ideas_skips_already_processed():\n\
-      \      - Create a .md file in ideas dir and a same-named file in the\n     \
-      \   processed subdir.\n      - Monkeypatch IDEAS_DIR and IDEAS_PROCESSED_DIR.\n\
-      \      - Call scan_ideas().\n      - Assert the already-processed file is not\
-      \ returned.\n\n   d. test_scan_ideas_returns_empty_when_dir_missing():\n   \
-      \   - Monkeypatch IDEAS_DIR to a non-existent path.\n      - Call scan_ideas().\n\
-      \      - Assert an empty list is returned.\n\n   e. test_scan_ideas_skips_dotfiles():\n\
-      \      - Create a .hidden.md file and a normal.md file.\n      - Monkeypatch\
-      \ IDEAS_DIR.\n      - Call scan_ideas().\n      - Assert only normal.md is returned.\n\
-      \n3. Run the tests:\n   ~/.pyenv/versions/3.11.*/bin/python -m pytest tests/test_auto_pipeline.py\
-      \ -v -k scan_ideas\n   Fix any failures before marking this task complete.\n\
-      \nFiles: tests/test_auto_pipeline.py\n"
-    attempts: 1
-    last_attempt: '2026-02-18T20:01:11.896457'
-    model_used: sonnet
-    completed_at: '2026-02-18T20:03:10.812317'
-    result_message: 'Added 5 unit tests for scan_ideas(): returns_md_files, skips_empty_files,
-      skips_already_processed, returns_empty_when_dir_missing, skips_dotfiles. All
-      41 tests pass.'
-  - id: '2.2'
-    name: Add unit tests for process_idea() and intake_ideas()
-    agent: coder
-    status: completed
-    depends_on:
-    - '1.3'
-    description: "Add unit tests for process_idea() and intake_ideas() functions.\n\
-      \nReference: docs/plans/2026-02-18-ideas-intake-pipeline-design.md\n\nSteps:\n\
-      1. Read tests/test_auto_pipeline.py to understand existing test patterns,\n\
-      \   especially how run_child_process is mocked.\n\n2. Add the following tests:\n\
-      \n   a. test_process_idea_dry_run():\n      - Create a temporary idea .md file.\n\
-      \      - Call process_idea(idea_path, dry_run=True).\n      - Assert it returns\
-      \ True without spawning any subprocess.\n      - Assert the idea file was NOT\
-      \ moved.\n\n   b. test_process_idea_success():\n      - Create a temporary idea\
-      \ .md file.\n      - Monkeypatch run_child_process to return a successful\n\
-      \        ProcessResult.\n      - Create the processed/ directory and simulate\
-      \ the file\n        being moved there (as the Claude session would do).\n  \
-      \    - Call process_idea().\n      - Assert it returns True.\n\n   c. test_process_idea_rate_limited():\n\
-      \      - Monkeypatch run_child_process to return a ProcessResult with\n    \
-      \    rate_limited=True.\n      - Call process_idea().\n      - Assert it returns\
-      \ False.\n\n   d. test_intake_ideas_processes_all():\n      - Monkeypatch scan_ideas()\
-      \ to return a list of 2 file paths.\n      - Monkeypatch process_idea() to always\
-      \ return True.\n      - Call intake_ideas(dry_run=False).\n      - Assert it\
-      \ returns 2.\n      - Assert process_idea() was called twice.\n\n   e. test_intake_ideas_returns_zero_when_no_ideas():\n\
-      \      - Monkeypatch scan_ideas() to return an empty list.\n      - Call intake_ideas(dry_run=False).\n\
-      \      - Assert it returns 0.\n\n3. Run the tests:\n   ~/.pyenv/versions/3.11.*/bin/python\
-      \ -m pytest tests/test_auto_pipeline.py -v\n   Fix any failures before marking\
-      \ this task complete.\n\nFiles: tests/test_auto_pipeline.py\n"
-    attempts: 1
-    last_attempt: '2026-02-18T20:03:13.168885'
-    model_used: sonnet
-    completed_at: '2026-02-18T20:08:31.683899'
-    result_message: 'Added 5 unit tests for process_idea() and intake_ideas(): dry-run,
-      success (with side-effect mock that creates processed file), rate-limited, processes-all,
-      and zero-when-no-ideas. All 46 tests pass.'
+    description: "Implement the work item: docs/feature-backlog/ideas-intake-pipeline.md\n\
+      Design reference: docs/plans/2026-03-24-ideas-intake-pipeline-design.md\n\n\
+      Steps:\n1. In langgraph_pipeline/cli.py:\n   a. Add import at the top with\
+      \ other node imports:\n      from langgraph_pipeline.pipeline.nodes.idea_classifier\
+      \ import process_ideas\n   b. In _run_scan_loop(), inside the `while not shutdown_event.is_set()`\
+      \ loop,\n      AFTER the _post_pending_suspension_questions(slack) call and\
+      \ BEFORE\n      the _pre_scan() call, add:\n\n      ideas_processed = process_ideas(dry_run)\n\
+      \      if ideas_processed > 0:\n          logger.info(\"Ideas intake: processed\
+      \ %d idea(s) into backlog\", ideas_processed)\n\n2. Verify syntax:\n   python3\
+      \ -c \"import py_compile; py_compile.compile('langgraph_pipeline/cli.py',\
+      \ doraise=True); print('syntax OK')\"\n\nFiles: langgraph_pipeline/cli.py\n"
 - id: phase-3
-  name: Phase 3 - Plugin Version Bump
-  status: completed
+  name: Phase 3 - Unit tests
+  status: pending
   tasks:
   - id: '3.1'
-    name: Bump plugin version and update release notes
+    name: Add unit tests for idea_classifier module
     agent: coder
-    status: completed
+    status: pending
     depends_on:
-    - '1.3'
-    description: "Bump the plugin version in plugin.json and update RELEASE-NOTES.md\n\
-      for the ideas-intake-pipeline feature.\n\nSteps:\n1. Read plugin.json. Find\
-      \ the current version number.\n2. Bump the minor version (this is a new feature).\n\
-      3. Read RELEASE-NOTES.md. Add a new entry at the top for the new\n   version\
-      \ with a summary:\n   - Added ideas intake pipeline: drop rough notes in\n \
-      \    docs/ideas/ and they are automatically classified and converted\n     into\
-      \ properly formatted backlog items.\n4. Git commit both files:\n   git add plugin.json\
-      \ RELEASE-NOTES.md\n   git commit -m \"chore: bump version for ideas-intake-pipeline\
-      \ feature\"\n\nFiles: plugin.json, RELEASE-NOTES.md\n"
-    attempts: 1
-    last_attempt: '2026-02-18T20:08:34.225016'
-    model_used: sonnet
-    completed_at: '2026-02-18T20:10:05.915237'
-    result_message: Bumped plugin.json version from 1.1.0 to 1.2.0 and added 1.2.0
-      entry to RELEASE-NOTES.md summarizing the ideas-intake-pipeline feature. Also
-      resolved an unmerged state on ideas-intake-pipeline.yaml (no conflict markers
-      present). Committed all three files.
+    - '1.1'
+    description: "Implement the work item: docs/feature-backlog/ideas-intake-pipeline.md\n\
+      Design reference: docs/plans/2026-03-24-ideas-intake-pipeline-design.md\n\n\
+      Create tests/test_idea_classifier.py with tests for all three public functions.\n\
+      \nFor scan_ideas():\n- test_scan_ideas_returns_md_files: tmp ideas dir with\
+      \ two .md files -> both returned\n- test_scan_ideas_skips_empty_files: empty\
+      \ .md file skipped, non-empty returned\n- test_scan_ideas_skips_already_processed:\
+      \ file in processed/ subdir is skipped\n- test_scan_ideas_returns_empty_when_dir_missing:\
+      \ non-existent IDEAS_DIR -> []\n- test_scan_ideas_skips_dotfiles: .hidden.md\
+      \ skipped, normal.md returned\n\nFor classify_idea():\n- test_classify_idea_dry_run:\
+      \ dry_run=True returns True without spawning subprocess\n- test_classify_idea_success:\
+      \ monkeypatch subprocess.run to succeed and create processed\n  file; assert\
+      \ returns True\n- test_classify_idea_subprocess_failure: subprocess returns\
+      \ non-zero; assert returns False\n- test_classify_idea_file_not_moved: subprocess\
+      \ succeeds but file not moved to processed/;\n  assert returns False\n\nFor\
+      \ process_ideas():\n- test_process_ideas_no_ideas: monkeypatch scan_ideas to\
+      \ []; assert returns 0\n- test_process_ideas_all_succeed: scan returns 2 paths,\
+      \ classify returns True; assert returns 2\n- test_process_ideas_partial_failure:\
+      \ scan returns 2, classify returns True then False;\n  assert returns 1\n\n\
+      Use monkeypatch for IDEAS_DIR, IDEAS_PROCESSED_DIR, and subprocess.run.\n\n\
+      Run tests and fix any failures:\n  ~/.pyenv/versions/3.11.*/bin/python -m\
+      \ pytest tests/test_idea_classifier.py -v\n\nFiles: tests/test_idea_classifier.py\n"
 - id: phase-4
-  name: Phase 4 - Verification
-  status: completed
+  name: Phase 4 - Plugin version bump
+  status: pending
   tasks:
   - id: '4.1'
-    name: Final verification - syntax, tests, and dry-run
-    agent: code-reviewer
-<<<<<<< Updated upstream
-    status: completed
-=======
-    status: in_progress
->>>>>>> Stashed changes
+    name: Bump plugin version and update release notes
+    agent: coder
+    status: pending
     depends_on:
     - '2.1'
-    - '2.2'
     - '3.1'
-    description: "Run all verification checks to confirm the feature is correctly\n\
-      implemented and all tests pass.\n\nSteps:\n1. Check Python syntax for both scripts:\n\
-      \   python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py',\
-      \ doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\"\
-      \n\n2. Run the full test suite:\n   ~/.pyenv/versions/3.11.*/bin/python -m pytest\
-      \ tests/ -v\n\n3. Verify the new constants and functions exist in auto-pipeline:\n\
-      \   python3 -c \"\n   import importlib.util\n   spec = importlib.util.spec_from_file_location('ap',\
-      \ 'scripts/auto-pipeline.py')\n   mod = importlib.util.module_from_spec(spec)\n\
-      \   spec.loader.exec_module(mod)\n   assert hasattr(mod, 'IDEAS_DIR'), 'IDEAS_DIR\
-      \ not found'\n   assert hasattr(mod, 'IDEAS_PROCESSED_DIR'), 'IDEAS_PROCESSED_DIR\
-      \ not found'\n   assert callable(mod.scan_ideas), 'scan_ideas not callable'\n\
-      \   assert callable(mod.process_idea), 'process_idea not callable'\n   assert\
-      \ callable(mod.intake_ideas), 'intake_ideas not callable'\n   assert mod.IDEAS_DIR\
-      \ in [d for d in mod.REQUIRED_DIRS], 'IDEAS_DIR not in REQUIRED_DIRS'\n   assert\
-      \ mod.IDEAS_PROCESSED_DIR in [d for d in mod.REQUIRED_DIRS], 'IDEAS_PROCESSED_DIR\
-      \ not in REQUIRED_DIRS'\n   print('All new constants and functions verified\
-      \ OK')\n   \"\n\n4. Verify the prompt template exists and has required placeholders:\n\
-      \   python3 -c \"\n   import importlib.util\n   spec = importlib.util.spec_from_file_location('ap',\
-      \ 'scripts/auto-pipeline.py')\n   mod = importlib.util.module_from_spec(spec)\n\
-      \   spec.loader.exec_module(mod)\n   tmpl = mod.IDEA_INTAKE_PROMPT_TEMPLATE\n\
-      \   assert '{idea_path}' in tmpl, 'Missing idea_path placeholder'\n   assert\
-      \ '{feature_dir}' in tmpl, 'Missing feature_dir placeholder'\n   assert '{defect_dir}'\
-      \ in tmpl, 'Missing defect_dir placeholder'\n   assert '{processed_dir}' in\
-      \ tmpl, 'Missing processed_dir placeholder'\n   print('Prompt template verified\
-      \ OK')\n   \"\n\n5. Run orchestrator dry-run to confirm no startup errors:\n\
-      \   python3 scripts/plan-orchestrator.py --plan .claude/plans/sample-plan.yaml\
-      \ --dry-run\n\n6. Run the full test suite one more time to confirm stability:\n\
-      \   python3 -m pytest tests/ 2>/dev/null || echo 'No test suite configured'\n\
-      \nIf any check fails, report the specific failure with details.\n\nFiles: scripts/auto-pipeline.py,\
-      \ scripts/plan-orchestrator.py,\n  tests/test_auto_pipeline.py, plugin.json,\
-      \ RELEASE-NOTES.md\n"
-    attempts: 1
-    last_attempt: '2026-02-18T20:10:08.239649'
-<<<<<<< Updated upstream
-    model_used: sonnet
-    completed_at: '2026-02-18T20:11:43.673864'
-    result_message: 'All verification checks passed: Python syntax OK, 246 tests pass,
-      IDEAS_DIR/IDEAS_PROCESSED_DIR constants and scan_ideas/process_idea/intake_ideas
-      functions verified, IDEA_INTAKE_PROMPT_TEMPLATE placeholders verified, orchestrator
-      dry-run succeeded'
-=======
->>>>>>> Stashed changes
+    description: "Implement the work item: docs/feature-backlog/ideas-intake-pipeline.md\n\
+      \nSteps:\n1. Read plugin.json and find the current version.\n2. Bump the minor\
+      \ version (new feature).\n3. Read RELEASE-NOTES.md and add a new entry at\
+      \ the top summarising:\n   - Ideas intake pipeline: drop rough notes in docs/ideas/\
+      \ and they are\n     automatically classified and converted into properly formatted\n\
+      \     backlog items by a Claude session.\n4. Git commit:\n   git add plugin.json\
+      \ RELEASE-NOTES.md\n   git commit -m \"chore: bump version for ideas-intake-pipeline\
+      \ feature\"\n\nFiles: plugin.json, RELEASE-NOTES.md\n"
