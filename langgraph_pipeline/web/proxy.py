@@ -1,6 +1,7 @@
 # langgraph_pipeline/web/proxy.py
-# TracingProxy: SQLite persistence and async LangSmith forwarder for trace runs.
+# TracingProxy: SQLite persistence, async LangSmith forwarder, and cost query methods.
 # Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md
+# Design: docs/plans/2026-03-26-10-trace-cost-analysis-page-design.md
 
 """Intercepts LangSmith trace calls, persists them to a local SQLite database,
 and optionally forwards them to the real LangSmith API in a background thread.
@@ -14,6 +15,7 @@ import json
 import logging
 import sqlite3
 import threading
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -91,6 +93,88 @@ _CREATE_INDEXES_SQL = [
 ]
 
 _LANGSMITH_RUNS_URL = "https://api.smith.langchain.com/runs"
+
+COST_SORT_INCLUSIVE_DESC = "inclusive_desc"
+COST_SORT_EXCLUSIVE_DESC = "exclusive_desc"
+COST_SORT_DATE_DESC = "date_desc"
+
+# Recursive CTE fragment: computes inclusive cost (run + all descendants) for a given run_id.
+# Bind parameter :anchor_id must be set to the run_id of the row being computed.
+_INCLUSIVE_COST_CTE = """
+    WITH RECURSIVE subtree(run_id, total_cost_usd) AS (
+        SELECT run_id,
+               COALESCE(json_extract(metadata_json, '$.total_cost_usd'), 0.0)
+        FROM traces
+        WHERE run_id = :anchor_id
+        UNION ALL
+        SELECT t.run_id,
+               COALESCE(json_extract(t.metadata_json, '$.total_cost_usd'), 0.0)
+        FROM traces t
+        JOIN subtree s ON t.parent_run_id = s.run_id
+    )
+    SELECT COALESCE(SUM(total_cost_usd), 0.0) FROM subtree
+"""
+
+
+# ─── Cost Data Types ──────────────────────────────────────────────────────────
+
+
+@dataclass
+class CostSummary:
+    """Aggregate cost figures for the analysis page summary cards."""
+
+    total_cost_usd: float
+    today_cost_usd: float
+    week_cost_usd: float
+    most_expensive_slug: str
+    most_expensive_slug_cost_usd: float
+
+
+@dataclass
+class DailyCost:
+    """Cost total for a single calendar day."""
+
+    date_str: str
+    cost_usd: float
+
+
+@dataclass
+class CostRun:
+    """One row in the paginated top-runs table."""
+
+    run_id: str
+    name: str
+    model: str
+    item_slug: str
+    item_type: str
+    exclusive_cost_usd: float
+    inclusive_cost_usd: float
+    input_tokens: int
+    output_tokens: int
+    duration_ms: int
+    created_at: str
+
+
+@dataclass
+class SlugCost:
+    """Aggregated cost for a single work-item slug."""
+
+    item_slug: str
+    item_type: str
+    total_cost_usd: float
+    task_count: int
+    avg_cost_usd: float
+
+
+@dataclass
+class NodeCost:
+    """Aggregated cost for a single node type (e.g. execute_task, validate_task)."""
+
+    node_name: str
+    task_count: int
+    total_cost_usd: float
+    avg_cost_usd: float
+
 
 # ─── Module State ─────────────────────────────────────────────────────────────
 
@@ -727,6 +811,294 @@ class TracingProxy:
             parent_id = row_dict["parent_run_id"]
             result.setdefault(parent_id, []).append(row_dict)
         return result
+
+    # ─── Cost Analysis Queries ────────────────────────────────────────────────
+
+    def get_cost_summary(self) -> CostSummary:
+        """Return aggregate cost figures for the analysis page summary cards.
+
+        Queries cost data from traces.metadata_json for execute_task and
+        validate_task runs that carry a total_cost_usd field.
+
+        Returns:
+            CostSummary with all-time, today, and this-week totals plus the
+            most expensive slug and its cost.
+        """
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        week_start = datetime.now(timezone.utc).strftime("%Y-%W")  # ISO year-week
+
+        sql = """
+            SELECT
+                COALESCE(SUM(json_extract(metadata_json, '$.total_cost_usd')), 0.0) AS total,
+                COALESCE(SUM(CASE
+                    WHEN substr(created_at, 1, 10) = :today
+                    THEN json_extract(metadata_json, '$.total_cost_usd')
+                    ELSE 0.0 END), 0.0) AS today_total,
+                COALESCE(SUM(CASE
+                    WHEN strftime('%Y-%W', created_at) = :week_start
+                    THEN json_extract(metadata_json, '$.total_cost_usd')
+                    ELSE 0.0 END), 0.0) AS week_total
+            FROM traces
+            WHERE json_extract(metadata_json, '$.total_cost_usd') IS NOT NULL
+        """
+        slug_sql = """
+            SELECT
+                json_extract(metadata_json, '$.item_slug') AS slug,
+                COALESCE(SUM(json_extract(metadata_json, '$.total_cost_usd')), 0.0) AS slug_total
+            FROM traces
+            WHERE json_extract(metadata_json, '$.item_slug') IS NOT NULL
+              AND json_extract(metadata_json, '$.total_cost_usd') IS NOT NULL
+            GROUP BY slug
+            ORDER BY slug_total DESC
+            LIMIT 1
+        """
+        with self._connect() as conn:
+            row = conn.execute(sql, {"today": today, "week_start": week_start}).fetchone()
+            slug_row = conn.execute(slug_sql).fetchone()
+
+        total = float(row["total"]) if row else 0.0
+        today_total = float(row["today_total"]) if row else 0.0
+        week_total = float(row["week_total"]) if row else 0.0
+        most_expensive_slug = slug_row["slug"] if slug_row else ""
+        most_expensive_slug_cost = float(slug_row["slug_total"]) if slug_row else 0.0
+
+        return CostSummary(
+            total_cost_usd=total,
+            today_cost_usd=today_total,
+            week_cost_usd=week_total,
+            most_expensive_slug=most_expensive_slug,
+            most_expensive_slug_cost_usd=most_expensive_slug_cost,
+        )
+
+    def get_cost_by_day(self, days: int = 30) -> list[DailyCost]:
+        """Return daily cost totals for the past N days, for a bar chart.
+
+        Args:
+            days: Number of calendar days to look back (default 30).
+
+        Returns:
+            List of DailyCost ordered by date ascending.
+        """
+        sql = """
+            SELECT
+                substr(created_at, 1, 10) AS date_str,
+                COALESCE(SUM(json_extract(metadata_json, '$.total_cost_usd')), 0.0) AS cost_usd
+            FROM traces
+            WHERE json_extract(metadata_json, '$.total_cost_usd') IS NOT NULL
+              AND created_at >= datetime('now', :offset)
+            GROUP BY date_str
+            ORDER BY date_str ASC
+        """
+        offset = f"-{days} days"
+        with self._connect() as conn:
+            rows = conn.execute(sql, {"offset": offset}).fetchall()
+        return [DailyCost(date_str=row["date_str"], cost_usd=float(row["cost_usd"])) for row in rows]
+
+    def list_cost_runs(
+        self,
+        page: int = 1,
+        page_size: int = PAGE_SIZE_DEFAULT,
+        slug: Optional[str] = None,
+        item_type: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        sort: str = COST_SORT_INCLUSIVE_DESC,
+    ) -> tuple[list[CostRun], int]:
+        """Return a paginated list of cost-bearing trace runs with inclusive cost.
+
+        Inclusive cost is computed via a correlated sub-query containing a recursive
+        CTE that sums total_cost_usd across the run and all its descendants.
+
+        Args:
+            page: 1-based page number.
+            page_size: Rows per page.
+            slug: Optional substring filter on item_slug (case-insensitive).
+            item_type: Optional exact filter on item_type.
+            date_from: Optional ISO date lower bound on created_at (inclusive).
+            date_to: Optional ISO date upper bound on created_at (inclusive).
+            sort: Sort order — one of the COST_SORT_* constants.
+
+        Returns:
+            Tuple of (rows, total_count).
+        """
+        conditions, params = self._cost_run_filters(slug, item_type, date_from, date_to)
+        where = " AND ".join(conditions) if conditions else "1"
+        order_by = self._cost_run_order_by(sort)
+        offset = (page - 1) * page_size
+
+        sql = f"""
+            SELECT
+                run_id,
+                name,
+                COALESCE(model, json_extract(metadata_json, '$.model'), '') AS model,
+                COALESCE(json_extract(metadata_json, '$.item_slug'), '') AS item_slug,
+                COALESCE(json_extract(metadata_json, '$.item_type'), '') AS item_type,
+                COALESCE(json_extract(metadata_json, '$.total_cost_usd'), 0.0) AS exclusive_cost_usd,
+                (
+                    WITH RECURSIVE subtree(rid, cost) AS (
+                        SELECT run_id,
+                               COALESCE(json_extract(metadata_json, '$.total_cost_usd'), 0.0)
+                        FROM traces AS inner_t
+                        WHERE inner_t.run_id = traces.run_id
+                        UNION ALL
+                        SELECT t2.run_id,
+                               COALESCE(json_extract(t2.metadata_json, '$.total_cost_usd'), 0.0)
+                        FROM traces AS t2
+                        JOIN subtree ON t2.parent_run_id = subtree.rid
+                    )
+                    SELECT COALESCE(SUM(cost), 0.0) FROM subtree
+                ) AS inclusive_cost_usd,
+                COALESCE(json_extract(metadata_json, '$.input_tokens'), 0) AS input_tokens,
+                COALESCE(json_extract(metadata_json, '$.output_tokens'), 0) AS output_tokens,
+                COALESCE(json_extract(metadata_json, '$.duration_ms'), 0) AS duration_ms,
+                created_at
+            FROM traces
+            WHERE {where}
+            ORDER BY {order_by}
+            LIMIT ? OFFSET ?
+        """
+
+        count_sql = f"""
+            SELECT COUNT(*) FROM traces WHERE {where}
+        """
+
+        count_params = list(params)
+        params.extend([page_size, offset])
+
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+            total = conn.execute(count_sql, count_params).fetchone()[0]
+
+        cost_runs = [
+            CostRun(
+                run_id=row["run_id"],
+                name=row["name"],
+                model=row["model"] or "",
+                item_slug=row["item_slug"] or "",
+                item_type=row["item_type"] or "",
+                exclusive_cost_usd=float(row["exclusive_cost_usd"]),
+                inclusive_cost_usd=float(row["inclusive_cost_usd"]),
+                input_tokens=int(row["input_tokens"]),
+                output_tokens=int(row["output_tokens"]),
+                duration_ms=int(row["duration_ms"]),
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
+        return cost_runs, total
+
+    def get_cost_by_slug(self) -> list[SlugCost]:
+        """Return cost aggregated by work-item slug, ordered by total cost descending.
+
+        Returns:
+            List of SlugCost, one entry per distinct item_slug.
+        """
+        sql = """
+            SELECT
+                COALESCE(json_extract(metadata_json, '$.item_slug'), '') AS item_slug,
+                COALESCE(json_extract(metadata_json, '$.item_type'), '') AS item_type,
+                COALESCE(SUM(json_extract(metadata_json, '$.total_cost_usd')), 0.0) AS total_cost_usd,
+                COUNT(*) AS task_count,
+                COALESCE(AVG(json_extract(metadata_json, '$.total_cost_usd')), 0.0) AS avg_cost_usd
+            FROM traces
+            WHERE json_extract(metadata_json, '$.item_slug') IS NOT NULL
+              AND json_extract(metadata_json, '$.total_cost_usd') IS NOT NULL
+            GROUP BY item_slug, item_type
+            ORDER BY total_cost_usd DESC
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql).fetchall()
+        return [
+            SlugCost(
+                item_slug=row["item_slug"],
+                item_type=row["item_type"],
+                total_cost_usd=float(row["total_cost_usd"]),
+                task_count=int(row["task_count"]),
+                avg_cost_usd=float(row["avg_cost_usd"]),
+            )
+            for row in rows
+        ]
+
+    def get_cost_by_node_type(self) -> list[NodeCost]:
+        """Return cost aggregated by node/run name (e.g. execute_task, validate_task).
+
+        Returns:
+            List of NodeCost ordered by total cost descending.
+        """
+        sql = """
+            SELECT
+                name AS node_name,
+                COUNT(*) AS task_count,
+                COALESCE(SUM(json_extract(metadata_json, '$.total_cost_usd')), 0.0) AS total_cost_usd,
+                COALESCE(AVG(json_extract(metadata_json, '$.total_cost_usd')), 0.0) AS avg_cost_usd
+            FROM traces
+            WHERE json_extract(metadata_json, '$.total_cost_usd') IS NOT NULL
+            GROUP BY name
+            ORDER BY total_cost_usd DESC
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql).fetchall()
+        return [
+            NodeCost(
+                node_name=row["node_name"],
+                task_count=int(row["task_count"]),
+                total_cost_usd=float(row["total_cost_usd"]),
+                avg_cost_usd=float(row["avg_cost_usd"]),
+            )
+            for row in rows
+        ]
+
+    def _cost_run_filters(
+        self,
+        slug: Optional[str],
+        item_type: Optional[str],
+        date_from: Optional[str],
+        date_to: Optional[str],
+    ) -> tuple[list[str], list]:
+        """Build WHERE conditions and params for list_cost_runs queries.
+
+        Only rows that carry a total_cost_usd in metadata_json are included.
+
+        Args:
+            slug: Substring filter on item_slug (case-insensitive).
+            item_type: Exact filter on item_type.
+            date_from: ISO date lower bound on created_at.
+            date_to: ISO date upper bound on created_at.
+
+        Returns:
+            Tuple of (conditions list, params list).
+        """
+        conditions = ["json_extract(metadata_json, '$.total_cost_usd') IS NOT NULL"]
+        params: list = []
+        if slug:
+            conditions.append("json_extract(metadata_json, '$.item_slug') LIKE ?")
+            params.append(f"%{slug}%")
+        if item_type:
+            conditions.append("json_extract(metadata_json, '$.item_type') = ?")
+            params.append(item_type)
+        if date_from:
+            conditions.append("created_at >= ?")
+            params.append(date_from)
+        if date_to:
+            conditions.append("created_at <= ?")
+            params.append(date_to)
+        return conditions, params
+
+    def _cost_run_order_by(self, sort: str) -> str:
+        """Map a sort constant to a SQL ORDER BY clause for list_cost_runs.
+
+        Args:
+            sort: One of the COST_SORT_* constants.
+
+        Returns:
+            SQL ORDER BY fragment (without the ORDER BY keyword).
+        """
+        order_map = {
+            COST_SORT_INCLUSIVE_DESC: "inclusive_cost_usd DESC",
+            COST_SORT_EXCLUSIVE_DESC: "exclusive_cost_usd DESC",
+            COST_SORT_DATE_DESC: "created_at DESC",
+        }
+        return order_map.get(sort, "inclusive_cost_usd DESC")
 
 
 # ─── Module-Level Singleton ────────────────────────────────────────────────────
