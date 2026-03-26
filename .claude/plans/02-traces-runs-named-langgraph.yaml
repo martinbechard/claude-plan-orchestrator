@@ -1,0 +1,40 @@
+meta:
+  item_type: defect
+  source_item: .claude/plans/.claimed/02-traces-runs-named-langgraph.md
+  validation:
+    enabled: true
+    max_validation_attempts: 2
+    run_after:
+    - coder
+    validators:
+    - validator
+sections:
+- id: '1'
+  name: Fix root run naming and add tests
+  status: pending
+  tasks:
+  - agent: coder
+    description: 'Implement the work item: .claude/plans/.claimed/02-traces-runs-named-langgraph.md
+
+
+      Design: docs/plans/2026-03-26-02-traces-runs-named-langgraph-design.md
+
+
+      In langgraph_pipeline/worker.py, add "run_name": item_slug to thread_config
+      in main() when item_slug is non-empty (guard with if item_slug:). This makes
+      the LangGraph SDK use the slug as the root run name instead of the default "LangGraph".
+
+
+      Create tests/langgraph/test_worker.py with unit tests covering:
+
+      - _build_initial_state() builds correct PipelineState fields
+
+      - thread_config includes run_name when item_slug is non-empty
+
+      - thread_config omits run_name when item_slug is empty
+
+
+      Run the full test suite and fix any failures before finishing.'
+    id: '1.1'
+    name: Inject run_name into LangGraph config and write worker tests
+    status: pending
