@@ -87,10 +87,15 @@ sections:
       In _reap_worker(), after the worker exits, call read_trace_id_from_file(claimed_path)
       and pass run_id to proxy.record_completion() for all outcome paths (success,
       fail, warn/crash). See design doc: docs/plans/2026-03-26-06-dashboard-drill-down-to-trace-design.md'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:38:18.407990'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-26T01:41:11.695036'
+    result_message: 'Imported read_trace_id_from_file in supervisor.py. Read trace
+      UUID at dispatch (passed to add_active_worker via run_id kwarg) and at reap
+      (passed to record_completion for all three outcome paths: crash/no-result, success,
+      warn/failure). All 1520 tests pass.'
 - id: '2'
   name: Frontend - add trace links to worker cards and completion rows
   status: pending
