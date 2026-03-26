@@ -1,6 +1,6 @@
 # langgraph_pipeline/web/dashboard_state.py
 # Thread-safe DashboardState singleton for the pipeline activity dashboard.
-# Design: docs/plans/2026-03-25-15-pipeline-activity-dashboard-design.md
+# Design: docs/plans/2026-03-26-03-dashboard-items-stuck-running-design.md
 
 """Thread-safe state container for the pipeline activity dashboard.
 
@@ -9,6 +9,7 @@ A module-level singleton is shared between the supervisor thread (writer) and
 the SSE endpoint in the uvicorn async loop (reader).
 """
 
+import os
 import threading
 import time
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from langgraph_pipeline.shared.paths import BACKLOG_DIRS
+from langgraph_pipeline.web.proxy import get_proxy
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -144,6 +146,31 @@ class DashboardState:
             if len(self.recent_errors) > MAX_RECENT_ERRORS:
                 self.recent_errors = self.recent_errors[:MAX_RECENT_ERRORS]
 
+    def sweep_dead_workers(self) -> None:
+        """Remove workers whose OS processes are no longer alive.
+
+        Uses os.kill(pid, 0) to probe each active worker. If the process is
+        gone (OSError with errno ESRCH), the worker is reaped as a failure
+        with zero cost and an elapsed time computed from its stored start_time.
+
+        Called at the top of snapshot() so the dashboard never shows zombie
+        entries for workers that died without going through the normal reap path.
+        Must NOT be called while self._lock is held (remove_active_worker
+        acquires the lock internally).
+        """
+        with self._lock:
+            pids = list(self.active_workers.keys())
+        for pid in pids:
+            try:
+                os.kill(pid, 0)
+            except OSError:
+                with self._lock:
+                    worker = self.active_workers.get(pid)
+                if worker is None:
+                    continue
+                elapsed_s = time.monotonic() - worker.start_time
+                self.remove_active_worker(pid, "fail", 0.0, elapsed_s)
+
     # ─── Snapshot ─────────────────────────────────────────────────────────────
 
     def snapshot(self) -> dict:
@@ -157,6 +184,7 @@ class DashboardState:
             session_cost_usd, session_elapsed_s, active_count, total_processed,
             recent_errors.
         """
+        self.sweep_dead_workers()
         with self._lock:
             active_list = [
                 {
@@ -168,17 +196,21 @@ class DashboardState:
                 }
                 for w in self.active_workers.values()
             ]
-            completions_list = [
-                {
-                    "slug": c.slug,
-                    "item_type": c.item_type,
-                    "outcome": c.outcome,
-                    "cost_usd": c.cost_usd,
-                    "duration_s": c.duration_s,
-                    "finished_at": c.finished_at,
-                }
-                for c in self.recent_completions
-            ]
+            proxy = get_proxy()
+            if proxy is not None:
+                completions_list = proxy.list_completions()
+            else:
+                completions_list = [
+                    {
+                        "slug": c.slug,
+                        "item_type": c.item_type,
+                        "outcome": c.outcome,
+                        "cost_usd": c.cost_usd,
+                        "duration_s": c.duration_s,
+                        "finished_at": c.finished_at,
+                    }
+                    for c in self.recent_completions
+                ]
             errors_copy = list(self.recent_errors)
             session_cost = self.session_cost_usd
             elapsed = time.monotonic() - self.session_start

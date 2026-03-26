@@ -40,6 +40,7 @@ from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.paths import BACKLOG_DIRS, CLAIMED_DIR, PLANS_DIR, WORKER_RESULT_DIR
 from langgraph_pipeline.slack.notifier import SlackNotifier
 from langgraph_pipeline.web.dashboard_state import get_dashboard_state
+from langgraph_pipeline.web.proxy import get_proxy
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -132,6 +133,15 @@ def _unclaim_orphaned_items() -> None:
             logger.info("Returned orphan %s to %s backlog.", md_file.name, item_type)
         except (OSError, KeyError) as exc:
             logger.warning("Could not return orphan %s: %s", md_file.name, exc)
+
+    # Remove any leftover sidecar files whose .md has already been archived.
+    for sidecar in claimed_dir.glob("*" + CLAIM_META_SUFFIX):
+        if not sidecar.exists():
+            continue
+        md_path = sidecar.parent / sidecar.name[: -len(CLAIM_META_SUFFIX)]
+        if not md_path.exists():
+            sidecar.unlink()
+            logger.info("Removed stale claim sidecar %s", sidecar.name)
 
 
 def _cleanup_orphaned_plan_yamls() -> None:
@@ -306,6 +316,9 @@ def _reap_one_worker(
         logger.error(crash_msg)
         get_dashboard_state().add_error(crash_msg)
         get_dashboard_state().remove_active_worker(pid, "fail", 0.0, duration_s)
+        proxy = get_proxy()
+        if proxy is not None:
+            proxy.record_completion(Path(claimed_path).stem, item_type, "fail", 0.0, duration_s)
         try:
             unclaim_item(claimed_path, item_type)
             logger.info("Unclaimed %s back to %s backlog.", claimed_path, item_type)
@@ -331,6 +344,9 @@ def _reap_one_worker(
             duration_s,
         )
         get_dashboard_state().remove_active_worker(pid, "success", cost_usd, duration_s)
+        proxy = get_proxy()
+        if proxy is not None:
+            proxy.record_completion(Path(claimed_path).stem, item_type, "success", cost_usd, duration_s)
     else:
         # Handled failure (e.g. quota exhausted) — return item to backlog for retry.
         failure_msg = (
@@ -340,6 +356,9 @@ def _reap_one_worker(
         logger.warning(failure_msg)
         get_dashboard_state().add_error(failure_msg)
         get_dashboard_state().remove_active_worker(pid, "warn", cost_usd, duration_s)
+        proxy = get_proxy()
+        if proxy is not None:
+            proxy.record_completion(Path(claimed_path).stem, item_type, "warn", cost_usd, duration_s)
         try:
             unclaim_item(claimed_path, item_type)
             logger.info("Unclaimed %s back to %s backlog.", claimed_path, item_type)
@@ -387,7 +406,10 @@ def _reap_finished_workers(
             reaped_pid, _status = os.waitpid(pid, os.WNOHANG)
         except ChildProcessError:
             logger.warning("Worker PID %d already reaped; removing from tracking.", pid)
-            active_workers.pop(pid, None)
+            record = active_workers.pop(pid, None)
+            if record is not None:
+                elapsed_s = time.monotonic() - record[3]
+                get_dashboard_state().remove_active_worker(pid, "fail", 0.0, elapsed_s)
             continue
 
         if reaped_pid == 0:
