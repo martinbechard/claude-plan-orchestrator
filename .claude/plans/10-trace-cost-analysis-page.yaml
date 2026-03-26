@@ -1,0 +1,70 @@
+meta:
+  id: "10"
+  title: Trace-based cost analysis page
+  source_item: .claude/plans/.claimed/10-trace-cost-analysis-page.md
+  design: docs/plans/2026-03-26-10-trace-cost-analysis-page-design.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: "1"
+  name: TracingProxy query methods for trace-based cost data
+  status: pending
+  tasks:
+  - id: "1.1"
+    name: Add cost query methods to TracingProxy
+    agent: coder
+    status: pending
+    description: |
+      Implement the work item: .claude/plans/.claimed/10-trace-cost-analysis-page.md
+
+      Design doc: docs/plans/2026-03-26-10-trace-cost-analysis-page-design.md
+
+      Add the following query methods to TracingProxy in langgraph_pipeline/web/proxy.py:
+      get_cost_summary(), get_cost_by_day(days), list_cost_runs(page, page_size, slug,
+      item_type, date_from, date_to, sort), get_cost_by_slug(), get_cost_by_node_type().
+      All queries read from the traces table using json_extract() on metadata_json.
+      Use a recursive CTE for inclusive cost computation in list_cost_runs. Add
+      corresponding dataclass or namedtuple types for the return values.
+- id: "2"
+  name: Replace analysis route and template
+  status: pending
+  tasks:
+  - id: "2.1"
+    name: Replace /analysis route implementation
+    agent: coder
+    status: pending
+    description: |
+      Implement the work item: .claude/plans/.claimed/10-trace-cost-analysis-page.md
+
+      Design doc: docs/plans/2026-03-26-10-trace-cost-analysis-page-design.md
+
+      Replace langgraph_pipeline/web/routes/analysis.py entirely. The new route
+      serves GET /analysis and calls the TracingProxy query methods added in task 1.1.
+      Accept query params: slug, item_type, date_from, date_to, sort, page. Pass
+      all data to analysis.html. Remove the dependency on CostLogReader (the import
+      and all calls). Keep using svg_bar_chart() from cost_log_reader for the
+      cost-over-time bar chart.
+  - id: "2.2"
+    name: Replace analysis.html template with trace-based cost page
+    agent: frontend-coder
+    status: pending
+    description: |
+      Implement the work item: .claude/plans/.claimed/10-trace-cost-analysis-page.md
+
+      Design doc: docs/plans/2026-03-26-10-trace-cost-analysis-page-design.md
+
+      Replace langgraph_pipeline/web/templates/analysis.html. The new template
+      extends base.html and renders: (1) summary cards row (total cost all-time,
+      today, this week, most expensive slug), (2) SVG cost-over-time bar chart,
+      (3) sortable/filterable paginated top-runs table with columns: slug, node
+      name, model, exclusive cost, inclusive cost, tokens in/out, duration,
+      timestamp, (4) cost-by-work-item aggregated table, (5) cost-by-node-type
+      bar chart and table. Include filter form (slug text input, item_type select,
+      date_from/date_to inputs, sort select) consistent with completions.html style.
+      Show a clear note that tool calls carry no direct cost.
