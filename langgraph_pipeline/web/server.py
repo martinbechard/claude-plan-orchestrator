@@ -269,6 +269,15 @@ def create_app(config: Optional[dict] = None):
                         start_time=run_data.get("start_time"),
                         end_time=run_data.get("end_time"),
                     )
+                    inv = extra.get("invocation_params") or {}
+                    meta = extra.get("metadata") or {}
+                    model = (
+                        inv.get("model") or inv.get("model_name") or
+                        meta.get("ls_model_name") or meta.get("model") or ""
+                    )
+                    parent_run_id = run_data.get("parent_run_id")
+                    if model and parent_run_id:
+                        proxy.propagate_model_to_root(parent_run_id, model)
                 except Exception as exc:
                     logger.debug("runs_multipart: failed to record run %s: %s", run_id, exc)
         except Exception as exc:
@@ -283,17 +292,27 @@ def create_app(config: Optional[dict] = None):
         if proxy is not None:
             try:
                 body = await request.json()
+                extra = body.get("extra") or {}
                 proxy.record_run(
                     run_id=body.get("id", ""),
                     parent_run_id=body.get("parent_run_id"),
                     name=body.get("name", ""),
                     inputs=body.get("inputs"),
                     outputs=body.get("outputs"),
-                    metadata=(body.get("extra") or {}).get("metadata"),
+                    metadata=extra.get("metadata"),
                     error=body.get("error"),
                     start_time=body.get("start_time"),
                     end_time=body.get("end_time"),
                 )
+                inv = extra.get("invocation_params") or {}
+                meta = extra.get("metadata") or {}
+                model = (
+                    inv.get("model") or inv.get("model_name") or
+                    meta.get("ls_model_name") or meta.get("model") or ""
+                )
+                parent_run_id = body.get("parent_run_id")
+                if model and parent_run_id:
+                    proxy.propagate_model_to_root(parent_run_id, model)
             except Exception as exc:
                 logger.debug("runs_create: failed to record run: %s", exc)
         return JSONResponse({}, status_code=200)

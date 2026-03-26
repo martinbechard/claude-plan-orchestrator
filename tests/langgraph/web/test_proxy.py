@@ -4,6 +4,7 @@
 
 """Unit tests for langgraph_pipeline.web.proxy and langgraph_pipeline.web.routes.proxy."""
 
+import json
 from unittest.mock import patch
 
 import pytest
@@ -25,6 +26,8 @@ SAMPLE_END_TIME = "2026-03-25T10:00:05"
 SAMPLE_INPUTS = {"prompt": "hello"}
 SAMPLE_OUTPUTS = {"result": "world"}
 SAMPLE_METADATA = {"model": "claude-opus", "slug": "item-42"}
+SAMPLE_MODEL = "claude-opus-4-5"
+SAMPLE_MULTIPART_BOUNDARY = "testboundary99"
 
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -192,6 +195,227 @@ def test_proxy_detail_endpoint(enabled_client):
     assert response.status_code == 200
     assert "<svg" in response.text
 
+
+
+# ─── propagate_model_to_root Tests ───────────────────────────────────────────
+
+
+def test_propagate_model_to_root_sets_model(proxy):
+    """propagate_model_to_root updates the root run's model column."""
+    proxy.record_run(
+        run_id=SAMPLE_PARENT_RUN_ID,
+        parent_run_id=None,
+        name="root-run",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    proxy.record_run(
+        run_id=SAMPLE_CHILD_RUN_ID_A,
+        parent_run_id=SAMPLE_PARENT_RUN_ID,
+        name="child-llm",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+
+    proxy.propagate_model_to_root(SAMPLE_CHILD_RUN_ID_A, SAMPLE_MODEL)
+
+    root = proxy.get_run(SAMPLE_PARENT_RUN_ID)
+    assert root is not None
+    assert root["model"] == SAMPLE_MODEL
+
+
+def test_propagate_model_to_root_first_write_wins(proxy):
+    """A second propagation call does not overwrite the model already set."""
+    proxy.record_run(
+        run_id=SAMPLE_PARENT_RUN_ID,
+        parent_run_id=None,
+        name="root-run",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+
+    proxy.propagate_model_to_root(SAMPLE_PARENT_RUN_ID, SAMPLE_MODEL)
+    proxy.propagate_model_to_root(SAMPLE_PARENT_RUN_ID, "other-model")
+
+    root = proxy.get_run(SAMPLE_PARENT_RUN_ID)
+    assert root["model"] == SAMPLE_MODEL
+
+
+def test_propagate_model_to_root_walks_chain(proxy):
+    """propagate_model_to_root walks up a multi-level parent chain to the root."""
+    mid_run_id = "run-mid-001"
+    proxy.record_run(
+        run_id=SAMPLE_PARENT_RUN_ID,
+        parent_run_id=None,
+        name="root",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    proxy.record_run(
+        run_id=mid_run_id,
+        parent_run_id=SAMPLE_PARENT_RUN_ID,
+        name="mid",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    proxy.record_run(
+        run_id=SAMPLE_CHILD_RUN_ID_A,
+        parent_run_id=mid_run_id,
+        name="leaf-llm",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+
+    proxy.propagate_model_to_root(mid_run_id, SAMPLE_MODEL)
+
+    root = proxy.get_run(SAMPLE_PARENT_RUN_ID)
+    assert root["model"] == SAMPLE_MODEL
+    mid = proxy.get_run(mid_run_id)
+    assert mid["model"] == ""  # Only root is updated
+
+
+# ─── Model Filter Tests ───────────────────────────────────────────────────────
+
+
+def test_model_filter_list_runs(proxy):
+    """list_runs with model= returns only root runs whose model column matches."""
+    proxy.record_run(
+        run_id="r-match",
+        parent_run_id=None,
+        name="match-run",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    proxy.record_run(
+        run_id="r-other",
+        parent_run_id=None,
+        name="other-run",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+
+    proxy.propagate_model_to_root("r-match", SAMPLE_MODEL)
+
+    runs = proxy.list_runs(model="claude-opus")
+    assert len(runs) == 1
+    assert runs[0]["run_id"] == "r-match"
+
+
+def test_model_filter_count_runs(proxy):
+    """count_runs with model= counts only root runs whose model column matches."""
+    proxy.record_run(
+        run_id="r-match",
+        parent_run_id=None,
+        name="match-run",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    proxy.record_run(
+        run_id="r-other",
+        parent_run_id=None,
+        name="other-run",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+
+    proxy.propagate_model_to_root("r-match", SAMPLE_MODEL)
+
+    assert proxy.count_runs(model="claude-opus") == 1
+    assert proxy.count_runs(model="nonexistent") == 0
+    assert proxy.count_runs() == 2
+
+
+# ─── Multipart Model Extraction Tests ────────────────────────────────────────
+
+
+def _build_multipart_body(run_id: str, parent_run_id: str, model: str) -> bytes:
+    """Build a minimal multipart body with model in extra.invocation_params."""
+    run_json = json.dumps({"name": "llm-call", "parent_run_id": parent_run_id}).encode()
+    extra_json = json.dumps({"invocation_params": {"model": model}}).encode()
+    boundary = SAMPLE_MULTIPART_BOUNDARY
+    parts = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="post.{run_id}"\r\n'
+        f"Content-Type: application/json\r\n\r\n"
+    ).encode() + run_json + (
+        f"\r\n--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="post.{run_id}.extra"\r\n'
+        f"Content-Type: application/json\r\n\r\n"
+    ).encode() + extra_json + f"\r\n--{boundary}--\r\n".encode()
+    return parts
+
+
+def test_multipart_model_extraction(enabled_client):
+    """POST /runs/multipart with invocation_params.model propagates to root run."""
+    proxy = get_proxy()
+    assert proxy is not None
+
+    root_run_id = "mp-root-001"
+    child_run_id = "mp-child-001"
+
+    proxy.record_run(
+        run_id=root_run_id,
+        parent_run_id=None,
+        name="mp-root",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+
+    body = _build_multipart_body(child_run_id, root_run_id, SAMPLE_MODEL)
+    response = enabled_client.post(
+        "/runs/multipart",
+        content=body,
+        headers={"content-type": f"multipart/form-data; boundary={SAMPLE_MULTIPART_BOUNDARY}"},
+    )
+    assert response.status_code == 202
+
+    root = proxy.get_run(root_run_id)
+    assert root is not None
+    assert root["model"] == SAMPLE_MODEL
 
 
 # ─── Error Resilience ────────────────────────────────────────────────────────
