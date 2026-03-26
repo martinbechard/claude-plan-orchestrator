@@ -248,6 +248,8 @@ def main() -> int:
     try:
         initial_state = _build_initial_state(item_path, item_type, item_slug)
         thread_config = {"configurable": {"thread_id": thread_id}}
+        if item_slug:
+            thread_config["run_name"] = item_slug
 
         with pipeline_graph(db_path=db_path) as graph:
             final_state = graph.invoke(initial_state, config=thread_config)
