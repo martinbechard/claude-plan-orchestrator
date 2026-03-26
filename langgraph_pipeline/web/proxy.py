@@ -78,8 +78,11 @@ CREATE TABLE IF NOT EXISTS cost_tasks (
 );
 """
 
+_CREATE_UNIQUE_INDEX_RUN_ID_SQL = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_traces_run_id_unique ON traces (run_id);"
+)
+
 _CREATE_INDEXES_SQL = [
-    "CREATE INDEX IF NOT EXISTS idx_traces_run_id        ON traces (run_id);",
     "CREATE INDEX IF NOT EXISTS idx_traces_parent_run_id ON traces (parent_run_id);",
     "CREATE INDEX IF NOT EXISTS idx_traces_created_at    ON traces (created_at);",
     "CREATE INDEX IF NOT EXISTS idx_traces_model         ON traces (model);",
@@ -129,6 +132,10 @@ class TracingProxy:
                 conn.execute(_ALTER_ADD_COMPLETIONS_RUN_ID_SQL)
             except sqlite3.OperationalError:
                 pass  # Column already exists in an existing database
+            try:
+                conn.execute(_CREATE_UNIQUE_INDEX_RUN_ID_SQL)
+            except sqlite3.IntegrityError:
+                pass  # Pre-existing duplicate run_ids; unique index skipped for this DB
             for index_sql in _CREATE_INDEXES_SQL:
                 conn.execute(index_sql)
 
@@ -184,7 +191,7 @@ class TracingProxy:
             with self._connect() as conn:
                 conn.execute(
                     """
-                    INSERT INTO traces
+                    INSERT OR IGNORE INTO traces
                         (run_id, parent_run_id, name, start_time, end_time,
                          inputs_json, outputs_json, metadata_json, error, created_at)
                     VALUES
@@ -368,9 +375,10 @@ class TracingProxy:
             List of dicts with keys: run_id, name, created_at.
         """
         sql = """
-            SELECT run_id, name, created_at
+            SELECT run_id, name, MIN(created_at) AS created_at
             FROM traces
             WHERE parent_run_id IS NULL AND name LIKE ?
+            GROUP BY run_id
             ORDER BY created_at DESC
         """
         with self._connect() as conn:
