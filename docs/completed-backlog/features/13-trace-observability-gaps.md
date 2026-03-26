@@ -83,5 +83,3 @@ without calling Claude at all (e.g. no more tasks to execute).
 - claude_invoked: bool (true if subprocess was spawned, false if skipped)
 - skip_reason: str (if not invoked, why — "no_pending_tasks",
   "plan_complete", etc.)
-
-## LangSmith Trace: cff36ae8-458e-4034-9cb5-494c43761dbd
