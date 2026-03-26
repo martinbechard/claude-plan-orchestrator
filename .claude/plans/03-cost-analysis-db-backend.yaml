@@ -23,10 +23,14 @@ sections:
       DB. In langgraph_pipeline/web/proxy.py, add _CREATE_COST_TASKS_SQL with the
       schema from the work item and call conn.execute(_CREATE_COST_TASKS_SQL) in _init_db().
       Add the corresponding index on item_slug.'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:03:09.273897'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T01:04:35.656176'
+    result_message: Added _CREATE_COST_TASKS_SQL schema and idx_cost_tasks_item_slug
+      index to proxy.py; _init_db() now creates the cost_tasks table alongside traces
+      and completions. All 1494 tests pass.
   - id: '1.2'
     name: Add POST /api/cost endpoint
     agent: coder
