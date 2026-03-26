@@ -1,0 +1,88 @@
+meta:
+  source_item: .claude/plans/.claimed/37-ui-quality-process-lost-in-langgraph-migration.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: phase-1
+  name: Process documentation and style guide
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Update agent prompts with UI design review process
+    agent: coder
+    description: 'Implement the process documentation changes for the work item: .claude/plans/.claimed/37-ui-quality-process-lost-in-langgraph-migration.md.
+      Design: docs/plans/2026-03-26-37-ui-quality-process-lost-in-langgraph-migration-design.md.
+      Update .claude/agents/planner.md to add a UI work item detection section that
+      mandates invoking the frontend-design skill when the work item touches web UI
+      templates or CSS. Update .claude/agents/frontend-coder.md to reference the style
+      guide and require it to be read before any UI change.'
+    status: pending
+  - id: '1.2'
+    name: Create UI style guide
+    agent: coder
+    description: 'Create docs/ui-style-guide.md for the work item: .claude/plans/.claimed/37-ui-quality-process-lost-in-langgraph-migration.md.
+      Design: docs/plans/2026-03-26-37-ui-quality-process-lost-in-langgraph-migration-design.md.
+      The style guide must cover: typography, spacing, colour palette, pagination
+      component, empty states, table conventions, and card layouts. It must be readable
+      by agents and humans without running the app.'
+    status: pending
+    depends_on:
+    - '1.1'
+- id: phase-2
+  name: UI fixes across all pages
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Fix pagination and navigation styling
+    agent: frontend-coder
+    description: 'Implement pagination and navigation UI fixes for the work item:
+      .claude/plans/.claimed/37-ui-quality-process-lost-in-langgraph-migration.md.
+      Design: docs/plans/2026-03-26-37-ui-quality-process-lost-in-langgraph-migration-design.md.
+      Style guide: docs/ui-style-guide.md. Fix pagination across all pages: add left
+      padding, consistent button sizing, readable text, active page highlight. Fix
+      the navigation active state in base.html to use a stronger visual treatment.'
+    status: pending
+    depends_on:
+    - '1.2'
+  - id: '2.2'
+    name: Fix empty states and table styling
+    agent: frontend-coder
+    description: 'Implement empty state and table styling fixes for the work item:
+      .claude/plans/.claimed/37-ui-quality-process-lost-in-langgraph-migration.md.
+      Design: docs/plans/2026-03-26-37-ui-quality-process-lost-in-langgraph-migration-design.md.
+      Style guide: docs/ui-style-guide.md. Standardize empty states to icon + heading
+      + sub-text pattern across queue, completions, traces, and dashboard. Fix table
+      th/td padding, left-align text columns, right-align numeric columns across all
+      pages.'
+    status: pending
+    depends_on:
+    - '2.1'
+  - id: '2.3'
+    name: Fix cost display tildes and misc issues
+    agent: frontend-coder
+    description: 'Implement miscellaneous UI fixes for the work item: .claude/plans/.claimed/37-ui-quality-process-lost-in-langgraph-migration.md.
+      Design: docs/plans/2026-03-26-37-ui-quality-process-lost-in-langgraph-migration-design.md.
+      Style guide: docs/ui-style-guide.md. Scan all templates for tilde-prefixed cost
+      values (~$) and replace with plain $ format. Check analysis.html and any other
+      templates for this pattern.'
+    status: pending
+    depends_on:
+    - '2.2'
+- id: phase-3
+  name: Release
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Bump plugin version and update release notes
+    agent: coder
+    description: 'Bump plugin.json version (patch) and add a RELEASE-NOTES.md entry
+      for this fix. Work item: .claude/plans/.claimed/37-ui-quality-process-lost-in-langgraph-migration.md'
+    status: pending
+    depends_on:
+    - '2.3'
