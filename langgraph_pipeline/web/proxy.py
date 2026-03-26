@@ -2,6 +2,7 @@
 # TracingProxy: SQLite persistence, async LangSmith forwarder, and cost query methods.
 # Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md
 # Design: docs/plans/2026-03-26-10-trace-cost-analysis-page-design.md
+# Design: docs/plans/2026-03-26-11-tool-call-cost-attribution-design.md
 
 """Intercepts LangSmith trace calls, persists them to a local SQLite database,
 and optionally forwards them to the real LangSmith API in a background thread.
@@ -28,6 +29,8 @@ DB_DEFAULT_PATH = "~/.claude/orchestrator-traces.db"
 PAGE_SIZE_DEFAULT = 50
 
 COMPLETIONS_LIMIT = 20
+TOP_TOOL_CALLS_LIMIT = 250
+BASH_COMMAND_PREVIEW_LENGTH = 50
 
 _CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS traces (
@@ -174,6 +177,18 @@ class NodeCost:
     task_count: int
     total_cost_usd: float
     avg_cost_usd: float
+
+
+@dataclass
+class ToolCallCost:
+    """Proportional cost attribution for a single tool call within a task."""
+
+    tool_name: str
+    detail: str           # file_path for Read/Edit/Write, command prefix for Bash, pattern for Grep/Glob
+    result_bytes: int
+    estimated_cost_usd: float
+    item_slug: str
+    task_id: str
 
 
 # ─── Module State ─────────────────────────────────────────────────────────────
@@ -1047,6 +1062,86 @@ class TracingProxy:
             )
             for row in rows
         ]
+
+    def get_tool_call_attribution(self) -> list[ToolCallCost]:
+        """Return per-tool-call cost estimates, proportional to result_bytes within each task.
+
+        For each cost_tasks row with a non-empty tool_calls_json, parses the JSON list and
+        distributes the task's cost_usd across tool calls proportionally by result_bytes.
+        Tool calls with no result_bytes receive no attribution and are excluded.
+
+        Returns:
+            List of ToolCallCost ordered by estimated_cost_usd descending, capped at
+            TOP_TOOL_CALLS_LIMIT entries.
+        """
+        sql = """
+            SELECT item_slug, task_id, cost_usd, tool_calls_json
+            FROM cost_tasks
+            WHERE tool_calls_json IS NOT NULL
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql).fetchall()
+
+        results: list[ToolCallCost] = []
+        for row in rows:
+            tool_calls = self._parse_tool_calls_json(row["tool_calls_json"])
+            if not tool_calls:
+                continue
+            sum_bytes = sum(int(tc.get("result_bytes", 0)) for tc in tool_calls)
+            if sum_bytes == 0:
+                continue
+            task_cost = float(row["cost_usd"])
+            for tc in tool_calls:
+                result_bytes = int(tc.get("result_bytes", 0))
+                if result_bytes == 0:
+                    continue
+                estimated_cost = (result_bytes / sum_bytes) * task_cost
+                results.append(
+                    ToolCallCost(
+                        tool_name=tc.get("tool", ""),
+                        detail=self._tool_call_detail(tc),
+                        result_bytes=result_bytes,
+                        estimated_cost_usd=estimated_cost,
+                        item_slug=row["item_slug"],
+                        task_id=row["task_id"],
+                    )
+                )
+
+        results.sort(key=lambda tc: tc.estimated_cost_usd, reverse=True)
+        return results[:TOP_TOOL_CALLS_LIMIT]
+
+    def _parse_tool_calls_json(self, tool_calls_json: str) -> list[dict]:
+        """Parse a tool_calls_json string; returns an empty list on any error.
+
+        Args:
+            tool_calls_json: JSON string from the cost_tasks.tool_calls_json column.
+
+        Returns:
+            Parsed list of tool call dicts, or [] if the value is missing or invalid.
+        """
+        try:
+            parsed = json.loads(tool_calls_json)
+            return parsed if isinstance(parsed, list) else []
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def _tool_call_detail(self, tool_call: dict) -> str:
+        """Extract a human-readable detail string from a tool call dict.
+
+        Args:
+            tool_call: A single tool call dict with optional file_path and command keys.
+
+        Returns:
+            file_path for Read/Edit/Write calls, truncated command for Bash,
+            pattern for Grep/Glob, or empty string when none apply.
+        """
+        file_path: str = tool_call.get("file_path", "")
+        if file_path:
+            return file_path
+        command: str = tool_call.get("command", "")
+        if command:
+            return command[:BASH_COMMAND_PREVIEW_LENGTH]
+        return ""
 
     def _cost_run_filters(
         self,
