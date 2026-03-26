@@ -143,6 +143,22 @@ class DashboardState:
             self.session_cost_usd += cost_usd
             self._total_processed += 1
 
+    def update_worker_run_id(self, pid: int, run_id: str) -> None:
+        """Update the LangSmith run_id for an active worker once it becomes available.
+
+        Called by the supervisor polling loop when it detects that a worker
+        previously registered with run_id=None has since written its trace ID
+        to the item file.
+
+        Args:
+            pid: Process ID of the worker to update.
+            run_id: LangSmith trace UUID now available for this worker.
+        """
+        with self._lock:
+            worker = self.active_workers.get(pid)
+            if worker is not None:
+                worker.run_id = run_id
+
     def add_error(self, message: str) -> None:
         """Prepend an error message to the recent-errors stream.
 

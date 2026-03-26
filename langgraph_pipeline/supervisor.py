@@ -53,7 +53,11 @@ EXIT_CODE_BUDGET_EXHAUSTED = 2
 SCAN_SLEEP_SECONDS = 15
 
 # How long to sleep between worker-poll iterations when workers are active.
-WORKER_POLL_SLEEP_SECONDS = 2
+WORKER_POLL_SLEEP_SECONDS = 5
+
+# Maximum warn (handled-failure) completions per item before the item is
+# archived as exhausted instead of being unclaimed back to the backlog.
+MAX_WARN_RETRIES_PER_ITEM = 5
 
 # Result file name template; uses a UUID generated before spawning.
 _RESULT_FILE_TEMPLATE = "worker-{uid}.result.json"
@@ -286,11 +290,13 @@ def _reap_one_worker(
     cumulative_cost_usd: list[float],
     budget_cap_usd: Optional[float],
     slack: Optional[SlackNotifier],
+    warn_counts: Optional[dict[str, int]] = None,
 ) -> bool:
     """Process the result of a single finished worker.
 
-    Reads the result file, updates cumulative cost, and unclams the item on
-    failure. Removes the result file after reading.
+    Reads the result file, updates cumulative cost, and unclaims the item on
+    failure. When an item exceeds MAX_WARN_RETRIES_PER_ITEM consecutive warns,
+    it is archived as exhausted instead of being returned to the backlog.
 
     Args:
         pid: PID of the finished worker.
@@ -298,6 +304,7 @@ def _reap_one_worker(
         cumulative_cost_usd: Single-element list holding the running cost total.
         budget_cap_usd: Budget cap in USD, or None.
         slack: SlackNotifier, or None.
+        warn_counts: Mutable dict tracking warn completions per item slug.
 
     Returns:
         True if the budget cap was reached after adding this worker's cost.
@@ -338,6 +345,8 @@ def _reap_one_worker(
 
     cumulative_cost_usd[0] += cost_usd
 
+    item_slug = Path(claimed_path).stem
+
     if success:
         logger.info(
             "Worker PID %d: success. item=%s cost=$%.4f duration=%.1fs",
@@ -349,26 +358,49 @@ def _reap_one_worker(
         get_dashboard_state().remove_active_worker(pid, "success", cost_usd, duration_s)
         proxy = get_proxy()
         if proxy is not None:
-            proxy.record_completion(Path(claimed_path).stem, item_type, "success", cost_usd, duration_s, run_id=run_id)
+            proxy.record_completion(item_slug, item_type, "success", cost_usd, duration_s, run_id=run_id)
+        # Reset warn counter on success.
+        if warn_counts is not None:
+            warn_counts.pop(item_slug, None)
     else:
-        # Handled failure (e.g. quota exhausted) — return item to backlog for retry.
+        # Handled failure — track warn count to cap retries.
+        if warn_counts is not None:
+            warn_counts[item_slug] = warn_counts.get(item_slug, 0) + 1
+            current_warns = warn_counts[item_slug]
+        else:
+            current_warns = 1
+
         failure_msg = (
             f"Worker PID {pid}: handled failure. item={item_path} "
-            f"cost=${cost_usd:.4f} duration={duration_s:.1f}s message={message}"
+            f"cost=${cost_usd:.4f} duration={duration_s:.1f}s "
+            f"warns={current_warns}/{MAX_WARN_RETRIES_PER_ITEM} message={message}"
         )
         logger.warning(failure_msg)
         get_dashboard_state().add_error(failure_msg)
         get_dashboard_state().remove_active_worker(pid, "warn", cost_usd, duration_s)
         proxy = get_proxy()
         if proxy is not None:
-            proxy.record_completion(Path(claimed_path).stem, item_type, "warn", cost_usd, duration_s, run_id=run_id)
-        try:
-            unclaim_item(claimed_path, item_type)
-            logger.info("Unclaimed %s back to %s backlog.", claimed_path, item_type)
-        except Exception as exc:
-            logger.error(
-                "Failed to unclaim %s after worker failure: %s", claimed_path, exc
+            proxy.record_completion(item_slug, item_type, "warn", cost_usd, duration_s, run_id=run_id)
+
+        if current_warns >= MAX_WARN_RETRIES_PER_ITEM:
+            exhausted_msg = (
+                f"Item {item_slug} exhausted after {current_warns} consecutive "
+                f"warn completions — archiving instead of retrying."
             )
+            logger.error(exhausted_msg)
+            get_dashboard_state().add_error(exhausted_msg)
+            if slack is not None:
+                slack.send_status(exhausted_msg, level="warning")
+            # Leave in .claimed/ — the archive node will pick it up,
+            # or the next startup will unclaim orphans.
+        else:
+            try:
+                unclaim_item(claimed_path, item_type)
+                logger.info("Unclaimed %s back to %s backlog.", claimed_path, item_type)
+            except Exception as exc:
+                logger.error(
+                    "Failed to unclaim %s after worker failure: %s", claimed_path, exc
+                )
 
     if budget_cap_usd is not None and cumulative_cost_usd[0] >= budget_cap_usd:
         logger.warning(
@@ -393,6 +425,7 @@ def _reap_finished_workers(
     cumulative_cost_usd: list[float],
     budget_cap_usd: Optional[float],
     slack: Optional[SlackNotifier],
+    warn_counts: Optional[dict[str, int]] = None,
 ) -> bool:
     """Non-blocking reap of all finished workers using WNOHANG.
 
@@ -420,7 +453,7 @@ def _reap_finished_workers(
             continue
 
         record = active_workers.pop(pid)
-        if _reap_one_worker(pid, record, cumulative_cost_usd, budget_cap_usd, slack):
+        if _reap_one_worker(pid, record, cumulative_cost_usd, budget_cap_usd, slack, warn_counts):
             budget_exceeded = True
 
     return budget_exceeded
@@ -476,6 +509,42 @@ def _try_dispatch_one(active_workers: dict[int, WorkerRecord]) -> bool:
         return False
 
 
+# ─── Run-id refresh ───────────────────────────────────────────────────────────
+
+
+def _refresh_worker_run_ids(active_workers: dict[int, WorkerRecord]) -> None:
+    """Re-read item files for active workers that still have no LangSmith run_id.
+
+    For freshly dispatched workers the trace ID is not yet written to the item
+    file when the supervisor registers them. This function is called each poll
+    iteration so that once the subprocess writes ``## LangSmith Trace: <uuid>``
+    the dashboard can surface the "View Traces" link without waiting for the
+    worker to finish.
+
+    Args:
+        active_workers: Current mapping of pid → WorkerRecord.
+    """
+    dashboard = get_dashboard_state()
+    with dashboard._lock:
+        missing_run_id_pids = [
+            pid
+            for pid, worker_info in dashboard.active_workers.items()
+            if worker_info.run_id is None and pid in active_workers
+        ]
+
+    for pid in missing_run_id_pids:
+        record = active_workers.get(pid)
+        if record is None:
+            continue
+        claimed_path = record[0]
+        run_id = read_trace_id_from_file(claimed_path)
+        if run_id is not None:
+            dashboard.update_worker_run_id(pid, run_id)
+            logger.debug(
+                "Refreshed run_id for worker PID %d: %s", pid, run_id
+            )
+
+
 # ─── Main supervisor loop ─────────────────────────────────────────────────────
 
 
@@ -521,6 +590,8 @@ def run_supervisor_loop(
     active_workers: dict[int, WorkerRecord] = {}
     cumulative_cost_usd: list[float] = [0.0]
     budget_exceeded = False
+    # Track consecutive warn completions per item slug to cap retries.
+    warn_counts: dict[str, int] = {}
 
     # Cleanup: return any items orphaned in CLAIMED_DIR by a previous run,
     # then delete any plan YAMLs that have no corresponding active item.
@@ -541,8 +612,13 @@ def run_supervisor_loop(
             # Step 1: Reap any finished workers (non-blocking).
             if active_workers:
                 budget_exceeded = _reap_finished_workers(
-                    active_workers, cumulative_cost_usd, budget_cap_usd, slack
+                    active_workers, cumulative_cost_usd, budget_cap_usd, slack,
+                    warn_counts,
                 )
+
+            # Step 1b: Refresh run_ids for workers that launched without one.
+            if active_workers:
+                _refresh_worker_run_ids(active_workers)
 
             # Step 2: Dispatch new workers while slots are available.
             if not budget_exceeded and not shutdown_event.is_set():

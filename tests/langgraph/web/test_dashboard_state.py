@@ -251,6 +251,56 @@ def test_handler_accumulates_multiple_records():
     assert "first warning" in state.recent_errors[2]
 
 
+def test_update_worker_run_id_sets_run_id():
+    """update_worker_run_id sets run_id on a worker that was registered without one."""
+    state = get_dashboard_state()
+    state.add_active_worker(
+        pid=SAMPLE_PID,
+        slug=SAMPLE_SLUG,
+        item_type=SAMPLE_ITEM_TYPE,
+        start_time=time.monotonic(),
+        run_id=None,
+    )
+    assert state.active_workers[SAMPLE_PID].run_id is None
+
+    state.update_worker_run_id(SAMPLE_PID, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
+    assert state.active_workers[SAMPLE_PID].run_id == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+
+def test_update_worker_run_id_noop_for_unknown_pid():
+    """update_worker_run_id is a no-op when the pid is not in active_workers."""
+    state = get_dashboard_state()
+
+    # Should not raise even when the pid is unknown.
+    state.update_worker_run_id(99999, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
+    assert state.active_workers == {}
+
+
+def test_update_worker_run_id_snapshot_includes_run_id(monkeypatch):
+    """snapshot() reflects the updated run_id after update_worker_run_id is called."""
+    monkeypatch.setattr(
+        "langgraph_pipeline.web.dashboard_state.get_proxy", lambda: None
+    )
+    # Prevent sweep_dead_workers from removing the fake PID.
+    monkeypatch.setattr("langgraph_pipeline.web.dashboard_state.os.kill", lambda pid, sig: None)
+    state = get_dashboard_state()
+    state.add_active_worker(
+        pid=SAMPLE_PID,
+        slug=SAMPLE_SLUG,
+        item_type=SAMPLE_ITEM_TYPE,
+        start_time=time.monotonic(),
+        run_id=None,
+    )
+
+    state.update_worker_run_id(SAMPLE_PID, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
+    snap = state.snapshot()
+    worker_snap = next(w for w in snap["active_workers"] if w["pid"] == SAMPLE_PID)
+    assert worker_snap["run_id"] == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+
 def test_thread_safety():
     """Concurrent add_active_worker and remove_active_worker must not raise and
     must leave the state in a consistent (no phantom workers) condition."""
