@@ -1,0 +1,37 @@
+meta:
+  source_item: .claude/plans/.claimed/36-cost-analysis-ui-polish.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: phase-1
+  name: UI polish for cost analysis page
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Replace disclaimer lines with info icon toggle
+    agent: frontend-coder
+    description: 'Implement the UI changes for the work item: .claude/plans/.claimed/36-cost-analysis-ui-polish.md.
+      Design: docs/plans/2026-03-26-36-cost-analysis-ui-polish-design.md'
+    status: pending
+  - id: '1.2'
+    name: Fix pagination styling
+    agent: frontend-coder
+    description: 'Implement the pagination styling fixes for the work item: .claude/plans/.claimed/36-cost-analysis-ui-polish.md.
+      Design: docs/plans/2026-03-26-36-cost-analysis-ui-polish-design.md'
+    status: pending
+    depends_on:
+    - '1.1'
+  - id: '1.3'
+    name: Bump plugin version and update release notes
+    agent: coder
+    description: 'Bump plugin.json version (patch) and add a RELEASE-NOTES.md entry
+      for this fix. Work item: .claude/plans/.claimed/36-cost-analysis-ui-polish.md'
+    status: pending
+    depends_on:
+    - '1.2'
