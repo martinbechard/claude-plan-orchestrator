@@ -94,7 +94,13 @@ sections:
       falls back to JSON file glob if DB does not exist or cost_tasks table is absent.
       Deserialise tool_calls_json column for _accumulate_read_bytes(). Update tests
       in tests/langgraph/web/test_cost_log_reader.py.'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:14:55.345839'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T01:19:49.524216'
+    result_message: 'Added _try_load_from_db() to CostLogReader: queries cost_tasks
+      table grouped by item_slug using DB_DEFAULT_PATH, deserialises tool_calls_json
+      for read-bytes accumulation. load_all() tries DB first, falls back to JSON file
+      glob if DB absent or table missing. Refactored into _load_from_json() + _aggregate()
+      helpers. Added 5 new DB-path tests; all 1517 tests pass.'
