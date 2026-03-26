@@ -1,8 +1,8 @@
 # langgraph_pipeline/web/cost_log_reader.py
-# Reads execution-cost JSON logs and returns pre-aggregated data for the /analysis page.
+# Reads execution-cost data from SQLite DB or JSON logs and returns pre-aggregated data for the /analysis page.
 # Design: docs/plans/2026-03-25-16-tool-call-timing-and-cost-analysis-ui-design.md
 
-"""CostLogReader — loads docs/reports/execution-costs/*.json and aggregates them.
+"""CostLogReader — loads cost data from SQLite DB (primary) or JSON files (fallback).
 
 Public API:
     CostLogReader().load_all() -> CostData
@@ -10,10 +10,13 @@ Public API:
 """
 
 import json
+import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+from langgraph_pipeline.web.proxy import DB_DEFAULT_PATH
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -89,51 +92,135 @@ class CostData:
 # ─── Reader ───────────────────────────────────────────────────────────────────
 
 
-class CostLogReader:
-    """Reads and aggregates execution-cost JSON log files on demand."""
+_EMPTY_COST_DATA = CostData(
+    top_files=[],
+    cost_by_agent={},
+    cost_by_item=[],
+    wasted_reads=[],
+    has_data=False,
+)
 
-    def __init__(self, logs_dir: Optional[Path] = None) -> None:
+
+class CostLogReader:
+    """Reads and aggregates execution-cost data on demand.
+
+    Tries the SQLite DB (cost_tasks table) first. Falls back to JSON file glob
+    if the DB does not exist or the cost_tasks table is absent.
+    """
+
+    def __init__(
+        self,
+        logs_dir: Optional[Path] = None,
+        db_path: Optional[str] = None,
+    ) -> None:
         self._logs_dir = logs_dir or _COST_LOGS_DIR
+        self._db_path: str = db_path if db_path is not None else DB_DEFAULT_PATH
 
     def load_all(self) -> CostData:
-        """Read all JSON files and return aggregated cost data.
+        """Return aggregated cost data from DB or JSON files.
 
-        Uses two passes over the raw data:
-          1. Build ItemCost objects, accumulate per-file bytes and per-agent tokens.
-          2. Detect wasted reads (same file read in 2+ distinct tasks per item).
+        Tries the SQLite DB first. Falls back to JSON files if the DB file is
+        absent or the cost_tasks table does not exist.
 
         Returns:
-            CostData with pre-computed aggregations. has_data is False when the
-            directory is absent or contains no valid JSON files.
+            CostData with pre-computed aggregations. has_data is False when no
+            cost records are found in either source.
         """
-        json_files = self._find_json_files()
-        if not json_files:
-            return CostData(
-                top_files=[],
-                cost_by_agent={},
-                cost_by_item=[],
-                wasted_reads=[],
-                has_data=False,
+        db_result = self._try_load_from_db()
+        if db_result is not None:
+            return db_result
+        return self._load_from_json()
+
+    # ─── DB path ──────────────────────────────────────────────────────────────
+
+    def _try_load_from_db(self) -> Optional[CostData]:
+        """Query cost_tasks from SQLite. Returns None if DB absent or table missing."""
+        db_path = Path(self._db_path).expanduser()
+        if not db_path.exists():
+            return None
+        try:
+            conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+            try:
+                table_exists = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cost_tasks'"
+                ).fetchone()
+                if table_exists is None:
+                    return None
+                rows = conn.execute(
+                    "SELECT * FROM cost_tasks ORDER BY item_slug, id"
+                ).fetchall()
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            return None
+
+        if not rows:
+            return _EMPTY_COST_DATA
+
+        item_types: dict[str, str] = {}
+        raw_tasks_by_slug: dict[str, list[dict]] = defaultdict(list)
+        for row in rows:
+            slug: str = row["item_slug"]
+            if slug not in item_types:
+                item_types[slug] = row["item_type"]
+            tool_calls: list[dict] = _deserialise_tool_calls(row["tool_calls_json"])
+            raw_tasks_by_slug[slug].append(
+                {
+                    "task_id": row["task_id"],
+                    "agent_type": row["agent_type"],
+                    "model": row["model"],
+                    "input_tokens": row["input_tokens"],
+                    "output_tokens": row["output_tokens"],
+                    "cost_usd": row["cost_usd"],
+                    "duration_s": row["duration_s"],
+                    "tool_calls": tool_calls,
+                }
             )
 
-        read_bytes_by_file: dict[str, int] = defaultdict(int)
-        tokens_by_agent: dict[str, int] = defaultdict(int)
-        item_costs: list[ItemCost] = []
-        raw_tasks_by_slug: dict[str, list[dict]] = {}
+        return self._aggregate(item_types, dict(raw_tasks_by_slug))
 
+    # ─── JSON fallback path ────────────────────────────────────────────────────
+
+    def _load_from_json(self) -> CostData:
+        """Load cost data from JSON log files."""
+        json_files = self._find_json_files()
+        if not json_files:
+            return _EMPTY_COST_DATA
+
+        item_types: dict[str, str] = {}
+        raw_tasks_by_slug: dict[str, list[dict]] = {}
         for path in json_files:
             data = self._parse_file(path)
             if data is None:
                 continue
-
             item_slug: str = data.get("item_slug", "")
             item_type: str = data.get("item_type", "")
             raw_tasks: list[dict] = data.get("tasks", [])
-
             if not item_slug or not isinstance(raw_tasks, list):
                 continue
-
+            item_types[item_slug] = item_type
             raw_tasks_by_slug[item_slug] = raw_tasks
+
+        return self._aggregate(item_types, raw_tasks_by_slug)
+
+    # ─── Aggregation ──────────────────────────────────────────────────────────
+
+    def _aggregate(
+        self,
+        item_types: dict[str, str],
+        raw_tasks_by_slug: dict[str, list[dict]],
+    ) -> CostData:
+        """Build CostData from a mapping of item_slug -> (item_type, raw_tasks)."""
+        if not raw_tasks_by_slug:
+            return _EMPTY_COST_DATA
+
+        read_bytes_by_file: dict[str, int] = defaultdict(int)
+        tokens_by_agent: dict[str, int] = defaultdict(int)
+        item_costs: list[ItemCost] = []
+
+        for item_slug, raw_tasks in raw_tasks_by_slug.items():
+            item_type = item_types.get(item_slug, "")
             item_cost = self._build_item_cost(
                 item_slug, item_type, raw_tasks, read_bytes_by_file, tokens_by_agent
             )
@@ -201,12 +288,23 @@ class CostLogReader:
             output_tokens=sum(tc.output_tokens for tc in task_costs),
             cost_usd=sum(tc.cost_usd for tc in task_costs),
             num_tasks=len(task_costs),
-            num_wasted_reads=0,  # filled in by the second pass in load_all
+            num_wasted_reads=0,  # filled in by the second pass in _aggregate
             tasks=task_costs,
         )
 
 
 # ─── Module-level helpers ─────────────────────────────────────────────────────
+
+
+def _deserialise_tool_calls(tool_calls_json: Optional[str]) -> list[dict]:
+    """Parse the tool_calls_json column; returns an empty list on any error."""
+    if not tool_calls_json:
+        return []
+    try:
+        parsed = json.loads(tool_calls_json)
+        return parsed if isinstance(parsed, list) else []
+    except json.JSONDecodeError:
+        return []
 
 
 def _parse_task(raw: dict) -> Optional[TaskCost]:
