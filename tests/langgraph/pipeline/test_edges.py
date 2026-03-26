@@ -17,7 +17,6 @@ from langgraph_pipeline.pipeline.edges import (
     after_create_plan,
     after_intake,
     cycles_exhausted,
-    has_items,
     is_defect,
     verify_result,
 )
@@ -74,26 +73,6 @@ class TestNodeNameConstants:
     def test_archive_is_string(self):
         assert isinstance(NODE_ARCHIVE, str)
         assert NODE_ARCHIVE
-
-
-class TestHasItems:
-    """has_items routes based on whether item_path is populated."""
-
-    def test_returns_intake_analyze_when_item_path_set(self):
-        state = _make_state(item_path="docs/defect-backlog/my-bug.md")
-        assert has_items(state) == NODE_INTAKE_ANALYZE
-
-    def test_returns_end_when_item_path_is_empty(self):
-        state = _make_state(item_path="")
-        assert has_items(state) == END
-
-    def test_returns_end_when_item_path_is_none(self):
-        state = _make_state(item_path=None)
-        assert has_items(state) == END
-
-    def test_returns_end_when_item_path_missing_from_state(self):
-        state = {}
-        assert has_items(state) == END
 
 
 class TestIsDefect:

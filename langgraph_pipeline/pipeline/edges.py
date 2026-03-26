@@ -31,17 +31,6 @@ NODE_ARCHIVE = "archive"
 # ─── Edge routing functions ───────────────────────────────────────────────────
 
 
-def has_items(state: PipelineState) -> str:
-    """Route from scan_backlog based on whether a work item was found.
-
-    Returns NODE_INTAKE_ANALYZE when scan_backlog populated item_path,
-    or END when the backlog is empty (triggering a sleep/wait cycle).
-    """
-    if state.get("item_path"):
-        return NODE_INTAKE_ANALYZE
-    return END
-
-
 def after_intake(state: PipelineState) -> str:
     """Route from intake_analyze: END on quota exhaustion, else create_plan."""
     if state.get("quota_exhausted"):

@@ -4,12 +4,14 @@
 
 """Pipeline StateGraph for the Claude plan orchestrator.
 
-Assembles the five-node pipeline graph (scan_backlog, intake_analyze, create_plan,
-execute_plan, verify_symptoms, archive) with conditional edges and SQLite-backed
+Assembles the pipeline graph (intake_analyze, create_plan, execute_plan,
+verify_symptoms, archive) with conditional edges and SQLite-backed
 checkpointing for crash recovery.
 
+The CLI pre-scans the backlog via scan_backlog_fn() before invoking the graph,
+so the graph entry point is intake_analyze (item_path is always pre-populated).
+
 Graph topology:
-  scan_backlog --[has_items]--> intake_analyze | END
   intake_analyze --[after_intake]--> create_plan | END
   create_plan --[after_create_plan]--> execute_plan | END
   execute_plan --[is_defect]--> verify_symptoms | archive
@@ -24,13 +26,12 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from langgraph_pipeline.pipeline.edges import after_create_plan, after_intake, has_items, is_defect, verify_result
+from langgraph_pipeline.pipeline.edges import after_create_plan, after_intake, is_defect, verify_result
 from langgraph_pipeline.pipeline.nodes import (
     archive,
     create_plan,
     execute_plan,
     intake_analyze,
-    scan_backlog,
     verify_symptoms,
 )
 from langgraph_pipeline.pipeline.state import PipelineState
@@ -44,7 +45,6 @@ PIPELINE_THREAD_ID = "pipeline-main"
 # ─── Node name constants ───────────────────────────────────────────────────────
 # These must match the string names registered with add_node() below.
 
-NODE_SCAN_BACKLOG = "scan_backlog"
 NODE_INTAKE_ANALYZE = "intake_analyze"
 NODE_CREATE_PLAN = "create_plan"
 NODE_EXECUTE_PLAN = "execute_plan"
@@ -65,17 +65,13 @@ def build_graph() -> StateGraph:
     configure_tracing()
     graph = StateGraph(PipelineState)
 
-    graph.add_node(NODE_SCAN_BACKLOG, scan_backlog)
     graph.add_node(NODE_INTAKE_ANALYZE, intake_analyze)
     graph.add_node(NODE_CREATE_PLAN, create_plan)
     graph.add_node(NODE_EXECUTE_PLAN, execute_plan)
     graph.add_node(NODE_VERIFY_SYMPTOMS, verify_symptoms)
     graph.add_node(NODE_ARCHIVE, archive)
 
-    graph.set_entry_point(NODE_SCAN_BACKLOG)
-
-    # scan_backlog → has_items → intake_analyze | END
-    graph.add_conditional_edges(NODE_SCAN_BACKLOG, has_items)
+    graph.set_entry_point(NODE_INTAKE_ANALYZE)
 
     # intake_analyze → after_intake → create_plan | END
     graph.add_conditional_edges(NODE_INTAKE_ANALYZE, after_intake)

@@ -6,10 +6,14 @@
 
 These tests build and invoke the full compiled StateGraph with all node
 functions mocked, verifying that conditional edges route correctly for the
-three key scenarios: empty backlog, feature item, and defect item.
+two key scenarios: feature item and defect item.
+
+The CLI pre-scans items before invoking the graph, so all tests start with
+item_path pre-populated in the initial state — matching the real invocation
+pattern.
 
 Patching is applied at the graph module's namespace (e.g.,
-langgraph_pipeline.pipeline.graph.scan_backlog) because that is where the
+langgraph_pipeline.pipeline.graph.intake_analyze) because that is where the
 name bindings live when build_graph() calls add_node().
 """
 
@@ -45,13 +49,16 @@ FAIL_VERIFICATION_RECORD = {
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def _initial_state() -> dict:
-    """Return a minimal valid PipelineState dict for graph invocation."""
+def _feature_initial_state() -> dict:
+    """Return a minimal valid PipelineState dict for a feature item graph invocation.
+
+    item_path is pre-populated to match the CLI's pre-scan behaviour.
+    """
     return {
-        "item_path": "",
-        "item_slug": "",
+        "item_path": FEATURE_ITEM_PATH,
+        "item_slug": "01-test-feature",
         "item_type": "feature",
-        "item_name": "",
+        "item_name": "01 Test Feature",
         "plan_path": None,
         "design_doc_path": None,
         "verification_cycle": 0,
@@ -67,36 +74,28 @@ def _initial_state() -> dict:
     }
 
 
-def _feature_scan_result() -> dict:
-    """State updates returned by a mock scan_backlog for a feature item."""
-    return {
-        "item_path": FEATURE_ITEM_PATH,
-        "item_slug": "01-test-feature",
-        "item_type": "feature",
-        "item_name": "01 Test Feature",
-        "plan_path": None,
-    }
+def _defect_initial_state() -> dict:
+    """Return a minimal valid PipelineState dict for a defect item graph invocation.
 
-
-def _defect_scan_result() -> dict:
-    """State updates returned by a mock scan_backlog for a defect item."""
+    item_path is pre-populated to match the CLI's pre-scan behaviour.
+    """
     return {
         "item_path": DEFECT_ITEM_PATH,
         "item_slug": "01-test-defect",
         "item_type": "defect",
         "item_name": "01 Test Defect",
         "plan_path": None,
-    }
-
-
-def _empty_scan_result() -> dict:
-    """State updates returned by a mock scan_backlog when the backlog is empty."""
-    return {
-        "item_path": "",
-        "item_slug": "",
-        "item_type": "feature",
-        "item_name": "",
-        "plan_path": None,
+        "design_doc_path": None,
+        "verification_cycle": 0,
+        "verification_history": [],
+        "should_stop": False,
+        "rate_limited": False,
+        "rate_limit_reset": None,
+        "session_cost_usd": 0.0,
+        "session_input_tokens": 0,
+        "session_output_tokens": 0,
+        "intake_count_defects": 0,
+        "intake_count_features": 0,
     }
 
 
@@ -108,34 +107,12 @@ def _config(suffix: str) -> dict:
 # ─── Tests ────────────────────────────────────────────────────────────────────
 
 
-class TestEmptyBacklog:
-    """When scan_backlog finds no items, the graph terminates at END."""
-
-    def test_graph_terminates_after_empty_scan(self, checkpointer):
-        """An empty backlog routes scan_backlog → END without visiting any other node."""
-        node_calls: list[str] = []
-
-        def mock_scan(state: dict) -> dict:
-            node_calls.append("scan_backlog")
-            return _empty_scan_result()
-
-        with patch(f"{GRAPH_MODULE}.scan_backlog", mock_scan):
-            compiled = build_graph().compile(checkpointer=checkpointer)
-            compiled.invoke(_initial_state(), config=_config("empty"))
-
-        assert node_calls == ["scan_backlog"]
-
-
 class TestFeatureItem:
     """Feature items skip verify_symptoms and go directly to archive."""
 
     def test_feature_routes_through_archive(self, checkpointer):
-        """A feature item traverses: scan → intake → create_plan → execute → archive."""
+        """A feature item traverses: intake → create_plan → execute → archive."""
         node_calls: list[str] = []
-
-        def mock_scan(state: dict) -> dict:
-            node_calls.append("scan_backlog")
-            return _feature_scan_result()
 
         def mock_intake(state: dict) -> dict:
             node_calls.append("intake_analyze")
@@ -154,17 +131,15 @@ class TestFeatureItem:
             return {}
 
         with (
-            patch(f"{GRAPH_MODULE}.scan_backlog", mock_scan),
             patch(f"{GRAPH_MODULE}.intake_analyze", mock_intake),
             patch(f"{GRAPH_MODULE}.create_plan", mock_create_plan),
             patch(f"{GRAPH_MODULE}.execute_plan", mock_execute_plan),
             patch(f"{GRAPH_MODULE}.archive", mock_archive),
         ):
             compiled = build_graph().compile(checkpointer=checkpointer)
-            result = compiled.invoke(_initial_state(), config=_config("feature"))
+            result = compiled.invoke(_feature_initial_state(), config=_config("feature"))
 
         assert node_calls == [
-            "scan_backlog",
             "intake_analyze",
             "create_plan",
             "execute_plan",
@@ -175,9 +150,6 @@ class TestFeatureItem:
     def test_verify_symptoms_not_called_for_feature(self, checkpointer):
         """verify_symptoms is never called when item_type is 'feature'."""
         verify_called = False
-
-        def mock_scan(state: dict) -> dict:
-            return _feature_scan_result()
 
         def mock_intake(state: dict) -> dict:
             return {}
@@ -197,7 +169,6 @@ class TestFeatureItem:
             return {}
 
         with (
-            patch(f"{GRAPH_MODULE}.scan_backlog", mock_scan),
             patch(f"{GRAPH_MODULE}.intake_analyze", mock_intake),
             patch(f"{GRAPH_MODULE}.create_plan", mock_create_plan),
             patch(f"{GRAPH_MODULE}.execute_plan", mock_execute_plan),
@@ -205,7 +176,7 @@ class TestFeatureItem:
             patch(f"{GRAPH_MODULE}.archive", mock_archive),
         ):
             compiled = build_graph().compile(checkpointer=checkpointer)
-            compiled.invoke(_initial_state(), config=_config("feature-no-verify"))
+            compiled.invoke(_feature_initial_state(), config=_config("feature-no-verify"))
 
         assert not verify_called
 
@@ -214,12 +185,8 @@ class TestDefectItemPassVerification:
     """Defect items that PASS verification route to archive after verify_symptoms."""
 
     def test_defect_routes_through_verification_to_archive(self, checkpointer):
-        """A defect that PASSes routes: scan → intake → create_plan → execute → verify → archive."""
+        """A defect that PASSes routes: intake → create_plan → execute → verify → archive."""
         node_calls: list[str] = []
-
-        def mock_scan(state: dict) -> dict:
-            node_calls.append("scan_backlog")
-            return _defect_scan_result()
 
         def mock_intake(state: dict) -> dict:
             node_calls.append("intake_analyze")
@@ -246,7 +213,6 @@ class TestDefectItemPassVerification:
             return {}
 
         with (
-            patch(f"{GRAPH_MODULE}.scan_backlog", mock_scan),
             patch(f"{GRAPH_MODULE}.intake_analyze", mock_intake),
             patch(f"{GRAPH_MODULE}.create_plan", mock_create_plan),
             patch(f"{GRAPH_MODULE}.execute_plan", mock_execute_plan),
@@ -254,10 +220,9 @@ class TestDefectItemPassVerification:
             patch(f"{GRAPH_MODULE}.archive", mock_archive),
         ):
             compiled = build_graph().compile(checkpointer=checkpointer)
-            result = compiled.invoke(_initial_state(), config=_config("defect-pass"))
+            result = compiled.invoke(_defect_initial_state(), config=_config("defect-pass"))
 
         assert node_calls == [
-            "scan_backlog",
             "intake_analyze",
             "create_plan",
             "execute_plan",
@@ -274,10 +239,6 @@ class TestDefectItemFailRetry:
         """FAIL on cycle 1 retries create_plan; PASS on cycle 2 archives."""
         node_calls: list[str] = []
         verify_call_count = 0
-
-        def mock_scan(state: dict) -> dict:
-            node_calls.append("scan_backlog")
-            return _defect_scan_result()
 
         def mock_intake(state: dict) -> dict:
             node_calls.append("intake_analyze")
@@ -310,7 +271,6 @@ class TestDefectItemFailRetry:
             return {}
 
         with (
-            patch(f"{GRAPH_MODULE}.scan_backlog", mock_scan),
             patch(f"{GRAPH_MODULE}.intake_analyze", mock_intake),
             patch(f"{GRAPH_MODULE}.create_plan", mock_create_plan),
             patch(f"{GRAPH_MODULE}.execute_plan", mock_execute_plan),
@@ -318,10 +278,9 @@ class TestDefectItemFailRetry:
             patch(f"{GRAPH_MODULE}.archive", mock_archive),
         ):
             compiled = build_graph().compile(checkpointer=checkpointer)
-            result = compiled.invoke(_initial_state(), config=_config("defect-fail-retry"))
+            result = compiled.invoke(_defect_initial_state(), config=_config("defect-fail-retry"))
 
         assert node_calls == [
-            "scan_backlog",
             "intake_analyze",
             "create_plan",
             "execute_plan",
