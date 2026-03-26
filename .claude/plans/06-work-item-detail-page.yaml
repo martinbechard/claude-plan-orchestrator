@@ -69,6 +69,11 @@ sections:
       Implements two-column layout (requirements left, plan tasks/completions/traces
       right) with responsive collapse at <900px. Uses existing CSS design tokens and
       badge classes. All sections show empty-state fallbacks per spec.
+    validation_attempts: 1
+    validation_findings: item.html created with correct two-column layout (>=900px),
+      all four sections (requirements, plan tasks, completions, traces), empty-state
+      fallbacks, outcome color coding via badge classes, trace links to /proxy?trace_id=,
+      and all 1525 tests pass.
 - id: '3'
   name: Dashboard - add slug drill-down links
   status: pending
@@ -89,4 +94,7 @@ sections:
       in active-worker cards and recent-completions rows with /item/slug links.
 
       '
-    status: pending
+    status: in_progress
+    last_attempt: '2026-03-26T02:04:53.879409'
+    attempts: 1
+    model_used: sonnet
