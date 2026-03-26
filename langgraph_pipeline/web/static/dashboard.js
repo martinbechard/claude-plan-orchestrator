@@ -10,8 +10,11 @@ const SSE_ENDPOINT = "/api/stream";
 const RECONNECT_DELAY_MS = 3000;
 const LS_VIEW_KEY = "dashboard.workers.view";
 const LS_WINDOW_MS_KEY = "dashboard.timeline.windowMs";
+const LS_COLOR_MODE_KEY = "dashboard.timeline.colorMode";
 const VIEW_TABLE = "table";
 const VIEW_TIMELINE = "timeline";
+const COLOR_MODE_TYPE = "type";
+const COLOR_MODE_VELOCITY = "velocity";
 const DEFAULT_WINDOW_MS = 10 * 60 * 1000;
 const MIN_WINDOW_MS = 60 * 1000;
 const AXIS_TICK_COUNT = 5;
@@ -19,6 +22,8 @@ const MS_PER_MINUTE = 60 * 1000;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
 const HALF_WINDOW_DIVISOR = 2;
 const ZOOM_FACTOR = 2;
+const VEL_LOW_THRESHOLD = 1000;
+const VEL_HIGH_THRESHOLD = 5000;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -65,6 +70,12 @@ function fmtWindowDuration(ms) {
   return rem > 0 ? h + "h " + rem + "m" : h + "h";
 }
 
+function fmtVelocity(tpm) {
+  if (!tpm || tpm === 0) return "\u2014";
+  if (tpm >= 1000) return (tpm / 1000).toFixed(1) + "k tok/min";
+  return Math.round(tpm) + " tok/min";
+}
+
 function itemTypeBadgeClass(itemType) {
   switch (itemType) {
     case "defect": return "item-type-defect";
@@ -93,6 +104,7 @@ function stampTemplate(templateId) {
 var currentView = VIEW_TABLE;
 var latestWorkers = [];
 var latestCompletions = [];
+var colorMode = COLOR_MODE_TYPE;
 
 function getStoredView() {
   try {
@@ -105,6 +117,19 @@ function getStoredView() {
 
 function setStoredView(view) {
   try { localStorage.setItem(LS_VIEW_KEY, view); } catch (_) { /* noop */ }
+}
+
+function getStoredColorMode() {
+  try {
+    var v = localStorage.getItem(LS_COLOR_MODE_KEY);
+    return v === COLOR_MODE_VELOCITY ? COLOR_MODE_VELOCITY : COLOR_MODE_TYPE;
+  } catch (_) {
+    return COLOR_MODE_TYPE;
+  }
+}
+
+function setStoredColorMode(mode) {
+  try { localStorage.setItem(LS_COLOR_MODE_KEY, mode); } catch (_) { /* noop */ }
 }
 
 // ── Timeline window state ─────────────────────────────────────────────────────
@@ -174,6 +199,27 @@ function outcomeBarBorderClass(outcome) {
     case "warn": return "timeline-bar-border--warn";
     case "fail": return "timeline-bar-border--fail";
     default: return "timeline-bar-border--success";
+  }
+}
+
+function velocityBarClass(tpm) {
+  if (!tpm || tpm === 0) return "timeline-bar--vel-none";
+  if (tpm < VEL_LOW_THRESHOLD) return "timeline-bar--vel-low";
+  if (tpm <= VEL_HIGH_THRESHOLD) return "timeline-bar--vel-medium";
+  return "timeline-bar--vel-high";
+}
+
+function updateColorModeButton() {
+  var btn = document.getElementById("tl-btn-color-mode");
+  if (!btn) return;
+  if (colorMode === COLOR_MODE_VELOCITY) {
+    btn.textContent = "Type";
+    btn.setAttribute("aria-pressed", "true");
+    btn.setAttribute("title", "Switch to type colour mode");
+  } else {
+    btn.textContent = "Velocity";
+    btn.setAttribute("aria-pressed", "false");
+    btn.setAttribute("title", "Switch to velocity colour mode");
   }
 }
 
@@ -352,7 +398,7 @@ function computeBarPosition(barStartMs, barEndMs) {
 
 /**
  * Creates and appends a single timeline row for a bar entry.
- * barEntry: { slug, itemType, barStartMs, barEndMs, isCompletion, outcome }
+ * barEntry: { slug, itemType, barStartMs, barEndMs, isCompletion, outcome, tokensPerMinute }
  */
 function buildTimelineRow(barEntry) {
   var pos = computeBarPosition(barEntry.barStartMs, barEntry.barEndMs);
@@ -375,12 +421,26 @@ function buildTimelineRow(barEntry) {
   var bar = clone.querySelector(".timeline-bar");
   bar.style.left = pos.leftPct + "%";
   bar.style.width = pos.widthPct + "%";
-  bar.classList.add(timelineBarClass(barEntry.itemType));
+
+  if (colorMode === COLOR_MODE_VELOCITY) {
+    bar.classList.add(velocityBarClass(barEntry.tokensPerMinute || 0));
+  } else {
+    bar.classList.add(timelineBarClass(barEntry.itemType));
+  }
 
   if (barEntry.isCompletion) {
     bar.classList.add("timeline-bar--completion");
     bar.classList.add(outcomeBarBorderClass(barEntry.outcome));
   }
+
+  var elapsedS = Math.round((barEntry.barEndMs - barEntry.barStartMs) / 1000);
+  var velStr = fmtVelocity(barEntry.tokensPerMinute || 0);
+  var barLabelText = fmtElapsed(elapsedS);
+  if (velStr !== "\u2014") barLabelText += "  " + velStr;
+  var barLabel = document.createElement("span");
+  barLabel.className = "timeline-bar-label";
+  barLabel.textContent = barLabelText;
+  bar.appendChild(barLabel);
 
   return clone;
 }
@@ -418,6 +478,7 @@ function renderTimeline(workers, completions) {
       barEndMs: barEndMs,
       isCompletion: false,
       outcome: null,
+      tokensPerMinute: w.tokens_per_minute || 0,
       sortKey: w.elapsed_s || 0
     };
   }).sort(function(a, b) { return b.sortKey - a.sortKey; });
@@ -436,6 +497,7 @@ function renderTimeline(workers, completions) {
       barEndMs: barEndMs,
       isCompletion: true,
       outcome: c.outcome,
+      tokensPerMinute: c.tokens_per_minute || 0,
       sortKey: barEndMs
     };
   }).sort(function(a, b) { return b.sortKey - a.sortKey; });
@@ -590,6 +652,13 @@ function wireTimelineToolbar() {
     renderTimeline(latestWorkers, latestCompletions);
     updateWindowLabel();
   });
+
+  document.getElementById("tl-btn-color-mode").addEventListener("click", function() {
+    colorMode = colorMode === COLOR_MODE_VELOCITY ? COLOR_MODE_TYPE : COLOR_MODE_VELOCITY;
+    setStoredColorMode(colorMode);
+    updateColorModeButton();
+    renderTimeline(latestWorkers, latestCompletions);
+  });
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
@@ -598,9 +667,11 @@ document.addEventListener("DOMContentLoaded", function() {
   setConnectionStatus(false);
 
   currentView = getStoredView();
+  colorMode = getStoredColorMode();
   timelineWindowMs = getStoredWindowMs();
   snapWindowToLive();
   applyView(currentView);
+  updateColorModeButton();
 
   var toggleBtn = document.getElementById("workers-view-toggle");
   if (toggleBtn) {
