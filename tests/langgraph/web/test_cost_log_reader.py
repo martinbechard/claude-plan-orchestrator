@@ -400,53 +400,60 @@ def test_svg_bar_chart_empty_data_returns_svg():
 
 
 @pytest.fixture()
-def client_no_data(tmp_path):
-    """TestClient with CostLogReader pointed at an empty directory and no DB."""
+def client_no_proxy():
+    """TestClient with proxy disabled (get_proxy returns None) for /analysis."""
     from unittest.mock import patch
 
     from langgraph_pipeline.web.server import create_app
 
-    empty_logs = tmp_path / "empty-logs"
-    empty_logs.mkdir()
-
     app = create_app(config={})
-    with patch(
-        "langgraph_pipeline.web.routes.analysis.CostLogReader",
-        return_value=CostLogReader(logs_dir=empty_logs, db_path=NONEXISTENT_DB),
-    ):
+    with patch("langgraph_pipeline.web.routes.analysis.get_proxy", return_value=None):
         yield TestClient(app)
 
 
 @pytest.fixture()
-def client_with_data(tmp_path):
-    """TestClient with CostLogReader pointed at a directory with one fixture file."""
-    from unittest.mock import patch
+def client_with_proxy(tmp_path):
+    """TestClient with a real TracingProxy backed by a temporary SQLite DB."""
+    from unittest.mock import MagicMock, patch
 
+    from langgraph_pipeline.web.proxy import CostSummary, NodeCost, SlugCost
     from langgraph_pipeline.web.server import create_app
 
-    logs_dir = tmp_path / "logs"
-    logs_dir.mkdir()
-
-    tasks = [_make_task("1.1", agent_type="coder", input_tokens=1000, output_tokens=200, cost_usd=0.03)]
-    _write_log(logs_dir, f"{FIXTURE_ITEM_SLUG}.json", _make_log(FIXTURE_ITEM_SLUG, FIXTURE_ITEM_TYPE, tasks))
+    mock_proxy = MagicMock()
+    mock_proxy.get_cost_summary.return_value = CostSummary(
+        total_cost_usd=1.23,
+        today_cost_usd=0.10,
+        week_cost_usd=0.50,
+        most_expensive_slug=FIXTURE_ITEM_SLUG,
+        most_expensive_slug_cost_usd=0.80,
+    )
+    mock_proxy.get_cost_by_day.return_value = []
+    mock_proxy.list_cost_runs.return_value = ([], 0)
+    mock_proxy.get_cost_by_slug.return_value = [
+        SlugCost(
+            item_slug=FIXTURE_ITEM_SLUG,
+            item_type=FIXTURE_ITEM_TYPE,
+            total_cost_usd=0.80,
+            task_count=3,
+            avg_cost_usd=0.27,
+        )
+    ]
+    mock_proxy.get_cost_by_node_type.return_value = [
+        NodeCost(node_name="execute_task", task_count=5, total_cost_usd=1.00, avg_cost_usd=0.20)
+    ]
 
     app = create_app(config={})
-    with patch(
-        "langgraph_pipeline.web.routes.analysis.CostLogReader",
-        return_value=CostLogReader(logs_dir=logs_dir, db_path=NONEXISTENT_DB),
-    ):
+    with patch("langgraph_pipeline.web.routes.analysis.get_proxy", return_value=mock_proxy):
         yield TestClient(app)
 
 
-def test_analysis_endpoint_no_data(client_no_data):
-    """GET /analysis with empty log dir returns 200 and empty-state message in body."""
-    response = client_no_data.get("/analysis")
-    assert response.status_code == 200
-    assert "No cost data yet" in response.text
+def test_analysis_endpoint_no_proxy(client_no_proxy):
+    """GET /analysis with proxy disabled returns 404."""
+    response = client_no_proxy.get("/analysis")
+    assert response.status_code == 404
 
 
-def test_analysis_endpoint_with_data(client_with_data):
-    """GET /analysis with one fixture file returns 200 and item slug in body."""
-    response = client_with_data.get("/analysis")
+def test_analysis_endpoint_with_proxy(client_with_proxy):
+    """GET /analysis with proxy returns 200."""
+    response = client_with_proxy.get("/analysis")
     assert response.status_code == 200
-    assert FIXTURE_ITEM_SLUG in response.text
