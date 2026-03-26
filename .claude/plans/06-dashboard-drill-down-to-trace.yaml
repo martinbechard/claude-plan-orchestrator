@@ -61,10 +61,15 @@ sections:
       exist (use pragma_table_info to guard). Update record_completion() to accept
       and store run_id. Update list_completions() SELECT to include run_id. See design
       doc: docs/plans/2026-03-26-06-dashboard-drill-down-to-trace-design.md'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:34:18.305821'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-26T01:36:14.860643'
+    result_message: Added nullable run_id TEXT column to completions table schema,
+      ALTER TABLE migration guard for existing DBs, updated record_completion() to
+      accept optional run_id param, updated list_completions() SELECT to include run_id.
+      All 14 proxy tests and 6 dashboard state tests pass.
   - id: '1.4'
     name: Read trace_id in supervisor at dispatch and reap; pass to dashboard state
       and proxy
