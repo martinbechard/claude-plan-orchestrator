@@ -38,3 +38,5 @@ level. Install this handler on the root logger or the langgraph_pipeline
 logger in server.py or cli.py at startup. This ensures all supervisor
 warnings/errors flow to the dashboard without manually sprinkling add_error()
 calls everywhere.
+
+## LangSmith Trace: 7d9a9599-2103-4ee4-9785-7a2a903dc1c1
