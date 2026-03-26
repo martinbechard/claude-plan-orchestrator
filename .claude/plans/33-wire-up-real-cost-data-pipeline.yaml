@@ -25,11 +25,23 @@ sections:
     model_used: sonnet
     completed_at: '2026-03-26T18:21:22.509263'
     result_message: 'PASS: All good'
+    validation_attempts: 1
+    validation_findings: 'Core fix verified: cli.py:806 correctly extends web_enabled
+      to include bool(web_config.get(port)). Zero 12-test-item rows in DB. 1295 tests
+      pass. Build command fails on scripts/plan-orchestrator.py but that file was
+      deleted in prior commit 30ee1d65 unrelated to this task. Runtime acceptance
+      criteria cannot be verified at validation time.'
   - id: '1.2'
     name: Bump plugin version and update release notes
     agent: coder
     description: 'Bump plugin.json version (patch) and add a RELEASE-NOTES.md entry
       for this fix. Work item: .claude/plans/.claimed/33-wire-up-real-cost-data-pipeline.md'
-    status: pending
+    status: completed
     depends_on:
     - '1.1'
+    last_attempt: '2026-03-26T18:23:24.047455'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-26T18:24:12.305081'
+    result_message: Bumped plugin.json version from 1.10.4 to 1.10.5 and added RELEASE-NOTES.md
+      entry describing the web server auto-enable fix
