@@ -96,7 +96,7 @@ sections:
   - id: '2.2'
     name: Replace analysis.html template with trace-based cost page
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: .claude/plans/.claimed/10-trace-cost-analysis-page.md
 
 
@@ -125,3 +125,10 @@ sections:
     last_attempt: '2026-03-26T12:01:58.581710'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T12:04:00.067312'
+    result_message: 'Replaced analysis.html with trace-based cost analysis page. Renders:
+      summary cards (all-time/today/week/most-expensive-slug), SVG cost-over-time
+      bar chart, paginated top-runs table (slug, node, model, exclusive/inclusive
+      cost, tokens in/out, duration, timestamp), cost-by-work-item aggregated table,
+      cost-by-node-type bar chart + table. Filter form matches completions.html style.
+      Tool-call-no-direct-cost note included.'
