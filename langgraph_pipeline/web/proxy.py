@@ -339,6 +339,44 @@ class TracingProxy:
             rows = conn.execute(sql, [limit]).fetchall()
         return [dict(row) for row in rows]
 
+    def list_completions_by_slug(self, slug: str) -> list[dict]:
+        """Return all completions for the given slug, ordered by finished_at descending.
+
+        Args:
+            slug: Work item slug to filter by.
+
+        Returns:
+            List of dicts with keys: slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id.
+        """
+        sql = """
+            SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id
+            FROM completions
+            WHERE slug = ?
+            ORDER BY finished_at DESC
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql, [slug]).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_root_traces_by_slug(self, slug: str) -> list[dict]:
+        """Return root traces whose name contains the given slug.
+
+        Args:
+            slug: Work item slug to match against trace names.
+
+        Returns:
+            List of dicts with keys: run_id, name, created_at.
+        """
+        sql = """
+            SELECT run_id, name, created_at
+            FROM traces
+            WHERE parent_run_id IS NULL AND name LIKE ?
+            ORDER BY created_at DESC
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql, [f"%{slug}%"]).fetchall()
+        return [dict(row) for row in rows]
+
     # ─── Cost Tasks ───────────────────────────────────────────────────────────
 
     def record_cost_task(
