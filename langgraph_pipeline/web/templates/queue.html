@@ -1,0 +1,130 @@
+{# langgraph_pipeline/web/templates/queue.html
+   Read-only backlog queue page listing pending work items.
+   Design: docs/plans/2026-03-26-05-queue-page-design.md #}
+{% extends "base.html" %}
+
+{% block title %}Queue — Plan Orchestrator{% endblock %}
+
+{% block content %}
+<section aria-labelledby="hd-queue">
+  <h2 id="hd-queue">Backlog Queue</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Type</th>
+          <th scope="col">Slug</th>
+          <th scope="col">Age</th>
+        </tr>
+      </thead>
+      <tbody id="queue-body" aria-live="polite" aria-label="Queue items">
+        <tr id="queue-empty">
+          <td colspan="3" class="empty-state">
+            <p>No items in queue</p>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<template id="tpl-queue-row">
+  <tr class="queue-row" data-slug="">
+    <td><span class="badge item-type-badge"></span></td>
+    <td class="queue-slug"></td>
+    <td class="queue-age"></td>
+  </tr>
+</template>
+
+<template id="tpl-queue-detail">
+  <tr class="queue-detail-row" data-slug="">
+    <td colspan="3">
+      <pre class="queue-content"></pre>
+    </td>
+  </tr>
+</template>
+
+<script>
+(function() {
+  var POLL_INTERVAL_MS = 12000;
+  var openSlugs = {};
+
+  function formatAge(seconds) {
+    if (seconds < 60) return seconds + "s";
+    if (seconds < 3600) return Math.floor(seconds / 60) + "m";
+    if (seconds < 86400) return Math.floor(seconds / 3600) + "h";
+    return Math.floor(seconds / 86400) + "d";
+  }
+
+  function renderItems(items) {
+    var tbody = document.getElementById("queue-body");
+    var emptyRow = document.getElementById("queue-empty");
+    var rowTpl = document.getElementById("tpl-queue-row");
+    var detailTpl = document.getElementById("tpl-queue-detail");
+
+    if (!items || items.length === 0) {
+      tbody.innerHTML = "";
+      tbody.appendChild(emptyRow);
+      emptyRow.style.display = "";
+      return;
+    }
+
+    if (emptyRow) emptyRow.style.display = "none";
+    tbody.innerHTML = "";
+
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var row = rowTpl.content.cloneNode(true);
+      var tr = row.querySelector("tr");
+      tr.dataset.slug = item.slug;
+
+      var badge = tr.querySelector(".item-type-badge");
+      badge.textContent = item.item_type;
+      badge.classList.add("item-type-" + item.item_type);
+
+      tr.querySelector(".queue-slug").textContent = item.slug;
+      tr.querySelector(".queue-age").textContent = formatAge(item.age_seconds);
+
+      tr.style.cursor = "pointer";
+      tr.addEventListener("click", (function(slug) {
+        return function() { toggleDetail(slug); };
+      })(item.slug));
+
+      tbody.appendChild(tr);
+
+      if (openSlugs[item.slug]) {
+        var detail = detailTpl.content.cloneNode(true);
+        var detailTr = detail.querySelector("tr");
+        detailTr.dataset.slug = item.slug;
+        detailTr.querySelector(".queue-content").textContent = item.content;
+        tbody.appendChild(detailTr);
+      }
+    }
+  }
+
+  function toggleDetail(slug) {
+    if (openSlugs[slug]) {
+      delete openSlugs[slug];
+    } else {
+      openSlugs[slug] = true;
+    }
+    if (lastItems) renderItems(lastItems);
+  }
+
+  var lastItems = null;
+
+  function fetchQueue() {
+    fetch("/api/queue")
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        lastItems = data.items || [];
+        renderItems(lastItems);
+      })
+      .catch(function() {});
+  }
+
+  fetchQueue();
+  setInterval(fetchQueue, POLL_INTERVAL_MS);
+})();
+</script>
+{% endblock %}
