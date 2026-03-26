@@ -42,7 +42,7 @@ sections:
   - id: '1.2'
     name: Add unit tests for duplicate-run deduplication
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Add tests for the changes described in: .claude/plans/.claimed/18-work-item-duplicate-traces.md
 
       Design doc: docs/plans/2026-03-26-18-work-item-duplicate-traces-design.md
@@ -51,3 +51,8 @@ sections:
     last_attempt: '2026-03-26T11:02:48.015729'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T11:05:16.639067'
+    result_message: 'Added 4 new tests to TestRunIntakeAnalysis: failure_reason in
+      Slack message on empty call_claude response, add_error() called on empty response,
+      quota fallback message contains quota, add_error() called on quota exhaustion.
+      All 66 suspension tests pass; 1536 total pass (4 pre-existing failures in test_execution_cost_log.py).'
