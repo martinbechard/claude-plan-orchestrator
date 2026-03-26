@@ -31,3 +31,5 @@ inclusive_cost_usd column or materialized view would make the page fast.
 Start with option 3 (query-time CTE limited to current page) since the
 trace count is manageable. Move to option 2 if performance degrades
 beyond 500ms query time.
+
+## LangSmith Trace: 1bb661c7-0e36-4eea-8f85-044bbf319ea9
