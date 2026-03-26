@@ -54,20 +54,19 @@ router = APIRouter()
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-_ISO_FMT = "%Y-%m-%dT%H:%M:%S"
-_ISO_FMT_WITH_TZ = "%Y-%m-%dT%H:%M:%S%z"
-
 
 def _parse_iso(ts: Optional[str]) -> Optional[datetime]:
-    """Parse an ISO-8601 timestamp string to a datetime, returning None on error."""
+    """Parse an ISO-8601 timestamp string to a datetime, returning None on error.
+
+    Uses datetime.fromisoformat() to preserve fractional seconds (microseconds).
+    The tzinfo is normalised to UTC regardless of the offset in the string.
+    """
     if not ts:
         return None
-    for fmt in (_ISO_FMT_WITH_TZ, _ISO_FMT):
-        try:
-            return datetime.strptime(ts[:19], _ISO_FMT).replace(tzinfo=timezone.utc)
-        except ValueError:
-            pass
-    return None
+    try:
+        return datetime.fromisoformat(ts).replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
 
 
 def _format_duration(start: Optional[str], end: Optional[str]) -> str:
