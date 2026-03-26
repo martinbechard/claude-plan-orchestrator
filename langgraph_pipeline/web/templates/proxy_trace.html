@@ -132,26 +132,36 @@
 {% set safe_span = [span_s, 0.001] | max %}
 
 {# ── Bar colour by inferred run type ──────────────────────────────────── #}
+{# Tool check: exact set membership (case-sensitive Claude Code tool names) #}
+{# LLM check: substring fallback on lower-cased name                        #}
 {% macro bar_color(name) -%}
+  {%- set tool_names = ["Bash", "Edit", "Write", "Read", "Glob", "Grep", "Skill", "MultiEdit", "NotebookEdit"] -%}
+  {%- set llm_substrings = ["claude", "llm", "model", "chatanthropic", "langgraph", "assistant"] -%}
   {%- set n = name | lower -%}
-  {%- if "llm" in n or "chat" in n or "claude" in n or "gpt" in n or "model" in n -%}
-    #7c3aed
-  {%- elif "tool" in n or "function" in n or "retriev" in n or "search" in n -%}
-    #0891b2
-  {%- else -%}
-    #f59e0b
+  {%- set ns = namespace(is_tool=false, is_llm=false) -%}
+  {%- for t in tool_names -%}{%- if name == t -%}{%- set ns.is_tool = true -%}{%- endif -%}{%- endfor -%}
+  {%- if not ns.is_tool -%}
+    {%- for sub in llm_substrings -%}{%- if sub in n -%}{%- set ns.is_llm = true -%}{%- endif -%}{%- endfor -%}
+  {%- endif -%}
+  {%- if ns.is_tool -%}#0891b2
+  {%- elif ns.is_llm -%}#7c3aed
+  {%- else -%}#f59e0b
   {%- endif -%}
 {%- endmacro %}
 
 {# ── Text colour (contrast on fill) ──────────────────────────────────── #}
 {% macro text_color(name) -%}
+  {%- set tool_names = ["Bash", "Edit", "Write", "Read", "Glob", "Grep", "Skill", "MultiEdit", "NotebookEdit"] -%}
+  {%- set llm_substrings = ["claude", "llm", "model", "chatanthropic", "langgraph", "assistant"] -%}
   {%- set n = name | lower -%}
-  {%- if "llm" in n or "chat" in n or "claude" in n or "gpt" in n or "model" in n -%}
-    #f5f3ff
-  {%- elif "tool" in n or "function" in n or "retriev" in n or "search" in n -%}
-    #ecfeff
-  {%- else -%}
-    #1c1917
+  {%- set ns = namespace(is_tool=false, is_llm=false) -%}
+  {%- for t in tool_names -%}{%- if name == t -%}{%- set ns.is_tool = true -%}{%- endif -%}{%- endfor -%}
+  {%- if not ns.is_tool -%}
+    {%- for sub in llm_substrings -%}{%- if sub in n -%}{%- set ns.is_llm = true -%}{%- endif -%}{%- endfor -%}
+  {%- endif -%}
+  {%- if ns.is_tool -%}#ecfeff
+  {%- elif ns.is_llm -%}#f5f3ff
+  {%- else -%}#1c1917
   {%- endif -%}
 {%- endmacro %}
 
