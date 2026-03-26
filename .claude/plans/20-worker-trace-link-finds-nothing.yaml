@@ -20,7 +20,7 @@ sections:
   - id: '1.1'
     name: Relax parent_run_id IS NULL when trace_id filter is provided
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the fix described in: .claude/plans/.claimed/20-worker-trace-link-finds-nothing.md
 
 
@@ -41,6 +41,12 @@ sections:
     last_attempt: '2026-03-26T13:21:02.956378'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T13:23:37.104446'
+    result_message: 'Fixed list_runs() and count_runs() in proxy.py: when trace_id
+      is provided, replaced parent_run_id IS NULL + run_id LIKE with (run_id = ? OR
+      parent_run_id = ?) so in-flight child runs are visible while the root run has
+      not yet been posted. Updated test_proxy.py with new tests covering root+children
+      visibility and child-only visibility before root arrives. All 1553 tests pass.'
 - id: '2'
   name: Fix supervisor run_id refresh (Bug 1)
   status: pending
