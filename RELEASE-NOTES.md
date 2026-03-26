@@ -1,5 +1,14 @@
 # Release Notes
 
+## 1.10.9 (2026-03-26)
+
+### Bug Fixes
+- **Remove redundant scan_backlog graph node:** The `scan_backlog` node was the
+  graph entry point but always short-circuited with `return {}` because the CLI
+  pre-scans the next item before invoking the graph. Removed it from the graph
+  node list and edge definitions; `intake_analyze` is now the entry point.
+  The `scan_backlog` function is retained for direct use by tests.
+
 ## 1.10.8 (2026-03-26)
 
 ### Bug Fixes
