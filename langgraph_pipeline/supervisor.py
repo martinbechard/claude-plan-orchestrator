@@ -284,6 +284,31 @@ def _spawn_worker(claimed_path: str, result_file: str, item_type: str, item_slug
 # ─── Worker reaping ───────────────────────────────────────────────────────────
 
 
+def _compute_final_velocity(pid: int, duration_s: float) -> float:
+    """Compute tokens-per-minute for a worker about to be reaped.
+
+    Reads the worker's accumulated token counts from DashboardState (which has
+    been kept current by _refresh_worker_token_counts). Returns 0.0 when the
+    worker is not found or has no token data.
+
+    Args:
+        pid: Process ID of the worker.
+        duration_s: Wall-clock seconds the worker ran.
+
+    Returns:
+        Tokens per minute as a float (0.0 if no token data is available).
+    """
+    dashboard = get_dashboard_state()
+    with dashboard._lock:
+        worker = dashboard.active_workers.get(pid)
+        if worker is None or (worker.tokens_in == 0 and worker.tokens_out == 0):
+            return 0.0
+        total_tokens = worker.tokens_in + worker.tokens_out
+
+    elapsed_min = max(duration_s / 60.0, 0.001)
+    return total_tokens / elapsed_min
+
+
 def _reap_one_worker(
     pid: int,
     record: WorkerRecord,
@@ -317,6 +342,9 @@ def _reap_one_worker(
 
     run_id = read_trace_id_from_file(claimed_path)
 
+    # Compute final velocity from accumulated token counts before removing the worker.
+    final_velocity = _compute_final_velocity(pid, duration_s)
+
     if result is None:
         # Worker crashed without writing a result file — return item to backlog.
         crash_msg = (
@@ -328,7 +356,10 @@ def _reap_one_worker(
         get_dashboard_state().remove_active_worker(pid, "fail", 0.0, duration_s)
         proxy = get_proxy()
         if proxy is not None:
-            proxy.record_completion(Path(claimed_path).stem, item_type, "fail", 0.0, duration_s, run_id=run_id)
+            proxy.record_completion(
+                Path(claimed_path).stem, item_type, "fail", 0.0, duration_s,
+                run_id=run_id, tokens_per_minute=final_velocity,
+            )
         try:
             unclaim_item(claimed_path, item_type)
             logger.info("Unclaimed %s back to %s backlog.", claimed_path, item_type)
@@ -358,7 +389,10 @@ def _reap_one_worker(
         get_dashboard_state().remove_active_worker(pid, "success", cost_usd, duration_s)
         proxy = get_proxy()
         if proxy is not None:
-            proxy.record_completion(item_slug, item_type, "success", cost_usd, duration_s, run_id=run_id)
+            proxy.record_completion(
+                item_slug, item_type, "success", cost_usd, duration_s,
+                run_id=run_id, tokens_per_minute=final_velocity,
+            )
         # Reset warn counter on success.
         if warn_counts is not None:
             warn_counts.pop(item_slug, None)
@@ -380,7 +414,10 @@ def _reap_one_worker(
         get_dashboard_state().remove_active_worker(pid, "warn", cost_usd, duration_s)
         proxy = get_proxy()
         if proxy is not None:
-            proxy.record_completion(item_slug, item_type, "warn", cost_usd, duration_s, run_id=run_id)
+            proxy.record_completion(
+                item_slug, item_type, "warn", cost_usd, duration_s,
+                run_id=run_id, tokens_per_minute=final_velocity,
+            )
 
         if current_warns >= MAX_WARN_RETRIES_PER_ITEM:
             exhausted_msg = (
@@ -509,7 +546,7 @@ def _try_dispatch_one(active_workers: dict[int, WorkerRecord]) -> bool:
         return False
 
 
-# ─── Run-id refresh ───────────────────────────────────────────────────────────
+# ─── Run-id and token refresh ─────────────────────────────────────────────────
 
 
 def _refresh_worker_run_ids(active_workers: dict[int, WorkerRecord]) -> None:
@@ -543,6 +580,34 @@ def _refresh_worker_run_ids(active_workers: dict[int, WorkerRecord]) -> None:
             logger.debug(
                 "Refreshed run_id for worker PID %d: %s", pid, run_id
             )
+
+
+def _refresh_worker_token_counts(active_workers: dict[int, WorkerRecord]) -> None:
+    """Update token counts for all active workers that have a known run_id.
+
+    Called each poll iteration after _refresh_worker_run_ids(). Queries
+    the traces DB via the proxy for each worker with a non-None run_id and
+    writes the updated counts to DashboardState so the SSE snapshot can
+    compute tokens_per_minute.
+
+    Args:
+        active_workers: Current mapping of pid → WorkerRecord.
+    """
+    proxy = get_proxy()
+    if proxy is None:
+        return
+
+    dashboard = get_dashboard_state()
+    with dashboard._lock:
+        workers_with_run_id = [
+            (pid, worker_info.run_id)
+            for pid, worker_info in dashboard.active_workers.items()
+            if worker_info.run_id is not None and pid in active_workers
+        ]
+
+    for pid, run_id in workers_with_run_id:
+        tokens_in, tokens_out = proxy.get_worker_token_counts(run_id)
+        dashboard.update_worker_tokens(pid, tokens_in, tokens_out)
 
 
 # ─── Main supervisor loop ─────────────────────────────────────────────────────
@@ -619,6 +684,10 @@ def run_supervisor_loop(
             # Step 1b: Refresh run_ids for workers that launched without one.
             if active_workers:
                 _refresh_worker_run_ids(active_workers)
+
+            # Step 1c: Refresh token counts for workers with a known run_id.
+            if active_workers:
+                _refresh_worker_token_counts(active_workers)
 
             # Step 2: Dispatch new workers while slots are available.
             if not budget_exceeded and not shutdown_event.is_set():
