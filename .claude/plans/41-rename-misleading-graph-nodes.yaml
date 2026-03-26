@@ -1,0 +1,29 @@
+meta:
+  source_item: .claude/plans/.claimed/41-rename-misleading-graph-nodes.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: phase-1
+  name: Rename misleading graph node and edge names
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Rename verify_symptoms to verify_fix and edge functions to route_after_* pattern
+    agent: coder
+    description: 'Implement the renames described in the work item and design doc.
+      Work item: .claude/plans/.claimed/41-rename-misleading-graph-nodes.md.
+      Design: docs/plans/2026-03-26-41-rename-misleading-graph-nodes-design.md'
+    status: pending
+  - id: '1.2'
+    name: Bump plugin version and update release notes
+    agent: coder
+    description: 'Bump plugin.json version (patch) and add a RELEASE-NOTES.md entry
+      for this fix. Work item: .claude/plans/.claimed/41-rename-misleading-graph-nodes.md'
+    status: pending
+    depends_on:
+    - '1.1'
