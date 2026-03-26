@@ -30,10 +30,14 @@ sections:
       that walks up the parent chain and sets model on the root run only when model
       is currently empty. Update list_runs() and count_runs() to filter with LOWER(model)
       LIKE LOWER(?) instead of metadata_json LIKE ?.'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:08:48.485990'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T01:11:32.119163'
+    result_message: Added run_name to thread_config in worker.main() when item_slug
+      is non-empty; created tests/langgraph/test_worker.py with 4 unit tests. All
+      1506 tests pass.
   - id: '1.2'
     name: Extract model in server.py and fix enrich_run display
     agent: coder
