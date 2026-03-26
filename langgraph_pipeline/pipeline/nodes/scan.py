@@ -257,6 +257,10 @@ def scan_backlog(state: PipelineState) -> dict:
     """
     # Short-circuit if the CLI already pre-scanned an item.
     if state.get("item_path"):
+        add_trace_metadata({
+            "short_circuited": True,
+            "short_circuit_reason": "item pre-scanned by CLI",
+        })
         return {}
 
     claimed_dir_resolved = Path(CLAIMED_DIR).resolve()
