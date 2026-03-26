@@ -60,10 +60,15 @@ sections:
       Use the frontend-design skill for a polished layout.
 
       '
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:59:54.538380'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T02:03:00.991603'
+    result_message: Created langgraph_pipeline/web/templates/item.html extending base.html.
+      Implements two-column layout (requirements left, plan tasks/completions/traces
+      right) with responsive collapse at <900px. Uses existing CSS design tokens and
+      badge classes. All sections show empty-state fallbacks per spec.
 - id: '3'
   name: Dashboard - add slug drill-down links
   status: pending
