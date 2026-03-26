@@ -26,5 +26,3 @@ analysis page:
    passing them to the chart (e.g. "$55.61" not "55.605055300000004").
 3. Increase SVG_VALUE_LABEL_PADDING or adjust the bar_area_width
    calculation to reserve more space for labels.
-
-## LangSmith Trace: ebd7169b-1c66-41cb-afc0-b625d3895aa1
