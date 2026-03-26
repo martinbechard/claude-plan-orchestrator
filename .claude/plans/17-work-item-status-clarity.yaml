@@ -44,7 +44,7 @@ sections:
   - id: '2.1'
     name: Update item template for pipeline stage and worker banner
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: .claude/plans/.claimed/17-work-item-status-clarity.md
 
 
@@ -56,3 +56,8 @@ sections:
     last_attempt: '2026-03-26T18:17:55.852844'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T18:20:23.432084'
+    result_message: 'Updated item.html: renamed status to pipeline_stage, added CSS
+      for claimed/designing/planning/executing/stuck stages, added active-worker banner
+      with pulsing indicator, PID, elapsed time, and optional trace link. All 1295
+      tests pass.'
