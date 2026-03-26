@@ -39,6 +39,8 @@ class WorkerInfo:
     start_time: float  # time.monotonic()
     estimated_cost_usd: float = 0.0
     run_id: Optional[str] = None
+    tokens_in: int = 0
+    tokens_out: int = 0
 
 
 @dataclass
@@ -143,6 +145,23 @@ class DashboardState:
             self.session_cost_usd += cost_usd
             self._total_processed += 1
 
+    def update_worker_tokens(self, pid: int, tokens_in: int, tokens_out: int) -> None:
+        """Update the token counts for an active worker.
+
+        Called by the supervisor polling loop after querying token counts from
+        the traces DB for the worker's current run_id.
+
+        Args:
+            pid: Process ID of the worker to update.
+            tokens_in: Total input tokens consumed so far in this run.
+            tokens_out: Total output tokens produced so far in this run.
+        """
+        with self._lock:
+            worker = self.active_workers.get(pid)
+            if worker is not None:
+                worker.tokens_in = tokens_in
+                worker.tokens_out = tokens_out
+
     def update_worker_run_id(self, pid: int, run_id: str) -> None:
         """Update the LangSmith run_id for an active worker once it becomes available.
 
@@ -209,18 +228,29 @@ class DashboardState:
             recent_errors.
         """
         self.sweep_dead_workers()
+        now = time.monotonic()
         with self._lock:
-            active_list = [
-                {
-                    "pid": w.pid,
-                    "slug": w.slug,
-                    "item_type": w.item_type,
-                    "elapsed_s": time.monotonic() - w.start_time,
-                    "estimated_cost_usd": w.estimated_cost_usd,
-                    "run_id": w.run_id,
-                }
-                for w in self.active_workers.values()
-            ]
+            active_list = []
+            for w in self.active_workers.values():
+                elapsed_s = now - w.start_time
+                elapsed_min = max(elapsed_s / 60.0, 0.001)
+                if w.tokens_in == 0 and w.tokens_out == 0:
+                    tokens_per_minute = 0.0
+                else:
+                    tokens_per_minute = (w.tokens_in + w.tokens_out) / elapsed_min
+                active_list.append(
+                    {
+                        "pid": w.pid,
+                        "slug": w.slug,
+                        "item_type": w.item_type,
+                        "elapsed_s": elapsed_s,
+                        "estimated_cost_usd": w.estimated_cost_usd,
+                        "run_id": w.run_id,
+                        "tokens_in": w.tokens_in,
+                        "tokens_out": w.tokens_out,
+                        "tokens_per_minute": tokens_per_minute,
+                    }
+                )
             proxy = get_proxy()
             if proxy is not None:
                 completions_list = proxy.list_completions()
