@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Add result_bytes to ToolCallRecord and capture from tool_result events
     agent: coder
-    status: in_progress
+    status: completed
     description: Implement the work item .claude/plans/.claimed/27-tool-call-cost-attribution-dummy-data.md
       -- read docs/plans/2026-03-26-27-tool-call-cost-attribution-dummy-data-design.md
       for full details. Add result_bytes to ToolCallRecord TypedDict in langgraph_pipeline/shared/claude_cli.py.
@@ -29,6 +29,10 @@ sections:
     last_attempt: '2026-03-26T14:50:24.932829'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T14:52:02.349276'
+    result_message: 'Added result_bytes: NotRequired[Optional[int]] to ToolCallRecord
+      TypedDict and captures len(json.dumps(content)) from tool_result blocks in stream_json_output().
+      All 1561 tests pass.'
   - id: '1.2'
     name: Wire task_runner and validator to POST cost data to /api/cost
     agent: coder
