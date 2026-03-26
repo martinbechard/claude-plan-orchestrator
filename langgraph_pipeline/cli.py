@@ -42,6 +42,7 @@ from langgraph_pipeline.shared.config import get_max_parallel_items, load_orches
 from langgraph_pipeline.shared.dotenv import load_dotenv_files
 from langgraph_pipeline.shared.langsmith import configure_tracing
 from langgraph_pipeline.shared.paths import LANGGRAPH_PID_FILE_PATH
+from langgraph_pipeline.shared.shutdown import register_shutdown_event
 from langgraph_pipeline.shared.suspension import SUSPENDED_DIR, clear_suspension_marker
 from langgraph_pipeline.shared.hot_reload import CodeChangeMonitor, _perform_restart
 from langgraph_pipeline.shared.quota import QUOTA_PROBE_INTERVAL_SECONDS, probe_quota_available
@@ -855,6 +856,7 @@ def main() -> int:
     _write_pid_file()
 
     shutdown_event = threading.Event()
+    register_shutdown_event(shutdown_event)
     _register_signal_handlers(shutdown_event)
 
     exit_code = EXIT_CODE_CLEAN
