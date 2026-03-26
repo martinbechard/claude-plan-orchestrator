@@ -66,3 +66,5 @@ sections:
     result_message: Updated server.py runs_multipart and runs_create to extract model
       from extra.invocation_params/metadata and call propagate_model_to_root(); routes/proxy.py
       _enrich_run() was already correct. Added 7 new tests. All 1512 tests pass.
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
