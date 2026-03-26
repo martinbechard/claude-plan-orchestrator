@@ -56,3 +56,5 @@ sections:
       Slack message on empty call_claude response, add_error() called on empty response,
       quota fallback message contains quota, add_error() called on quota exhaustion.
       All 66 suspension tests pass; 1536 total pass (4 pre-existing failures in test_execution_cost_log.py).'
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
