@@ -332,19 +332,126 @@ class TracingProxy:
         except Exception:
             logger.debug("TracingProxy: failed to record completion for %s", slug, exc_info=True)
 
-    def list_completions(self, limit: int = COMPLETIONS_LIMIT) -> list[dict]:
-        """Return the most recent completions ordered by finished_at descending.
+    def list_completions(
+        self,
+        page: int = 1,
+        page_size: int = COMPLETIONS_LIMIT,
+        slug: str = "",
+        outcome: str = "",
+        date_from: str = "",
+        date_to: str = "",
+    ) -> list[dict]:
+        """Return completions ordered by finished_at descending, with optional filters.
+
+        The dashboard SSE feed calls this with no arguments and receives the most
+        recent COMPLETIONS_LIMIT rows (page=1, page_size=COMPLETIONS_LIMIT).
+        The /completions route passes explicit pagination and filter params.
 
         Args:
-            limit: Maximum number of rows to return.
+            page: 1-based page number.
+            page_size: Number of rows per page.
+            slug: Filter on slug containing this substring (case-insensitive).
+            outcome: Filter on exact outcome value (e.g. "success", "warn", "fail").
+            date_from: ISO date string lower bound for finished_at (inclusive).
+            date_to: ISO date string upper bound for finished_at (inclusive).
 
         Returns:
             List of dicts with keys: slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id.
         """
-        sql = "SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id FROM completions ORDER BY finished_at DESC LIMIT ?"
+        conditions, params = self._completions_filter(slug, outcome, date_from, date_to)
+        where = " AND ".join(conditions) if conditions else "1"
+        offset = (page - 1) * page_size
+        params.extend([page_size, offset])
+        sql = f"""
+            SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id
+            FROM completions
+            WHERE {where}
+            ORDER BY finished_at DESC
+            LIMIT ? OFFSET ?
+        """
         with self._connect() as conn:
-            rows = conn.execute(sql, [limit]).fetchall()
+            rows = conn.execute(sql, params).fetchall()
         return [dict(row) for row in rows]
+
+    def count_completions(
+        self,
+        slug: str = "",
+        outcome: str = "",
+        date_from: str = "",
+        date_to: str = "",
+    ) -> int:
+        """Return total count of completions matching the given filters.
+
+        Uses the same filter logic as list_completions but returns only the count.
+
+        Args:
+            slug: Filter on slug containing this substring (case-insensitive).
+            outcome: Filter on exact outcome value (e.g. "success", "warn", "fail").
+            date_from: ISO date string lower bound for finished_at (inclusive).
+            date_to: ISO date string upper bound for finished_at (inclusive).
+        """
+        conditions, params = self._completions_filter(slug, outcome, date_from, date_to)
+        where = " AND ".join(conditions) if conditions else "1"
+        sql = f"SELECT COUNT(*) FROM completions WHERE {where}"
+        with self._connect() as conn:
+            row = conn.execute(sql, params).fetchone()
+        return row[0] if row else 0
+
+    def sum_completions_cost(
+        self,
+        slug: str = "",
+        outcome: str = "",
+        date_from: str = "",
+        date_to: str = "",
+    ) -> float:
+        """Return sum of cost_usd for completions matching the given filters.
+
+        Args:
+            slug: Filter on slug containing this substring (case-insensitive).
+            outcome: Filter on exact outcome value (e.g. "success", "warn", "fail").
+            date_from: ISO date string lower bound for finished_at (inclusive).
+            date_to: ISO date string upper bound for finished_at (inclusive).
+        """
+        conditions, params = self._completions_filter(slug, outcome, date_from, date_to)
+        where = " AND ".join(conditions) if conditions else "1"
+        sql = f"SELECT COALESCE(SUM(cost_usd), 0.0) FROM completions WHERE {where}"
+        with self._connect() as conn:
+            row = conn.execute(sql, params).fetchone()
+        return float(row[0]) if row else 0.0
+
+    def _completions_filter(
+        self,
+        slug: str,
+        outcome: str,
+        date_from: str,
+        date_to: str,
+    ) -> tuple[list[str], list]:
+        """Build WHERE clause conditions and params for completions queries.
+
+        Args:
+            slug: Substring match on slug (case-insensitive).
+            outcome: Exact match on outcome.
+            date_from: ISO date lower bound for finished_at.
+            date_to: ISO date upper bound for finished_at.
+
+        Returns:
+            Tuple of (conditions list, params list).
+        """
+        conditions: list[str] = []
+        params: list = []
+        if slug:
+            conditions.append("slug LIKE ?")
+            params.append(f"%{slug}%")
+        if outcome:
+            conditions.append("outcome = ?")
+            params.append(outcome)
+        if date_from:
+            conditions.append("finished_at >= ?")
+            params.append(date_from)
+        if date_to:
+            conditions.append("finished_at <= ?")
+            params.append(date_to)
+        return conditions, params
 
     def list_completions_by_slug(self, slug: str) -> list[dict]:
         """Return all completions for the given slug, ordered by finished_at descending.
