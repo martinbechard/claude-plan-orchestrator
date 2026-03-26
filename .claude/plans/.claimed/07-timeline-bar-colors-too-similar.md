@@ -34,3 +34,5 @@ Text contrast colors should also be updated to match.
 
 Update the bar_color() and text_color() macros in proxy_trace.html to use
 the new palette. Update the legend rect fills to match.
+
+## LangSmith Trace: dd2de2fd-c5cb-4dcc-baef-3736eea85ed7
