@@ -85,7 +85,10 @@ function renderWorkers(workers) {
     card.setAttribute("aria-label", "Worker: " + w.slug);
 
     const slugEl = clone.querySelector(".worker-slug");
-    slugEl.textContent = w.slug;
+    const slugLink = document.createElement("a");
+    slugLink.href = "/item/" + encodeURIComponent(w.slug);
+    slugLink.textContent = w.slug;
+    slugEl.appendChild(slugLink);
 
     const typeEl = clone.querySelector(".item-type-badge");
     typeEl.textContent = w.item_type;
@@ -129,7 +132,11 @@ function renderCompletions(completions) {
   completions.forEach(function(c) {
     const clone = stampTemplate("tpl-completion-row");
 
-    clone.querySelector(".completion-slug").textContent = c.slug;
+    const completionSlugEl = clone.querySelector(".completion-slug");
+    const completionSlugLink = document.createElement("a");
+    completionSlugLink.href = "/item/" + encodeURIComponent(c.slug);
+    completionSlugLink.textContent = c.slug;
+    completionSlugEl.appendChild(completionSlugLink);
 
     const typeEl = clone.querySelector(".item-type-badge");
     typeEl.textContent = c.item_type;
