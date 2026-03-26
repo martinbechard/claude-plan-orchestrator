@@ -273,7 +273,7 @@
       <span class="disabled" aria-disabled="true">&larr; Previous</span>
     {% endif %}
 
-    <span>Page {{ page }} of {{ total_pages }}</span>
+    <span class="pagination-page-info">Page {{ page }} of {{ total_pages }}</span>
 
     {% if has_next %}
       {% set next_page = page + 1 %}

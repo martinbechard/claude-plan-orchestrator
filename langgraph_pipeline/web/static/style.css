@@ -213,9 +213,15 @@ details[open] > summary::before { content: "▼"; }
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 0.75rem 0;
+    padding: 0.75rem 0 0.75rem 2px;
     font-size: 13px;
     color: #555;
+}
+
+.pagination-page-info {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
 }
 
 .pagination a {
@@ -758,6 +764,12 @@ svg.gantt text { font-family: inherit; }
 .timeline-bar--defect   { background: #f97316; }
 .timeline-bar--feature  { background: #06b6d4; }
 .timeline-bar--analysis { background: #eab308; }
+
+/* Velocity colour mode — thermal gradient: blue → green → yellow → red */
+.timeline-bar--vel-none   { background: #9090b0; }
+.timeline-bar--vel-low    { background: #2563eb; }
+.timeline-bar--vel-medium { background: #16a34a; }
+.timeline-bar--vel-high   { background: #dc2626; }
 
 /* Completion bars: semi-transparent, with outcome left border */
 .timeline-bar--completion {
