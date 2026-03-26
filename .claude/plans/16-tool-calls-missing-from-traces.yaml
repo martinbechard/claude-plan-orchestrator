@@ -20,13 +20,16 @@ sections:
   - id: '1.1'
     name: Fetch grandchildren in proxy_trace route and extend span_s
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the backend changes described in: .claude/plans/.claimed/16-tool-calls-missing-from-traces.md
 
 
       Design doc: docs/plans/2026-03-26-16-tool-calls-missing-from-traces-design.md
 
       '
+    last_attempt: '2026-03-26T10:55:17.440671'
+    attempts: 1
+    model_used: sonnet
   - id: '1.2'
     name: Render grandchild rows in SVG timeline and expandable detail section
     agent: frontend-coder
