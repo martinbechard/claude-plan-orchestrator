@@ -49,5 +49,3 @@ supervisor can read and store.
 - Feature 06: work item detail page (where notes are displayed)
 - Defect 19: validator marks incomplete work as done (related — better
   notes would make false completions visible)
-
-## LangSmith Trace: 864de87a-7247-4574-9b96-82b26d645059
