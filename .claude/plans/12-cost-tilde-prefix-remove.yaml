@@ -1,0 +1,41 @@
+meta:
+  source_item: .claude/plans/.claimed/12-cost-tilde-prefix-remove.md
+  item_type: defect
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Remove tilde prefix from all cost displays
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Remove ~ from cost strings in Python backend and test files
+    agent: coder
+    description: 'Implement the work item: .claude/plans/.claimed/12-cost-tilde-prefix-remove.md
+
+
+      See design doc at docs/plans/2026-03-26-12-cost-tilde-prefix-remove-design.md
+      for the full list of files. Remove the ~ character from all cost format strings
+      in: langgraph_pipeline/shared/budget.py, langgraph_pipeline/supervisor.py, langgraph_pipeline/cli.py,
+      langgraph_pipeline/worker.py, langgraph_pipeline/executor/nodes/task_runner.py,
+      langgraph_pipeline/pipeline/nodes/execute_plan.py, scripts/plan-orchestrator.py,
+      langgraph_pipeline/web/routes/proxy.py. Also update tests/test_token_usage.py
+      assertions from ~$ to $. Run the full test suite after.'
+    status: pending
+  - id: '1.2'
+    name: Remove ~ from cost displays in frontend templates
+    agent: frontend-coder
+    description: 'Implement the work item: .claude/plans/.claimed/12-cost-tilde-prefix-remove.md
+
+
+      See design doc at docs/plans/2026-03-26-12-cost-tilde-prefix-remove-design.md.
+      Remove the ~ character from cost displays in: langgraph_pipeline/web/static/dashboard.js
+      (formatCost function), langgraph_pipeline/web/templates/analysis.html (column
+      headers and cell values).'
+    status: pending
