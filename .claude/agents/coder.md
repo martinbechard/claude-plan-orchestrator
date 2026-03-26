@@ -68,6 +68,21 @@ These are the key rules from CODING-RULES.md. Read the full document for details
 - **No TODO/FIXME comments.** Use the YAML plan to track remaining work. Remove
   development-phase comments before task completion.
 
+## Test Data Discipline
+
+- **Clean up after yourself.** If you insert test data into a database, file, or
+  config to verify your code works, you MUST delete it before marking the task
+  complete. Verify the feature displays the correct empty state after cleanup.
+- **Use random values for test fixtures.** When creating test data, use random or
+  UUID-based values that are clearly distinguishable from real data. Never use
+  round numbers (100, 50, 0.01) or obvious placeholders ("test-item", "foo.py",
+  "example.com") in production databases or files. Use values like
+  cost=random(0.1, 5.0), tokens=random(500, 50000), slug="test-{uuid[:8]}".
+  This prevents the validator from mistaking leftover test data for real results.
+- **Test data belongs in test files only.** Test fixtures in unit tests (under
+  tests/) are fine. Test data inserted into production databases, config files,
+  or the filesystem during implementation must be ephemeral and cleaned up.
+
 ## Output Protocol
 
 When your task is complete, write a status file to .claude/plans/task-status.json:

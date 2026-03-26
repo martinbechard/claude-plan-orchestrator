@@ -62,10 +62,16 @@ server, it MUST report WARN with the note:
 Do NOT silently pass criteria that require runtime behavior.
 
 **5c. Test-data leak check**
-Grep all modified source files and DB migrations for known test-fixture strings
-such as: foo.py, 12-test-item, test-slug, example.com (in non-test
-files), hardcoded, mock_data.
-Any hit in a file that should not contain test data = WARN.
+Grep all modified source files, DB migrations, AND production databases for
+known test-fixture patterns:
+- Strings: foo.py, test-item, test-slug, example.com, placeholder, dummy,
+  mock_data, lorem ipsum, hardcoded
+- Suspicious round numbers in data: cost=0.01, tokens=100, tokens=50,
+  duration=0 in rows that claim to be real data
+- If the task involves a database, query for rows that look like test fixtures
+  (e.g. SELECT * FROM cost_tasks WHERE item_slug LIKE '%test%')
+Any test data found in production databases or non-test files = FAIL (not WARN).
+The coder is required to clean up test data before completion.
 
 ## Output Format
 

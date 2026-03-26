@@ -346,6 +346,17 @@ These rules address failure modes specific to AI code generation.
   - **BECAUSE:** In an orchestrated workflow, each task runs in a fresh session. If the task
     doesn't commit, the work vanishes.
 
+- **RULE:** Clean up all test data inserted into production databases, config files, or
+  the filesystem before marking a task complete. Verify the empty state renders correctly.
+  - **BECAUSE:** Leftover test data masks missing integration (the page "works" but only
+    because of fake data). The validator will mistake test output for real results.
+
+- **RULE:** When creating test fixtures during implementation, use random or UUID-based
+  values — never round numbers (100, 50, 0.01) or obvious placeholders ("test-item",
+  "foo.py"). Test fixtures in unit test files (under tests/) are exempt.
+  - **BECAUSE:** Round-number fixtures are indistinguishable from real data at a glance.
+    Random values make it obvious when test data has leaked into production.
+
 ---
 
 ## Adapting These Rules
