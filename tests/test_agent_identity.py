@@ -1,10 +1,8 @@
 # tests/test_agent_identity.py
 # Unit tests for Agent Identity Protocol.
-# Design ref: plan for agent identity in shared Slack channels.
+# Design ref: docs/plans/2026-02-26-03-extract-slack-modules-design.md
 
-import importlib.util
 import json
-import re
 import time
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -12,34 +10,52 @@ from unittest.mock import patch, MagicMock
 import pytest
 import yaml
 
-# plan-orchestrator.py has a hyphen in the filename, so we must use importlib
-# to load it as a module under a valid Python identifier.
-spec = importlib.util.spec_from_file_location(
-    "plan_orchestrator", "scripts/plan-orchestrator.py"
+from langgraph_pipeline.slack.identity import (
+    AgentIdentity,
+    load_agent_identity,
+    AGENT_ROLE_PIPELINE,
+    AGENT_ROLE_ORCHESTRATOR,
+    AGENT_ROLE_INTAKE,
+    AGENT_ROLE_QA,
+    AGENT_ROLES,
+    AGENT_ADDRESS_PATTERN,
 )
-mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mod)
+from langgraph_pipeline.slack.notifier import (
+    SlackNotifier,
+    SLACK_BLOCK_TEXT_MAX_LENGTH,
+)
+from langgraph_pipeline.slack.poller import (
+    SlackPoller,
+    MAX_SELF_REPLIES_PER_WINDOW,
+    LOOP_DETECTION_WINDOW_SECONDS,
+    MESSAGE_TRACKING_TTL_SECONDS,
+    BOT_NOTIFICATION_PATTERN,
+    MAX_INTAKES_PER_WINDOW,
+    INTAKE_RATE_WINDOW_SECONDS,
+    BACKLOG_CREATION_THROTTLE_PATH,
+    MAX_DEFECTS_PER_HOUR,
+    MAX_FEATURES_PER_HOUR,
+    BACKLOG_THROTTLE_WINDOW_SECONDS,
+)
 
-AgentIdentity = mod.AgentIdentity
-load_agent_identity = mod.load_agent_identity
-SlackNotifier = mod.SlackNotifier
-AGENT_ROLE_PIPELINE = mod.AGENT_ROLE_PIPELINE
-AGENT_ROLE_ORCHESTRATOR = mod.AGENT_ROLE_ORCHESTRATOR
-AGENT_ROLE_INTAKE = mod.AGENT_ROLE_INTAKE
-AGENT_ROLE_QA = mod.AGENT_ROLE_QA
-AGENT_ROLES = mod.AGENT_ROLES
-AGENT_ADDRESS_PATTERN = mod.AGENT_ADDRESS_PATTERN
-SLACK_BLOCK_TEXT_MAX_LENGTH = mod.SLACK_BLOCK_TEXT_MAX_LENGTH
-MAX_SELF_REPLIES_PER_WINDOW = mod.MAX_SELF_REPLIES_PER_WINDOW
-LOOP_DETECTION_WINDOW_SECONDS = mod.LOOP_DETECTION_WINDOW_SECONDS
-MESSAGE_TRACKING_TTL_SECONDS = mod.MESSAGE_TRACKING_TTL_SECONDS
-BOT_NOTIFICATION_PATTERN = mod.BOT_NOTIFICATION_PATTERN
-MAX_INTAKES_PER_WINDOW = mod.MAX_INTAKES_PER_WINDOW
-INTAKE_RATE_WINDOW_SECONDS = mod.INTAKE_RATE_WINDOW_SECONDS
-BACKLOG_CREATION_THROTTLE_PATH = mod.BACKLOG_CREATION_THROTTLE_PATH
-MAX_DEFECTS_PER_HOUR = mod.MAX_DEFECTS_PER_HOUR
-MAX_FEATURES_PER_HOUR = mod.MAX_FEATURES_PER_HOUR
-BACKLOG_THROTTLE_WINDOW_SECONDS = mod.BACKLOG_THROTTLE_WINDOW_SECONDS
+
+def _write_disabled_config(tmp_path) -> str:
+    """Write a disabled slack config file and return its path."""
+    config_file = tmp_path / "slack.yaml"
+    config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
+    return str(config_file)
+
+
+def _make_disabled_notifier(config_path: str) -> SlackNotifier:
+    """Create a disabled SlackNotifier for testing."""
+    return SlackNotifier(config_path=config_path)
+
+
+def _make_disabled_poller() -> SlackPoller:
+    """Create a disabled SlackPoller with empty credentials for testing."""
+    return SlackPoller(
+        bot_token="", channel_id="", channel_prefix="orchestrator-", enabled=False
+    )
 
 
 # ─── load_agent_identity tests ─────────────────────────────────────
@@ -188,8 +204,6 @@ class TestRegexPatterns:
         # email should not match because '@' is preceded by a word character,
         # but our pattern matches after any non-< char, so check behavior
         matches = AGENT_ADDRESS_PATTERN.findall(text)
-        # 'user@example' - the @ is preceded by 'r' not '<', so it matches 'example'
-        # This is acceptable; the pattern is for agent names, not emails
         # The important thing is Slack <@U...> mentions are excluded
         assert "U12345" not in matches  # Just verify no Slack mentions leak
 
@@ -202,9 +216,7 @@ class TestOutboundSigning:
 
     def _make_notifier(self, tmp_path):
         """Create a disabled SlackNotifier for testing."""
-        config_file = tmp_path / "slack.yaml"
-        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
-        return SlackNotifier(config_path=str(config_file))
+        return _make_disabled_notifier(_write_disabled_config(tmp_path))
 
     def test_sign_text_with_identity(self, tmp_path):
         """_sign_text appends agent signature when identity is set."""
@@ -274,11 +286,9 @@ class TestOutboundSigning:
 class TestInboundFiltering:
     """Tests for identity-based inbound message filtering in _handle_polled_messages."""
 
-    def _make_notifier_with_identity(self, tmp_path):
-        """Create a SlackNotifier with identity for testing."""
-        config_file = tmp_path / "slack.yaml"
-        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
-        notifier = SlackNotifier(config_path=str(config_file))
+    def _make_poller_with_identity(self, tmp_path):
+        """Create a SlackPoller with identity for testing."""
+        poller = _make_disabled_poller()
         identity = AgentIdentity(
             project="test",
             agents={
@@ -288,42 +298,42 @@ class TestInboundFiltering:
                 "qa": "Test-QA",
             },
         )
-        notifier.set_identity(identity, AGENT_ROLE_ORCHESTRATOR)
-        return notifier
+        poller._agent_identity = identity
+        return poller
 
     def test_skip_own_signature(self, tmp_path):
         """Messages signed by our own agent are skipped."""
-        notifier = self._make_notifier_with_identity(tmp_path)
+        poller = self._make_poller_with_identity(tmp_path)
         messages = [
             {"text": "Task done \u2014 *Test-Orchestrator*", "user": "bot", "ts": "1",
              "_channel_name": "orchestrator-notifications", "_channel_id": "C1"}
         ]
         # Should not raise and should not trigger any routing
-        notifier._handle_polled_messages(messages)
+        poller._handle_polled_messages(messages)
 
     def test_skip_addressed_to_other(self, tmp_path):
         """Messages addressed only to another agent are skipped."""
-        notifier = self._make_notifier_with_identity(tmp_path)
+        poller = self._make_poller_with_identity(tmp_path)
         messages = [
             {"text": "@Other-Pipeline please check this", "user": "human", "ts": "2",
              "_channel_name": "orchestrator-notifications", "_channel_id": "C1"}
         ]
-        notifier._handle_polled_messages(messages)
+        poller._handle_polled_messages(messages)
 
     def test_process_addressed_to_us(self, tmp_path):
         """Messages addressed to one of our agents are processed."""
-        notifier = self._make_notifier_with_identity(tmp_path)
+        poller = self._make_poller_with_identity(tmp_path)
         text = "@Test-Orchestrator what is the status?"
 
         # Verify address pattern identifies the message as directed at us
         addresses = set(AGENT_ADDRESS_PATTERN.findall(text))
-        our_names = notifier._agent_identity.all_names()
+        our_names = poller._agent_identity.all_names()
         addressed_to_us = bool(addresses & our_names)
         assert addressed_to_us is True
 
     def test_process_broadcast(self, tmp_path):
         """Messages without any @addressing are broadcast and processed."""
-        notifier = self._make_notifier_with_identity(tmp_path)
+        poller = self._make_poller_with_identity(tmp_path)
         text = "General status update for everyone"
         addresses = set(AGENT_ADDRESS_PATTERN.findall(text))
         assert len(addresses) == 0  # No addressing = broadcast
@@ -338,10 +348,10 @@ class TestInboundFiltering:
 
     def test_mixed_addressing_includes_us(self, tmp_path):
         """Messages addressed to us AND others are still processed."""
-        notifier = self._make_notifier_with_identity(tmp_path)
+        poller = self._make_poller_with_identity(tmp_path)
         text = "@Other-Agent and @Test-Pipeline please coordinate"
         addresses = set(AGENT_ADDRESS_PATTERN.findall(text))
-        our_names = notifier._agent_identity.all_names()
+        our_names = poller._agent_identity.all_names()
 
         addressed_to_us = bool(addresses & our_names)
         addressed_to_others = bool(addresses - our_names)
@@ -357,9 +367,7 @@ class TestRoleSwitching:
     """Tests for the _as_role context manager."""
 
     def _make_notifier(self, tmp_path):
-        config_file = tmp_path / "slack.yaml"
-        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
-        return SlackNotifier(config_path=str(config_file))
+        return _make_disabled_notifier(_write_disabled_config(tmp_path))
 
     def test_role_switch_and_restore(self, tmp_path):
         """_as_role switches role and restores it on exit."""
@@ -418,11 +426,9 @@ class TestRoleSwitching:
 class TestDedupAndLoopDetection:
     """Tests for dedup and loop detection in _handle_polled_messages."""
 
-    def _make_notifier(self, tmp_path):
-        """Create a disabled SlackNotifier with identity."""
-        config_file = tmp_path / "slack.yaml"
-        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
-        notifier = SlackNotifier(config_path=str(config_file))
+    def _make_poller(self, tmp_path):
+        """Create a disabled SlackPoller with identity."""
+        poller = _make_disabled_poller()
         identity = AgentIdentity(
             project="test",
             agents={
@@ -432,8 +438,8 @@ class TestDedupAndLoopDetection:
                 "qa": "Test-QA",
             },
         )
-        notifier.set_identity(identity, AGENT_ROLE_ORCHESTRATOR)
-        return notifier
+        poller._agent_identity = identity
+        return poller
 
     def _channel_msg(self, ts, text="Hello"):
         return {
@@ -444,25 +450,25 @@ class TestDedupAndLoopDetection:
             "_channel_id": "C1",
         }
 
-    def _patch_routing(self, notifier):
+    def _patch_routing(self, poller):
         """Patch routing methods to capture calls without triggering LLM."""
         routed = []
-        notifier._get_channel_role = lambda ch: None
-        notifier._route_message_via_llm = lambda text: MagicMock()
-        notifier._execute_routed_action = lambda *a, **kw: routed.append(a)
+        poller._get_channel_role = lambda ch: None
+        poller._route_message_via_llm = lambda text: MagicMock()
+        poller._execute_routed_action = lambda *a, **kw: routed.append(a)
         return routed
 
     def test_dedup_skips_already_processed_ts(self, tmp_path):
         """A ts already in _processed_message_ts is skipped on second encounter."""
-        notifier = self._make_notifier(tmp_path)
-        routed = self._patch_routing(notifier)
+        poller = self._make_poller(tmp_path)
+        routed = self._patch_routing(poller)
 
         msg = self._channel_msg("100.0", "First delivery")
-        notifier._handle_polled_messages([msg])
+        poller._handle_polled_messages([msg])
         first_routed = len(routed)
 
         # Second delivery of the same ts must be skipped
-        notifier._handle_polled_messages([msg])
+        poller._handle_polled_messages([msg])
         assert len(routed) == first_routed, "Duplicate ts must not reach routing"
 
     def test_self_origin_accepted_under_rate_limit(self, tmp_path):
@@ -471,15 +477,15 @@ class TestDedupAndLoopDetection:
         With MAX_SELF_REPLIES_PER_WINDOW=1, the first self-origin message
         with an empty window should be accepted.
         """
-        notifier = self._make_notifier(tmp_path)
-        routed = self._patch_routing(notifier)
+        poller = self._make_poller(tmp_path)
+        routed = self._patch_routing(poller)
 
         ts = "200.0"
-        notifier._own_sent_ts.add(ts)
+        poller._own_sent_ts.add(ts)
         # Empty window: 0 recent entries, below threshold of 1
-        notifier._self_reply_window["C1"] = []
+        poller._self_reply_window["C1"] = []
 
-        notifier._handle_polled_messages([self._channel_msg(ts)])
+        poller._handle_polled_messages([self._channel_msg(ts)])
         assert len(routed) > 0, "Self-origin message under limit must reach routing"
 
     def test_loop_detected_skips_message(self, tmp_path):
@@ -488,45 +494,45 @@ class TestDedupAndLoopDetection:
         With MAX_SELF_REPLIES_PER_WINDOW=1 and LOOP_DETECTION_WINDOW_SECONDS=300,
         having 1 recent entry in the window triggers the loop detector.
         """
-        notifier = self._make_notifier(tmp_path)
-        routed = self._patch_routing(notifier)
+        poller = self._make_poller(tmp_path)
+        routed = self._patch_routing(poller)
 
         ts = "300.0"
-        notifier._own_sent_ts.add(ts)
+        poller._own_sent_ts.add(ts)
         # At threshold: 1 recent entry within the 300s window
         now = time.monotonic()
-        notifier._self_reply_window["C1"] = [now - 10]
+        poller._self_reply_window["C1"] = [now - 10]
 
-        notifier._handle_polled_messages([self._channel_msg(ts)])
+        poller._handle_polled_messages([self._channel_msg(ts)])
         assert len(routed) == 0, "Self-origin message at loop threshold must be skipped"
 
     def test_prune_removes_old_entries(self, tmp_path):
         """_prune_message_tracking removes expired ts entries and old window slots."""
-        notifier = self._make_notifier(tmp_path)
+        poller = self._make_poller(tmp_path)
 
         old_ts = str(time.time() - MESSAGE_TRACKING_TTL_SECONDS - 1)
         recent_ts = str(time.time() - 10)
 
-        notifier._processed_message_ts.update({old_ts, recent_ts})
-        notifier._own_sent_ts.add(old_ts)
+        poller._processed_message_ts.update({old_ts, recent_ts})
+        poller._own_sent_ts.add(old_ts)
 
         # Expired window slot (older than LOOP_DETECTION_WINDOW_SECONDS)
         old_slot = time.monotonic() - LOOP_DETECTION_WINDOW_SECONDS - 1
         recent_slot = time.monotonic() - 5
-        notifier._self_reply_window["C1"] = [old_slot, recent_slot]
+        poller._self_reply_window["C1"] = [old_slot, recent_slot]
 
-        notifier._prune_message_tracking()
+        poller._prune_message_tracking()
 
-        assert old_ts not in notifier._processed_message_ts
-        assert recent_ts in notifier._processed_message_ts
-        assert old_ts not in notifier._own_sent_ts
+        assert old_ts not in poller._processed_message_ts
+        assert recent_ts in poller._processed_message_ts
+        assert old_ts not in poller._own_sent_ts
         # Old window slot pruned; recent slot kept
-        assert recent_slot in notifier._self_reply_window.get("C1", [])
-        assert old_slot not in notifier._self_reply_window.get("C1", [])
+        assert recent_slot in poller._self_reply_window.get("C1", [])
+        assert old_slot not in poller._self_reply_window.get("C1", [])
 
     def test_post_message_records_ts_in_own_sent_ts(self, tmp_path):
         """_post_message stores the returned ts in _own_sent_ts."""
-        notifier = self._make_notifier(tmp_path)
+        notifier = _make_disabled_notifier(_write_disabled_config(tmp_path))
         notifier._bot_token = "xoxb-test"
         notifier._channel_id = "C1"
 
@@ -599,18 +605,16 @@ class TestBotNotificationPattern:
 
     def test_notification_filter_skips_in_handle_polled(self, tmp_path):
         """_handle_polled_messages skips bot notification messages."""
-        config_file = tmp_path / "slack.yaml"
-        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
-        notifier = SlackNotifier(config_path=str(config_file))
+        poller = _make_disabled_poller()
         identity = AgentIdentity(project="test", agents={
             "orchestrator": "Test-Orchestrator",
         })
-        notifier.set_identity(identity, AGENT_ROLE_ORCHESTRATOR)
+        poller._agent_identity = identity
 
         routed = []
-        notifier._get_channel_role = lambda ch: None
-        notifier._route_message_via_llm = lambda text: MagicMock()
-        notifier._execute_routed_action = lambda *a, **kw: routed.append(a)
+        poller._get_channel_role = lambda ch: None
+        poller._route_message_via_llm = lambda text: MagicMock()
+        poller._execute_routed_action = lambda *a, **kw: routed.append(a)
 
         msg = {
             "text": ":white_check_mark: *Defect received* (#100 - test.md)",
@@ -619,7 +623,7 @@ class TestBotNotificationPattern:
             "_channel_name": "orchestrator-notifications",
             "_channel_id": "C1",
         }
-        notifier._handle_polled_messages([msg])
+        poller._handle_polled_messages([msg])
         assert len(routed) == 0, "Bot notification message must be skipped"
 
 
@@ -629,48 +633,46 @@ class TestBotNotificationPattern:
 class TestChainDetection:
     """Tests for intake history chain-loop detection."""
 
-    def _make_notifier(self, tmp_path):
-        config_file = tmp_path / "slack.yaml"
-        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
-        notifier = SlackNotifier(config_path=str(config_file))
+    def _make_poller(self, tmp_path):
+        poller = _make_disabled_poller()
         identity = AgentIdentity(project="test", agents={
             "orchestrator": "Test-Orchestrator",
         })
-        notifier.set_identity(identity, AGENT_ROLE_ORCHESTRATOR)
-        return notifier
+        poller._agent_identity = identity
+        return poller
 
     def test_detects_item_number_reference(self, tmp_path):
         """Chain detection catches text referencing a recently created item."""
-        notifier = self._make_notifier(tmp_path)
-        notifier._intake_history = [
+        poller = self._make_poller(tmp_path)
+        poller._intake_history = [
             {"item_number": 17552, "slug": "some-defect", "title_summary": "test",
              "timestamp": time.time()},
         ]
         text = ":white_check_mark: Defect received (#17552 - some-defect.md)"
-        assert notifier._is_chain_loop_artifact(text) is True
+        assert poller._is_chain_loop_artifact(text) is True
 
     def test_does_not_match_unrelated_text(self, tmp_path):
         """Chain detection does not false-positive on unrelated text."""
-        notifier = self._make_notifier(tmp_path)
-        notifier._intake_history = [
+        poller = self._make_poller(tmp_path)
+        poller._intake_history = [
             {"item_number": 17552, "slug": "some-defect", "title_summary": "test",
              "timestamp": time.time()},
         ]
         text = "The login button is broken on mobile browsers"
-        assert notifier._is_chain_loop_artifact(text) is False
+        assert poller._is_chain_loop_artifact(text) is False
 
     def test_chain_filter_skips_in_handle_polled(self, tmp_path):
         """_handle_polled_messages skips chain loop artifacts."""
-        notifier = self._make_notifier(tmp_path)
-        notifier._intake_history = [
+        poller = self._make_poller(tmp_path)
+        poller._intake_history = [
             {"item_number": 42, "slug": "login-bug", "title_summary": "Login bug",
              "timestamp": time.time()},
         ]
 
         routed = []
-        notifier._get_channel_role = lambda ch: None
-        notifier._route_message_via_llm = lambda text: MagicMock()
-        notifier._execute_routed_action = lambda *a, **kw: routed.append(a)
+        poller._get_channel_role = lambda ch: None
+        poller._route_message_via_llm = lambda text: MagicMock()
+        poller._execute_routed_action = lambda *a, **kw: routed.append(a)
 
         msg = {
             "text": "Defect created (#42 - login-bug.md): Login bug",
@@ -679,7 +681,7 @@ class TestChainDetection:
             "_channel_name": "orchestrator-defects",
             "_channel_id": "C2",
         }
-        notifier._handle_polled_messages([msg])
+        poller._handle_polled_messages([msg])
         assert len(routed) == 0, "Chain loop artifact must be skipped"
 
 
@@ -689,33 +691,31 @@ class TestChainDetection:
 class TestIntakeRateLimiter:
     """Tests for the global intake rate limiter."""
 
-    def _make_notifier(self, tmp_path):
-        config_file = tmp_path / "slack.yaml"
-        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
-        return SlackNotifier(config_path=str(config_file))
+    def _make_poller(self, tmp_path):
+        return _make_disabled_poller()
 
     def test_under_limit_allows(self, tmp_path):
         """Rate limiter allows intakes when under the threshold."""
-        notifier = self._make_notifier(tmp_path)
-        assert notifier._check_intake_rate_limit() is False
+        poller = self._make_poller(tmp_path)
+        assert poller._check_intake_rate_limit() is False
 
     def test_at_limit_blocks(self, tmp_path):
         """Rate limiter blocks when at MAX_INTAKES_PER_WINDOW."""
-        notifier = self._make_notifier(tmp_path)
+        poller = self._make_poller(tmp_path)
         now = time.time()
-        notifier._intake_timestamps = [
+        poller._intake_timestamps = [
             now - i for i in range(MAX_INTAKES_PER_WINDOW)
         ]
-        assert notifier._check_intake_rate_limit() is True
+        assert poller._check_intake_rate_limit() is True
 
     def test_old_entries_pruned(self, tmp_path):
         """Rate limiter prunes entries outside the window."""
-        notifier = self._make_notifier(tmp_path)
+        poller = self._make_poller(tmp_path)
         old_time = time.time() - INTAKE_RATE_WINDOW_SECONDS - 10
-        notifier._intake_timestamps = [
+        poller._intake_timestamps = [
             old_time - i for i in range(MAX_INTAKES_PER_WINDOW)
         ]
-        assert notifier._check_intake_rate_limit() is False
+        assert poller._check_intake_rate_limit() is False
 
 
 # ─── Disk-persisted backlog creation throttle tests ───────────────
@@ -724,17 +724,15 @@ class TestIntakeRateLimiter:
 class TestBacklogCreationThrottle:
     """Tests for the disk-persisted backlog creation throttle."""
 
-    def _make_notifier(self, tmp_path):
-        config_file = tmp_path / "slack.yaml"
-        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
-        return SlackNotifier(config_path=str(config_file))
+    def _make_poller(self, tmp_path):
+        return _make_disabled_poller()
 
     def _throttle_path(self, tmp_path):
         return str(tmp_path / "throttle.json")
 
     def test_allows_under_limit(self, tmp_path):
         """Throttle allows creation when under the per-type limit."""
-        notifier = self._make_notifier(tmp_path)
+        poller = self._make_poller(tmp_path)
         throttle_file = self._throttle_path(tmp_path)
         now = time.time()
         # Pre-fill with a few entries (well under MAX_DEFECTS_PER_HOUR)
@@ -742,12 +740,12 @@ class TestBacklogCreationThrottle:
         with open(throttle_file, "w") as f:
             json.dump(data, f)
 
-        with patch.object(mod, "BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
-            assert notifier._check_backlog_throttle("defect") is False
+        with patch("langgraph_pipeline.slack.poller.BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
+            assert poller._check_backlog_throttle("defect") is False
 
     def test_blocks_at_limit(self, tmp_path):
         """Throttle blocks creation when at the per-type limit."""
-        notifier = self._make_notifier(tmp_path)
+        poller = self._make_poller(tmp_path)
         throttle_file = self._throttle_path(tmp_path)
         now = time.time()
         # Fill with exactly MAX_DEFECTS_PER_HOUR recent entries
@@ -755,12 +753,12 @@ class TestBacklogCreationThrottle:
         with open(throttle_file, "w") as f:
             json.dump(data, f)
 
-        with patch.object(mod, "BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
-            assert notifier._check_backlog_throttle("defect") is True
+        with patch("langgraph_pipeline.slack.poller.BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
+            assert poller._check_backlog_throttle("defect") is True
 
     def test_prune_old_entries(self, tmp_path):
         """Old timestamps are pruned, allowing new creations."""
-        notifier = self._make_notifier(tmp_path)
+        poller = self._make_poller(tmp_path)
         throttle_file = self._throttle_path(tmp_path)
         old_time = time.time() - BACKLOG_THROTTLE_WINDOW_SECONDS - 100
         # All entries are expired
@@ -768,24 +766,24 @@ class TestBacklogCreationThrottle:
         with open(throttle_file, "w") as f:
             json.dump(data, f)
 
-        with patch.object(mod, "BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
-            assert notifier._check_backlog_throttle("defect") is False
+        with patch("langgraph_pipeline.slack.poller.BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
+            assert poller._check_backlog_throttle("defect") is False
 
     def test_persists_across_instances(self, tmp_path):
-        """Throttle data written by one notifier is read by another."""
+        """Throttle data written by one poller is read by another."""
         throttle_file = self._throttle_path(tmp_path)
 
-        with patch.object(mod, "BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
-            notifier1 = self._make_notifier(tmp_path)
-            notifier1._record_backlog_creation("defect")
+        with patch("langgraph_pipeline.slack.poller.BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
+            poller1 = _make_disabled_poller()
+            poller1._record_backlog_creation("defect")
 
-            notifier2 = self._make_notifier(tmp_path)
-            data = notifier2._load_backlog_throttle()
+            poller2 = _make_disabled_poller()
+            data = poller2._load_backlog_throttle()
             assert len(data.get("defect", [])) == 1
 
     def test_separate_limits_per_type(self, tmp_path):
         """Defect limit does not affect feature creation."""
-        notifier = self._make_notifier(tmp_path)
+        poller = self._make_poller(tmp_path)
         throttle_file = self._throttle_path(tmp_path)
         now = time.time()
         # Max out defects, leave features empty
@@ -793,21 +791,19 @@ class TestBacklogCreationThrottle:
         with open(throttle_file, "w") as f:
             json.dump(data, f)
 
-        with patch.object(mod, "BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
-            assert notifier._check_backlog_throttle("defect") is True
-            assert notifier._check_backlog_throttle("feature") is False
+        with patch("langgraph_pipeline.slack.poller.BACKLOG_CREATION_THROTTLE_PATH", throttle_file):
+            assert poller._check_backlog_throttle("defect") is True
+            assert poller._check_backlog_throttle("feature") is False
 
 
 # ─── Verbose FILTER logging tests ────────────────────────────────
 
 
 class TestVerboseFilterLogging:
-    """Tests that verbose_log() is called with FILTER prefix for each filtering decision."""
+    """Tests that filter decisions are printed for each filtering decision."""
 
-    def _make_notifier_with_identity(self, tmp_path):
-        config_file = tmp_path / "slack.yaml"
-        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
-        notifier = SlackNotifier(config_path=str(config_file))
+    def _make_poller_with_identity(self, tmp_path):
+        poller = _make_disabled_poller()
         identity = AgentIdentity(
             project="test",
             agents={
@@ -817,23 +813,23 @@ class TestVerboseFilterLogging:
                 "qa": "Test-QA",
             },
         )
-        notifier.set_identity(identity, AGENT_ROLE_ORCHESTRATOR)
-        return notifier
+        poller._agent_identity = identity
+        return poller
 
-    def _patch_routing(self, notifier):
-        notifier._get_channel_role = lambda ch: None
-        notifier._route_message_via_llm = lambda text: MagicMock()
-        notifier._execute_routed_action = lambda *a, **kw: None
+    def _patch_routing(self, poller):
+        poller._get_channel_role = lambda ch: None
+        poller._route_message_via_llm = lambda text: MagicMock()
+        poller._execute_routed_action = lambda *a, **kw: None
 
     def test_verbose_filter_skip_own_agent(self, tmp_path):
-        """verbose_log is called with FILTER prefix when a self-origin loop is detected."""
-        notifier = self._make_notifier_with_identity(tmp_path)
-        self._patch_routing(notifier)
+        """Filter log is emitted when a self-origin loop is detected."""
+        poller = self._make_poller_with_identity(tmp_path)
+        self._patch_routing(poller)
 
         ts = "700.0"
-        notifier._own_sent_ts.add(ts)
+        poller._own_sent_ts.add(ts)
         now = time.monotonic()
-        notifier._self_reply_window["C1"] = [now - 10] * MAX_SELF_REPLIES_PER_WINDOW
+        poller._self_reply_window["C1"] = [now - 10] * MAX_SELF_REPLIES_PER_WINDOW
 
         msg = {
             "text": "Task completed successfully",
@@ -843,18 +839,16 @@ class TestVerboseFilterLogging:
             "_channel_id": "C1",
         }
 
-        with patch.object(mod, "verbose_log") as mock_vlog:
-            notifier._handle_polled_messages([msg])
+        with patch("builtins.print") as mock_print:
+            poller._handle_polled_messages([msg])
 
-        mock_vlog.assert_called_once()
-        call_args = mock_vlog.call_args[0]
-        assert call_args[1] == "FILTER"
-        assert "Skip own-agent loop-detected" in call_args[0]
+        printed = [str(call[0][0]) for call in mock_print.call_args_list if call[0]]
+        assert any("[SLACK] Filter: skip loop-detected" in m for m in printed)
 
     def test_verbose_filter_skip_addressed_to_others(self, tmp_path):
-        """verbose_log is called with FILTER prefix when a message is addressed only to other agents."""
-        notifier = self._make_notifier_with_identity(tmp_path)
-        self._patch_routing(notifier)
+        """Filter log is emitted when a message is addressed only to other agents."""
+        poller = self._make_poller_with_identity(tmp_path)
+        self._patch_routing(poller)
 
         msg = {
             "text": "@Other-Pipeline please check this issue",
@@ -864,18 +858,16 @@ class TestVerboseFilterLogging:
             "_channel_id": "C1",
         }
 
-        with patch.object(mod, "verbose_log") as mock_vlog:
-            notifier._handle_polled_messages([msg])
+        with patch("builtins.print") as mock_print:
+            poller._handle_polled_messages([msg])
 
-        mock_vlog.assert_called_once()
-        call_args = mock_vlog.call_args[0]
-        assert call_args[1] == "FILTER"
-        assert "Skip addressed-to-others" in call_args[0]
+        printed = [str(call[0][0]) for call in mock_print.call_args_list if call[0]]
+        assert any("[SLACK] Filter: skip addressed-to-other" in m for m in printed)
 
     def test_verbose_filter_accept_addressed_to_us(self, tmp_path):
-        """verbose_log is called with FILTER prefix when a message is addressed to one of our agents."""
-        notifier = self._make_notifier_with_identity(tmp_path)
-        self._patch_routing(notifier)
+        """Filter log is emitted when a message is addressed to one of our agents."""
+        poller = self._make_poller_with_identity(tmp_path)
+        self._patch_routing(poller)
 
         msg = {
             "text": "@Test-Orchestrator what is the current status?",
@@ -885,18 +877,16 @@ class TestVerboseFilterLogging:
             "_channel_id": "C1",
         }
 
-        with patch.object(mod, "verbose_log") as mock_vlog:
-            notifier._handle_polled_messages([msg])
+        with patch("builtins.print") as mock_print:
+            poller._handle_polled_messages([msg])
 
-        mock_vlog.assert_called_once()
-        call_args = mock_vlog.call_args[0]
-        assert call_args[1] == "FILTER"
-        assert "Accept addressed-to-us" in call_args[0]
+        printed = [str(call[0][0]) for call in mock_print.call_args_list if call[0]]
+        assert any("[SLACK] Filter: accept addressed-to-us" in m for m in printed)
 
     def test_verbose_filter_accept_broadcast(self, tmp_path):
-        """verbose_log is called with FILTER prefix for broadcast messages with no @addressing."""
-        notifier = self._make_notifier_with_identity(tmp_path)
-        self._patch_routing(notifier)
+        """Filter log is emitted for broadcast messages with no @addressing."""
+        poller = self._make_poller_with_identity(tmp_path)
+        self._patch_routing(poller)
 
         msg = {
             "text": "General status update for everyone",
@@ -906,25 +896,21 @@ class TestVerboseFilterLogging:
             "_channel_id": "C1",
         }
 
-        with patch.object(mod, "verbose_log") as mock_vlog:
-            notifier._handle_polled_messages([msg])
+        with patch("builtins.print") as mock_print:
+            poller._handle_polled_messages([msg])
 
-        mock_vlog.assert_called_once()
-        call_args = mock_vlog.call_args[0]
-        assert call_args[1] == "FILTER"
-        assert "Accept broadcast" in call_args[0]
+        printed = [str(call[0][0]) for call in mock_print.call_args_list if call[0]]
+        assert any("[SLACK] Filter: accept broadcast" in m for m in printed)
 
 
 # ─── A0: Bot user ID self-skip filter tests ──────────────────────
 
 
 class TestBotUserIdSelfSkip:
-    """Tests for A0 identity-based bot user ID self-skip in SlackNotifier."""
+    """Tests for A0 identity-based bot user ID self-skip in SlackPoller."""
 
-    def _make_notifier(self, tmp_path):
-        config_file = tmp_path / "slack.yaml"
-        config_file.write_text(yaml.dump({"slack": {"enabled": False}}))
-        return SlackNotifier(config_path=str(config_file))
+    def _make_poller(self, tmp_path):
+        return _make_disabled_poller()
 
     def _channel_msg(self, ts: str, user: str) -> dict:
         return {
@@ -935,47 +921,47 @@ class TestBotUserIdSelfSkip:
             "_channel_id": "C1",
         }
 
-    def _patch_routing(self, notifier):
+    def _patch_routing(self, poller):
         routed = []
-        notifier._get_channel_role = lambda ch: None
-        notifier._route_message_via_llm = lambda text: MagicMock()
-        notifier._execute_routed_action = lambda *a, **kw: routed.append(a)
+        poller._get_channel_role = lambda ch: None
+        poller._route_message_via_llm = lambda text: MagicMock()
+        poller._execute_routed_action = lambda *a, **kw: routed.append(a)
         return routed
 
     def test_own_user_id_message_is_skipped(self, tmp_path):
         """Message whose user field equals _bot_user_id is skipped and ts recorded."""
-        notifier = self._make_notifier(tmp_path)
-        notifier._bot_user_id = "UBOT123"
+        poller = self._make_poller(tmp_path)
+        poller._bot_user_id = "UBOT123"
 
-        notifier._handle_polled_messages([self._channel_msg("800.0", "UBOT123")])
+        poller._handle_polled_messages([self._channel_msg("800.0", "UBOT123")])
 
-        assert "800.0" in notifier._processed_message_ts
+        assert "800.0" in poller._processed_message_ts
 
     def test_different_user_id_passes_filter(self, tmp_path):
         """Message from a different user is not filtered by A0 and reaches routing."""
-        notifier = self._make_notifier(tmp_path)
-        notifier._bot_user_id = "UBOT123"
-        routed = self._patch_routing(notifier)
+        poller = self._make_poller(tmp_path)
+        poller._bot_user_id = "UBOT123"
+        routed = self._patch_routing(poller)
 
-        notifier._handle_polled_messages([self._channel_msg("801.0", "UHUMAN")])
+        poller._handle_polled_messages([self._channel_msg("801.0", "UHUMAN")])
 
         assert len(routed) > 0, "Message from different user must pass A0 and reach routing"
 
     def test_no_bot_user_id_passes_filter(self, tmp_path):
         """When _bot_user_id is None, A0 is skipped and message reaches routing."""
-        notifier = self._make_notifier(tmp_path)
-        assert notifier._bot_user_id is None
-        routed = self._patch_routing(notifier)
+        poller = self._make_poller(tmp_path)
+        assert poller._bot_user_id is None
+        routed = self._patch_routing(poller)
 
-        notifier._handle_polled_messages([self._channel_msg("802.0", "UANYUSER")])
+        poller._handle_polled_messages([self._channel_msg("802.0", "UANYUSER")])
 
         assert len(routed) > 0, "Message must reach routing when _bot_user_id is None"
 
     def test_resolve_own_bot_id_sets_user_id(self, tmp_path):
         """_resolve_own_bot_id stores user_id from a successful auth.test response."""
-        notifier = self._make_notifier(tmp_path)
-        notifier._bot_token = "xoxb-test"
-        notifier._bot_user_id = None
+        poller = self._make_poller(tmp_path)
+        poller._bot_token = "xoxb-test"
+        poller._bot_user_id = None
 
         fake_response = MagicMock()
         fake_response.read.return_value = json.dumps(
@@ -985,18 +971,17 @@ class TestBotUserIdSelfSkip:
         fake_response.__exit__ = MagicMock(return_value=False)
 
         with patch("urllib.request.urlopen", return_value=fake_response):
-            notifier._resolve_own_bot_id()
+            poller._resolve_own_bot_id()
 
-        assert notifier._bot_user_id == "UBOT456"
+        assert poller._bot_user_id == "UBOT456"
 
     def test_resolve_own_bot_id_graceful_on_failure(self, tmp_path):
         """_resolve_own_bot_id leaves _bot_user_id as None when auth.test raises."""
-        notifier = self._make_notifier(tmp_path)
-        notifier._bot_token = "xoxb-test"
-        notifier._bot_user_id = None
+        poller = self._make_poller(tmp_path)
+        poller._bot_token = "xoxb-test"
+        poller._bot_user_id = None
 
         with patch("urllib.request.urlopen", side_effect=Exception("network error")):
-            notifier._resolve_own_bot_id()
+            poller._resolve_own_bot_id()
 
-        assert notifier._bot_user_id is None
-
+        assert poller._bot_user_id is None
