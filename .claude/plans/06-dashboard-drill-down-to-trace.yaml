@@ -146,3 +146,8 @@ sections:
     result_message: 'Wired trace-link anchors in renderWorkers() and renderCompletions():
       set href=/proxy?trace_id=<run_id> and show link when run_id is truthy, hide
       otherwise.'
+    validation_attempts: 1
+    validation_findings: 'Build passes, all 1525 tests pass. dashboard.js correctly
+      wires trace-link anchors in both renderWorkers() and renderCompletions(): sets
+      href=/proxy?trace_id=<run_id> with encodeURIComponent when run_id is truthy,
+      hides link otherwise. All work item requirements satisfied.'
