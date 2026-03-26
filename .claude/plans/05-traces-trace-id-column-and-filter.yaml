@@ -10,21 +10,41 @@ meta:
     - validator
     max_validation_attempts: 2
 sections:
-- id: "1"
+- id: '1'
   name: Backend filter support
   status: pending
   tasks:
-  - id: "1.1"
+  - id: '1.1'
     name: Add trace_id filter to TracingProxy and route
     agent: coder
-    description: "Implement the work item: .claude/plans/.claimed/05-traces-trace-id-column-and-filter.md\n\nFocus on the backend changes. In langgraph_pipeline/web/proxy.py, extend list_runs() and count_runs() to accept a trace_id parameter and append a run_id LIKE ? condition (trailing wildcard) when the value is non-empty, following the existing conditions/params guard-and-append pattern. In langgraph_pipeline/web/routes/proxy.py, add trace_id: str = Query(default=\"\") to proxy_list() and thread it through to proxy method calls and the template context dict. Add unit tests in tests/langgraph/web/test_proxy.py. See the design doc at docs/plans/2026-03-26-05-traces-trace-id-column-and-filter-design.md."
-    status: pending
-- id: "2"
+    description: 'Implement the work item: .claude/plans/.claimed/05-traces-trace-id-column-and-filter.md
+
+
+      Focus on the backend changes. In langgraph_pipeline/web/proxy.py, extend list_runs()
+      and count_runs() to accept a trace_id parameter and append a run_id LIKE ? condition
+      (trailing wildcard) when the value is non-empty, following the existing conditions/params
+      guard-and-append pattern. In langgraph_pipeline/web/routes/proxy.py, add trace_id:
+      str = Query(default="") to proxy_list() and thread it through to proxy method
+      calls and the template context dict. Add unit tests in tests/langgraph/web/test_proxy.py.
+      See the design doc at docs/plans/2026-03-26-05-traces-trace-id-column-and-filter-design.md.'
+    status: in_progress
+    last_attempt: '2026-03-26T01:26:09.404090'
+    attempts: 1
+    model_used: sonnet
+- id: '2'
   name: Frontend column and filter input
   status: pending
   tasks:
-  - id: "2.1"
+  - id: '2.1'
     name: Add trace_id column and filter input to proxy_list.html
     agent: frontend-coder
-    description: "Implement the work item: .claude/plans/.claimed/05-traces-trace-id-column-and-filter.md\n\nFocus on langgraph_pipeline/web/templates/proxy_list.html. Add a trace_id text input to the filter form (label Trace ID, name=trace_id, pre-filled from trace_id template variable). Add a Trace ID column header and in each row render the first 8-12 characters of run.run_id in monospace with the full UUID in the title attribute; add a copy-to-clipboard button using the Clipboard API. Include trace_id in all pagination link query strings. See the design doc at docs/plans/2026-03-26-05-traces-trace-id-column-and-filter-design.md."
+    description: 'Implement the work item: .claude/plans/.claimed/05-traces-trace-id-column-and-filter.md
+
+
+      Focus on langgraph_pipeline/web/templates/proxy_list.html. Add a trace_id text
+      input to the filter form (label Trace ID, name=trace_id, pre-filled from trace_id
+      template variable). Add a Trace ID column header and in each row render the
+      first 8-12 characters of run.run_id in monospace with the full UUID in the title
+      attribute; add a copy-to-clipboard button using the Clipboard API. Include trace_id
+      in all pagination link query strings. See the design doc at docs/plans/2026-03-26-05-traces-trace-id-column-and-filter-design.md.'
     status: pending
