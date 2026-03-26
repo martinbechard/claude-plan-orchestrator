@@ -41,5 +41,3 @@ The /analysis page shows dummy data because:
   YES = pass, NO = fail
 - Does the cost value shown on /analysis match the cost in the completions
   table for the same item (within rounding)? YES = pass, NO = fail
-
-## LangSmith Trace: d6dcb148-f380-4cb4-b9a7-67c01aa19d2f
