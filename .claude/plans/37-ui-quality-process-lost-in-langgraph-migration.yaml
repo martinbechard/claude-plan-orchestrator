@@ -22,7 +22,10 @@ sections:
       mandates invoking the frontend-design skill when the work item touches web UI
       templates or CSS. Update .claude/agents/frontend-coder.md to reference the style
       guide and require it to be read before any UI change.'
-    status: pending
+    status: in_progress
+    last_attempt: '2026-03-26T18:27:53.543937'
+    attempts: 1
+    model_used: sonnet
   - id: '1.2'
     name: Create UI style guide
     agent: coder
