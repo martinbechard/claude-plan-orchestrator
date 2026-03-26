@@ -118,7 +118,7 @@ sections:
   - id: '3.1'
     name: Add stop-decision trace in find_next_task and plan snapshot in execute_plan
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement Gaps 3 and 4 from: .claude/plans/.claimed/13-trace-observability-gaps.md
 
 
@@ -139,3 +139,6 @@ sections:
       statuses. Run the full test suite after changes.
 
       '
+    last_attempt: '2026-03-26T12:58:41.148323'
+    attempts: 1
+    model_used: sonnet
