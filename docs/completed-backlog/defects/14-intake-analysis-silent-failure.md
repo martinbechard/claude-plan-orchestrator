@@ -56,5 +56,3 @@ actually failed.
 4. Gate the intake call_claude on quota availability (check
    probe_quota_available() before calling, or share the quota state with
    the Slack handler).
-
-## LangSmith Trace: f6bf3598-43dc-4870-922d-63cd4787e15e
