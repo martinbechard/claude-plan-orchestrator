@@ -63,7 +63,7 @@ sections:
   - id: '1.3'
     name: Add unit tests for grandchild rendering in proxy route and template
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Add tests for the changes described in: .claude/plans/.claimed/16-tool-calls-missing-from-traces.md
 
 
@@ -73,3 +73,8 @@ sections:
     last_attempt: '2026-03-26T11:05:50.053108'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T11:09:11.847086'
+    result_message: Added 7 unit tests covering get_children_batch(), grandchild name
+      in SVG aria-label, grandchild name in expandable details section, SVG height
+      scaling with grandchild rows, and span_s extending to grandchild end times.
+      All 22 proxy tests pass.
