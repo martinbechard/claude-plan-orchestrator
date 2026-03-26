@@ -162,21 +162,27 @@ def _parse_timestamp(ts: str) -> float:
 # ─── Claude invocation ────────────────────────────────────────────────────────
 
 
-def _invoke_claude(prompt: str, timeout: int = INTAKE_ANALYSIS_TIMEOUT_SECONDS) -> str:
-    """Invoke Claude CLI with --print and return the combined stdout output.
+def _invoke_claude(prompt: str, timeout: int = INTAKE_ANALYSIS_TIMEOUT_SECONDS) -> tuple[str, float]:
+    """Invoke Claude CLI with --print and return (text, total_cost_usd).
 
-    Uses the 'claude' binary found on PATH. Returns empty string on failure.
+    Uses --output-format json so cost data is available in the response.
+    Returns ("", 0.0) on failure.
     """
     try:
         result = subprocess.run(
-            ["claude", "--model", INTAKE_MODEL, "--print", prompt],
+            ["claude", "--model", INTAKE_MODEL, "--print", prompt, "--output-format", "json"],
             capture_output=True,
             text=True,
             timeout=timeout,
         )
-        return result.stdout or ""
-    except (subprocess.TimeoutExpired, OSError, subprocess.SubprocessError):
-        return ""
+        if result.returncode == 0 and result.stdout:
+            data = json.loads(result.stdout)
+            text = data.get("result", "").strip()
+            cost = float(data.get("total_cost_usd", 0.0))
+            return text, cost
+        return result.stdout or "", 0.0
+    except (subprocess.TimeoutExpired, OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return "", 0.0
 
 
 # ─── Analysis helpers ─────────────────────────────────────────────────────────
@@ -219,25 +225,25 @@ def _check_rag_dedup(slug: str) -> bool:
     return False
 
 
-def _verify_defect_symptoms(item_path: str) -> dict[str, str | int]:
+def _verify_defect_symptoms(item_path: str) -> dict[str, str | int | float]:
     """Spawn Claude to verify defect symptoms and return parsed result fields."""
     prompt = DEFECT_SYMPTOM_PROMPT.format(item_path=item_path)
-    output = _invoke_claude(prompt)
+    output, cost = _invoke_claude(prompt)
     clarity = _parse_clarity_score(output)
 
     reproducible_match = _REPRODUCIBLE_PATTERN.search(output)
     reproducible = reproducible_match.group(1).lower() if reproducible_match else "unclear"
 
-    return {"reproducible": reproducible, "clarity": clarity, "raw_output": output}
+    return {"reproducible": reproducible, "clarity": clarity, "raw_output": output, "total_cost_usd": cost}
 
 
-def _run_five_whys_analysis(item_path: str) -> dict[str, str | int]:
+def _run_five_whys_analysis(item_path: str) -> dict[str, str | int | float]:
     """Spawn Claude to run a 5-Whys analysis on an analysis backlog item."""
     prompt = ANALYSIS_FIVE_WHYS_PROMPT.format(item_path=item_path)
-    output = _invoke_claude(prompt)
+    output, cost = _invoke_claude(prompt)
     clarity = _parse_clarity_score(output)
 
-    return {"clarity": clarity, "raw_output": output}
+    return {"clarity": clarity, "raw_output": output, "total_cost_usd": cost}
 
 
 # ─── Node ─────────────────────────────────────────────────────────────────────
@@ -289,6 +295,7 @@ def intake_analyze(state: PipelineState) -> dict:
 
     # Type-specific analysis.
     state_updates: dict = {}
+    total_cost_usd: float = 0.0
 
     if item_type == "defect" and item_path:
         result = _verify_defect_symptoms(item_path)
@@ -296,6 +303,7 @@ def intake_analyze(state: PipelineState) -> dict:
             return {"quota_exhausted": True}
         clarity = result["clarity"]
         reproducible = result["reproducible"]
+        total_cost_usd = float(result.get("total_cost_usd", 0.0))
 
         if clarity < INTAKE_CLARITY_THRESHOLD:
             print(
@@ -316,6 +324,7 @@ def intake_analyze(state: PipelineState) -> dict:
         if detect_quota_exhaustion(str(result["raw_output"])):
             return {"quota_exhausted": True}
         clarity = result["clarity"]
+        total_cost_usd = float(result.get("total_cost_usd", 0.0))
 
         if clarity < INTAKE_CLARITY_THRESHOLD:
             print(
@@ -339,6 +348,7 @@ def intake_analyze(state: PipelineState) -> dict:
         "graph_level": "pipeline",
         "item_slug": item_slug,
         "item_type": item_type,
+        "total_cost_usd": total_cost_usd,
     })
 
     return state_updates

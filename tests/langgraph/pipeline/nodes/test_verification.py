@@ -98,22 +98,25 @@ class TestBuildVerificationRecord:
 class TestInvokeClaude:
     def test_returns_stdout_on_success(self):
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value.stdout = "Result: PASS\nNotes: Tests pass."
+            mock_run.return_value.stdout = '{"result": "Result: PASS\\nNotes: Tests pass.", "total_cost_usd": 0.05}'
             mock_run.return_value.returncode = 0
-            output = _invoke_claude("some prompt")
-        assert "PASS" in output
+            text, cost = _invoke_claude("some prompt")
+        assert "PASS" in text
+        assert cost == 0.05
 
     def test_returns_empty_string_on_timeout(self):
         import subprocess
 
         with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("claude", 300)):
-            output = _invoke_claude("some prompt")
-        assert output == ""
+            text, cost = _invoke_claude("some prompt")
+        assert text == ""
+        assert cost == 0.0
 
     def test_returns_empty_string_on_os_error(self):
         with patch("subprocess.run", side_effect=OSError("not found")):
-            output = _invoke_claude("some prompt")
-        assert output == ""
+            text, cost = _invoke_claude("some prompt")
+        assert text == ""
+        assert cost == 0.0
 
 
 # ─── verify_symptoms node ─────────────────────────────────────────────────────
@@ -124,7 +127,7 @@ class TestVerifySymptoms:
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value="Result: PASS\nNotes: All tests pass.",
+            return_value=("Result: PASS\nNotes: All tests pass.", 0.0),
         ):
             result = verify_symptoms(state)
         assert "verification_history" in result
@@ -134,7 +137,7 @@ class TestVerifySymptoms:
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value="Result: PASS\nNotes: Fixed.",
+            return_value=("Result: PASS\nNotes: Fixed.", 0.0),
         ):
             result = verify_symptoms(state)
         assert result["verification_history"][0]["outcome"] == "PASS"
@@ -143,7 +146,7 @@ class TestVerifySymptoms:
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value="Result: FAIL\nNotes: Tests still failing.",
+            return_value=("Result: FAIL\nNotes: Tests still failing.", 0.0),
         ):
             result = verify_symptoms(state)
         assert result["verification_history"][0]["outcome"] == "FAIL"
@@ -152,7 +155,7 @@ class TestVerifySymptoms:
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value="",
+            return_value=("", 0.0),
         ):
             result = verify_symptoms(state)
         assert result["verification_history"][0]["outcome"] == "FAIL"
@@ -161,7 +164,7 @@ class TestVerifySymptoms:
         state = _make_state(verification_cycle=1)
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value="Result: PASS",
+            return_value=("Result: PASS", 0.0),
         ):
             result = verify_symptoms(state)
         assert result["verification_cycle"] == 2
@@ -170,7 +173,7 @@ class TestVerifySymptoms:
         state = _make_state(verification_cycle=0)
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value="Result: PASS",
+            return_value=("Result: PASS", 0.0),
         ):
             result = verify_symptoms(state)
         assert result["verification_cycle"] == 1
@@ -185,7 +188,7 @@ class TestVerifySymptoms:
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value="Result: PASS",
+            return_value=("Result: PASS", 0.0),
         ):
             result = verify_symptoms(state)
         record = result["verification_history"][0]
@@ -196,7 +199,7 @@ class TestVerifySymptoms:
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value="Result: PASS\nNotes: Everything is working.",
+            return_value=("Result: PASS\nNotes: Everything is working.", 0.0),
         ):
             result = verify_symptoms(state)
         assert "PASS" in result["verification_history"][0]["notes"]

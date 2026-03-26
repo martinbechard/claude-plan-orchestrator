@@ -33,10 +33,12 @@ class ClaudeResult(NamedTuple):
 
     text holds the LLM response on success, or empty string on failure.
     failure_reason holds a descriptive string on failure, or None on success.
+    total_cost_usd is the cost reported by the Claude CLI, or 0.0 when unavailable.
     """
 
     text: str
     failure_reason: Optional[str]
+    total_cost_usd: float = 0.0
 
 
 class ToolCallRecord(TypedDict):
@@ -118,7 +120,8 @@ def call_claude(
         )
         if proc.returncode == 0:
             data = json.loads(proc.stdout)
-            return ClaudeResult(text=data.get("result", "").strip(), failure_reason=None)
+            cost = float(data.get("total_cost_usd", 0.0))
+            return ClaudeResult(text=data.get("result", "").strip(), failure_reason=None, total_cost_usd=cost)
         reason = f"claude --print returned code {proc.returncode}: {proc.stderr}"
         logger.warning(reason)
         return ClaudeResult(text="", failure_reason=reason)

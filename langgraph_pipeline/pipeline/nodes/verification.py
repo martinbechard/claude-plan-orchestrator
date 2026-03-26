@@ -12,6 +12,7 @@ verification_cycle so the verify_result conditional edge can route
 accordingly.
 """
 
+import json
 import re
 import subprocess
 from datetime import datetime, timezone
@@ -49,21 +50,27 @@ VERIFICATION_PROMPT = (
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def _invoke_claude(prompt: str) -> str:
-    """Invoke the Claude CLI with --print and return combined stdout.
+def _invoke_claude(prompt: str) -> tuple[str, float]:
+    """Invoke the Claude CLI with --print and return (text, total_cost_usd).
 
-    Returns empty string on timeout, OS errors, or subprocess failures.
+    Uses --output-format json so cost data is available in the response.
+    Returns ("", 0.0) on timeout, OS errors, or subprocess failures.
     """
     try:
         result = subprocess.run(
-            ["claude", "--print", prompt],
+            ["claude", "--print", prompt, "--output-format", "json"],
             capture_output=True,
             text=True,
             timeout=VERIFICATION_TIMEOUT_SECONDS,
         )
-        return result.stdout or ""
-    except (subprocess.TimeoutExpired, OSError, subprocess.SubprocessError):
-        return ""
+        if result.returncode == 0 and result.stdout:
+            data = json.loads(result.stdout)
+            text = data.get("result", "").strip()
+            cost = float(data.get("total_cost_usd", 0.0))
+            return text, cost
+        return result.stdout or "", 0.0
+    except (subprocess.TimeoutExpired, OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return "", 0.0
 
 
 def _parse_verification_outcome(output: str) -> str:
@@ -117,7 +124,7 @@ def verify_symptoms(state: PipelineState) -> dict:
     print(f"[verify_symptoms] Verifying defect symptoms for {item_slug} (cycle {cycle + 1})")
 
     prompt = VERIFICATION_PROMPT.format(item_path=item_path)
-    output: str = _invoke_claude(prompt)
+    output, total_cost_usd = _invoke_claude(prompt)
 
     outcome: str = _parse_verification_outcome(output)
     notes: str = output.strip() if output else "No output from verification."
@@ -133,6 +140,7 @@ def verify_symptoms(state: PipelineState) -> dict:
         "item_type": "defect",
         "verification_cycle": cycle + 1,
         "outcome": outcome,
+        "total_cost_usd": total_cost_usd,
     })
 
     return {
