@@ -124,5 +124,3 @@ Based on the investigation, the following gaps need separate backlog items:
 3. Many traces have total_cost_usd = 0.01 (looks like a default/dummy
    value) — data quality issue
 4. No cost data for Slack intake LLM calls (call_claude in suspension.py)
-
-## LangSmith Trace: e1ba7b85-2b08-45d4-a445-8d827ecc82a4

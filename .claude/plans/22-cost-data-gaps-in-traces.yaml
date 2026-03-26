@@ -85,6 +85,11 @@ sections:
       bar chart + table. Filter form uses filter-bar class consistent with completions.html.
       Tool-call note present. All TracingProxy cost methods implemented. File headers
       comply with coding rules.'
+    validation_attempts: 1
+    validation_findings: 'All 8 requirements satisfied: summary cards (4 metrics),
+      SVG cost-over-time chart, sortable/filterable/paginated top-runs table (9 columns),
+      cost-by-work-item table, cost-by-node-type chart+table, filter form (5 inputs),
+      extends base.html, tool-call cost note. Build passes, 1551/1551 tests pass.'
 - id: '2'
   name: Fix Slack suspension call_claude cost visibility
   status: pending
@@ -92,7 +97,7 @@ sections:
   - id: '2.1'
     name: Record call_claude cost in suspension.py trace metadata
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the fix described in: .claude/plans/.claimed/22-cost-data-gaps-in-traces.md
 
 
@@ -108,3 +113,6 @@ sections:
       Run the full test suite after changes.
 
       '
+    last_attempt: '2026-03-26T12:09:02.357321'
+    attempts: 1
+    model_used: sonnet
