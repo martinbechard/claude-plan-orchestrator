@@ -35,3 +35,8 @@ sections:
       Trace ID column with 8-char monospace truncation, full UUID in title attribute,
       copy-to-clipboard button via Clipboard API, trace_id in pagination query strings
       and filter-active checks. Build passes, all 1520 tests pass.'
+    validation_attempts: 1
+    validation_findings: DashboardErrorHandler implemented in dashboard_state.py,
+      installed on langgraph_pipeline logger in cli.py after _configure_logging().
+      Tests cover WARNING/ERROR forwarding, DEBUG/INFO filtering, and multi-record
+      accumulation. Build passes, all 1525 tests pass.
