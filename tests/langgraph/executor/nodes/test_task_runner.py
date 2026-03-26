@@ -359,7 +359,7 @@ class TestExecuteTask:
         with (
             patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
-                  return_value=(True, {"total_cost_usd": 0.0, "usage": {}}, "", "", [])),
+                  return_value=(True, 0, {"total_cost_usd": 0.0, "usage": {}}, "", "", [])),
             patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files"),
             patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -388,7 +388,7 @@ class TestExecuteTask:
         with (
             patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
-                  return_value=(True, {"total_cost_usd": 0.01, "usage": {"input_tokens": 10, "output_tokens": 5}}, "", "", [])),
+                  return_value=(True, 0, {"total_cost_usd": 0.01, "usage": {"input_tokens": 10, "output_tokens": 5}}, "", "", [])),
             patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files"),
             patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -415,7 +415,7 @@ class TestExecuteTask:
         with (
             patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
-                  return_value=(False, {}, "", "error", [])),
+                  return_value=(False, 1, {}, "", "error", [])),
             patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files"),
             patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -442,7 +442,7 @@ class TestExecuteTask:
         with (
             patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(absent_path)),
             patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
-                  return_value=(True, {}, "", "", [])),
+                  return_value=(True, 0, {}, "", "", [])),
             patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files"),
             patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -471,7 +471,7 @@ class TestExecuteTask:
         with (
             patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
-                  return_value=(True, rc, "", "", [])),
+                  return_value=(True, 0, rc, "", "", [])),
             patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files"),
             patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -502,7 +502,7 @@ class TestExecuteTask:
         with (
             patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
-                  return_value=(True, {}, "", "", [])),
+                  return_value=(True, 0, {}, "", "", [])),
             patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files"),
             patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -532,7 +532,7 @@ class TestExecuteTask:
         with (
             patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
-                  return_value=(True, {}, "", "", [])),
+                  return_value=(True, 0, {}, "", "", [])),
             patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files") as mock_commit,
             patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -560,7 +560,7 @@ class TestExecuteTask:
         with (
             patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
-                  return_value=(False, {}, "", "", [])),
+                  return_value=(False, 1, {}, "", "", [])),
             patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files") as mock_commit,
             patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -586,7 +586,7 @@ class TestExecuteTask:
         with (
             patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
-                  return_value=(False, {}, "", "", [])),
+                  return_value=(False, 1, {}, "", "", [])),
             patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files"),
             patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -609,7 +609,7 @@ class TestExecuteTask:
 
         with (
             patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
-                  return_value=(False, {}, "", "", [])),
+                  return_value=(False, 1, {}, "", "", [])),
             patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files"),
             patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
                   return_value={}),
@@ -642,7 +642,7 @@ class TestExecuteTask:
         with (
             patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
-                  return_value=(True, {}, "", "", [])),
+                  return_value=(True, 0, {}, "", "", [])),
             patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files"),
             patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -675,7 +675,7 @@ class TestExecuteTask:
         with (
             patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
-                  return_value=(True, {}, "", "", fake_tool_calls)),
+                  return_value=(True, 0, {}, "", "", fake_tool_calls)),
             patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files"),
             patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -714,7 +714,7 @@ class TestExecuteTask:
         with (
             patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
-                  return_value=(True, {}, "", "", fake_tool_calls)),
+                  return_value=(True, 0, {}, "", "", fake_tool_calls)),
             patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files"),
             patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),

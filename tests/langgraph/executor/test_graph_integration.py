@@ -120,7 +120,7 @@ def _make_mock_run_claude(write_status: bool = True, success: bool = True):
         A callable matching the (prompt, model_cli_name) -> tuple signature.
     """
 
-    def _mock(prompt: str, model_cli_name: str) -> tuple[bool, dict, str, str, list]:
+    def _mock(prompt: str, model_cli_name: str) -> tuple[bool, int, dict, str, str, list]:
         if write_status:
             status_dir = os.path.dirname(STATUS_FILE_PATH)
             os.makedirs(status_dir, exist_ok=True)
@@ -140,7 +140,7 @@ def _make_mock_run_claude(write_status: bool = True, success: bool = True):
                 "output_tokens": _OUTPUT_TOKENS_PER_TASK,
             },
         }
-        return (success, result_capture, "", "", [])
+        return (success, 0 if success else 1, result_capture, "", "", [])
 
     return _mock
 
@@ -278,7 +278,7 @@ class TestExecutorGraphCircuitBreaker:
                     {"status": "failed", "message": "Task failed", "timestamp": "2026-01-01T00:00:00"},
                     f,
                 )
-            return (False, {}, "", "", [])
+            return (False, 1, {}, "", "", [])
 
         with (
             patch(
@@ -361,7 +361,7 @@ class TestExecutorGraphWithValidation:
                     {"status": "completed", "message": "Done", "timestamp": "2026-01-01T00:00:00"},
                     f,
                 )
-            return (True, {"total_cost_usd": _COST_PER_TASK, "usage": {"input_tokens": 100, "output_tokens": 50}}, "", "", [])
+            return (True, 0, {"total_cost_usd": _COST_PER_TASK, "usage": {"input_tokens": 100, "output_tokens": 50}}, "", "", [])
 
         def _mock_validator_claude(prompt, model_cli_name):
             os.makedirs(os.path.dirname(STATUS_FILE_PATH), exist_ok=True)

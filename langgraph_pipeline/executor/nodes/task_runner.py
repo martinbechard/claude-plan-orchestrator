@@ -265,11 +265,12 @@ def _write_task_log(
         print(f"[execute_task] Failed to write task log: {exc}")
 
 
-def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, dict, str, str, list[ToolCallRecord]]:
+def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, int, dict, str, str, list[ToolCallRecord]]:
     """Spawn Claude CLI and stream its output in real-time.
 
-    Returns (success, result_capture, stdout_text, stderr_text, tool_calls).
+    Returns (success, returncode, result_capture, stdout_text, stderr_text, tool_calls).
     success is True when Claude exits with return code 0.
+    returncode is process.returncode on normal exit, -1 on TimeoutExpired, -2 on Exception.
     result_capture holds the parsed 'result' JSON event with usage data.
     tool_calls accumulates ToolCallRecord entries from each tool_use and text event.
     """
@@ -328,6 +329,7 @@ def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, dict, str, str,
         )
         return (
             process.returncode == 0,
+            process.returncode,
             result_capture,
             stdout_collector.get_output(),
             stderr_collector.get_output(),
@@ -336,10 +338,10 @@ def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, dict, str, str,
 
     except subprocess.TimeoutExpired:
         print(f"[execute_task] Claude CLI timed out after {CLAUDE_TIMEOUT_SECONDS}s")
-        return (False, {}, "", "Timed out", [])
+        return (False, -1, {}, "", "Timed out", [])
     except Exception as exc:
         print(f"[execute_task] Failed to spawn Claude CLI: {exc}")
-        return (False, {}, "", str(exc), [])
+        return (False, -2, {}, "", str(exc), [])
 
 
 # ─── Status File ──────────────────────────────────────────────────────────────
@@ -424,6 +426,12 @@ def execute_task(state: TaskState) -> dict:
     task_id = state["current_task_id"]
     if task_id is None:
         print("[execute_task] No current_task_id in state; nothing to run")
+        add_trace_metadata({
+            "node_name": "execute_task",
+            "graph_level": "executor",
+            "claude_invoked": False,
+            "skip_reason": "no_current_task_id",
+        })
         return {}
 
     plan_data: dict = state["plan_data"]
@@ -436,6 +444,13 @@ def execute_task(state: TaskState) -> dict:
 
     if task is None or section is None:
         print(f"[execute_task] Task {task_id!r} not found in plan_data")
+        add_trace_metadata({
+            "node_name": "execute_task",
+            "graph_level": "executor",
+            "task_id": task_id,
+            "claude_invoked": False,
+            "skip_reason": "task_not_found_in_plan",
+        })
         failure_count = record_failure(state.get("consecutive_failures") or 0)
         return {
             "consecutive_failures": failure_count,
@@ -476,7 +491,7 @@ def execute_task(state: TaskState) -> dict:
 
     # Execute Claude CLI
     _exec_start = time.time()
-    cli_success, result_capture, _stdout, _stderr, tool_calls = _run_claude(prompt, model_cli_name)
+    cli_success, returncode, result_capture, _stdout, _stderr, tool_calls = _run_claude(prompt, model_cli_name)
     _duration_ms = int((time.time() - _exec_start) * 1000)
 
     # Detect quota exhaustion before processing outcome
@@ -484,6 +499,14 @@ def execute_task(state: TaskState) -> dict:
         print(f"[execute_task] Quota exhaustion detected for task {task_id!r}; resetting to pending")
         task["status"] = "pending"
         _save_plan_yaml(plan_path, plan_data)
+        add_trace_metadata({
+            "node_name": "execute_task",
+            "graph_level": "executor",
+            "task_id": task_id,
+            "claude_invoked": False,
+            "skip_reason": "quota_exhausted",
+            "quota_exhausted": True,
+        })
         return {"quota_exhausted": True, "plan_data": plan_data}
 
     # Parse usage data
@@ -576,6 +599,13 @@ def execute_task(state: TaskState) -> dict:
         parent_run_id=state.get("langsmith_root_run_id"),
     )
 
+    if returncode == 0:
+        failure_reason = "ok"
+    elif returncode == -1:
+        failure_reason = "timeout"
+    else:
+        failure_reason = f"exit_code_{returncode}"
+
     add_trace_metadata({
         "node_name": "execute_task",
         "graph_level": "executor",
@@ -586,6 +616,10 @@ def execute_task(state: TaskState) -> dict:
         "output_tokens": output_tokens,
         "duration_ms": _duration_ms,
         "tool_calls_count": len(tool_calls),
+        "subprocess_exit_code": returncode,
+        "subprocess_error": _stderr[:500] if not cli_success else "",
+        "failure_reason": failure_reason,
+        "claude_invoked": True,
     })
 
     # Interrupt the graph for Slack-based human suspension (after state is built)
