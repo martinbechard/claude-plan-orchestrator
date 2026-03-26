@@ -36,10 +36,12 @@ sections:
     result_message: Added tokens_in/tokens_out fields to WorkerInfo, update_worker_tokens()
       method to DashboardState, and tokens_per_minute computation (with 0.0 when both
       token fields are 0) in snapshot(). All 1563 tests pass.
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
   - id: '1.2'
     name: Add get_worker_token_counts and extend completions in proxy
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: .claude/plans/.claimed/16-worker-velocity-tracking.md
       -- Read the design doc at docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
       for full details. In langgraph_pipeline/web/proxy.py: (1) add ALTER TABLE migration
@@ -50,6 +52,9 @@ sections:
       float = 0.0 param to record_completion() and persist it; (4) include tokens_per_minute
       in the SELECT of list_completions() and list_completions_by_slug() return dicts.
       Run the full test suite and fix any failures.'
+    last_attempt: '2026-03-26T15:04:51.264044'
+    attempts: 1
+    model_used: sonnet
 - id: '2'
   name: Backend supervisor token refresh and velocity on reap
   status: pending
