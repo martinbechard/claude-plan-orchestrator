@@ -27,8 +27,8 @@ function fmtCost(usd) {
   return "~$" + usd.toFixed(4);
 }
 
-function fmtFinished(timestampSeconds) {
-  const d = new Date(timestampSeconds * 1000);
+function fmtFinished(finishedAt) {
+  const d = typeof finishedAt === "number" ? new Date(finishedAt * 1000) : new Date(finishedAt);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
@@ -97,6 +97,14 @@ function renderWorkers(workers) {
     const pidEl = clone.querySelector(".worker-pid");
     pidEl.textContent = "PID " + w.pid;
 
+    const traceLink = clone.querySelector(".trace-link");
+    if (w.run_id) {
+      traceLink.href = "/proxy?trace_id=" + encodeURIComponent(w.run_id);
+      traceLink.style.display = "";
+    } else {
+      traceLink.style.display = "none";
+    }
+
     fragment.appendChild(clone);
   });
 
@@ -134,6 +142,14 @@ function renderCompletions(completions) {
     clone.querySelector(".completion-cost").textContent = fmtCost(c.cost_usd);
     clone.querySelector(".completion-duration").textContent = fmtElapsed(c.duration_s ?? 0);
     clone.querySelector(".completion-finished").textContent = fmtFinished(c.finished_at);
+
+    const traceLink = clone.querySelector(".trace-link");
+    if (c.run_id) {
+      traceLink.href = "/proxy?trace_id=" + encodeURIComponent(c.run_id);
+      traceLink.style.display = "";
+    } else {
+      traceLink.style.display = "none";
+    }
 
     fragment.appendChild(clone);
   });
