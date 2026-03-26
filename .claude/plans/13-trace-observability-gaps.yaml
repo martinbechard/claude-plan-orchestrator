@@ -45,10 +45,15 @@ sections:
     model_used: sonnet
     completed_at: '2026-03-26T12:22:54.818884'
     result_message: 'PASS: All good'
+    validation_attempts: 1
+    validation_findings: 'All requirements met: _run_claude returns 6-tuple with returncode,
+      early-exit paths call add_trace_metadata with claude_invoked=False, normal execution
+      includes subprocess_exit_code/failure_reason/claude_invoked=True. Build passes,
+      all 1551 tests pass.'
   - id: '1.2'
     name: Add subprocess_exit_code and failure_reason to validate_task traces
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement Gap 1 for validate_task from: .claude/plans/.claimed/13-trace-observability-gaps.md
 
 
@@ -62,6 +67,9 @@ sections:
       call. Run the full test suite after changes.
 
       '
+    last_attempt: '2026-03-26T12:25:16.714338'
+    attempts: 1
+    model_used: sonnet
 - id: '2'
   name: Validator verdict richness
   status: pending
