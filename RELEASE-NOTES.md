@@ -1,5 +1,15 @@
 # Release Notes
 
+## 1.10.2 (2026-03-26)
+
+### Improvements
+- **Checklist-style validation criteria:** Planner agent now generates acceptance
+  criteria as binary YES/NO questions (e.g. "Does X exist? YES = pass, NO = fail")
+  rather than prose statements, eliminating ambiguous validator interpretations.
+- **Literal answer requirement for validator:** Validator agent now must answer each
+  criterion question literally (YES/NO) and record the answer before determining
+  the final verdict, preventing false PASSes on unverified criteria.
+
 ## 1.10.1 (2026-03-25)
 
 ### Bug Fixes
