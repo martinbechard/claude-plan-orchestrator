@@ -1,0 +1,65 @@
+meta:
+  source_item: .claude/plans/.claimed/06-work-item-detail-page.md
+  item_type: feature
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: "1"
+  name: Backend - proxy query helpers and item route
+  status: pending
+  tasks:
+  - id: "1.1"
+    name: Add slug-scoped query methods to TracingProxy and implement GET /item/{slug} route
+    agent: coder
+    description: |
+      Implement the work item: .claude/plans/.claimed/06-work-item-detail-page.md
+
+      See the design doc at docs/plans/2026-03-26-06-work-item-detail-page-design.md
+      for the route contract, data sources, and template context shape.
+
+      Add to langgraph_pipeline/web/proxy.py:
+        - list_completions_by_slug(slug): SELECT * FROM completions WHERE slug = ?
+        - list_root_traces_by_slug(slug): SELECT run_id, name, created_at FROM
+          traces WHERE parent_run_id IS NULL AND name LIKE ?
+
+      Create langgraph_pipeline/web/routes/item.py with GET /item/{slug} endpoint.
+      Register the router in langgraph_pipeline/web/server.py.
+    status: pending
+- id: "2"
+  name: Frontend - item detail page template
+  status: pending
+  tasks:
+  - id: "2.1"
+    name: Create item.html polished two-column detail page
+    agent: frontend-coder
+    description: |
+      Implement the work item: .claude/plans/.claimed/06-work-item-detail-page.md
+
+      See the design doc at docs/plans/2026-03-26-06-work-item-detail-page-design.md
+      for the layout spec and template context variables.
+
+      Create langgraph_pipeline/web/templates/item.html extending base.html.
+      Use the frontend-design skill for a polished layout.
+    status: pending
+- id: "3"
+  name: Dashboard - add slug drill-down links
+  status: pending
+  tasks:
+  - id: "3.1"
+    name: Wrap slug text in /item/<slug> links in dashboard.html JavaScript
+    agent: frontend-coder
+    description: |
+      Implement the work item: .claude/plans/.claimed/06-work-item-detail-page.md
+
+      See the design doc at docs/plans/2026-03-26-06-work-item-detail-page-design.md
+      for the navigation requirements.
+
+      Modify langgraph_pipeline/web/templates/dashboard.html to wrap slug text
+      in active-worker cards and recent-completions rows with /item/slug links.
+    status: pending
