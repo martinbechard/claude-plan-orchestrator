@@ -51,8 +51,19 @@
       <p>No active workers</p>
     </div>
   </div>
-  <div id="timeline-container" class="timeline-container" aria-live="polite" aria-label="Active workers timeline" hidden>
-    <div class="timeline-axis" id="timeline-axis" aria-hidden="true"></div>
+  <div id="timeline-container" class="timeline-container" aria-live="polite" aria-label="Workers timeline" hidden>
+    <div class="timeline-toolbar" id="timeline-toolbar" aria-label="Timeline navigation">
+      <button class="timeline-nav-btn" id="tl-btn-prev" title="Scroll left" aria-label="Scroll timeline left">&#9664;</button>
+      <button class="timeline-nav-btn" id="tl-btn-next" title="Scroll right" aria-label="Scroll timeline right">&#9654;</button>
+      <button class="timeline-nav-btn" id="tl-btn-zoom-out" title="Zoom out" aria-label="Zoom out">&#8722;</button>
+      <button class="timeline-nav-btn" id="tl-btn-zoom-in" title="Zoom in" aria-label="Zoom in">&#43;</button>
+      <button class="timeline-nav-btn timeline-nav-btn--live" id="tl-btn-live" title="Jump to live" aria-label="Jump to live view">Live</button>
+      <span class="timeline-window-label" id="timeline-window-label" aria-live="polite"></span>
+    </div>
+    <div class="timeline-axis-wrap" aria-hidden="true">
+      <div class="timeline-label-spacer"></div>
+      <div class="timeline-axis" id="timeline-axis"></div>
+    </div>
     <div class="timeline-rows" id="timeline-rows"></div>
   </div>
 </section>
@@ -137,14 +148,13 @@
   <p class="error-row"></p>
 </template>
 
-{# Timeline row template — one instance per active_workers entry in timeline view #}
+{# Timeline row template — one instance per worker or completion in timeline view #}
 <template id="tpl-timeline-row">
   <div class="timeline-row" role="row">
     <span class="timeline-label" role="rowheader"></span>
-    <div class="timeline-bar-track" role="cell" aria-label="Elapsed time bar">
+    <div class="timeline-bar-track" role="cell" aria-label="Duration bar">
       <div class="timeline-bar"></div>
     </div>
-    <span class="timeline-elapsed" role="cell" aria-label="Elapsed time"></span>
   </div>
 </template>
 

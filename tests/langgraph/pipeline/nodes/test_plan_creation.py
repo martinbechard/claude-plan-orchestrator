@@ -236,27 +236,42 @@ class TestCreatePlan:
         assert slug in result["design_doc_path"]
 
     def test_sets_rate_limited_when_rate_limit_detected(self):
-        rate_limit_output = (
+        rate_limit_stderr = (
             "You've hit your limit · resets Feb 9 at 6pm (America/Toronto)"
         )
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.plan_creation._run_subprocess",
-            return_value=(1, rate_limit_output, ""),
+            return_value=(1, "", rate_limit_stderr),
         ):
             result = create_plan(state)
         assert result.get("rate_limited") is True
 
     def test_quota_exhausted_when_rate_limit_has_no_reset_time(self):
-        rate_limit_output = "You've hit your limit"
+        rate_limit_stderr = "You've hit your limit"
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.plan_creation._run_subprocess",
-            return_value=(1, rate_limit_output, ""),
+            return_value=(1, "", rate_limit_stderr),
         ):
             result = create_plan(state)
         assert result.get("quota_exhausted") is True
         assert "rate_limited" not in result
+
+    def test_no_false_positive_when_response_text_contains_limit_keywords(self):
+        """Quota detection must not match keywords in Claude's successful response."""
+        response_json = '{"result": "The check_rate_limit function matches You\'ve hit your limit"}'
+        state = _make_state()
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.plan_creation._run_subprocess",
+            return_value=(0, response_json, ""),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.plan_creation._plan_exists",
+            return_value=False,
+        ):
+            result = create_plan(state)
+        assert result.get("quota_exhausted") is not True
+        assert result.get("rate_limited") is not True
 
     def test_design_doc_path_contains_date_and_slug(self, tmp_path, monkeypatch):
         slug = "02-feature"

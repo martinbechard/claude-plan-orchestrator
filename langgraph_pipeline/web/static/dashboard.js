@@ -9,10 +9,16 @@
 const SSE_ENDPOINT = "/api/stream";
 const RECONNECT_DELAY_MS = 3000;
 const LS_VIEW_KEY = "dashboard.workers.view";
+const LS_WINDOW_MS_KEY = "dashboard.timeline.windowMs";
 const VIEW_TABLE = "table";
 const VIEW_TIMELINE = "timeline";
-const AXIS_TICK_PERCENTS = [0, 25, 50, 75, 100];
-const FLASH_DURATION_MS = 1200;
+const DEFAULT_WINDOW_MS = 10 * 60 * 1000;
+const MIN_WINDOW_MS = 60 * 1000;
+const AXIS_TICK_COUNT = 5;
+const MS_PER_MINUTE = 60 * 1000;
+const MS_PER_HOUR = 60 * MS_PER_MINUTE;
+const HALF_WINDOW_DIVISOR = 2;
+const ZOOM_FACTOR = 2;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -32,9 +38,31 @@ function fmtCost(usd) {
   return "$" + usd.toFixed(4);
 }
 
+/** Parses finished_at which may be an ISO string or a Unix timestamp (seconds). */
+function finishedAtToMs(finishedAt) {
+  if (typeof finishedAt === "number") return finishedAt * 1000;
+  return new Date(finishedAt).getTime();
+}
+
 function fmtFinished(finishedAt) {
-  const d = typeof finishedAt === "number" ? new Date(finishedAt * 1000) : new Date(finishedAt);
+  const d = new Date(finishedAtToMs(finishedAt));
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+/** Formats an epoch-ms timestamp as HH:MM (24-hour local time). */
+function fmtTimeHHMM(epochMs) {
+  const d = new Date(epochMs);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return hh + ":" + mm;
+}
+
+/** Formats a window duration in ms as a human-readable string like "10m" or "2h". */
+function fmtWindowDuration(ms) {
+  if (ms < MS_PER_HOUR) return Math.round(ms / MS_PER_MINUTE) + "m";
+  const h = Math.floor(ms / MS_PER_HOUR);
+  const rem = Math.round((ms % MS_PER_HOUR) / MS_PER_MINUTE);
+  return rem > 0 ? h + "h " + rem + "m" : h + "h";
 }
 
 function itemTypeBadgeClass(itemType) {
@@ -63,7 +91,7 @@ function stampTemplate(templateId) {
 // ── View state ────────────────────────────────────────────────────────────────
 
 var currentView = VIEW_TABLE;
-var previousWorkerSlugs = new Set();
+var latestWorkers = [];
 var latestCompletions = [];
 
 function getStoredView() {
@@ -79,6 +107,56 @@ function setStoredView(view) {
   try { localStorage.setItem(LS_VIEW_KEY, view); } catch (_) { /* noop */ }
 }
 
+// ── Timeline window state ─────────────────────────────────────────────────────
+
+var timelineWindowMs = DEFAULT_WINDOW_MS;
+var timelineWindowStart = 0;
+var timelineWindowEnd = 0;
+var timelineLiveMode = true;
+
+function getStoredWindowMs() {
+  try {
+    var raw = localStorage.getItem(LS_WINDOW_MS_KEY);
+    if (raw) {
+      var parsed = parseInt(raw, 10);
+      if (!isNaN(parsed) && parsed >= MIN_WINDOW_MS) return parsed;
+    }
+  } catch (_) { /* noop */ }
+  return DEFAULT_WINDOW_MS;
+}
+
+function setStoredWindowMs(ms) {
+  try { localStorage.setItem(LS_WINDOW_MS_KEY, String(ms)); } catch (_) { /* noop */ }
+}
+
+function snapWindowToLive() {
+  timelineWindowEnd = Date.now();
+  timelineWindowStart = timelineWindowEnd - timelineWindowMs;
+  timelineLiveMode = true;
+  updateLiveButtonState();
+}
+
+function updateLiveButtonState() {
+  var btn = document.getElementById("tl-btn-live");
+  if (!btn) return;
+  if (timelineLiveMode) {
+    btn.classList.add("timeline-nav-btn--live-active");
+    btn.setAttribute("aria-pressed", "true");
+  } else {
+    btn.classList.remove("timeline-nav-btn--live-active");
+    btn.setAttribute("aria-pressed", "false");
+  }
+}
+
+function updateWindowLabel() {
+  var label = document.getElementById("timeline-window-label");
+  if (!label) return;
+  var startStr = fmtTimeHHMM(timelineWindowStart);
+  var endStr = fmtTimeHHMM(timelineWindowEnd);
+  var durStr = fmtWindowDuration(timelineWindowMs);
+  label.textContent = startStr + " \u2014 " + endStr + " (" + durStr + ")";
+}
+
 // ── Timeline bar colour ──────────────────────────────────────────────────────
 
 function timelineBarClass(itemType) {
@@ -90,12 +168,12 @@ function timelineBarClass(itemType) {
   }
 }
 
-function flashClass(outcome) {
+function outcomeBarBorderClass(outcome) {
   switch (outcome) {
-    case "success": return "timeline-bar--flash-success";
-    case "warn": return "timeline-bar--flash-warn";
-    case "fail": return "timeline-bar--flash-fail";
-    default: return "timeline-bar--flash-success";
+    case "success": return "timeline-bar-border--success";
+    case "warn": return "timeline-bar-border--warn";
+    case "fail": return "timeline-bar-border--fail";
+    default: return "timeline-bar-border--success";
   }
 }
 
@@ -115,7 +193,6 @@ function renderWorkers(workers) {
 
   if (!workers || workers.length === 0) {
     empty.style.display = "";
-    // Remove all worker cards but leave the empty placeholder
     Array.from(container.querySelectorAll(".worker-card")).forEach(el => el.remove());
     return;
   }
@@ -155,7 +232,6 @@ function renderWorkers(workers) {
     fragment.appendChild(clone);
   });
 
-  // Replace only the worker-card nodes, leave empty placeholder intact
   Array.from(container.querySelectorAll(".worker-card")).forEach(el => el.remove());
   container.appendChild(fragment);
 }
@@ -237,116 +313,142 @@ function renderErrors(errors) {
   container.appendChild(fragment);
 }
 
-// ── Timeline view ─────────────────────────────────────────────────────────────
+// ── Timeline axis ─────────────────────────────────────────────────────────────
 
-function renderTimelineAxis(maxElapsed) {
+function renderTimelineAxis() {
   var axis = document.getElementById("timeline-axis");
   axis.innerHTML = "";
-  AXIS_TICK_PERCENTS.forEach(function(pct) {
-    var span = document.createElement("span");
-    span.className = "timeline-axis-tick";
-    span.style.left = pct + "%";
-    var secs = Math.round((pct / 100) * maxElapsed);
-    span.textContent = fmtElapsed(secs);
-    axis.appendChild(span);
-  });
+
+  for (var i = 0; i <= AXIS_TICK_COUNT; i++) {
+    var pct = (i / AXIS_TICK_COUNT) * 100;
+    var epochMs = timelineWindowStart + (pct / 100) * timelineWindowMs;
+
+    var tick = document.createElement("span");
+    tick.className = "timeline-axis-tick";
+    tick.style.left = pct + "%";
+    tick.textContent = fmtTimeHHMM(epochMs);
+    axis.appendChild(tick);
+  }
 }
 
-function renderTimeline(workers) {
-  var container = document.getElementById("timeline-container");
-  var rowsEl = document.getElementById("timeline-rows");
+// ── Timeline bar positioning ─────────────────────────────────────────────────
 
-  if (!workers || workers.length === 0) {
-    rowsEl.innerHTML = "";
-    document.getElementById("timeline-axis").innerHTML = "";
-    return;
+/**
+ * Computes left% and width% for a bar given its start/end in epoch ms.
+ * Clamps both edges to the visible window.
+ * Returns null if the bar is completely outside the window.
+ */
+function computeBarPosition(barStartMs, barEndMs) {
+  if (barEndMs <= timelineWindowStart || barStartMs >= timelineWindowEnd) return null;
+
+  var clampedStart = Math.max(barStartMs, timelineWindowStart);
+  var clampedEnd = Math.min(barEndMs, timelineWindowEnd);
+
+  var leftPct = ((clampedStart - timelineWindowStart) / timelineWindowMs) * 100;
+  var widthPct = ((clampedEnd - clampedStart) / timelineWindowMs) * 100;
+
+  return { leftPct: Math.max(0, leftPct), widthPct: Math.max(0, widthPct) };
+}
+
+/**
+ * Creates and appends a single timeline row for a bar entry.
+ * barEntry: { slug, itemType, barStartMs, barEndMs, isCompletion, outcome }
+ */
+function buildTimelineRow(barEntry) {
+  var pos = computeBarPosition(barEntry.barStartMs, barEntry.barEndMs);
+  if (!pos) return null;
+
+  var clone = stampTemplate("tpl-timeline-row");
+  var row = clone.querySelector(".timeline-row");
+  row.setAttribute("data-slug", barEntry.slug);
+  if (barEntry.isCompletion) row.classList.add("timeline-row--completion");
+
+  var label = clone.querySelector(".timeline-label");
+  var labelLink = document.createElement("a");
+  labelLink.href = "/item/" + encodeURIComponent(barEntry.slug);
+  labelLink.textContent = barEntry.slug;
+  label.appendChild(labelLink);
+
+  var track = clone.querySelector(".timeline-bar-track");
+  addGridlines(track);
+
+  var bar = clone.querySelector(".timeline-bar");
+  bar.style.left = pos.leftPct + "%";
+  bar.style.width = pos.widthPct + "%";
+  bar.classList.add(timelineBarClass(barEntry.itemType));
+
+  if (barEntry.isCompletion) {
+    bar.classList.add("timeline-bar--completion");
+    bar.classList.add(outcomeBarBorderClass(barEntry.outcome));
   }
 
-  var maxElapsed = 0;
-  workers.forEach(function(w) {
-    if ((w.elapsed_s || 0) > maxElapsed) maxElapsed = w.elapsed_s;
-  });
-  if (maxElapsed === 0) maxElapsed = 1;
+  return clone;
+}
 
-  renderTimelineAxis(maxElapsed);
+/** Adds faint vertical gridlines to the bar track at each axis tick position. */
+function addGridlines(track) {
+  for (var i = 1; i < AXIS_TICK_COUNT; i++) {
+    var pct = (i / AXIS_TICK_COUNT) * 100;
+    var line = document.createElement("div");
+    line.className = "timeline-gridline";
+    line.style.left = pct + "%";
+    track.appendChild(line);
+  }
+}
+
+// ── Timeline view ─────────────────────────────────────────────────────────────
+
+function renderTimeline(workers, completions) {
+  var rowsEl = document.getElementById("timeline-rows");
+  rowsEl.innerHTML = "";
+
+  renderTimelineAxis();
+  updateWindowLabel();
+
+  var now = Date.now();
+
+  // Build active worker entries sorted by elapsed_s descending
+  var activeEntries = (workers || []).map(function(w) {
+    var barEndMs = now;
+    var barStartMs = now - ((w.elapsed_s || 0) * 1000);
+    return {
+      slug: w.slug,
+      itemType: w.item_type,
+      barStartMs: barStartMs,
+      barEndMs: barEndMs,
+      isCompletion: false,
+      outcome: null,
+      sortKey: w.elapsed_s || 0
+    };
+  }).sort(function(a, b) { return b.sortKey - a.sortKey; });
+
+  // Build completion entries sorted by finished_at descending, excluding those before window
+  var completionEntries = (completions || []).filter(function(c) {
+    var endMs = finishedAtToMs(c.finished_at);
+    return endMs >= timelineWindowStart;
+  }).map(function(c) {
+    var barEndMs = finishedAtToMs(c.finished_at);
+    var barStartMs = barEndMs - ((c.duration_s || 0) * 1000);
+    return {
+      slug: c.slug,
+      itemType: c.item_type,
+      barStartMs: barStartMs,
+      barEndMs: barEndMs,
+      isCompletion: true,
+      outcome: c.outcome,
+      sortKey: barEndMs
+    };
+  }).sort(function(a, b) { return b.sortKey - a.sortKey; });
+
+  var allEntries = activeEntries.concat(completionEntries);
 
   var fragment = document.createDocumentFragment();
-  workers.forEach(function(w) {
-    var clone = stampTemplate("tpl-timeline-row");
-    var row = clone.querySelector(".timeline-row");
-    row.setAttribute("data-slug", w.slug);
-
-    var label = clone.querySelector(".timeline-label");
-    var labelLink = document.createElement("a");
-    labelLink.href = "/item/" + encodeURIComponent(w.slug);
-    labelLink.textContent = w.slug;
-    label.appendChild(labelLink);
-
-    var bar = clone.querySelector(".timeline-bar");
-    var pct = Math.min(100, ((w.elapsed_s || 0) / maxElapsed) * 100);
-    bar.style.width = pct + "%";
-    bar.classList.add(timelineBarClass(w.item_type));
-
-    clone.querySelector(".timeline-elapsed").textContent = fmtElapsed(w.elapsed_s || 0);
-
-    fragment.appendChild(clone);
+  allEntries.forEach(function(entry) {
+    var rowClone = buildTimelineRow(entry);
+    if (rowClone) fragment.appendChild(rowClone);
   });
 
-  rowsEl.innerHTML = "";
   rowsEl.appendChild(fragment);
-}
-
-// ── Completion flash ──────────────────────────────────────────────────────────
-
-function findCompletionOutcome(slug, completions) {
-  if (!completions) return null;
-  for (var i = 0; i < completions.length; i++) {
-    if (completions[i].slug === slug) return completions[i].outcome;
-  }
-  return null;
-}
-
-function showCompletionFlash(departedSlugs, completions) {
-  departedSlugs.forEach(function(slug) {
-    var outcome = findCompletionOutcome(slug, completions);
-    var cls = flashClass(outcome);
-
-    if (currentView === VIEW_TIMELINE) {
-      var rowsEl = document.getElementById("timeline-rows");
-      var clone = stampTemplate("tpl-timeline-row");
-      var row = clone.querySelector(".timeline-row");
-      row.setAttribute("data-slug", slug);
-      clone.querySelector(".timeline-label").textContent = slug;
-      var bar = clone.querySelector(".timeline-bar");
-      bar.className = "timeline-bar " + cls;
-      bar.style.width = "100%";
-      clone.querySelector(".timeline-elapsed").textContent = "done";
-      rowsEl.appendChild(clone);
-    } else {
-      var container = document.getElementById("workers-container");
-      var cards = container.querySelectorAll(".worker-card");
-      cards.forEach(function(card) {
-        if (card.getAttribute("aria-label") === "Worker: " + slug) {
-          card.style.transition = "opacity 1.2s ease";
-          card.style.opacity = "0";
-        }
-      });
-    }
-
-    setTimeout(function() {
-      if (currentView === VIEW_TIMELINE) {
-        var rowsEl = document.getElementById("timeline-rows");
-        rowsEl.querySelectorAll(".timeline-row").forEach(function(row) {
-          if (row.getAttribute("data-slug") === slug) row.remove();
-        });
-      } else {
-        var container = document.getElementById("workers-container");
-        container.querySelectorAll(".worker-card").forEach(function(card) {
-          if (card.getAttribute("aria-label") === "Worker: " + slug) card.remove();
-        });
-      }
-    }, FLASH_DURATION_MS);
-  });
 }
 
 // ── Toggle logic ──────────────────────────────────────────────────────────────
@@ -378,28 +480,21 @@ function applyView(view) {
 
 function renderAll(data) {
   var workers = data.active_workers || [];
+  latestWorkers = workers;
   latestCompletions = data.recent_completions || [];
 
-  var currentSlugs = new Set();
-  workers.forEach(function(w) { currentSlugs.add(w.slug); });
-
-  var departed = [];
-  previousWorkerSlugs.forEach(function(slug) {
-    if (!currentSlugs.has(slug)) departed.push(slug);
-  });
+  // Update timeline window if in live mode
+  if (timelineLiveMode) {
+    timelineWindowEnd = Date.now();
+    timelineWindowStart = timelineWindowEnd - timelineWindowMs;
+  }
 
   renderSessionSummary(data);
   renderWorkers(workers);
-  renderTimeline(workers);
+  renderTimeline(workers, latestCompletions);
   applyView(currentView);
   renderCompletions(latestCompletions);
   renderErrors(data.recent_errors);
-
-  if (departed.length > 0) {
-    showCompletionFlash(departed, latestCompletions);
-  }
-
-  previousWorkerSlugs = currentSlugs;
 }
 
 // ── Connection status ──────────────────────────────────────────────────────────
@@ -445,12 +540,66 @@ function connect() {
   });
 }
 
+// ── Timeline toolbar wiring ────────────────────────────────────────────────────
+
+function wireTimelineToolbar() {
+  document.getElementById("tl-btn-prev").addEventListener("click", function() {
+    var shift = timelineWindowMs / HALF_WINDOW_DIVISOR;
+    timelineWindowStart -= shift;
+    timelineWindowEnd -= shift;
+    timelineLiveMode = false;
+    updateLiveButtonState();
+    renderTimeline(latestWorkers, latestCompletions);
+    updateWindowLabel();
+  });
+
+  document.getElementById("tl-btn-next").addEventListener("click", function() {
+    var shift = timelineWindowMs / HALF_WINDOW_DIVISOR;
+    timelineWindowStart += shift;
+    timelineWindowEnd += shift;
+    // Re-enable live mode if the right edge is now at or past now
+    if (timelineWindowEnd >= Date.now()) {
+      snapWindowToLive();
+    }
+    renderTimeline(latestWorkers, latestCompletions);
+    updateWindowLabel();
+  });
+
+  document.getElementById("tl-btn-zoom-out").addEventListener("click", function() {
+    var center = (timelineWindowStart + timelineWindowEnd) / 2;
+    timelineWindowMs = Math.min(timelineWindowMs * ZOOM_FACTOR, 24 * MS_PER_HOUR);
+    setStoredWindowMs(timelineWindowMs);
+    timelineWindowStart = center - timelineWindowMs / 2;
+    timelineWindowEnd = center + timelineWindowMs / 2;
+    renderTimeline(latestWorkers, latestCompletions);
+    updateWindowLabel();
+  });
+
+  document.getElementById("tl-btn-zoom-in").addEventListener("click", function() {
+    var center = (timelineWindowStart + timelineWindowEnd) / 2;
+    timelineWindowMs = Math.max(timelineWindowMs / ZOOM_FACTOR, MIN_WINDOW_MS);
+    setStoredWindowMs(timelineWindowMs);
+    timelineWindowStart = center - timelineWindowMs / 2;
+    timelineWindowEnd = center + timelineWindowMs / 2;
+    renderTimeline(latestWorkers, latestCompletions);
+    updateWindowLabel();
+  });
+
+  document.getElementById("tl-btn-live").addEventListener("click", function() {
+    snapWindowToLive();
+    renderTimeline(latestWorkers, latestCompletions);
+    updateWindowLabel();
+  });
+}
+
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", function() {
   setConnectionStatus(false);
 
   currentView = getStoredView();
+  timelineWindowMs = getStoredWindowMs();
+  snapWindowToLive();
   applyView(currentView);
 
   var toggleBtn = document.getElementById("workers-view-toggle");
@@ -461,5 +610,6 @@ document.addEventListener("DOMContentLoaded", function() {
     });
   }
 
+  wireTimelineToolbar();
   connect();
 });

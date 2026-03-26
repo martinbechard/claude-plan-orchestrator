@@ -209,20 +209,22 @@ def create_plan(state: PipelineState) -> dict:
     exit_code, stdout, stderr = _run_subprocess(cmd)
     total_cost_usd = _extract_cost_from_json_output(stdout)
 
-    combined_output = stdout + stderr
-    is_rate_limited, reset_time = check_rate_limit(combined_output)
-    if is_rate_limited and reset_time is not None:
-        print(f"[create_plan] Rate limited during plan creation for {item_slug}")
-        return {
-            "rate_limited": True,
-            "rate_limit_reset": reset_time.isoformat(),
-        }
-
-    if detect_quota_exhaustion(combined_output):
-        print(f"[create_plan] Quota exhausted during plan creation for {item_slug}")
-        return {"quota_exhausted": True}
-
+    # Only check stderr for rate limit / quota signals — stdout contains
+    # Claude's response which may include those keywords literally (e.g.
+    # when the work item discusses rate limit handling).
     if exit_code != 0:
+        is_rate_limited, reset_time = check_rate_limit(stderr)
+        if is_rate_limited and reset_time is not None:
+            print(f"[create_plan] Rate limited during plan creation for {item_slug}")
+            return {
+                "rate_limited": True,
+                "rate_limit_reset": reset_time.isoformat(),
+            }
+
+        if detect_quota_exhaustion(stderr):
+            print(f"[create_plan] Quota exhausted during plan creation for {item_slug}")
+            return {"quota_exhausted": True}
+
         print(
             f"[create_plan] Plan creation failed for {item_slug} "
             f"(exit {exit_code}): {stderr[:200]}"

@@ -188,9 +188,22 @@ def find_next_task(state: TaskState) -> dict:
           current_task_id: Task ID to execute next, or None to stop.
     """
     plan_data: dict = state.get("plan_data") or _load_plan_yaml(state["plan_path"])
+    all_tasks = _collect_tasks(plan_data)
+    completed_ids = _completed_task_ids(all_tasks)
+    completed_count = len(completed_ids)
+    total_count = len(all_tasks)
+    tasks_completed_str = f"{completed_count}/{total_count}"
+    cycle_number = state.get("task_attempt") or 1
 
     if state.get("quota_exhausted"):
         print("[find_next_task] Quota exhausted — stopping task selection")
+        add_trace_metadata({
+            "node_name": "find_next_task",
+            "decision": "stop",
+            "reason": "quota_exhausted",
+            "cycle_number": cycle_number,
+            "tasks_completed": tasks_completed_str,
+        })
         return {"plan_data": plan_data, "current_task_id": None}
 
     consecutive_failures = state.get("consecutive_failures") or 0
@@ -198,6 +211,13 @@ def find_next_task(state: TaskState) -> dict:
         print(
             f"[find_next_task] Circuit open after {consecutive_failures} consecutive failures"
         )
+        add_trace_metadata({
+            "node_name": "find_next_task",
+            "decision": "stop",
+            "reason": "circuit_open",
+            "cycle_number": cycle_number,
+            "tasks_completed": tasks_completed_str,
+        })
         return {"plan_data": plan_data, "current_task_id": None}
 
     if _is_budget_exceeded(state, plan_data):
@@ -206,14 +226,26 @@ def find_next_task(state: TaskState) -> dict:
         print(
             f"[find_next_task] Budget exceeded: cost=${cost:.4f} >= limit=${limit:.4f}"
         )
+        add_trace_metadata({
+            "node_name": "find_next_task",
+            "decision": "stop",
+            "reason": "budget_exceeded",
+            "cycle_number": cycle_number,
+            "tasks_completed": tasks_completed_str,
+        })
         return {"plan_data": plan_data, "current_task_id": None}
 
-    all_tasks = _collect_tasks(plan_data)
-    completed_ids = _completed_task_ids(all_tasks)
     pending_tasks = [t for t in all_tasks if t.get("status") == PENDING_STATUS]
 
     if not pending_tasks:
         print("[find_next_task] All tasks completed or no pending tasks remain")
+        add_trace_metadata({
+            "node_name": "find_next_task",
+            "decision": "stop",
+            "reason": "no_pending_tasks",
+            "cycle_number": cycle_number,
+            "tasks_completed": tasks_completed_str,
+        })
         return {"plan_data": plan_data, "current_task_id": None}
 
     eligible = _find_eligible_task(pending_tasks, completed_ids)
@@ -222,6 +254,13 @@ def find_next_task(state: TaskState) -> dict:
             f"[find_next_task] Deadlock: {len(pending_tasks)} pending task(s) with"
             " no eligible next step (unsatisfied dependencies)"
         )
+        add_trace_metadata({
+            "node_name": "find_next_task",
+            "decision": "stop",
+            "reason": "deadlock",
+            "cycle_number": cycle_number,
+            "tasks_completed": tasks_completed_str,
+        })
         return {"plan_data": plan_data, "current_task_id": None}
 
     current_model: ModelTier = state.get("effective_model") or "haiku"
@@ -239,6 +278,8 @@ def find_next_task(state: TaskState) -> dict:
         "task_name": eligible.get("name", ""),
         "agent": agent_name,
         "effective_model": effective,
+        "completed_count": completed_count,
+        "total_count": total_count,
     })
     return {
         "plan_data": plan_data,

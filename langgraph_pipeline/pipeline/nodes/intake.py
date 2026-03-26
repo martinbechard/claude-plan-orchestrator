@@ -166,7 +166,9 @@ def _invoke_claude(prompt: str, timeout: int = INTAKE_ANALYSIS_TIMEOUT_SECONDS) 
     """Invoke Claude CLI with --print and return (text, total_cost_usd).
 
     Uses --output-format json so cost data is available in the response.
-    Returns ("", 0.0) on failure.
+    Returns ("", 0.0) on failure. On non-zero exit code, returns stderr
+    (not stdout) so that quota/rate-limit detection does not false-positive
+    on keywords that appear in Claude's response text.
     """
     try:
         result = subprocess.run(
@@ -180,7 +182,10 @@ def _invoke_claude(prompt: str, timeout: int = INTAKE_ANALYSIS_TIMEOUT_SECONDS) 
             text = data.get("result", "").strip()
             cost = float(data.get("total_cost_usd", 0.0))
             return text, cost
-        return result.stdout or "", 0.0
+        # Return stderr on failure — callers check this for quota/rate-limit
+        # signals. Returning stdout here caused false positives when Claude's
+        # response text contained limit-related keywords.
+        return result.stderr or "", 0.0
     except (subprocess.TimeoutExpired, OSError, subprocess.SubprocessError, json.JSONDecodeError):
         return "", 0.0
 

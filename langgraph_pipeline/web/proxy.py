@@ -66,6 +66,10 @@ CREATE TABLE IF NOT EXISTS completions (
 
 _ALTER_ADD_COMPLETIONS_RUN_ID_SQL = "ALTER TABLE completions ADD COLUMN run_id TEXT"
 
+_ALTER_ADD_COMPLETIONS_TOKENS_PER_MINUTE_SQL = (
+    "ALTER TABLE completions ADD COLUMN tokens_per_minute REAL NOT NULL DEFAULT 0.0"
+)
+
 _CREATE_COST_TASKS_SQL = """
 CREATE TABLE IF NOT EXISTS cost_tasks (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -239,6 +243,10 @@ class TracingProxy:
                 pass  # Column already exists in an existing database
             try:
                 conn.execute(_ALTER_ADD_COMPLETIONS_RUN_ID_SQL)
+            except sqlite3.OperationalError:
+                pass  # Column already exists in an existing database
+            try:
+                conn.execute(_ALTER_ADD_COMPLETIONS_TOKENS_PER_MINUTE_SQL)
             except sqlite3.OperationalError:
                 pass  # Column already exists in an existing database
             conn.execute(_DEDUPLICATE_RUN_IDS_SQL)

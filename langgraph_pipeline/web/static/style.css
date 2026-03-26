@@ -608,7 +608,7 @@ svg.gantt text { font-family: inherit; }
     color: #fff;
 }
 
-/* ── Dashboard — Timeline (Gantt) view ──────────────────────────────────────── */
+/* ── Dashboard — Timeline (wall-clock) view ─────────────────────────────────── */
 .timeline-container {
     background: #fff;
     border: 1px solid #e2e8f0;
@@ -617,12 +617,75 @@ svg.gantt text { font-family: inherit; }
     margin-bottom: 0.5rem;
 }
 
-.timeline-axis {
+/* Toolbar row: nav buttons + window label */
+.timeline-toolbar {
     display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.timeline-nav-btn {
+    height: 26px;
+    min-width: 26px;
+    padding: 0 8px;
+    background: #fff;
+    color: #3b6fcf;
+    border: 1px solid #d0d5dd;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    line-height: 1;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.timeline-nav-btn:hover {
+    background: #eff4ff;
+    border-color: #3b6fcf;
+}
+
+.timeline-nav-btn--live {
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.timeline-nav-btn--live-active {
+    background: #10b981;
+    color: #fff;
+    border-color: #10b981;
+}
+
+.timeline-nav-btn--live-active:hover {
+    background: #059669;
+    border-color: #059669;
+}
+
+.timeline-window-label {
+    font-size: 11px;
+    color: #6b7280;
+    margin-left: 8px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Axis row: label spacer + tick labels */
+.timeline-axis-wrap {
+    display: flex;
+    align-items: flex-end;
+    margin-bottom: 4px;
+}
+
+.timeline-label-spacer {
+    width: 160px;
+    min-width: 160px;
+    flex-shrink: 0;
+}
+
+.timeline-axis {
+    flex: 1;
     position: relative;
     height: 20px;
-    margin-left: 160px;
-    margin-bottom: 4px;
 }
 
 .timeline-axis-tick {
@@ -631,24 +694,26 @@ svg.gantt text { font-family: inherit; }
     color: #9090b0;
     transform: translateX(-50%);
     white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
+/* Row list */
 .timeline-rows {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
 }
 
 .timeline-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-height: 28px;
+    gap: 0;
+    min-height: 26px;
 }
 
 .timeline-label {
-    width: 152px;
-    min-width: 152px;
+    width: 160px;
+    min-width: 160px;
     font-size: 12px;
     font-weight: 500;
     color: #374151;
@@ -657,22 +722,36 @@ svg.gantt text { font-family: inherit; }
     white-space: nowrap;
     text-align: right;
     padding-right: 8px;
+    flex-shrink: 0;
 }
 
+/* Bar track: the full-width area where bars are positioned */
 .timeline-bar-track {
     flex: 1;
-    height: 20px;
+    height: 22px;
     background: #f3f4f6;
     border-radius: 3px;
-    overflow: hidden;
     position: relative;
+    overflow: hidden;
 }
 
+/* Faint vertical gridlines at tick positions inside the track */
+.timeline-gridline {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: #e2e8f0;
+    pointer-events: none;
+}
+
+/* Active worker bars — left is computed from window start, width from duration */
 .timeline-bar {
-    height: 100%;
-    width: 0%;
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    min-width: 2px;
     border-radius: 3px;
-    transition: width 0.4s ease;
     background: #9090b0;
 }
 
@@ -680,34 +759,17 @@ svg.gantt text { font-family: inherit; }
 .timeline-bar--feature  { background: #06b6d4; }
 .timeline-bar--analysis { background: #eab308; }
 
-.timeline-elapsed {
-    width: 52px;
-    min-width: 52px;
-    font-size: 11px;
-    font-weight: 500;
-    color: #374151;
-    text-align: right;
+/* Completion bars: semi-transparent, with outcome left border */
+.timeline-bar--completion {
+    opacity: 0.6;
 }
 
-/* ── Dashboard — Timeline completion flash ──────────────────────────────────── */
-@keyframes timeline-flash-success {
-    0%   { opacity: 1; background: #10b981; }
-    80%  { opacity: 0.6; background: #10b981; }
-    100% { opacity: 0; }
-}
+.timeline-bar-border--success { border-left: 3px solid #10b981; }
+.timeline-bar-border--warn    { border-left: 3px solid #f59e0b; }
+.timeline-bar-border--fail    { border-left: 3px solid #ef4444; }
 
-@keyframes timeline-flash-warn {
-    0%   { opacity: 1; background: #f59e0b; }
-    80%  { opacity: 0.6; background: #f59e0b; }
-    100% { opacity: 0; }
+/* Completion rows tinted background */
+.timeline-row--completion .timeline-label {
+    color: #6b7280;
+    font-weight: 400;
 }
-
-@keyframes timeline-flash-fail {
-    0%   { opacity: 1; background: #ef4444; }
-    80%  { opacity: 0.6; background: #ef4444; }
-    100% { opacity: 0; }
-}
-
-.timeline-bar--flash-success { animation: timeline-flash-success 1.2s ease forwards; }
-.timeline-bar--flash-warn    { animation: timeline-flash-warn    1.2s ease forwards; }
-.timeline-bar--flash-fail    { animation: timeline-flash-fail    1.2s ease forwards; }

@@ -9,7 +9,7 @@ tools:
   - Bash
   - Grep
   - Glob
-model: sonnet
+model: opus
 ---
 
 # Planner Agent

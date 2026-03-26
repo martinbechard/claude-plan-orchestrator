@@ -263,19 +263,17 @@ def scan_backlog(state: PipelineState) -> dict:
 
     # Priority 1: Resume in-progress plans.
     in_progress = _find_in_progress_plans()
-    if in_progress:
-        plan_path = in_progress[0]
+    for plan_path in in_progress:
         source_item = _source_item_for_plan(plan_path)
         if source_item and Path(source_item).exists():
             if Path(source_item).resolve().parent == claimed_dir_resolved:
-                logging.warning(
-                    "scan_backlog: source_item %s is already in CLAIMED_DIR — "
-                    "skipping plan %s (item is already being processed).",
+                logging.debug(
+                    "scan_backlog: source_item %s is in CLAIMED_DIR — "
+                    "skipping plan %s (item is being processed by a worker).",
                     source_item,
                     plan_path,
                 )
-                source_item = None
-        if source_item and Path(source_item).exists():
+                continue
             filepath = source_item
             slug = Path(filepath).stem
             item_type = _item_type_from_path(filepath)
