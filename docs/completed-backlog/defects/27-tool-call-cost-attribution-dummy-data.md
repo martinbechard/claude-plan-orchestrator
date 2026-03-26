@@ -32,5 +32,3 @@ from the pipeline execution data.
   in their trace records.
 - Feature 03 (cost-analysis-db-backend): the cost_tasks table has only
   fake test data.
-
-## LangSmith Trace: 378286c1-f048-4f78-93fe-7cb75bd4f197
