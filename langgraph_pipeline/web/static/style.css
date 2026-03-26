@@ -571,3 +571,143 @@ svg.gantt text { font-family: inherit; }
 .queue-detail-row > td {
     border-bottom: 2px solid #e2e8f0;
 }
+
+/* ── Dashboard — Section header with toggle ─────────────────────────────────── */
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.section-header h2 {
+    margin: 1.5rem 0 0.75rem;
+    flex: 1;
+}
+
+.view-toggle-btn {
+    height: 28px;
+    padding: 0 12px;
+    background: #fff;
+    color: #3b6fcf;
+    border: 1px solid #3b6fcf;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.view-toggle-btn:hover {
+    background: #eff4ff;
+}
+
+.view-toggle-btn[aria-pressed="true"] {
+    background: #3b6fcf;
+    color: #fff;
+}
+
+/* ── Dashboard — Timeline (Gantt) view ──────────────────────────────────────── */
+.timeline-container {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.timeline-axis {
+    display: flex;
+    position: relative;
+    height: 20px;
+    margin-left: 160px;
+    margin-bottom: 4px;
+}
+
+.timeline-axis-tick {
+    position: absolute;
+    font-size: 10px;
+    color: #9090b0;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+
+.timeline-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.timeline-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+}
+
+.timeline-label {
+    width: 152px;
+    min-width: 152px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #374151;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+    padding-right: 8px;
+}
+
+.timeline-bar-track {
+    flex: 1;
+    height: 20px;
+    background: #f3f4f6;
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+}
+
+.timeline-bar {
+    height: 100%;
+    width: 0%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+    background: #9090b0;
+}
+
+.timeline-bar--defect   { background: #f97316; }
+.timeline-bar--feature  { background: #06b6d4; }
+.timeline-bar--analysis { background: #eab308; }
+
+.timeline-elapsed {
+    width: 52px;
+    min-width: 52px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #374151;
+    text-align: right;
+}
+
+/* ── Dashboard — Timeline completion flash ──────────────────────────────────── */
+@keyframes timeline-flash-success {
+    0%   { opacity: 1; background: #10b981; }
+    80%  { opacity: 0.6; background: #10b981; }
+    100% { opacity: 0; }
+}
+
+@keyframes timeline-flash-warn {
+    0%   { opacity: 1; background: #f59e0b; }
+    80%  { opacity: 0.6; background: #f59e0b; }
+    100% { opacity: 0; }
+}
+
+@keyframes timeline-flash-fail {
+    0%   { opacity: 1; background: #ef4444; }
+    80%  { opacity: 0.6; background: #ef4444; }
+    100% { opacity: 0; }
+}
+
+.timeline-bar--flash-success { animation: timeline-flash-success 1.2s ease forwards; }
+.timeline-bar--flash-warn    { animation: timeline-flash-warn    1.2s ease forwards; }
+.timeline-bar--flash-fail    { animation: timeline-flash-fail    1.2s ease forwards; }
