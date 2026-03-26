@@ -91,6 +91,23 @@ Rules for writing acceptance criteria:
   a running server must say "WARN if cannot verify at validation time"
 - Never write criteria that can be satisfied by test fixture data alone
 
+## UI Work Item Detection
+
+Before creating implementation tasks, check whether the work item touches any file
+under `langgraph_pipeline/web/` (templates, static CSS/JS, or Python view handlers).
+
+If the work item touches web UI files:
+
+1. **Invoke the `frontend-design` skill** before writing any implementation tasks.
+   The skill will guide you through design exploration and produce a design brief
+   that the `frontend-coder` agent will use during implementation.
+2. **Assign UI implementation tasks to the `frontend-coder` agent**, not `coder`.
+3. **Add a reference to `docs/ui-style-guide.md`** in each frontend task description
+   so the implementer reads it before making changes.
+
+Trigger phrase to include in frontend task descriptions:
+  "Style guide: docs/ui-style-guide.md."
+
 ## Constraints
 
 - Use the Write tool to modify the YAML plan file. Read the current plan first,

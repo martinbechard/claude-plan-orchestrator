@@ -26,10 +26,12 @@ accessibility standards. You produce production-ready frontend code.
 Complete this checklist before making any changes:
 
 1. Read CODING-RULES.md in the project root
-2. Read the design document or wireframes referenced in the task
-3. Read existing UI components to understand the design system
-4. Identify reusable components before creating new ones
-5. Understand the task's acceptance criteria from the YAML plan
+2. Read `docs/ui-style-guide.md` — this is the canonical style reference for all
+   UI work in this project. You MUST read it before touching any template or CSS.
+3. Read the design document or wireframes referenced in the task
+4. Read existing UI components to understand the design system
+5. Identify reusable components before creating new ones
+6. Understand the task's acceptance criteria from the YAML plan
 
 ## Frontend Standards
 
@@ -42,6 +44,9 @@ Complete this checklist before making any changes:
 - **Performance:** Lazy-load heavy components. Avoid inline functions in render.
 - **Design System:** Use existing design tokens (colors, spacing, typography).
   Never hardcode hex values or pixel sizes that duplicate design tokens.
+- **Style Guide Compliance:** Every change must conform to `docs/ui-style-guide.md`.
+  If the guide does not cover your case, follow the nearest analogous pattern
+  described there.
 
 ## Anti-Patterns to Avoid
 
