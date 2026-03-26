@@ -1,0 +1,491 @@
+{# langgraph_pipeline/web/templates/item.html
+   Work-item detail page: requirements, plan tasks, completions, traces.
+   Context: slug, item_type, status, total_cost_usd, requirements_html,
+            plan_tasks [{id, name, status}], completions, traces [{run_id, name, created_at}]
+   Design: docs/plans/2026-03-26-06-work-item-detail-page-design.md #}
+{% extends "base.html" %}
+
+{% block title %}{{ slug }} — Plan Orchestrator{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Item detail page ─────────────────────────────────────────────────── */
+
+.item-breadcrumb {
+    font-size: 13px;
+    margin-bottom: 1rem;
+    color: #6b7280;
+}
+
+.item-breadcrumb a { color: #3b6fcf; }
+
+/* ── Header card ──────────────────────────────────────────────────────── */
+.item-header {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.item-header-main { flex: 1 1 0; min-width: 0; }
+
+.item-slug {
+    font-size: 17px;
+    font-weight: 700;
+    color: #1a1a2e;
+    word-break: break-all;
+    margin: 0 0 0.625rem;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    line-height: 1.3;
+}
+
+.item-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.item-header-cost {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    align-items: flex-end;
+    min-width: 110px;
+}
+
+.item-cost-label {
+    font-size: 11px;
+    color: #9090b0;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+}
+
+.item-cost-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1a1a2e;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Status badges */
+.status-running   { background: #d1fae5; color: #065f46; }
+.status-completed { background: #dbeafe; color: #1e40af; }
+.status-queued    { background: #fef3c7; color: #92400e; }
+.status-unknown   { background: #f3f4f6; color: #6b7280; }
+
+/* ── Two-column layout ────────────────────────────────────────────────── */
+.item-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+@media (min-width: 900px) {
+    .item-layout { grid-template-columns: 1fr 360px; }
+}
+
+/* ── Section cards ────────────────────────────────────────────────────── */
+.item-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.item-card:last-child { margin-bottom: 0; }
+
+.item-card-header {
+    padding: 0.625rem 1.25rem;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.item-card-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin: 0;
+}
+
+.item-card-count {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+/* ── Requirements (rendered markdown) ────────────────────────────────── */
+.requirements-body {
+    padding: 1.25rem;
+    font-size: 14px;
+    line-height: 1.7;
+    color: #374151;
+}
+
+.requirements-body h1,
+.requirements-body h2,
+.requirements-body h3,
+.requirements-body h4 {
+    color: #1a1a2e;
+    margin: 1.25em 0 0.5em;
+    font-weight: 600;
+}
+
+.requirements-body h1 { font-size: 18px; margin-top: 0; }
+.requirements-body h2 { font-size: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
+.requirements-body h3 { font-size: 14px; }
+
+.requirements-body p { margin: 0 0 0.75em; }
+.requirements-body p:last-child { margin-bottom: 0; }
+
+.requirements-body ul,
+.requirements-body ol {
+    margin: 0 0 0.75em;
+    padding-left: 1.5em;
+}
+
+.requirements-body li { margin-bottom: 0.25em; }
+
+.requirements-body code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    font-size: 12px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: #374151;
+}
+
+.requirements-body pre {
+    background: #1a1a2e;
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 0 0 0.75em;
+}
+
+.requirements-body pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #e2e8f0;
+    font-size: 12px;
+}
+
+.requirements-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 0.75em;
+    font-size: 13px;
+}
+
+.requirements-body th,
+.requirements-body td {
+    padding: 6px 10px;
+    border: 1px solid #e2e8f0;
+    text-align: left;
+}
+
+.requirements-body th {
+    background: #f8fafc;
+    font-weight: 600;
+    color: #374151;
+}
+
+.requirements-body blockquote {
+    margin: 0 0 0.75em;
+    padding: 0.5em 1em;
+    border-left: 3px solid #3b6fcf;
+    background: #f0f5ff;
+    color: #374151;
+    border-radius: 0 4px 4px 0;
+}
+
+/* ── Plan task list ───────────────────────────────────────────────────── */
+.task-list {
+    list-style: none;
+    margin: 0;
+    padding: 0.25rem 1.25rem;
+}
+
+.task-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f0f4f8;
+    font-size: 12px;
+    color: #374151;
+}
+
+.task-item:last-child { border-bottom: none; }
+
+.task-icon {
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    margin-top: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.task-icon--completed  { background: #d1fae5; color: #065f46; }
+.task-icon--pending    { background: #f3f4f6; color: #d1d5db; border: 1px solid #d1d5db; }
+.task-icon--in_progress { background: #fef3c7; color: #d97706; }
+.task-icon--skipped    { background: #e5e7eb; color: #9ca3af; }
+
+.task-name {
+    flex: 1;
+    line-height: 1.4;
+}
+
+.task-name--done {
+    text-decoration: line-through;
+    color: #9ca3af;
+}
+
+.task-id-label {
+    font-size: 10px;
+    color: #b0b8c4;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    flex-shrink: 0;
+    align-self: center;
+}
+
+/* ── Compact tables (completions + traces) ────────────────────────────── */
+.compact-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.compact-table th {
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 6px 10px;
+    text-align: left;
+    font-weight: 600;
+    color: #374151;
+    white-space: nowrap;
+}
+
+.compact-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #f0f4f8;
+    vertical-align: middle;
+}
+
+.compact-table tr:last-child td { border-bottom: none; }
+.compact-table tr:hover td { background: #fafbff; }
+
+.mono-sm {
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 11px;
+    color: #6b7280;
+}
+
+.nowrap { white-space: nowrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+{# ── Breadcrumb ──────────────────────────────────────────────────────────── #}
+<nav class="item-breadcrumb" aria-label="Breadcrumb">
+  <a href="/dashboard">Dashboard</a>
+  <span aria-hidden="true" style="margin: 0 0.35rem; color: #c0c0cc;">›</span>
+  <span>{{ slug }}</span>
+</nav>
+
+{# ── Item header ─────────────────────────────────────────────────────────── #}
+<div class="item-header" aria-label="Work item summary">
+  <div class="item-header-main">
+    <h1 class="item-slug">{{ slug }}</h1>
+    <div class="item-badges">
+      {% if item_type %}
+        <span class="badge item-type-{{ item_type }}"
+              aria-label="Type: {{ item_type }}">{{ item_type }}</span>
+      {% endif %}
+      <span class="badge status-{{ status }}"
+            aria-label="Status: {{ status }}">{{ status }}</span>
+    </div>
+  </div>
+  <div class="item-header-cost" aria-label="Total API cost">
+    <span class="item-cost-label">Total Cost</span>
+    <span class="item-cost-value">~${{ "%.4f"|format(total_cost_usd) }}</span>
+  </div>
+</div>
+
+{# ── Two-column layout ───────────────────────────────────────────────────── #}
+<div class="item-layout">
+
+  {# ── Left: Requirements ──────────────────────────────────────────────────── #}
+  <div>
+    <div class="item-card">
+      <div class="item-card-header">
+        <h2 class="item-card-title">Requirements</h2>
+      </div>
+      {% if requirements_html %}
+        <div class="requirements-body" aria-label="Requirements document">
+          {{ requirements_html | safe }}
+        </div>
+      {% else %}
+        <div class="empty-state" style="padding: 2.5rem 1rem;">
+          <div class="icon" aria-hidden="true">&#128462;</div>
+          <p>No requirements document found for this item.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Right: Plan + Completions + Traces ──────────────────────────────────── #}
+  <div>
+
+    {# Plan tasks #}
+    <div class="item-card">
+      <div class="item-card-header">
+        <h2 class="item-card-title">Plan Tasks</h2>
+        {% if plan_tasks %}
+          <span class="item-card-count">
+            {{ plan_tasks | selectattr('status', 'equalto', 'completed') | list | length }}
+            / {{ plan_tasks | length }}
+          </span>
+        {% endif %}
+      </div>
+      {% if plan_tasks %}
+        <ul class="task-list" aria-label="Plan tasks">
+          {% for task in plan_tasks %}
+          <li class="task-item">
+            <span class="task-icon task-icon--{{ task.status }}"
+                  title="{{ task.status }}" aria-label="{{ task.status }}">
+              {% if task.status == 'completed' %}&#10003;
+              {% elif task.status == 'in_progress' %}&#9679;
+              {% elif task.status == 'skipped' %}&mdash;
+              {% else %}&nbsp;{% endif %}
+            </span>
+            <span class="task-name {% if task.status == 'completed' %}task-name--done{% endif %}">
+              {{ task.name }}
+            </span>
+            <span class="task-id-label">#{{ task.id }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="empty-state" style="padding: 1.5rem 1rem;">
+          <p>No plan found for this item.</p>
+        </div>
+      {% endif %}
+    </div>
+
+    {# Completion history #}
+    <div class="item-card">
+      <div class="item-card-header">
+        <h2 class="item-card-title">Completion History</h2>
+        {% if completions %}
+          <span class="item-card-count">
+            {{ completions | length }} run{{ 's' if completions | length != 1 else '' }}
+          </span>
+        {% endif %}
+      </div>
+      {% if completions %}
+        <div style="overflow-x: auto;">
+          <table class="compact-table" aria-label="Completion history">
+            <thead>
+              <tr>
+                <th scope="col">Outcome</th>
+                <th scope="col">Cost</th>
+                <th scope="col">Duration</th>
+                <th scope="col">Finished</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in completions | sort(attribute='finished_at', reverse=True) %}
+              <tr>
+                <td>
+                  <span class="badge outcome-{{ c.outcome }}"
+                        aria-label="Outcome: {{ c.outcome }}">{{ c.outcome }}</span>
+                </td>
+                <td class="nowrap">~${{ "%.4f"|format(c.cost_usd) }}</td>
+                <td class="nowrap">{{ "%.1f"|format(c.duration_s) }}s</td>
+                <td class="nowrap mono-sm">
+                  {{ c.finished_at[:16] if c.finished_at else '—' }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="empty-state" style="padding: 1.5rem 1rem;">
+          <p>No completions recorded yet.</p>
+        </div>
+      {% endif %}
+    </div>
+
+    {# Traces #}
+    <div class="item-card">
+      <div class="item-card-header">
+        <h2 class="item-card-title">Traces</h2>
+        {% if traces %}
+          <span class="item-card-count">{{ traces | length }}</span>
+        {% endif %}
+      </div>
+      {% if traces %}
+        <div style="overflow-x: auto;">
+          <table class="compact-table" aria-label="Linked traces">
+            <thead>
+              <tr>
+                <th scope="col">Run ID</th>
+                <th scope="col">Name</th>
+                <th scope="col">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for t in traces | sort(attribute='created_at', reverse=True) %}
+              <tr>
+                <td>
+                  <a href="/proxy?trace_id={{ t.run_id }}"
+                     class="mono-sm"
+                     aria-label="View trace {{ t.run_id }}">
+                    {{ t.run_id[:8] }}&hellip;
+                  </a>
+                </td>
+                <td style="font-size: 11px; color: #374151; word-break: break-word;">
+                  {{ t.name }}
+                </td>
+                <td class="nowrap mono-sm">
+                  {{ t.created_at[:16] if t.created_at else '—' }}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="empty-state" style="padding: 1.5rem 1rem;">
+          <p>No traces linked to this item.</p>
+        </div>
+      {% endif %}
+    </div>
+
+  </div>{# /.item-right #}
+
+</div>{# /.item-layout #}
+{% endblock %}
