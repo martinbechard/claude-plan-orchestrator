@@ -1,0 +1,214 @@
+{# langgraph_pipeline/web/templates/completions.html
+   Full paginated history of work-item completions with filters and summary stats.
+   Context variables:
+     rows          list[dict]  — completions rows: slug, item_type, outcome, cost_usd,
+                                 duration_s, finished_at, run_id
+     page          int         — current 1-based page number
+     total_pages   int         — total number of pages
+     slug          str         — active slug filter value
+     outcome       str         — active outcome filter value
+     date_from     str         — active date-from filter value (ISO date)
+     date_to       str         — active date-to filter value (ISO date)
+     total_count   int         — total completions matching active filters
+     success_count int         — completions with outcome=success (active filters)
+     warn_count    int         — completions with outcome=warn (active filters)
+     fail_count    int         — completions with outcome=fail (active filters)
+     total_cost_usd float      — sum of cost_usd for active filters
+   Design: docs/plans/2026-03-26-07-completions-paged-table-design.md
+#}
+{% extends "base.html" %}
+
+{% block title %}Completions — Plan Orchestrator{% endblock %}
+
+{% block content %}
+<h1>Completions</h1>
+
+{# ── Summary stats bar ─────────────────────────────────────────────────────── #}
+<div class="stats-bar" role="region" aria-label="Completion summary statistics">
+  <span class="stat">
+    <span class="stat-value">{{ total_count }}</span>
+    <span class="stat-label">Total</span>
+  </span>
+  <span class="stat">
+    <span class="stat-value badge badge-success">{{ success_count }}</span>
+    <span class="stat-label">Success</span>
+  </span>
+  <span class="stat">
+    <span class="stat-value badge badge-warn">{{ warn_count }}</span>
+    <span class="stat-label">Warn</span>
+  </span>
+  <span class="stat">
+    <span class="stat-value badge badge-error">{{ fail_count }}</span>
+    <span class="stat-label">Fail</span>
+  </span>
+  <span class="stat">
+    <span class="stat-value">~${{ "%.4f" | format(total_cost_usd) }}</span>
+    <span class="stat-label">Total Cost</span>
+  </span>
+</div>
+
+{# ── Filter bar ────────────────────────────────────────────────────────────── #}
+<form class="filter-bar" method="get" action="/completions" role="search"
+      aria-label="Filter completions">
+
+  <label>
+    Slug
+    <input type="search" name="slug" value="{{ slug | e }}"
+           placeholder="Substring match&hellip;" aria-label="Filter by slug substring">
+  </label>
+
+  <label>
+    Outcome
+    <select name="outcome" aria-label="Filter by outcome">
+      <option value="">All outcomes</option>
+      <option value="success" {% if outcome == "success" %}selected{% endif %}>Success</option>
+      <option value="warn"    {% if outcome == "warn"    %}selected{% endif %}>Warn</option>
+      <option value="fail"    {% if outcome == "fail"    %}selected{% endif %}>Fail</option>
+    </select>
+  </label>
+
+  <label>
+    From
+    <input type="date" name="date_from" value="{{ date_from | e }}"
+           aria-label="Start date">
+  </label>
+
+  <label>
+    To
+    <input type="date" name="date_to" value="{{ date_to | e }}"
+           aria-label="End date">
+  </label>
+
+  <button type="submit">Apply</button>
+
+  {% if slug or outcome or date_from or date_to %}
+  <a class="reset-link" href="/completions" aria-label="Clear all filters">Clear filters</a>
+  {% endif %}
+</form>
+
+{# ── Completions table or empty state ─────────────────────────────────────── #}
+{% if rows %}
+<div class="table-wrap" role="region" aria-label="Completions list">
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Slug</th>
+        <th scope="col">Type</th>
+        <th scope="col">Outcome</th>
+        <th scope="col">Cost</th>
+        <th scope="col">Duration</th>
+        <th scope="col">Finished At</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+
+      {# Determine outcome badge ─────────────────────────────────────────────── #}
+      {% if row.outcome == "success" %}
+        {% set badge_class = "badge-success" %}
+      {% elif row.outcome == "warn" %}
+        {% set badge_class = "badge-warn" %}
+      {% elif row.outcome == "fail" %}
+        {% set badge_class = "badge-error" %}
+      {% else %}
+        {% set badge_class = "badge-unknown" %}
+      {% endif %}
+
+      <tr>
+        <td>
+          {% if row.slug %}
+            <a href="/item/{{ row.slug | e }}"
+               aria-label="View work item {{ row.slug | e }}">{{ row.slug | e }}</a>
+          {% else %}
+            &mdash;
+          {% endif %}
+        </td>
+
+        <td>{{ row.item_type | e if row.item_type else "&mdash;" | safe }}</td>
+
+        <td>
+          <span class="badge {{ badge_class }}" role="status">
+            {{ row.outcome | e if row.outcome else "unknown" }}
+          </span>
+        </td>
+
+        <td>
+          {% if row.cost_usd is not none and row.cost_usd != "" %}
+            ~${{ "%.4f" | format(row.cost_usd | float) }}
+          {% else %}
+            &mdash;
+          {% endif %}
+        </td>
+
+        <td>
+          {% if row.duration_s is not none and row.duration_s != "" %}
+            {{ "%.1f" | format(row.duration_s | float) }}s
+          {% else %}
+            &mdash;
+          {% endif %}
+        </td>
+
+        <td>
+          {% if row.finished_at %}
+            <time datetime="{{ row.finished_at | e }}" class="local-time">
+              {{ row.finished_at[:10] | e }} {{ row.finished_at[11:19] | e }}
+            </time>
+          {% else %}
+            &mdash;
+          {% endif %}
+        </td>
+      </tr>
+
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# ── Pagination ────────────────────────────────────────────────────────────── #}
+{% set has_prev = page > 1 %}
+{% set has_next = page < total_pages %}
+
+{% set qs_parts = [] %}
+{% if slug %}{% set _ = qs_parts.append("slug=" ~ slug) %}{% endif %}
+{% if outcome %}{% set _ = qs_parts.append("outcome=" ~ outcome) %}{% endif %}
+{% if date_from %}{% set _ = qs_parts.append("date_from=" ~ date_from) %}{% endif %}
+{% if date_to %}{% set _ = qs_parts.append("date_to=" ~ date_to) %}{% endif %}
+{% set qs_base = qs_parts | join("&") %}
+
+<nav class="pagination" aria-label="Pagination">
+  {% if has_prev %}
+    {% set prev_page = page - 1 %}
+    {% set prev_qs = (qs_base ~ "&page=" ~ prev_page) if qs_base else ("page=" ~ prev_page) %}
+    <a href="/completions?{{ prev_qs }}" rel="prev" aria-label="Go to previous page">&larr; Previous</a>
+  {% else %}
+    <span class="disabled" aria-disabled="true">&larr; Previous</span>
+  {% endif %}
+
+  <span>Page {{ page }} of {{ total_pages }}</span>
+
+  {% if has_next %}
+    {% set next_page = page + 1 %}
+    {% set next_qs = (qs_base ~ "&page=" ~ next_page) if qs_base else ("page=" ~ next_page) %}
+    <a href="/completions?{{ next_qs }}" rel="next" aria-label="Go to next page">Next &rarr;</a>
+  {% else %}
+    <span class="disabled" aria-disabled="true">Next &rarr;</span>
+  {% endif %}
+</nav>
+
+{% else %}
+{# ── Empty state ───────────────────────────────────────────────────────────── #}
+<div class="empty-state" role="status" aria-live="polite">
+  <div class="icon" aria-hidden="true">&#9989;</div>
+  {% if slug or outcome or date_from or date_to %}
+    <p>No completions match the current filters.</p>
+    <p><a href="/completions">Clear filters</a> to see all completions.</p>
+  {% else %}
+    <p>No completions recorded yet.</p>
+    <p style="font-size:12px;color:#aaa;margin-top:0.25rem;">
+      Completions appear here once work items finish processing.
+    </p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}
