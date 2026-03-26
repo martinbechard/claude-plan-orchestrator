@@ -38,7 +38,7 @@ sections:
   - id: '1.2'
     name: Wire task_runner and validator to POST cost data to /api/cost
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '1.1'
     description: Implement the work item .claude/plans/.claimed/27-tool-call-cost-attribution-dummy-data.md
@@ -53,3 +53,5 @@ sections:
     last_attempt: '2026-03-26T14:53:54.905505'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T14:59:56.298641'
+    result_message: 'PASS: All good'
