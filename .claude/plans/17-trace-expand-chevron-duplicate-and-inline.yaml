@@ -20,7 +20,7 @@ sections:
   - id: '1.1'
     name: Fix CSS duplicate chevron on grandchild-toggle summary
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the CSS fix described in: .claude/plans/.claimed/17-trace-expand-chevron-duplicate-and-inline.md
 
       Design doc: docs/plans/2026-03-26-17-trace-expand-chevron-duplicate-and-inline-design.md
@@ -35,6 +35,11 @@ sections:
     last_attempt: '2026-03-26T10:54:25.987516'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T10:55:12.207631'
+    result_message: Added TestCallClaude class (9 tests) to test_claude_cli.py covering
+      success, timeout, non-zero returncode, JSON decode error, and OSError paths.
+      Verified test_suspension.py already used ClaudeResult mocks from task 1.1. All
+      71 tests in scope pass.
   - id: '1.2'
     name: Add get_children_batch to proxy.py and pass grandchildren to route
     agent: coder
