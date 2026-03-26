@@ -2,6 +2,12 @@
 
 ## Status: Open
 
+## RETURNED FROM COMPLETED — No Visible Implementation
+
+This item was previously marked as completed but there is no evidence of the
+implementation in the dashboard UI. No timeline toggle button exists, no
+timeline view is rendered. Needs re-verification and completion.
+
 ## Priority: Medium
 
 ## Summary
