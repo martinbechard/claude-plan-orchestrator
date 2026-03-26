@@ -2,7 +2,7 @@
    Full paginated history of work-item completions with filters and summary stats.
    Context variables:
      rows          list[dict]  — completions rows: slug, item_type, outcome, cost_usd,
-                                 duration_s, finished_at, run_id
+                                 duration_s, tokens_per_minute, finished_at, run_id
      page          int         — current 1-based page number
      total_pages   int         — total number of pages
      slug          str         — active slug filter value
@@ -97,6 +97,7 @@
         <th scope="col">Outcome</th>
         <th scope="col">Cost</th>
         <th scope="col">Duration</th>
+        <th scope="col">Velocity</th>
         <th scope="col">Finished At</th>
       </tr>
     </thead>
@@ -143,6 +144,19 @@
         <td>
           {% if row.duration_s is not none and row.duration_s != "" %}
             {{ "%.1f" | format(row.duration_s | float) }}s
+          {% else %}
+            &mdash;
+          {% endif %}
+        </td>
+
+        <td>
+          {% if row.tokens_per_minute and row.tokens_per_minute > 0 %}
+            {% set tpm = row.tokens_per_minute | float %}
+            {% if tpm >= 1000 %}
+              {{ "%.1f" | format(tpm / 1000) }}k tok/min
+            {% else %}
+              {{ "%.0f" | format(tpm) }} tok/min
+            {% endif %}
           {% else %}
             &mdash;
           {% endif %}
