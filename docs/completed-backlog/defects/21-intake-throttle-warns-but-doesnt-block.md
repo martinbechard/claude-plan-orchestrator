@@ -4,6 +4,17 @@
 
 ## Priority: High
 
+## RETURNED FROM COMPLETED — Only 1 of 3 Tasks Done
+
+Previous attempt completed task 1.1 (shutdown event module) after 3 escalation
+cycles ($1.74). Then Claude stopped responding (likely quota exhaustion). Runs
+2-5 all had $0.00 cost — Claude returned empty every time. Pipeline archived
+after 5 warn outcomes despite tasks 1.2 and 2.1 never attempted.
+
+Tasks remaining:
+- 1.2: Implement blocking throttle wait in intake.py and update limits to 50
+- 2.1: Update poller.py MAX_DEFECTS_PER_HOUR and MAX_FEATURES_PER_HOUR to 50
+
 ## Summary
 
 The intake_analyze throttle in intake.py prints a warning when the per-type
@@ -22,9 +33,8 @@ processed regardless of the throttle state.
 ## Expected Behavior
 
 1. Raise limits to 50 per hour for both features and defects.
-2. When the throttle is triggered, the pipeline should **wait** (block) until
-   the count drops below the limit before proceeding, similar to the quota
-   probe idle loop pattern.
+2. When the throttle is triggered, the pipeline should wait (block) until
+   the count drops below the limit before proceeding.
 3. Use shutdown_event.wait() with a reasonable interval (e.g. 60 seconds)
    so the pipeline remains responsive to shutdown signals while waiting.
 4. Log a clear message when entering the throttle wait and when resuming.
@@ -35,11 +45,10 @@ In intake_analyze(), when _check_throttle() returns True:
 - Enter a blocking loop: log that processing is paused due to throttle,
   then call shutdown_event.wait(60) in a loop, re-checking _check_throttle()
   each iteration until it returns False or shutdown is requested.
-- Model this after _run_quota_probe_loop() in cli.py.
 
 Update constants:
 - MAX_INTAKES_PER_HOUR: defect=50, feature=50, analysis=50
 
-Also note: there are TWO separate throttle systems (intake.py and poller.py)
-with separate files and separate limits. These should be consolidated or at
-minimum use consistent limits.
+Also update poller.py:
+- MAX_DEFECTS_PER_HOUR = 50
+- MAX_FEATURES_PER_HOUR = 50
