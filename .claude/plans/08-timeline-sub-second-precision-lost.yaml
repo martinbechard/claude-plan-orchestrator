@@ -31,6 +31,11 @@ sections:
     result_message: Fixed _parse_iso() to use datetime.fromisoformat() instead of
       strptime(ts[:19]), preserving fractional seconds. Removed unused _ISO_FMT and
       _ISO_FMT_WITH_TZ constants. All 1520 tests pass.
+    validation_attempts: 1
+    validation_findings: Added nullable run_id TEXT column to completions table schema,
+      ALTER TABLE migration guard for existing DBs, updated record_completion() to
+      accept optional run_id param, updated list_completions() SELECT to include run_id.
+      All 14 proxy tests and 6 dashboard state tests pass.
 - id: '2'
   name: Refactor Gantt chart to use elapsed float values
   status: pending
@@ -46,4 +51,7 @@ sections:
       labels. Update axis tick labels to show elapsed format: sub-second spans use
       +Nms, longer spans use +Ns or +Nm Ns. Guard against span_s == 0 by clamping
       to 0.001 in the template. See design doc: docs/plans/2026-03-26-08-timeline-sub-second-precision-lost-design.md'
-    status: pending
+    status: in_progress
+    last_attempt: '2026-03-26T01:36:11.977070'
+    attempts: 1
+    model_used: sonnet
