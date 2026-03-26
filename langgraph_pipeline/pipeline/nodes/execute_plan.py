@@ -81,7 +81,7 @@ def execute_plan(state: PipelineState) -> dict:
     task_count = len(final_task_state.get("task_results") or [])
     print(
         f"[execute_plan] Executor subgraph finished for {item_slug!r}: "
-        f"{task_count} task(s), ~${cost_usd:.4f}"
+        f"{task_count} task(s), ${cost_usd:.4f}"
     )
 
     add_trace_metadata({

@@ -251,7 +251,7 @@ def _write_task_log(
             if result_capture:
                 cost = result_capture.get("total_cost_usd", 0)
                 usage = result_capture.get("usage", {})
-                f.write(f"Cost: ~${cost:.4f}\n")
+                f.write(f"Cost: ${cost:.4f}\n")
                 f.write(
                     f"Tokens: {usage.get('input_tokens', 0)} input / "
                     f"{usage.get('output_tokens', 0)} output\n"

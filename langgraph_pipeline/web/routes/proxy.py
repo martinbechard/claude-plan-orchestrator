@@ -133,7 +133,7 @@ def _enrich_run(run: dict) -> dict:
     run["display_slug"] = meta.get("slug") or meta.get("item_slug") or ""
     run["display_model"] = run.get("model") or ""
     cost = meta.get("cost") or meta.get("total_cost")
-    run["display_cost"] = f"~${float(cost):.4f}" if cost is not None else ""
+    run["display_cost"] = f"${float(cost):.4f}" if cost is not None else ""
     return run
 
 

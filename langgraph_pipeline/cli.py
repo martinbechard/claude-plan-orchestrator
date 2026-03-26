@@ -258,7 +258,7 @@ def _log_startup_banner(
         logger.info("Backlog dir   : %s", args.backlog_dir)
     logger.info(
         "Budget cap    : %s",
-        f"~${args.budget_cap:.2f} USD" if args.budget_cap is not None else "none",
+        f"${args.budget_cap:.2f} USD" if args.budget_cap is not None else "none",
     )
     logger.info("Dry run       : %s", "yes" if args.dry_run else "no")
     logger.info("Slack         : %s", "disabled" if args.no_slack else "enabled")
@@ -291,7 +291,7 @@ def _is_budget_exhausted(state: PipelineState, budget_cap_usd: Optional[float]) 
     cost = state.get("session_cost_usd", 0.0)
     if cost >= budget_cap_usd:
         logger.warning(
-            "Budget cap exhausted: session_cost_usd=~$%.4f >= cap=~$%.2f",
+            "Budget cap exhausted: session_cost_usd=$%.4f >= cap=$%.2f",
             cost,
             budget_cap_usd,
         )
@@ -446,7 +446,7 @@ def _run_single_item(
             return EXIT_CODE_CLEAN
 
         logger.info(
-            "Item complete: cost=~$%.4f tokens_in=%d tokens_out=%d",
+            "Item complete: cost=$%.4f tokens_in=%d tokens_out=%d",
             final_state.get("session_cost_usd", 0.0),
             final_state.get("session_input_tokens", 0),
             final_state.get("session_output_tokens", 0),
@@ -512,7 +512,7 @@ def _run_once(
             return EXIT_CODE_CLEAN
 
         logger.info(
-            "Item complete: cost=~$%.4f tokens_in=%d tokens_out=%d",
+            "Item complete: cost=$%.4f tokens_in=%d tokens_out=%d",
             final_state.get("session_cost_usd", 0.0),
             final_state.get("session_input_tokens", 0),
             final_state.get("session_output_tokens", 0),
@@ -747,7 +747,7 @@ def _run_scan_loop(
 
                     cost = final_state.get("session_cost_usd", 0.0)
                     logger.debug(
-                        "Graph invocation complete: cost=~$%.4f tokens_in=%d tokens_out=%d",
+                        "Graph invocation complete: cost=$%.4f tokens_in=%d tokens_out=%d",
                         cost,
                         final_state.get("session_input_tokens", 0),
                         final_state.get("session_output_tokens", 0),

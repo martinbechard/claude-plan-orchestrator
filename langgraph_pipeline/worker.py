@@ -275,7 +275,7 @@ def main() -> int:
             return EXIT_CODE_ERROR
 
         logger.info(
-            "Worker complete: cost=~$%.4f tokens_in=%d tokens_out=%d duration=%.1fs",
+            "Worker complete: cost=$%.4f tokens_in=%d tokens_out=%d duration=%.1fs",
             cost_usd,
             input_tokens,
             output_tokens,

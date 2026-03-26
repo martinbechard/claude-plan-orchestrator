@@ -157,10 +157,10 @@ class UsageTracker:
         model = self.task_models.get(task_id, "")
         model_str = f" [{model}]" if model else ""
         return (
-            f"[Usage] Task {task_id}{model_str}: ~${u.total_cost_usd:.4f} | "
+            f"[Usage] Task {task_id}{model_str}: ${u.total_cost_usd:.4f} | "
             f"{u.input_tokens:,} in / {u.output_tokens:,} out / "
             f"{u.cache_read_tokens:,} cached ({cache_pct:.0f}% cache hit) | "
-            f"Running: ~${total.total_cost_usd:.4f}"
+            f"Running: ${total.total_cost_usd:.4f}"
         )
 
     def format_final_summary(self, plan: dict) -> str:
@@ -170,7 +170,7 @@ class UsageTracker:
         lines = [
             "\n=== Usage Summary (API-Equivalent Estimates) ===",
             "(These are API-equivalent costs reported by Claude CLI, not actual subscription charges)",
-            f"Total API-equivalent cost: ~${total.total_cost_usd:.4f}",
+            f"Total API-equivalent cost: ${total.total_cost_usd:.4f}",
             f"Total tokens: {total.input_tokens:,} input / {total.output_tokens:,} output",
             f"Cache: {total.cache_read_tokens:,} read / {total.cache_creation_tokens:,} created ({cache_rate:.0%} hit rate)",
             f"API time: {total.duration_api_ms / 1000:.1f}s across {total.num_turns} turns",
@@ -184,7 +184,7 @@ class UsageTracker:
                 1 for t in section.get("tasks", []) if t.get("id") in self.task_usages
             )
             if task_count > 0:
-                lines.append(f"  {sname}: ~${su.total_cost_usd:.4f} ({task_count} tasks)")
+                lines.append(f"  {sname}: ${su.total_cost_usd:.4f} ({task_count} tasks)")
         return "\n".join(lines)
 
     def write_report(self, plan: dict, plan_path: str) -> Optional[Path]:
@@ -270,7 +270,7 @@ class UsageTracker:
                 "name": work_item_name,
                 "cost_usd": cost,
             })
-            print(f"[Usage] {work_item_name}: ~${cost:.4f} (API-equivalent)")
+            print(f"[Usage] {work_item_name}: ${cost:.4f} (API-equivalent)")
         except (FileNotFoundError, json.JSONDecodeError, ValueError):
             pass  # Report not available, skip silently
 
@@ -281,7 +281,7 @@ class UsageTracker:
             "(These are API-equivalent costs reported by Claude CLI, "
             "not actual subscription charges)"
         )
-        lines.append(f"Total API-equivalent cost: ~${self.total_cost_usd:.4f}")
+        lines.append(f"Total API-equivalent cost: ${self.total_cost_usd:.4f}")
         lines.append(
             f"Total tokens: {self.total_input_tokens:,} input / "
             f"{self.total_output_tokens:,} output"
@@ -289,7 +289,7 @@ class UsageTracker:
         if self.work_item_costs:
             lines.append("Per work item:")
             for item in self.work_item_costs:
-                lines.append(f"  {item['name']}: ~${item['cost_usd']:.4f}")
+                lines.append(f"  {item['name']}: ${item['cost_usd']:.4f}")
         return "\n".join(lines)
 
     def write_session_report(self) -> Optional[str]:

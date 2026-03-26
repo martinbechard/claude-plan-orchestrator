@@ -226,13 +226,13 @@ def test_tracker_format_final_summary():
     }
     summary = tracker.format_final_summary(plan)
     assert "=== Usage Summary (API-Equivalent Estimates) ===" in summary
-    assert "~$0.4000" in summary
+    assert "$0.4000" in summary
     assert "Total API-equivalent cost:" in summary
     assert "not actual subscription charges" in summary
     assert "Phase 1" in summary
     assert "Phase 2" in summary
-    assert "~$0.1000" in summary
-    assert "~$0.3000" in summary
+    assert "$0.1000" in summary
+    assert "$0.3000" in summary
 
 
 def test_tracker_write_report(tmp_path, monkeypatch):

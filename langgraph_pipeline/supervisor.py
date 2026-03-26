@@ -340,7 +340,7 @@ def _reap_one_worker(
 
     if success:
         logger.info(
-            "Worker PID %d: success. item=%s cost=~$%.4f duration=%.1fs",
+            "Worker PID %d: success. item=%s cost=$%.4f duration=%.1fs",
             pid,
             item_path,
             cost_usd,
@@ -354,7 +354,7 @@ def _reap_one_worker(
         # Handled failure (e.g. quota exhausted) — return item to backlog for retry.
         failure_msg = (
             f"Worker PID {pid}: handled failure. item={item_path} "
-            f"cost=~${cost_usd:.4f} duration={duration_s:.1f}s message={message}"
+            f"cost=${cost_usd:.4f} duration={duration_s:.1f}s message={message}"
         )
         logger.warning(failure_msg)
         get_dashboard_state().add_error(failure_msg)
@@ -372,14 +372,14 @@ def _reap_one_worker(
 
     if budget_cap_usd is not None and cumulative_cost_usd[0] >= budget_cap_usd:
         logger.warning(
-            "Budget cap reached: cumulative=~$%.4f >= cap=~$%.2f",
+            "Budget cap reached: cumulative=$%.4f >= cap=$%.2f",
             cumulative_cost_usd[0],
             budget_cap_usd,
         )
         if slack is not None:
             slack.send_status(
-                f"Budget cap ~${budget_cap_usd:.2f} USD reached "
-                f"(spent ~${cumulative_cost_usd[0]:.4f}). "
+                f"Budget cap ${budget_cap_usd:.2f} USD reached "
+                f"(spent ${cumulative_cost_usd[0]:.4f}). "
                 "Stopping dispatch of new items.",
                 level="warning",
             )
@@ -510,7 +510,7 @@ def run_supervisor_loop(
         logger.info(
             "[DRY RUN] Supervisor loop: max_workers=%d budget_cap=%s",
             max_workers,
-            f"~${budget_cap_usd:.2f}" if budget_cap_usd is not None else "none",
+            f"${budget_cap_usd:.2f}" if budget_cap_usd is not None else "none",
         )
         while not shutdown_event.is_set():
             logger.info("[DRY RUN] Would dispatch up to %d workers.", max_workers)
@@ -530,7 +530,7 @@ def run_supervisor_loop(
     logger.info(
         "Supervisor starting: max_workers=%d budget_cap=%s",
         max_workers,
-        f"~${budget_cap_usd:.2f} USD" if budget_cap_usd is not None else "none",
+        f"${budget_cap_usd:.2f} USD" if budget_cap_usd is not None else "none",
     )
 
     try:
@@ -579,7 +579,7 @@ def run_supervisor_loop(
             )
 
         logger.info(
-            "Supervisor exiting. Total cumulative cost: ~$%.4f USD.",
+            "Supervisor exiting. Total cumulative cost: $%.4f USD.",
             cumulative_cost_usd[0],
         )
 
