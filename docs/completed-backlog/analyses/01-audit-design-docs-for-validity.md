@@ -39,5 +39,3 @@ instructions.
 
 Post a summary to Slack and save the classification report to
 docs/reports/design-doc-audit.md.
-
-## LangSmith Trace: 78010284-c590-427a-b027-ea14d8a13ec5
