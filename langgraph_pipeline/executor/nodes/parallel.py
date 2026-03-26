@@ -490,6 +490,8 @@ def execute_parallel_task(state: TaskState) -> dict:
             ],
         }
 
+    (worktree_path / "tmp").mkdir(parents=True, exist_ok=True)
+
     prompt = _build_parallel_prompt(plan_data, section, task, plan_path, task_attempt)
     model_cli_name = MODEL_TIER_TO_CLI_NAME.get(effective_model, effective_model)
     print(

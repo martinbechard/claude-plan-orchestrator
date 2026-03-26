@@ -162,7 +162,7 @@ def create_worktree(plan_name: str, task_id: str) -> Optional[Path]:
 
         # Clear stale task-status.json inherited from main branch to prevent
         # the orchestrator from reading results from a previous plan's run
-        stale_status = worktree_path / ".claude" / "plans" / "task-status.json"
+        stale_status = worktree_path / STATUS_FILE_PATH
         if stale_status.exists():
             stale_status.unlink(missing_ok=True)
 

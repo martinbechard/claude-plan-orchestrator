@@ -580,6 +580,9 @@ def execute_task(state: TaskState) -> dict:
     # Stop dev server before task execution to avoid cache/runtime conflicts
     _stop_dev_server(dev_server_port)
 
+    # Ensure the status file directory exists before Claude runs (agents cannot rely on it)
+    Path(STATUS_FILE_PATH).parent.mkdir(parents=True, exist_ok=True)
+
     # Execute Claude CLI
     _exec_start = time.time()
     cli_success, returncode, result_capture, _stdout, _stderr, tool_calls = _run_claude(prompt, model_cli_name)

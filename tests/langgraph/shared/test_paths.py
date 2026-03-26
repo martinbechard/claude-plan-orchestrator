@@ -44,11 +44,8 @@ class TestStatusFilePath:
     def test_is_string(self):
         assert isinstance(STATUS_FILE_PATH, str)
 
-    def test_under_plans_dir(self):
-        assert STATUS_FILE_PATH.startswith(PLANS_DIR)
-
     def test_expected_value(self):
-        assert STATUS_FILE_PATH == ".claude/plans/task-status.json"
+        assert STATUS_FILE_PATH == "tmp/task-status.json"
 
 
 class TestTaskLogDir:

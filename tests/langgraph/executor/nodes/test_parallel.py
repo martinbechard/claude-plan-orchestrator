@@ -300,7 +300,7 @@ class TestReadWorktreeStatus:
         assert result is None
 
     def test_reads_valid_json(self, tmp_path):
-        status_path = tmp_path / ".claude" / "plans"
+        status_path = tmp_path / "tmp"
         status_path.mkdir(parents=True)
         (status_path / "task-status.json").write_text(
             json.dumps({"task_id": "1.1", "status": "completed", "message": "Done"})
@@ -309,7 +309,7 @@ class TestReadWorktreeStatus:
         assert result == {"task_id": "1.1", "status": "completed", "message": "Done"}
 
     def test_returns_none_on_invalid_json(self, tmp_path):
-        status_path = tmp_path / ".claude" / "plans"
+        status_path = tmp_path / "tmp"
         status_path.mkdir(parents=True)
         (status_path / "task-status.json").write_text("not json {{")
         result = _read_worktree_status(tmp_path)

@@ -16,7 +16,7 @@ venv/
 .env.local
 
 # Auto-generated (user-specific)
-.claude/plans/task-status.json
+tmp/task-status.json
 .claude/plans/current-plan.yaml
 .claude/plans/.stop
 .claude/plans/.pipeline.pid
