@@ -1,6 +1,6 @@
 # langgraph_pipeline/web/routes/item.py
 # FastAPI router for the GET /item/{slug} work-item detail page.
-# Design: docs/plans/2026-03-26-06-work-item-detail-page-design.md
+# Design: docs/plans/2026-03-26-17-work-item-status-clarity-design.md
 
 """FastAPI router that serves the work-item detail page.
 
@@ -9,6 +9,7 @@ Endpoints:
                         completion history, and linked root traces.
 """
 
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -18,18 +19,24 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
-from langgraph_pipeline.shared.paths import BACKLOG_DIRS, COMPLETED_DIRS
+from langgraph_pipeline.shared.paths import BACKLOG_DIRS, CLAIMED_DIR, COMPLETED_DIRS
 from langgraph_pipeline.web.proxy import get_proxy
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 _PLANS_DIR = Path(".claude/plans")
+_CLAIMED_PATH = Path(CLAIMED_DIR)
+_DESIGN_DOCS_DIR = Path("docs/plans")
 
-_STATUS_RUNNING = "running"
-_STATUS_COMPLETED = "completed"
-_STATUS_QUEUED = "queued"
-_STATUS_UNKNOWN = "unknown"
+_STAGE_EXECUTING = "executing"
+_STAGE_COMPLETED = "completed"
+_STAGE_PLANNING = "planning"
+_STAGE_CLAIMED = "claimed"
+_STAGE_DESIGNING = "designing"
+_STAGE_QUEUED = "queued"
+_STAGE_STUCK = "stuck"
+_STAGE_UNKNOWN = "unknown"
 
 # ─── Jinja2 Setup ─────────────────────────────────────────────────────────────
 
@@ -62,7 +69,8 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
     plan_tasks = _load_plan_tasks(slug)
     completions = _load_completions(slug)
     traces = _load_root_traces(slug)
-    status = _derive_status(slug, completions)
+    pipeline_stage = _derive_pipeline_stage(slug, completions)
+    active_worker = _get_active_worker(slug)
     total_cost_usd = sum(c.get("cost_usd", 0.0) for c in completions)
 
     return templates.TemplateResponse(
@@ -71,7 +79,8 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
         {
             "slug": slug,
             "item_type": item_type,
-            "status": status,
+            "pipeline_stage": pipeline_stage,
+            "active_worker": active_worker,
             "total_cost_usd": total_cost_usd,
             "requirements_html": requirements_html,
             "plan_tasks": plan_tasks,
@@ -209,35 +218,126 @@ def _load_root_traces(slug: str) -> list[dict]:
     return proxy.list_root_traces_by_slug(slug)
 
 
-def _derive_status(slug: str, completions: list[dict]) -> str:
-    """Derive the current status of a work item.
+def _find_plan_yaml(slug: str) -> Optional[Path]:
+    """Locate the plan YAML file for the given slug.
 
-    Checks active-worker state via dashboard_state, then falls back to
-    completion history and plan file presence.
+    Tries an exact match first, then a prefix glob.
+
+    Args:
+        slug: Work item slug.
+
+    Returns:
+        Path to the YAML file, or None if not found.
+    """
+    exact = _PLANS_DIR / f"{slug}.yaml"
+    if exact.exists():
+        return exact
+    matches = sorted(_PLANS_DIR.glob(f"{slug}*.yaml"))
+    return matches[0] if matches else None
+
+
+def _find_design_doc(slug: str) -> Optional[Path]:
+    """Locate the design document for the given slug in docs/plans/.
+
+    Matches files of the form ``docs/plans/*-<slug>-design.md``.
+
+    Args:
+        slug: Work item slug.
+
+    Returns:
+        Path to the design doc, or None if not found.
+    """
+    matches = sorted(_DESIGN_DOCS_DIR.glob(f"*-{slug}-design.md"))
+    return matches[0] if matches else None
+
+
+def _derive_pipeline_stage(slug: str, completions: list[dict]) -> str:
+    """Derive the current pipeline stage of a work item.
+
+    Checks the full waterfall: active worker → completed backlog → claimed
+    state → plan/design docs → backlog presence. The "stuck" sub-stage is
+    returned when all prior completions failed and the item is still pending.
 
     Args:
         slug: Work item slug.
         completions: List of completion records for this slug.
 
     Returns:
-        One of "running", "completed", "queued", "unknown".
+        One of "executing", "completed", "planning", "claimed", "designing",
+        "queued", "stuck", or "unknown".
+    """
+    # 1. Active worker → executing
+    try:
+        from langgraph_pipeline.web.dashboard_state import get_dashboard_state
+        state = get_dashboard_state()
+        for worker in state.active_workers.values():
+            if worker.slug == slug:
+                return _STAGE_EXECUTING
+    except Exception:
+        pass
+
+    all_failed = bool(completions) and all(
+        c.get("outcome") != "success" for c in completions
+    )
+
+    # 2. Item in completed backlog → completed
+    for dir_str in COMPLETED_DIRS.values():
+        if (Path(dir_str) / f"{slug}.md").exists():
+            return _STAGE_COMPLETED
+
+    # 3–5. Item in .claimed
+    claimed_file = _CLAIMED_PATH / f"{slug}.md"
+    if claimed_file.exists():
+        if all_failed:
+            return _STAGE_STUCK
+        if _find_plan_yaml(slug) is not None:
+            return _STAGE_EXECUTING
+        if _find_design_doc(slug) is not None:
+            return _STAGE_PLANNING
+        return _STAGE_CLAIMED
+
+    # 6. Plan YAML exists → executing
+    if _find_plan_yaml(slug) is not None:
+        return _STAGE_EXECUTING
+
+    # 7. Design doc exists → designing
+    if _find_design_doc(slug) is not None:
+        return _STAGE_DESIGNING
+
+    # 8. Item in backlog dir → queued (or stuck)
+    if _find_requirements_file(slug) is not None:
+        return _STAGE_STUCK if all_failed else _STAGE_QUEUED
+
+    # 9. Otherwise → unknown
+    return _STAGE_UNKNOWN
+
+
+def _get_active_worker(slug: str) -> Optional[dict]:
+    """Return active worker info for the given slug, or None if not running.
+
+    Scans DashboardState.active_workers for a WorkerInfo whose slug matches.
+    Elapsed time is formatted as "Xm Ys" for display.
+
+    Args:
+        slug: Work item slug.
+
+    Returns:
+        Dict with keys ``pid``, ``elapsed_s``, ``run_id``, or None.
     """
     try:
         from langgraph_pipeline.web.dashboard_state import get_dashboard_state
         state = get_dashboard_state()
-        active_slugs = {w.get("slug") for w in (state.get("active_workers") or [])}
-        if slug in active_slugs:
-            return _STATUS_RUNNING
+        now = time.monotonic()
+        for worker in state.active_workers.values():
+            if worker.slug == slug:
+                elapsed_total = now - worker.start_time
+                minutes = int(elapsed_total // 60)
+                seconds = int(elapsed_total % 60)
+                return {
+                    "pid": worker.pid,
+                    "elapsed_s": f"{minutes}m {seconds}s",
+                    "run_id": worker.run_id,
+                }
     except Exception:
         pass
-
-    if completions:
-        return _STATUS_COMPLETED
-
-    if (_PLANS_DIR / f"{slug}.yaml").exists():
-        return _STATUS_QUEUED
-
-    if _find_requirements_file(slug) is not None:
-        return _STATUS_QUEUED
-
-    return _STATUS_UNKNOWN
+    return None
