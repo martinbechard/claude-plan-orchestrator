@@ -33,3 +33,5 @@ This is a trace readability issue, not a functional bug. Options:
    are populated and outputs are empty.
 3. In the trace detail page, hide empty outputs ({}) rather than showing
    an "Outputs" section with just {}.
+
+## LangSmith Trace: 8858d60e-9f02-480e-9c79-5e8aab5c4b2f
