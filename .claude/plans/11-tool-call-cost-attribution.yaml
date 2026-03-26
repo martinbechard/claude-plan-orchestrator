@@ -77,7 +77,7 @@ sections:
   - id: '2.2'
     name: Add tool attribution section to analysis template
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: .claude/plans/.claimed/11-tool-call-cost-attribution.md
 
 
@@ -92,3 +92,8 @@ sections:
     last_attempt: '2026-03-26T12:08:23.155667'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T12:10:56.768063'
+    result_message: 'Added Tool Call Cost Attribution section to analysis.html. Table
+      renders tool_attribution list with columns: tool name, slug link, task ID, detail
+      (monospace, truncated), result KB, estimated cost. Includes proportional-estimate
+      disclaimer. Updated template header comment. All 1551 tests pass.'
