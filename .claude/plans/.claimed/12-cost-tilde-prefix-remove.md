@@ -24,3 +24,5 @@ information since users already understand API costs are estimates.
 Remove the ~ prefix everywhere cost is rendered. Display plain "$0.0123"
 or "$1.23" without the tilde. If an approximation disclaimer is needed,
 add a footnote or tooltip rather than a per-value prefix character.
+
+## LangSmith Trace: f37e9ed5-8e60-44f7-89cc-766f27645be3
