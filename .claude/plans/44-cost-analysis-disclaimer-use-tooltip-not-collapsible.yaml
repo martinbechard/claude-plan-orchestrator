@@ -26,11 +26,17 @@ sections:
     result_message: 'Replaced <details>/<summary> disclaimer with CSS-only hover tooltip:
       .cost-info-toggle/.cost-info-panel replaced by .cost-info-icon/.cost-info-tooltip
       in analysis.html'
+    validation_attempts: 1
+    validation_findings: All 5 acceptance criteria met. CSS-only tooltip with .cost-info-icon/.cost-info-tooltip
+      replaces <details>/<summary>. Build passes. 1289/1289 tests pass.
   - id: '1.2'
     name: Bump plugin version and update release notes
     agent: coder
     description: 'Bump plugin.json version (patch) and add a RELEASE-NOTES.md entry
       for this fix. Work item: .claude/plans/.claimed/44-cost-analysis-disclaimer-use-tooltip-not-collapsible.md'
-    status: pending
+    status: in_progress
     depends_on:
     - '1.1'
+    last_attempt: '2026-03-26T19:07:27.672326'
+    attempts: 1
+    model_used: sonnet
