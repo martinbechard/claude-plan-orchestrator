@@ -76,7 +76,7 @@ sections:
   - id: '2.1'
     name: Update poller.py MAX_DEFECTS_PER_HOUR and MAX_FEATURES_PER_HOUR to 50
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the fix described in: .claude/plans/.claimed/21-intake-throttle-warns-but-doesnt-block.md
 
 
@@ -92,9 +92,8 @@ sections:
     last_attempt: '2026-03-26T12:20:35.787496'
     attempts: 2
     model_used: opus
-    completed_at: '2026-03-26T12:18:28.186284'
-    result_message: Updated MAX_DEFECTS_PER_HOUR and MAX_FEATURES_PER_HOUR from 20
-      to 50 in plan-orchestrator.py to match intake.py limits. All 1551 tests pass.
+    completed_at: '2026-03-26T12:22:19.238098'
+    result_message: 'PASS: All good'
     validation_attempts: 1
     validation_findings: 'Wrong file updated: langgraph_pipeline/slack/poller.py still
       has MAX_DEFECTS_PER_HOUR=20 and MAX_FEATURES_PER_HOUR=20. Implementation modified
