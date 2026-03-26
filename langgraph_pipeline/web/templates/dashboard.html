@@ -58,6 +58,7 @@
       <thead>
         <tr>
           <th scope="col">Item</th>
+          <th scope="col">Trace</th>
           <th scope="col">Type</th>
           <th scope="col">Outcome</th>
           <th scope="col">Cost</th>
@@ -67,7 +68,7 @@
       </thead>
       <tbody id="completions-container" aria-live="polite" aria-label="Recent completions">
         <tr id="completions-empty">
-          <td colspan="6" class="empty-state">
+          <td colspan="7" class="empty-state">
             <p>No completions yet</p>
           </td>
         </tr>
@@ -101,6 +102,7 @@
     <div class="worker-card-body">
       <span class="worker-elapsed" aria-label="Elapsed time"></span>
       <span class="worker-pid" aria-label="Process ID"></span>
+      <a class="trace-link" href="#" target="_blank" rel="noopener" style="display:none" aria-label="View trace">View Trace</a>
     </div>
   </article>
 </template>
@@ -109,6 +111,9 @@
 <template id="tpl-completion-row">
   <tr>
     <td class="completion-slug"></td>
+    <td class="completion-trace">
+      <a class="trace-link" href="#" target="_blank" rel="noopener" style="display:none" aria-label="View trace">Trace</a>
+    </td>
     <td><span class="badge item-type-badge"></span></td>
     <td><span class="badge outcome-badge"></span></td>
     <td class="completion-cost"></td>
