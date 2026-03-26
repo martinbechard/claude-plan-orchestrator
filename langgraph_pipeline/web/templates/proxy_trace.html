@@ -73,7 +73,9 @@
     Start time
     <span>
       {% if run.start_time %}
-        {{ run.start_time[:19] | replace("T", " ") }}
+        <time datetime="{{ run.start_time | e }}" class="local-time">
+          {{ run.start_time[:19] | replace("T", " ") }}
+        </time>
       {% else %}
         —
       {% endif %}

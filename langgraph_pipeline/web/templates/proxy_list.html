@@ -149,7 +149,7 @@
 
         <td>
           {% if run.start_time %}
-            <time datetime="{{ run.start_time | e }}">
+            <time datetime="{{ run.start_time | e }}" class="local-time">
               {{ run.start_time[:10] | e }} {{ run.start_time[11:19] | e }}
             </time>
           {% else %}
