@@ -25,14 +25,14 @@ sections:
       span_s as a float covering all children. Batch-fetch grandchild counts using
       count_children_batch. Pass span_s and grandchild_counts to the template context.
       See the design doc at docs/plans/2026-03-26-04-timeline-duplicate-labels-and-elapsed-time-design.md.'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:23:57.704570'
     attempts: 2
     model_used: opus
-    completed_at: '2026-03-26T01:22:18.282223'
-    result_message: Added _compute_elapsed() helper and updated proxy_trace() to compute
-      elapsed_start_s/elapsed_end_s per child, span_s, and grandchild_counts; all
-      passed to template context. All 1517 tests pass.
+    completed_at: '2026-03-26T01:25:34.099276'
+    result_message: Elapsed times (elapsed_start_s, elapsed_end_s) computed per child
+      via _compute_elapsed() helper; span_s and grandchild_counts passed to template
+      context. All 1517 tests pass.
     validation_attempts: 1
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
