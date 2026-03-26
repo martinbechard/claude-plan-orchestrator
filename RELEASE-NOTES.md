@@ -1,5 +1,15 @@
 # Release Notes
 
+## 1.10.4 (2026-03-26)
+
+### Bug Fixes
+- **Cost posting uses dedicated env var:** Introduced `ORCHESTRATOR_WEB_URL` as the
+  canonical env var for the local web server URL. `_post_cost_to_api()` in task_runner
+  and validator now reads this var instead of `LANGCHAIN_ENDPOINT`, so cost data is
+  posted whenever the web server is running regardless of LangSmith tracing configuration.
+  The CLI sets `ORCHESTRATOR_WEB_URL` after the web server starts so all worker
+  subprocesses inherit it automatically.
+
 ## 1.10.3 (2026-03-26)
 
 ### Improvements
