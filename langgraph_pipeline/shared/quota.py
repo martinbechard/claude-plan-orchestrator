@@ -39,5 +39,5 @@ def probe_quota_available() -> bool:
     Returns True if Claude responds with a non-empty reply, False if the
     call fails or returns empty output (indicating quota still exhausted).
     """
-    response = call_claude(QUOTA_PROBE_PROMPT, timeout=QUOTA_PROBE_TIMEOUT_SECONDS)
-    return bool(response)
+    result = call_claude(QUOTA_PROBE_PROMPT, timeout=QUOTA_PROBE_TIMEOUT_SECONDS)
+    return bool(result.text)

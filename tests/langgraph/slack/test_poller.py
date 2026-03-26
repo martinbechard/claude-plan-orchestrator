@@ -26,6 +26,7 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 from langgraph_pipeline.slack.identity import AgentIdentity
+from langgraph_pipeline.shared.claude_cli import ClaudeResult
 from langgraph_pipeline.slack.poller import (
     BOT_NOTIFICATION_PATTERN,
     INTAKE_HISTORY_MAX_ENTRIES,
@@ -628,7 +629,7 @@ class TestHandleControlCommand:
 
 class TestRouteMessageViaLlm:
     def test_delegates_to_call_claude(self):
-        call_claude = MagicMock(return_value='{"action": "create_defect", "title": "crash"}')
+        call_claude = MagicMock(return_value=ClaudeResult(text='{"action": "create_defect", "title": "crash"}', failure_reason=None))
         callbacks = PollerCallbacks(call_claude=call_claude)
         p = _make_poller(callbacks=callbacks)
         result = p._route_message_via_llm("the app crashes on startup")
@@ -641,7 +642,7 @@ class TestRouteMessageViaLlm:
         assert result == {"action": "none"}
 
     def test_falls_back_on_invalid_json(self):
-        call_claude = MagicMock(return_value="not json")
+        call_claude = MagicMock(return_value=ClaudeResult(text="not json", failure_reason=None))
         callbacks = PollerCallbacks(call_claude=call_claude)
         p = _make_poller(callbacks=callbacks)
         result = p._route_message_via_llm("some text")

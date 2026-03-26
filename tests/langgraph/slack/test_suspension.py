@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, call, mock_open, patch
 
 import pytest
 
+from langgraph_pipeline.shared.claude_cli import ClaudeResult
 from langgraph_pipeline.slack.suspension import (
     INTAKE_ACK_TEMPLATE,
     INTAKE_ANALYSIS_TIMEOUT_SECONDS,
@@ -66,7 +67,7 @@ def _make_callbacks(**kwargs) -> SuspensionCallbacks:
         "as_role": None,
         "ensure_socket_mode": MagicMock(return_value=False),
         "should_notify": MagicMock(return_value=True),
-        "call_claude": MagicMock(return_value=""),
+        "call_claude": MagicMock(return_value=ClaudeResult(text="", failure_reason=None)),
         "gather_state": MagicMock(return_value={}),
         "format_state": MagicMock(return_value="state_context"),
         "create_backlog": MagicMock(return_value={"item_number": 1, "filename": "01-item.md", "filepath": "/tmp/01-item.md"}),
@@ -535,7 +536,7 @@ class TestReceiveAnswer:
 
 class TestAnswerQuestion:
     def test_calls_send_status_with_answer(self):
-        cb = _make_callbacks(call_claude=MagicMock(return_value="The answer is 42."))
+        cb = _make_callbacks(call_claude=MagicMock(return_value=ClaudeResult(text="The answer is 42.", failure_reason=None)))
         s = _make_suspension(callbacks=cb)
         s.answer_question("What is the status?", "C123")
         cb.send_status.assert_called_once()
@@ -546,7 +547,7 @@ class TestAnswerQuestion:
 
     def test_uses_state_context_when_llm_empty(self):
         cb = _make_callbacks(
-            call_claude=MagicMock(return_value=""),
+            call_claude=MagicMock(return_value=ClaudeResult(text="", failure_reason=None)),
             format_state=MagicMock(return_value="pipeline is idle"),
         )
         s = _make_suspension(callbacks=cb)
@@ -555,14 +556,14 @@ class TestAnswerQuestion:
         assert "pipeline is idle" in args[0]
 
     def test_records_qa_history(self):
-        cb = _make_callbacks(call_claude=MagicMock(return_value="My answer"))
+        cb = _make_callbacks(call_claude=MagicMock(return_value=ClaudeResult(text="My answer", failure_reason=None)))
         s = _make_suspension(callbacks=cb, qa_history_max_turns=3)
         s.answer_question("question one")
         assert len(s._qa_history) == 1
         assert s._qa_history[0] == ("question one", "My answer")
 
     def test_qa_history_injected_into_prompt(self):
-        cb = _make_callbacks(call_claude=MagicMock(return_value="response"))
+        cb = _make_callbacks(call_claude=MagicMock(return_value=ClaudeResult(text="response", failure_reason=None)))
         s = _make_suspension(callbacks=cb, qa_history_max_turns=3)
         s._qa_history = [("prev Q", "prev A")]
         s.answer_question("new Q")
@@ -571,14 +572,14 @@ class TestAnswerQuestion:
         assert "prev A" in prompt
 
     def test_qa_history_trimmed_to_max_turns(self):
-        cb = _make_callbacks(call_claude=MagicMock(return_value="A"))
+        cb = _make_callbacks(call_claude=MagicMock(return_value=ClaudeResult(text="A", failure_reason=None)))
         s = _make_suspension(callbacks=cb, qa_history_max_turns=2)
         for i in range(5):
             s.answer_question(f"Q{i}")
         assert len(s._qa_history) == 2
 
     def test_qa_history_disabled(self):
-        cb = _make_callbacks(call_claude=MagicMock(return_value="A"))
+        cb = _make_callbacks(call_claude=MagicMock(return_value=ClaudeResult(text="A", failure_reason=None)))
         s = _make_suspension(callbacks=cb, qa_history_enabled=False)
         s.answer_question("Q")
         assert s._qa_history == []
@@ -617,7 +618,7 @@ class TestRunIntakeAnalysis:
 
     def test_creates_backlog_item_on_success(self):
         llm_response = _full_llm_response()
-        cb = _make_callbacks(call_claude=MagicMock(return_value=llm_response))
+        cb = _make_callbacks(call_claude=MagicMock(return_value=ClaudeResult(text=llm_response, failure_reason=None)))
         s = _make_suspension(callbacks=cb)
         intake = _make_intake()
         s._run_intake_analysis(intake)
@@ -625,7 +626,7 @@ class TestRunIntakeAnalysis:
         cb.create_backlog.assert_called_once()
 
     def test_fallback_on_empty_llm_response(self):
-        cb = _make_callbacks(call_claude=MagicMock(return_value=""))
+        cb = _make_callbacks(call_claude=MagicMock(return_value=ClaudeResult(text="", failure_reason=None)))
         s = _make_suspension(callbacks=cb)
         intake = _make_intake()
         s._run_intake_analysis(intake)
@@ -646,7 +647,7 @@ class TestRunIntakeAnalysis:
 
         llm_response = _full_llm_response()
         cb = _make_callbacks(
-            call_claude=MagicMock(return_value=llm_response),
+            call_claude=MagicMock(return_value=ClaudeResult(text=llm_response, failure_reason=None)),
             send_status=capture_send_status,
         )
         s = _make_suspension(callbacks=cb)
@@ -658,7 +659,7 @@ class TestRunIntakeAnalysis:
 
     def test_low_clarity_sends_clarification(self):
         llm_response = _full_llm_response(clarity=INTAKE_CLARITY_THRESHOLD - 1)
-        cb = _make_callbacks(call_claude=MagicMock(return_value=llm_response))
+        cb = _make_callbacks(call_claude=MagicMock(return_value=ClaudeResult(text=llm_response, failure_reason=None)))
         s = _make_suspension(callbacks=cb)
         intake = _make_intake()
         s._run_intake_analysis(intake)
@@ -672,7 +673,10 @@ class TestRunIntakeAnalysis:
         first_response = _full_llm_response(n_whys=2)
         retry_response = _full_llm_response(n_whys=REQUIRED_FIVE_WHYS_COUNT)
         cb = _make_callbacks(
-            call_claude=MagicMock(side_effect=[first_response, retry_response])
+            call_claude=MagicMock(side_effect=[
+                ClaudeResult(text=first_response, failure_reason=None),
+                ClaudeResult(text=retry_response, failure_reason=None),
+            ])
         )
         s = _make_suspension(callbacks=cb)
         intake = _make_intake()
@@ -689,7 +693,7 @@ class TestRunIntakeAnalysis:
 
         llm_response = _full_llm_response()
         cb = _make_callbacks(
-            call_claude=MagicMock(return_value=llm_response),
+            call_claude=MagicMock(return_value=ClaudeResult(text=llm_response, failure_reason=None)),
             intake_lock=lock,
             pending_intakes=pending,
         )
@@ -717,7 +721,7 @@ class TestRunIntakeAnalysis:
         llm_response = _full_llm_response()
         item_info = {"item_number": 7, "filename": "07-add-feature.md", "filepath": "/tmp/07.md"}
         cb = _make_callbacks(
-            call_claude=MagicMock(return_value=llm_response),
+            call_claude=MagicMock(return_value=ClaudeResult(text=llm_response, failure_reason=None)),
             create_backlog=MagicMock(return_value=item_info),
         )
         s = _make_suspension(callbacks=cb)
@@ -749,7 +753,7 @@ class TestRunDedupCheck:
 
     def test_returns_false_when_no_duplicate(self):
         cb = _make_callbacks(
-            call_claude=MagicMock(return_value=json.dumps({"duplicate": False}))
+            call_claude=MagicMock(return_value=ClaudeResult(text=json.dumps({"duplicate": False}), failure_reason=None))
         )
         s = _make_suspension(callbacks=cb)
         intake = _make_intake()
@@ -769,8 +773,9 @@ class TestRunDedupCheck:
         }]
         cb = _make_callbacks(
             call_claude=MagicMock(
-                return_value=json.dumps(
-                    {"duplicate": True, "match_filename": "01-dark-mode.md"}
+                return_value=ClaudeResult(
+                    text=json.dumps({"duplicate": True, "match_filename": "01-dark-mode.md"}),
+                    failure_reason=None,
                 )
             )
         )
@@ -785,7 +790,7 @@ class TestRunDedupCheck:
         assert "Consolidated" in status_msg
 
     def test_returns_false_on_json_decode_error(self):
-        cb = _make_callbacks(call_claude=MagicMock(return_value="not json"))
+        cb = _make_callbacks(call_claude=MagicMock(return_value=ClaudeResult(text="not json", failure_reason=None)))
         s = _make_suspension(callbacks=cb)
         intake = _make_intake()
         rag = MagicMock()

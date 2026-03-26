@@ -657,7 +657,7 @@ class SlackSuspension:
 
         try:
             answer = (
-                self._callbacks.call_claude(prompt, SLACK_LLM_MODEL, None)
+                self._callbacks.call_claude(prompt, SLACK_LLM_MODEL, None).text
                 if self._callbacks.call_claude
                 else ""
             )
@@ -772,7 +772,7 @@ class SlackSuspension:
             response_text = (
                 self._callbacks.call_claude(
                     prompt, SLACK_LLM_MODEL, INTAKE_ANALYSIS_TIMEOUT_SECONDS
-                )
+                ).text
                 if self._callbacks.call_claude
                 else ""
             )
@@ -914,7 +914,7 @@ class SlackSuspension:
         retry_text = (
             self._callbacks.call_claude(
                 retry_prompt, SLACK_LLM_MODEL, INTAKE_ANALYSIS_TIMEOUT_SECONDS
-            )
+            ).text
             if self._callbacks.call_claude
             else ""
         )
@@ -1063,7 +1063,7 @@ class SlackSuspension:
         )
         try:
             dedup_response = (
-                self._callbacks.call_claude(dedup_prompt, "haiku", 30)
+                self._callbacks.call_claude(dedup_prompt, "haiku", 30).text
                 if self._callbacks.call_claude
                 else ""
             )

@@ -10,7 +10,7 @@ import os
 import shutil
 import subprocess
 from datetime import datetime
-from typing import IO, Literal, NotRequired, Optional, TypedDict
+from typing import IO, Literal, NamedTuple, NotRequired, Optional, TypedDict
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,17 @@ DEFAULT_CALL_TIMEOUT_SECONDS = 120
 
 
 # ─── Types ────────────────────────────────────────────────────────────────────
+
+
+class ClaudeResult(NamedTuple):
+    """Return value from call_claude().
+
+    text holds the LLM response on success, or empty string on failure.
+    failure_reason holds a descriptive string on failure, or None on success.
+    """
+
+    text: str
+    failure_reason: Optional[str]
 
 
 class ToolCallRecord(TypedDict):
@@ -74,8 +85,8 @@ def call_claude(
     prompt: str,
     model: str = "sonnet",
     timeout: Optional[int] = DEFAULT_CALL_TIMEOUT_SECONDS,
-) -> str:
-    """Call Claude CLI with --print and return the text result.
+) -> ClaudeResult:
+    """Call Claude CLI with --print and return a ClaudeResult.
 
     Uses subprocess.run to invoke claude --print with JSON output format.
     This is the shared LLM callback used by Slack intake, message routing,
@@ -87,7 +98,7 @@ def call_claude(
         timeout: Subprocess timeout in seconds, or None for no timeout.
 
     Returns:
-        The LLM text response, or empty string on failure.
+        ClaudeResult with text set on success, or failure_reason set on failure.
     """
     claude_bin = _find_claude_binary()
     cmd = [
@@ -107,15 +118,22 @@ def call_claude(
         )
         if proc.returncode == 0:
             data = json.loads(proc.stdout)
-            return data.get("result", "").strip()
-        logger.warning("claude --print returned code %d: %s", proc.returncode, proc.stderr[:200])
-        return ""
+            return ClaudeResult(text=data.get("result", "").strip(), failure_reason=None)
+        reason = f"claude --print returned code {proc.returncode}: {proc.stderr}"
+        logger.warning(reason)
+        return ClaudeResult(text="", failure_reason=reason)
     except subprocess.TimeoutExpired:
-        logger.warning("claude --print timed out after %ds", timeout)
-        return ""
-    except (json.JSONDecodeError, OSError) as exc:
-        logger.warning("claude --print failed: %s", exc)
-        return ""
+        reason = f"claude --print timed out after {timeout}s"
+        logger.warning(reason)
+        return ClaudeResult(text="", failure_reason=reason)
+    except json.JSONDecodeError as exc:
+        reason = f"claude --print JSON decode error: {exc}"
+        logger.warning(reason)
+        return ClaudeResult(text="", failure_reason=reason)
+    except OSError as exc:
+        reason = f"claude --print OS error: {exc}"
+        logger.warning(reason)
+        return ClaudeResult(text="", failure_reason=reason)
 
 
 # ─── OutputCollector ──────────────────────────────────────────────────────────

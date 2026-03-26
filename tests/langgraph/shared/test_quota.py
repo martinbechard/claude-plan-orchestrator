@@ -7,6 +7,7 @@
 from datetime import datetime, timezone
 from unittest.mock import patch
 
+from langgraph_pipeline.shared.claude_cli import ClaudeResult
 from langgraph_pipeline.shared.quota import detect_quota_exhaustion, probe_quota_available
 
 
@@ -52,7 +53,7 @@ class TestProbeQuotaAvailable:
         """A non-empty reply from Claude means quota has been restored."""
         with patch(
             "langgraph_pipeline.shared.quota.call_claude",
-            return_value="OK",
+            return_value=ClaudeResult(text="OK", failure_reason=None),
         ):
             assert probe_quota_available() is True
 
@@ -60,6 +61,6 @@ class TestProbeQuotaAvailable:
         """An empty reply means Claude is still unavailable (quota still exhausted)."""
         with patch(
             "langgraph_pipeline.shared.quota.call_claude",
-            return_value="",
+            return_value=ClaudeResult(text="", failure_reason=None),
         ):
             assert probe_quota_available() is False

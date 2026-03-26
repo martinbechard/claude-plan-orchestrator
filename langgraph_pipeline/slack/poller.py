@@ -889,7 +889,7 @@ class SlackPoller:
         try:
             response = self._callbacks.call_claude(
                 prompt, "haiku", MESSAGE_ROUTING_TIMEOUT_SECONDS
-            )
+            ).text
             if not response:
                 return fallback
             result = _extract_json(response)
