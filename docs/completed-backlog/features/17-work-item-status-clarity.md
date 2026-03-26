@@ -55,5 +55,3 @@ alongside the task list, not just the raw task checkboxes.
 - Use the existing DashboardState.active_workers to check if a worker is
   running for this slug.
 - The stage determination is a simple waterfall of file existence checks.
-
-## LangSmith Trace: 643c9a3c-9b27-40d3-9f65-725067f5a623
