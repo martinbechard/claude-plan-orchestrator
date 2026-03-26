@@ -44,10 +44,12 @@ sections:
       str, failure_reason: Optional[str]). Updated call_claude() to return ClaudeResult
       on all code paths. Updated quota.py, suspension.py (4 sites), and poller.py
       (1 site) to use result.text. Updated all test mocks. 138 tests pass.'
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
   - id: '1.2'
     name: Update tests for ClaudeResult return type
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the fix described in: .claude/plans/.claimed/14-intake-analysis-silent-failure.md
 
       Design doc: docs/plans/2026-03-26-14-intake-analysis-silent-failure-design.md
@@ -59,6 +61,9 @@ sections:
       to ClaudeResult instances. Run the full test suite and fix any failures.
 
       '
+    last_attempt: '2026-03-26T10:52:57.836548'
+    attempts: 1
+    model_used: sonnet
 - id: '2'
   name: Surface failures in Slack intake and dashboard
   status: pending
