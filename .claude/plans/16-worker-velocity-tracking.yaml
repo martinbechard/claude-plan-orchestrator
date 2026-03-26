@@ -1,31 +1,36 @@
 meta:
   name: worker-velocity-tracking
-  source_item: ".claude/plans/.claimed/16-worker-velocity-tracking.md"
+  source_item: .claude/plans/.claimed/16-worker-velocity-tracking.md
   design: docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
-
 sections:
-  - id: '1'
-    name: Add velocity column to completions history page
-    status: pending
-    tasks:
-      - id: '1.1'
-        name: Display tokens_per_minute in completions.html
-        agent: frontend-coder
-        status: pending
-        description: "Implement the work item: .claude/plans/.claimed/16-worker-velocity-tracking.md
-          -- Read the design doc at docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
-          for full details. The backend already returns tokens_per_minute in every
-          completions row (from proxy.list_completions). Add a Velocity column to
-          langgraph_pipeline/web/templates/completions.html: (1) add <th>Velocity</th>
-          header after the Duration column; (2) render each row.tokens_per_minute
-          as e.g. 2.4k tok/min or dash when 0; also update the context-variables
-          comment block at the top of the template to include tokens_per_minute."
+- id: '1'
+  name: Add velocity column to completions history page
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Display tokens_per_minute in completions.html
+    agent: frontend-coder
+    status: completed
+    description: 'Implement the work item: .claude/plans/.claimed/16-worker-velocity-tracking.md
+      -- Read the design doc at docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
+      for full details. The backend already returns tokens_per_minute in every completions
+      row (from proxy.list_completions). Add a Velocity column to langgraph_pipeline/web/templates/completions.html:
+      (1) add <th>Velocity</th> header after the Duration column; (2) render each
+      row.tokens_per_minute as e.g. 2.4k tok/min or dash when 0; also update the context-variables
+      comment block at the top of the template to include tokens_per_minute.'
+    last_attempt: '2026-03-26T15:31:56.191683'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-26T15:33:02.524355'
+    result_message: 'Added Velocity column to completions.html: Velocity header after
+      Duration, row rendering formats tokens_per_minute as 2.4k tok/min or dash when
+      0, and updated context-variables comment to include tokens_per_minute.'
