@@ -512,6 +512,72 @@ def test_multipart_model_extraction(enabled_client):
     assert root["model"] == SAMPLE_MODEL
 
 
+# ─── Duplicate-run Deduplication Tests ───────────────────────────────────────
+
+
+def test_duplicate_record_run_inserts_only_one_row(proxy):
+    """Calling record_run twice with the same run_id inserts only one DB row."""
+    proxy.record_run(
+        run_id=SAMPLE_RUN_ID,
+        parent_run_id=None,
+        name=SAMPLE_RUN_NAME,
+        inputs=SAMPLE_INPUTS,
+        outputs=SAMPLE_OUTPUTS,
+        metadata=SAMPLE_METADATA,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    # Second call with same run_id (simulating duplicate LangChain callback)
+    proxy.record_run(
+        run_id=SAMPLE_RUN_ID,
+        parent_run_id=None,
+        name=SAMPLE_RUN_NAME,
+        inputs={"prompt": "different"},
+        outputs={"result": "ignored"},
+        metadata=SAMPLE_METADATA,
+        error=None,
+        start_time="2026-03-25T11:00:00",
+        end_time="2026-03-25T11:00:05",
+    )
+
+    runs = proxy.list_runs(page=1)
+    assert len(runs) == 1
+    assert runs[0]["run_id"] == SAMPLE_RUN_ID
+    # First-write wins: original inputs preserved
+    row = proxy.get_run(SAMPLE_RUN_ID)
+    assert '"prompt": "hello"' in row["inputs_json"]
+
+
+def test_list_root_traces_by_slug_deduplicates_pre_existing_rows(proxy):
+    """list_root_traces_by_slug returns one row per run_id even with duplicate DB rows.
+
+    This covers databases that had duplicate rows before the UNIQUE index was added:
+    we bypass INSERT OR IGNORE and write two rows with the same run_id directly,
+    then verify the query collapses them to a single result.
+    """
+    slug = "item-99"
+    run_id = "run-dup-slug-001"
+    # Bypass record_run (which uses INSERT OR IGNORE) by writing directly to SQLite
+    with proxy._connect() as conn:
+        conn.execute(
+            "INSERT INTO traces (run_id, parent_run_id, name, created_at) VALUES (?, NULL, ?, ?)",
+            (run_id, f"pipeline-{slug}-first", "2026-03-25T09:00:00"),
+        )
+        # Drop the unique index so we can insert a true duplicate for the test
+        conn.execute("DROP INDEX IF EXISTS idx_traces_run_id_unique")
+        conn.execute(
+            "INSERT INTO traces (run_id, parent_run_id, name, created_at) VALUES (?, NULL, ?, ?)",
+            (run_id, f"pipeline-{slug}-second", "2026-03-25T10:00:00"),
+        )
+
+    results = proxy.list_root_traces_by_slug(slug)
+    assert len(results) == 1
+    assert results[0]["run_id"] == run_id
+    # MIN(created_at) should return the earlier timestamp
+    assert results[0]["created_at"] == "2026-03-25T09:00:00"
+
+
 # ─── Error Resilience ────────────────────────────────────────────────────────
 
 
