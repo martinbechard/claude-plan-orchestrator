@@ -99,6 +99,7 @@ def analysis(
     daily_costs = proxy.get_cost_by_day(days=30)
     slug_costs = proxy.get_cost_by_slug()
     node_costs = proxy.get_cost_by_node_type()
+    tool_attribution = proxy.get_tool_call_attribution()
 
     runs, total_count = proxy.list_cost_runs(
         page=page,
@@ -135,6 +136,7 @@ def analysis(
             "date_to": date_to,
             "sort": sort,
             "sort_options": VALID_SORT_OPTIONS,
+            "tool_attribution": tool_attribution,
         },
     )
 
