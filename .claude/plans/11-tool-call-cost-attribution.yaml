@@ -50,7 +50,7 @@ sections:
   - id: '2.1'
     name: Update analysis route to query and pass tool attribution data
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: .claude/plans/.claimed/11-tool-call-cost-attribution.md
 
 
@@ -68,6 +68,10 @@ sections:
     last_attempt: '2026-03-26T12:04:41.154040'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T12:06:45.658315'
+    result_message: 'Blocking throttle wait already implemented in intake.py: MAX_INTAKES_PER_HOUR
+      raised to 50 for all types, THROTTLE_WAIT_INTERVAL_SECONDS=60 added, intake_analyze()
+      uses blocking wait loop with get_shutdown_event(). All 37 tests pass.'
   - id: '2.2'
     name: Add tool attribution section to analysis template
     agent: frontend-coder
