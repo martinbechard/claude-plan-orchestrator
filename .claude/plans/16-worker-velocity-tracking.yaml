@@ -126,7 +126,7 @@ sections:
   - id: '3.2'
     name: Implement velocity colour mode and label in dashboard.js and style.css
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: .claude/plans/.claimed/16-worker-velocity-tracking.md
       -- Read the design doc at docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
       for full details. In langgraph_pipeline/web/static/dashboard.js: (1) add LS_COLOR_MODE_KEY
@@ -141,3 +141,11 @@ sections:
     last_attempt: '2026-03-26T15:18:17.787925'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T15:22:13.705209'
+    result_message: Added LS_COLOR_MODE_KEY constant, fmtVelocity helper, velocityBarClass,
+      updateColorModeButton. Extended buildTimelineRow to apply velocity CSS classes
+      (timeline-bar--vel-none/low/medium/high) in velocity mode, type classes otherwise,
+      and added elapsed+velocity bar label per row. Wired tl-btn-color-mode toggle
+      with localStorage persistence. Passed tokens_per_minute from worker/completion
+      SSE data. Added four velocity colour classes and .timeline-bar-label overlay
+      style to style.css. All 1295 tests pass.
