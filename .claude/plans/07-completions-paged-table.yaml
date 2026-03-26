@@ -81,7 +81,7 @@ sections:
       already exist and are correct. GET /completions endpoint with pagination, filters,
       summary stats bar, paginated table with slug links, and pagination controls
       all implemented. Router registered in server.py.
-    validation_attempts: 2
+    validation_attempts: 3
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
 - id: '3'
@@ -91,7 +91,7 @@ sections:
   - id: '3.1'
     name: Register completions router and add View all link and nav entry
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: .claude/plans/.claimed/07-completions-paged-table.md
 
 
@@ -107,3 +107,6 @@ sections:
       / Traces.
 
       '
+    last_attempt: '2026-03-26T11:49:43.699221'
+    attempts: 1
+    model_used: opus

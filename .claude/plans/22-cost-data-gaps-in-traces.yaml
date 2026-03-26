@@ -20,7 +20,7 @@ sections:
   - id: '1.1'
     name: Add total_cost_usd to ClaudeResult and fix intake.py and verification.py
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the fix described in: .claude/plans/.claimed/22-cost-data-gaps-in-traces.md
 
 
@@ -43,6 +43,9 @@ sections:
       Run the full test suite after changes.
 
       '
+    last_attempt: '2026-03-26T11:50:32.423596'
+    attempts: 1
+    model_used: sonnet
   - id: '1.2'
     name: Fix create_plan cost extraction and investigate 0.01 default in execute_task
     agent: coder
