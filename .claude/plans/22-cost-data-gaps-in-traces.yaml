@@ -51,10 +51,12 @@ sections:
       to ClaudeResult, call_claude() extracts cost from JSON, intake.py and verification.py
       _invoke_claude() use --output-format json returning (text, cost) tuples, add_trace_metadata
       calls include total_cost_usd. 1550 tests pass.'
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
   - id: '1.2'
     name: Fix create_plan cost extraction and investigate 0.01 default in execute_task
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the fix described in: .claude/plans/.claimed/22-cost-data-gaps-in-traces.md
 
 
@@ -73,6 +75,9 @@ sections:
       Run the full test suite after changes.
 
       '
+    last_attempt: '2026-03-26T12:03:09.867572'
+    attempts: 1
+    model_used: sonnet
 - id: '2'
   name: Fix Slack suspension call_claude cost visibility
   status: pending
