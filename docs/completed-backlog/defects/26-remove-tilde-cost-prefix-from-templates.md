@@ -30,5 +30,3 @@ The JS side (dashboard.js fmtCost) is already clean — no tilde there.
 
 Do NOT add tildes back anywhere. The MEMORY.md convention now explicitly
 says to use plain "$" without tilde.
-
-## LangSmith Trace: 635e10cf-be05-48af-83fa-43ca787ce19c
