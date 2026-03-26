@@ -1,0 +1,25 @@
+meta:
+  source_item: .claude/plans/.claimed/13-timeline-all-items-show-as-other.md
+  item_type: defect
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: "1"
+  name: Fix timeline run classification macros
+  status: pending
+  tasks:
+  - id: "1.1"
+    name: Replace substring keyword matching with explicit name sets in bar_color and text_color macros
+    agent: frontend-coder
+    description: |
+      Implement the work item: .claude/plans/.claimed/13-timeline-all-items-show-as-other.md
+
+      See the design doc at docs/plans/2026-03-26-13-timeline-all-items-show-as-other-design.md
+      for the classification strategy and exact file/line references.
+    status: pending
