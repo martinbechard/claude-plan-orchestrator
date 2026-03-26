@@ -22,7 +22,7 @@ sections:
     name: Add subprocess_exit_code, failure_reason, claude_invoked to execute_task
       traces
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement Gaps 1 and 5 from: .claude/plans/.claimed/13-trace-observability-gaps.md
 
 
@@ -40,6 +40,9 @@ sections:
       changes.
 
       '
+    last_attempt: '2026-03-26T12:18:21.729446'
+    attempts: 1
+    model_used: sonnet
   - id: '1.2'
     name: Add subprocess_exit_code and failure_reason to validate_task traces
     agent: coder

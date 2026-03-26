@@ -52,3 +52,5 @@ Update constants:
 Also update poller.py:
 - MAX_DEFECTS_PER_HOUR = 50
 - MAX_FEATURES_PER_HOUR = 50
+
+## LangSmith Trace: e872c747-2a3d-4fed-b8b5-f41d437e4195
