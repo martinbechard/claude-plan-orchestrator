@@ -133,11 +133,11 @@
 {% macro bar_color(name) -%}
   {%- set n = name | lower -%}
   {%- if "llm" in n or "chat" in n or "claude" in n or "gpt" in n or "model" in n -%}
-    #16a34a
+    #7c3aed
   {%- elif "tool" in n or "function" in n or "retriev" in n or "search" in n -%}
-    #2563eb
+    #0891b2
   {%- else -%}
-    #64748b
+    #f59e0b
   {%- endif -%}
 {%- endmacro %}
 
@@ -145,11 +145,11 @@
 {% macro text_color(name) -%}
   {%- set n = name | lower -%}
   {%- if "llm" in n or "chat" in n or "claude" in n or "gpt" in n or "model" in n -%}
-    #052e16
+    #f5f3ff
   {%- elif "tool" in n or "function" in n or "retriev" in n or "search" in n -%}
-    #eff6ff
+    #ecfeff
   {%- else -%}
-    #f8fafc
+    #1c1917
   {%- endif -%}
 {%- endmacro %}
 
@@ -250,11 +250,11 @@
 
     {# ── Legend ────────────────────────────────────────────────────── #}
     {% set legend_y = SVG_H - 2 %}
-    <rect x="{{ LABEL_W }}" y="{{ legend_y - 10 }}" width="10" height="10" rx="2" fill="#16a34a"/>
+    <rect x="{{ LABEL_W }}" y="{{ legend_y - 10 }}" width="10" height="10" rx="2" fill="#7c3aed"/>
     <text x="{{ LABEL_W + 14 }}" y="{{ legend_y }}" font-size="10" fill="#6b7280">LLM</text>
-    <rect x="{{ LABEL_W + 55 }}" y="{{ legend_y - 10 }}" width="10" height="10" rx="2" fill="#2563eb"/>
+    <rect x="{{ LABEL_W + 55 }}" y="{{ legend_y - 10 }}" width="10" height="10" rx="2" fill="#0891b2"/>
     <text x="{{ LABEL_W + 69 }}" y="{{ legend_y }}" font-size="10" fill="#6b7280">Tool</text>
-    <rect x="{{ LABEL_W + 110 }}" y="{{ legend_y - 10 }}" width="10" height="10" rx="2" fill="#64748b"/>
+    <rect x="{{ LABEL_W + 110 }}" y="{{ legend_y - 10 }}" width="10" height="10" rx="2" fill="#f59e0b"/>
     <text x="{{ LABEL_W + 124 }}" y="{{ legend_y }}" font-size="10" fill="#6b7280">Other</text>
   </svg>
 </div>
