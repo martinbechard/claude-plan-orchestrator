@@ -43,3 +43,5 @@ who prefer the compact table keep it.
   among active workers.
 - The toggle button should sit in the Active Workers section header, next
   to the section title.
+
+## LangSmith Trace: a117153c-1d5c-428d-b156-f2d79ffbb5ef

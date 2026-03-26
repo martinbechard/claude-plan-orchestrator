@@ -20,7 +20,7 @@ sections:
   - id: '1.1'
     name: Update validator.md with placeholder scan and end-to-end gate
     agent: coder
-    status: in_progress
+    status: pending
     description: 'Implement the fix described in: .claude/plans/.claimed/19-validator-marks-incomplete-work-as-done.md
 
 

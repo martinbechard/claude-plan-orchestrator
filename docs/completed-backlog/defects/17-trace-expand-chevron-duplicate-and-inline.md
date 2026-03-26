@@ -54,5 +54,3 @@ rather than an inline detail panel.
 ## Dependencies
 
 - Defect 16: tool calls / grandchildren not fetched (same data pipeline)
-
-## LangSmith Trace: 64dbf153-ea7a-4945-be70-a1441b9fad3e

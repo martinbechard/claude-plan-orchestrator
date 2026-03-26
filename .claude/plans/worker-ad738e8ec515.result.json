@@ -1,0 +1,9 @@
+{
+  "success": false,
+  "item_path": ".claude/plans/.claimed/03-cost-analysis-db-backend.md",
+  "cost_usd": 0.0,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "duration_s": 2.7723697919864208,
+  "message": "Claude quota exhausted \u2014 item left for retry"
+}

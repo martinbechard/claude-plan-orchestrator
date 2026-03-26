@@ -39,3 +39,5 @@ completion history across sessions.
   dashboard SSE feed only; the /completions page queries without that cap.
 - Summary stats at top of page: total completions, success/warn/fail counts,
   total cost across all completions.
+
+## LangSmith Trace: 1fb6b297-b24c-4970-b00d-67dfb89a9d68
