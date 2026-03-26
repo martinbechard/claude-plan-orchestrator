@@ -19,7 +19,10 @@ sections:
     agent: coder
     description: 'Implement the work item: .claude/plans/.claimed/32-test-data-cleanup-and-random-values-policy.md.
       Design: docs/plans/2026-03-26-32-test-data-cleanup-and-random-values-policy-design.md'
-    status: pending
+    status: in_progress
+    last_attempt: '2026-03-26T17:53:47.624291'
+    attempts: 1
+    model_used: sonnet
   - id: '1.2'
     name: Bump plugin version and update release notes
     agent: coder
