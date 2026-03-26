@@ -20,7 +20,7 @@ sections:
   - id: '1.1'
     name: Create shared shutdown event module and wire into cli.py
     agent: coder
-    status: completed
+    status: in_progress
     description: 'Implement the fix described in: .claude/plans/.claimed/21-intake-throttle-warns-but-doesnt-block.md
 
       Design doc: docs/plans/2026-03-26-21-intake-throttle-warns-but-doesnt-block-design.md
@@ -30,13 +30,17 @@ sections:
       immediately after the shutdown event is created in main().
 
       '
-    last_attempt: '2026-03-26T11:42:53.690590'
-    attempts: 1
-    model_used: sonnet
+    last_attempt: '2026-03-26T11:46:11.513018'
+    attempts: 2
+    model_used: opus
     completed_at: '2026-03-26T11:44:08.000516'
     result_message: Created langgraph_pipeline/shared/shutdown.py with get_shutdown_event()
       and register_shutdown_event(). Wired register_shutdown_event(shutdown_event)
       into cli.py immediately after threading.Event() creation.
+    validation_attempts: 1
+    validation_findings: Route file and template created correctly, but completions
+      router is NOT registered in server.py (endpoint unreachable) and dashboard.html
+      is missing the required View all link to /completions.
   - id: '1.2'
     name: Implement blocking throttle wait in intake.py and update limits
     agent: coder
