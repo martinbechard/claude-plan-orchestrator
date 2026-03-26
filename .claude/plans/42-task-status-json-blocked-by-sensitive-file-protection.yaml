@@ -19,7 +19,10 @@ sections:
     description: 'Implement the path relocation described in the work item and design
       doc. Work item: .claude/plans/.claimed/42-task-status-json-blocked-by-sensitive-file-protection.md.
       Design: docs/plans/2026-03-26-42-task-status-json-blocked-by-sensitive-file-protection-design.md'
-    status: pending
+    status: in_progress
+    last_attempt: '2026-03-26T18:55:53.335486'
+    attempts: 1
+    model_used: sonnet
   - id: '1.2'
     name: Update all agent markdown files to reference new path
     agent: coder
