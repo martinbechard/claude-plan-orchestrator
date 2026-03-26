@@ -20,7 +20,7 @@ sections:
   - id: '1.1'
     name: Add toggle button and timeline container to dashboard HTML
     agent: frontend-coder
-    status: pending
+    status: completed
     description: 'Implement the work item: .claude/plans/.claimed/04-dashboard-scrolling-timeline-view.md
 
 
@@ -32,6 +32,14 @@ sections:
       the design doc.
 
       '
+    last_attempt: '2026-03-26T11:30:21.952118'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-26T11:31:22.237517'
+    result_message: Added toggle button (#workers-view-toggle) next to Active Workers
+      heading inside a .section-header flex wrapper, timeline container div (#timeline-container)
+      with axis and rows slots, and tpl-timeline-row template with label, bar-track/bar,
+      and elapsed spans.
   - id: '1.2'
     name: Add timeline CSS styles
     agent: frontend-coder
