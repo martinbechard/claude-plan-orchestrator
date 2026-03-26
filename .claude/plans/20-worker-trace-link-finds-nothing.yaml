@@ -47,6 +47,11 @@ sections:
       parent_run_id = ?) so in-flight child runs are visible while the root run has
       not yet been posted. Updated test_proxy.py with new tests covering root+children
       visibility and child-only visibility before root arrives. All 1553 tests pass.'
+    validation_attempts: 1
+    validation_findings: list_runs() and count_runs() correctly replaced parent_run_id
+      IS NULL + run_id LIKE with (run_id = ? OR parent_run_id = ?) when trace_id is
+      provided. All 1553 tests pass. Tests cover root+children visibility and child-only
+      scenario before root arrives.
 - id: '2'
   name: Fix supervisor run_id refresh (Bug 1)
   status: pending
@@ -54,7 +59,7 @@ sections:
   - id: '2.1'
     name: Add update_worker_run_id to DashboardState and refresh in supervisor loop
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the fix described in: .claude/plans/.claimed/20-worker-trace-link-finds-nothing.md
 
 
@@ -72,3 +77,6 @@ sections:
       Add tests for the new DashboardState method and supervisor refresh behavior.
 
       '
+    last_attempt: '2026-03-26T13:25:31.083863'
+    attempts: 1
+    model_used: sonnet
