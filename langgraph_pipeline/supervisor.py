@@ -37,6 +37,7 @@ from langgraph_pipeline.pipeline.nodes.scan import (
     unclaim_item,
 )
 from langgraph_pipeline.pipeline.state import PipelineState
+from langgraph_pipeline.shared.langsmith import read_trace_id_from_file
 from langgraph_pipeline.shared.paths import BACKLOG_DIRS, CLAIMED_DIR, PLANS_DIR, WORKER_RESULT_DIR
 from langgraph_pipeline.slack.notifier import SlackNotifier
 from langgraph_pipeline.web.dashboard_state import get_dashboard_state
@@ -307,6 +308,8 @@ def _reap_one_worker(
     result = _read_result_file(result_file)
     _remove_result_file(result_file)
 
+    run_id = read_trace_id_from_file(claimed_path)
+
     if result is None:
         # Worker crashed without writing a result file — return item to backlog.
         crash_msg = (
@@ -318,7 +321,7 @@ def _reap_one_worker(
         get_dashboard_state().remove_active_worker(pid, "fail", 0.0, duration_s)
         proxy = get_proxy()
         if proxy is not None:
-            proxy.record_completion(Path(claimed_path).stem, item_type, "fail", 0.0, duration_s)
+            proxy.record_completion(Path(claimed_path).stem, item_type, "fail", 0.0, duration_s, run_id=run_id)
         try:
             unclaim_item(claimed_path, item_type)
             logger.info("Unclaimed %s back to %s backlog.", claimed_path, item_type)
@@ -346,7 +349,7 @@ def _reap_one_worker(
         get_dashboard_state().remove_active_worker(pid, "success", cost_usd, duration_s)
         proxy = get_proxy()
         if proxy is not None:
-            proxy.record_completion(Path(claimed_path).stem, item_type, "success", cost_usd, duration_s)
+            proxy.record_completion(Path(claimed_path).stem, item_type, "success", cost_usd, duration_s, run_id=run_id)
     else:
         # Handled failure (e.g. quota exhausted) — return item to backlog for retry.
         failure_msg = (
@@ -358,7 +361,7 @@ def _reap_one_worker(
         get_dashboard_state().remove_active_worker(pid, "warn", cost_usd, duration_s)
         proxy = get_proxy()
         if proxy is not None:
-            proxy.record_completion(Path(claimed_path).stem, item_type, "warn", cost_usd, duration_s)
+            proxy.record_completion(Path(claimed_path).stem, item_type, "warn", cost_usd, duration_s, run_id=run_id)
         try:
             unclaim_item(claimed_path, item_type)
             logger.info("Unclaimed %s back to %s backlog.", claimed_path, item_type)
@@ -455,7 +458,8 @@ def _try_dispatch_one(active_workers: dict[int, WorkerRecord]) -> bool:
         pid = proc.pid
         start_time = time.monotonic()
         active_workers[pid] = (claimed_path, result_file, item_type, start_time)
-        get_dashboard_state().add_active_worker(pid, item_slug, item_type, start_time)
+        run_id = read_trace_id_from_file(claimed_path)
+        get_dashboard_state().add_active_worker(pid, item_slug, item_type, start_time, run_id=run_id)
         logger.info(
             "Dispatched worker PID %d for %s (type=%s)", pid, claimed_path, item_type
         )
