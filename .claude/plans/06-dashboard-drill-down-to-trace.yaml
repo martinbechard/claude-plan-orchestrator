@@ -115,10 +115,14 @@ sections:
       with an anchor element (class trace-link) or add a separate link cell. Keep
       the layout minimal; only show the link when run_id is present (JS will set display:none
       otherwise). See design doc: docs/plans/2026-03-26-06-dashboard-drill-down-to-trace-design.md'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:43:38.792107'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-26T01:45:48.749830'
+    result_message: Added trace-link anchor to worker card body and new Trace column
+      to completion row template. Links hidden by default; task 2.2 wires href and
+      visibility in JS.
   - id: '2.2'
     name: Wire trace link href in dashboard.js renderWorkers and renderCompletions
     agent: frontend-coder
