@@ -1,63 +1,71 @@
 {# langgraph_pipeline/web/templates/analysis.html
-   Read-only cost and token-usage analysis page.
-   Context variables (has_data=True):
-     top_files_svg    str            — inline SVG: top files by read volume
-     agent_cost_svg   str            — inline SVG: token cost by agent type
-     cost_by_item     list[ItemCost] — per-item aggregations, sorted by cost desc
-       .item_slug      str
-       .item_type      str
-       .agent_types    list[str]
-       .input_tokens   int
-       .output_tokens  int
-       .cost_usd       float
-       .num_tasks      int
-       .num_wasted_reads int
-       .tasks          list[TaskCost]
-         .task_id      str
-         .agent_type   str
-         .model        str
-         .input_tokens int
-         .output_tokens int
-         .cost_usd     float
-         .duration_s   float
-     wasted_reads     list[WastedRead] — sorted by task_count desc
-       .item_slug      str
-       .file_path      str
-       .task_count     int
-     agent_filter     str|None       — active ?agent= filter value
-     all_agent_types  list[str]      — sorted list of all agent types
-   Context variables (has_data=False):
-     has_data         False
-   Design: docs/plans/2026-03-25-16-tool-call-timing-and-cost-analysis-ui-design.md #}
+   Trace-based cost analysis page.
+   Context variables:
+     summary            CostSummary  — total_cost_usd, today_cost_usd, week_cost_usd,
+                                       most_expensive_slug, most_expensive_slug_cost_usd
+     cost_over_time_svg str          — inline SVG bar chart (daily, last 30 days)
+     runs               list[CostRun] — paginated top-runs rows
+       .run_id           str
+       .name             str
+       .model            str
+       .item_slug        str
+       .item_type        str
+       .exclusive_cost_usd float
+       .inclusive_cost_usd float
+       .input_tokens     int
+       .output_tokens    int
+       .duration_ms      int
+       .created_at       str
+     page               int          — current 1-based page
+     total_pages        int
+     total_count        int
+     slug_costs         list[SlugCost]
+       .item_slug        str
+       .item_type        str
+       .total_cost_usd   float
+       .task_count       int
+       .avg_cost_usd     float
+     node_costs         list[NodeCost]
+       .node_name        str
+       .task_count       int
+       .total_cost_usd   float
+       .avg_cost_usd     float
+     node_cost_svg      str          — inline SVG bar chart by node type
+     slug               str          — active filter value
+     item_type          str          — active filter value
+     date_from          str          — active filter value
+     date_to            str          — active filter value
+     sort               str          — active sort value
+     sort_options       list[str]    — valid sort option constants
+   Design: docs/plans/2026-03-26-10-trace-cost-analysis-page-design.md
+#}
 {% extends "base.html" %}
 
 {% block title %}Cost Analysis — Plan Orchestrator{% endblock %}
 
 {% block extra_head %}
 <style>
-  .analysis-chart { margin-bottom: 2rem; overflow-x: auto; }
-  .agent-filter-bar { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
-  .agent-filter-bar a { font-size: 12px; padding: 2px 8px; border-radius: 3px;
-    background: #eef1f5; color: #333; text-decoration: none; border: 1px solid #ccc; }
-  .agent-filter-bar a:hover { background: #d8e3f0; }
-  .agent-filter-bar a.active { background: #4e79a7; color: #fff; border-color: #3a5f88; font-weight: 600; }
-  .agent-filter-bar a.clear { background: #f5f5f5; color: #666; }
-  .task-detail-row { display: none; }
-  .task-detail-row.expanded { display: table-row; }
-  .task-detail-cell { padding: 0 !important; background: #f8f9fb; }
-  .task-subtable { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .task-subtable th, .task-subtable td { padding: 4px 10px; border-bottom: 1px solid #e0e0e0; }
-  .task-subtable th { background: #edf0f5; font-weight: 600; color: #555; }
-  .expand-btn { cursor: pointer; background: none; border: 1px solid #ccc;
-    border-radius: 3px; padding: 1px 6px; font-size: 11px; color: #555; }
-  .expand-btn:hover { background: #eef1f5; }
+  .summary-cards { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; }
+  .summary-card {
+    flex: 1 1 180px;
+    background: #f8f9fb;
+    border: 1px solid #e2e6eb;
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+  }
+  .summary-card .card-label { font-size: 12px; color: #666; text-transform: uppercase;
+    letter-spacing: 0.04em; margin-bottom: 0.25rem; }
+  .summary-card .card-value { font-size: 1.5rem; font-weight: 700; color: #1a1a2e; }
+  .summary-card .card-sub { font-size: 11px; color: #888; margin-top: 0.2rem; }
+  .chart-section { margin-bottom: 2.5rem; }
+  .analysis-chart { overflow-x: auto; }
+  .tool-call-note {
+    background: #fffbe6; border: 1px solid #ffe58f; border-radius: 4px;
+    padding: 0.6rem 1rem; font-size: 13px; color: #7a5f00; margin-bottom: 1.5rem;
+  }
   .badge-item-type { font-size: 11px; padding: 1px 6px; border-radius: 3px;
     background: #e8f0fe; color: #3b5bdb; border: 1px solid #b8caff; }
-  .num-wasted { color: #c0392b; font-weight: 600; }
-  .duration-note { background: #fffbe6; border: 1px solid #ffe58f;
-    border-radius: 4px; padding: 0.75rem 1rem; font-size: 13px; color: #7a5f00;
-    margin-top: 1rem; }
-  .chart-section { margin-bottom: 2.5rem; }
+  .sort-col { white-space: nowrap; }
 </style>
 {% endblock %}
 
@@ -67,205 +75,281 @@
   API-Equivalent Estimates — subscription charges may differ.
 </p>
 
-{# ── No data yet ─────────────────────────────────────────────────────────────── #}
-{% if not has_data %}
-<div class="empty-state" role="status" aria-live="polite">
-  <div class="icon" aria-hidden="true">&#128202;</div>
-  <p>No cost data yet.</p>
-  <p style="font-size:12px;color:#aaa;margin-top:0.25rem;">
-    Cost logs appear here once the pipeline processes items with the cost log writer enabled.
-    Files are written to <code>docs/reports/execution-costs/</code> by the plan orchestrator.
-  </p>
+<div class="tool-call-note" role="note">
+  Cost is recorded at the agent task level only. Tool calls carry no direct cost.
 </div>
-{% else %}
 
-{# ── Top files by read volume ────────────────────────────────────────────────── #}
-<section class="chart-section" aria-labelledby="hd-top-files">
-  <h2 id="hd-top-files">Top Files by Read Volume</h2>
-  <div class="analysis-chart" aria-label="Top files by read volume chart">
-    {{ top_files_svg | safe }}
+{# ── Summary cards ──────────────────────────────────────────────────────────── #}
+<div class="summary-cards" role="region" aria-label="Cost summary">
+  <div class="summary-card">
+    <div class="card-label">All-Time Total</div>
+    <div class="card-value">~${{ "%.4f" | format(summary.total_cost_usd) }}</div>
+  </div>
+  <div class="summary-card">
+    <div class="card-label">Today</div>
+    <div class="card-value">~${{ "%.4f" | format(summary.today_cost_usd) }}</div>
+  </div>
+  <div class="summary-card">
+    <div class="card-label">This Week</div>
+    <div class="card-value">~${{ "%.4f" | format(summary.week_cost_usd) }}</div>
+  </div>
+  <div class="summary-card">
+    <div class="card-label">Most Expensive Slug</div>
+    <div class="card-value" style="font-size:1rem;word-break:break-all;">
+      {{ summary.most_expensive_slug | e if summary.most_expensive_slug else "&mdash;" | safe }}
+    </div>
+    {% if summary.most_expensive_slug %}
+    <div class="card-sub">~${{ "%.4f" | format(summary.most_expensive_slug_cost_usd) }}</div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Cost over time chart ────────────────────────────────────────────────────── #}
+<section class="chart-section" aria-labelledby="hd-cost-time">
+  <h2 id="hd-cost-time">Cost Over Time — Last 30 Days</h2>
+  <div class="analysis-chart" aria-label="Daily cost bar chart">
+    {{ cost_over_time_svg | safe }}
   </div>
 </section>
 
-{# ── Token cost by agent type ────────────────────────────────────────────────── #}
-<section class="chart-section" aria-labelledby="hd-agent-cost">
-  <h2 id="hd-agent-cost">Token Cost by Agent Type</h2>
-  <div class="analysis-chart" aria-label="Token cost by agent type chart">
-    {{ agent_cost_svg | safe }}
-  </div>
+{# ── Filter form ────────────────────────────────────────────────────────────── #}
+<form class="filter-bar" method="get" action="/analysis" role="search"
+      aria-label="Filter cost runs">
 
-  {# Filter links — one per agent type, plus a Clear link when filter is active #}
-  <nav class="agent-filter-bar" aria-label="Filter per-item table by agent type">
-    <span style="font-size:12px;color:#666;align-self:center;">Filter by agent:</span>
-    {% for agent_type in all_agent_types %}
-    <a href="/analysis?agent={{ agent_type | urlencode }}"
-       {% if agent_filter == agent_type %}class="active" aria-current="true"{% endif %}
-       aria-label="Filter to {{ agent_type }} agent">{{ agent_type }}</a>
-    {% endfor %}
-    {% if agent_filter %}
-    <a href="/analysis" class="clear" aria-label="Clear agent filter">&#10005; Clear filter</a>
-    {% endif %}
-  </nav>
-</section>
+  <label>
+    Slug
+    <input type="search" name="slug" value="{{ slug | e }}"
+           placeholder="Substring match&hellip;" aria-label="Filter by slug substring">
+  </label>
 
-{# ── Per-item cost table ──────────────────────────────────────────────────────── #}
-<section aria-labelledby="hd-item-costs">
-  <h2 id="hd-item-costs">Per-Item Cost
-    {% if agent_filter %}
-    <span style="font-size:14px;font-weight:400;color:#4e79a7;">&mdash; showing {{ agent_filter }} only</span>
-    {% endif %}
+  <label>
+    Type
+    <select name="item_type" aria-label="Filter by item type">
+      <option value="">All types</option>
+      <option value="feature" {% if item_type == "feature" %}selected{% endif %}>feature</option>
+      <option value="defect"  {% if item_type == "defect"  %}selected{% endif %}>defect</option>
+    </select>
+  </label>
+
+  <label>
+    From
+    <input type="date" name="date_from" value="{{ date_from | e }}"
+           aria-label="Start date">
+  </label>
+
+  <label>
+    To
+    <input type="date" name="date_to" value="{{ date_to | e }}"
+           aria-label="End date">
+  </label>
+
+  <label>
+    Sort
+    <select name="sort" aria-label="Sort order">
+      <option value="inclusive_desc" {% if sort == "inclusive_desc" %}selected{% endif %}>Inclusive cost ↓</option>
+      <option value="exclusive_desc" {% if sort == "exclusive_desc" %}selected{% endif %}>Exclusive cost ↓</option>
+      <option value="date_desc"      {% if sort == "date_desc"      %}selected{% endif %}>Date ↓</option>
+    </select>
+  </label>
+
+  <button type="submit">Apply</button>
+
+  {% if slug or item_type or date_from or date_to %}
+  <a class="reset-link" href="/analysis" aria-label="Clear all filters">Clear filters</a>
+  {% endif %}
+</form>
+
+{# ── Top runs table ─────────────────────────────────────────────────────────── #}
+<section aria-labelledby="hd-top-runs" style="margin-bottom:2.5rem;">
+  <h2 id="hd-top-runs">Top Runs
+    <span style="font-size:14px;font-weight:400;color:#666;">
+      ({{ total_count }} total{% if slug or item_type or date_from or date_to %}, filtered{% endif %})
+    </span>
   </h2>
 
-  {% if cost_by_item %}
-  <div class="table-wrap" role="region" aria-label="Per-item cost breakdown">
-    <table id="item-cost-table">
+  {% if runs %}
+  <div class="table-wrap" role="region" aria-label="Top runs table">
+    <table>
       <thead>
         <tr>
-          <th scope="col"></th>
-          <th scope="col" data-sortable="item_slug">Item</th>
-          <th scope="col" data-sortable="agent_types">Agent Types</th>
-          <th scope="col" data-sortable="input_tokens">Input Tokens</th>
-          <th scope="col" data-sortable="output_tokens">Output Tokens</th>
-          <th scope="col" data-sortable="cost_usd">Cost ($)</th>
-          <th scope="col" data-sortable="num_tasks">Tasks</th>
-          <th scope="col" data-sortable="num_wasted_reads">Wasted Reads</th>
+          <th scope="col">Slug</th>
+          <th scope="col">Node</th>
+          <th scope="col">Model</th>
+          <th scope="col" class="sort-col">Exclusive ~$</th>
+          <th scope="col" class="sort-col">Inclusive ~$</th>
+          <th scope="col">Tokens In</th>
+          <th scope="col">Tokens Out</th>
+          <th scope="col">Duration</th>
+          <th scope="col">Timestamp</th>
         </tr>
       </thead>
       <tbody>
-        {% for item in cost_by_item %}
-        {# ── Item summary row ──────────────────────────────────────────────── #}
-        <tr class="item-row"
-            data-item-slug="{{ item.item_slug | e }}"
-            data-item-type="{{ item.item_type | e }}"
-            data-agent-types="{{ item.agent_types | join(',') | e }}"
-            data-input-tokens="{{ item.input_tokens }}"
-            data-output-tokens="{{ item.output_tokens }}"
-            data-cost-usd="{{ item.cost_usd }}"
-            data-num-tasks="{{ item.num_tasks }}"
-            data-num-wasted-reads="{{ item.num_wasted_reads }}">
+        {% for run in runs %}
+        <tr>
           <td>
-            {% if item.tasks %}
-            <button class="expand-btn"
-                    aria-expanded="false"
-                    aria-controls="task-detail-{{ loop.index }}"
-                    aria-label="Toggle task breakdown for {{ item.item_slug | e }}">
-              &#9654;
-            </button>
-            {% endif %}
-          </td>
-          <td>
-            {{ item.item_slug | e }}
-            {% if item.item_type %}
-            <span class="badge-item-type">{{ item.item_type | e }}</span>
-            {% endif %}
-          </td>
-          <td>{{ item.agent_types | join(', ') | e }}</td>
-          <td>{{ "{:,}".format(item.input_tokens) }}</td>
-          <td>{{ "{:,}".format(item.output_tokens) }}</td>
-          <td>${{ "%.4f" | format(item.cost_usd) }}</td>
-          <td>{{ item.num_tasks }}</td>
-          <td>
-            {% if item.num_wasted_reads > 0 %}
-            <span class="num-wasted" title="{{ item.num_wasted_reads }} files read in multiple tasks">
-              {{ item.num_wasted_reads }}
-            </span>
+            {% if run.item_slug %}
+              <a href="/item/{{ run.item_slug | e }}"
+                 aria-label="View work item {{ run.item_slug | e }}">{{ run.item_slug | e }}</a>
+              {% if run.item_type %}
+              <span class="badge-item-type">{{ run.item_type | e }}</span>
+              {% endif %}
             {% else %}
-            0
+              &mdash;
+            {% endif %}
+          </td>
+          <td>{{ run.name | e }}</td>
+          <td>{{ run.model | e }}</td>
+          <td>~${{ "%.4f" | format(run.exclusive_cost_usd) }}</td>
+          <td>~${{ "%.4f" | format(run.inclusive_cost_usd) }}</td>
+          <td>{{ "{:,}".format(run.input_tokens) }}</td>
+          <td>{{ "{:,}".format(run.output_tokens) }}</td>
+          <td>
+            {% if run.duration_ms %}
+              {{ "%.1f" | format(run.duration_ms / 1000) }}s
+            {% else %}
+              &mdash;
+            {% endif %}
+          </td>
+          <td>
+            {% if run.created_at %}
+              <time datetime="{{ run.created_at | e }}" class="local-time">
+                {{ run.created_at[:10] | e }} {{ run.created_at[11:19] | e }}
+              </time>
+            {% else %}
+              &mdash;
             {% endif %}
           </td>
         </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
-        {# ── Per-task detail row (hidden until toggled) ───────────────────── #}
-        {% if item.tasks %}
-        <tr id="task-detail-{{ loop.index }}" class="task-detail-row"
-            aria-label="Task breakdown for {{ item.item_slug | e }}">
-          <td class="task-detail-cell" colspan="8">
-            <table class="task-subtable">
-              <thead>
-                <tr>
-                  <th scope="col">Task ID</th>
-                  <th scope="col">Agent</th>
-                  <th scope="col">Model</th>
-                  <th scope="col">Input Tokens</th>
-                  <th scope="col">Output Tokens</th>
-                  <th scope="col">Cost ($)</th>
-                  <th scope="col">Duration (s)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for task in item.tasks %}
-                <tr>
-                  <td>{{ task.task_id | e }}</td>
-                  <td>{{ task.agent_type | e }}</td>
-                  <td>{{ task.model | e }}</td>
-                  <td>{{ "{:,}".format(task.input_tokens) }}</td>
-                  <td>{{ "{:,}".format(task.output_tokens) }}</td>
-                  <td>${{ "%.4f" | format(task.cost_usd) }}</td>
-                  <td>{{ "%.1f" | format(task.duration_s) }}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </td>
+  {# ── Pagination ──────────────────────────────────────────────────────────── #}
+  {% set has_prev = page > 1 %}
+  {% set has_next = page < total_pages %}
+
+  {% set qs_parts = [] %}
+  {% if slug %}{% set _ = qs_parts.append("slug=" ~ slug) %}{% endif %}
+  {% if item_type %}{% set _ = qs_parts.append("item_type=" ~ item_type) %}{% endif %}
+  {% if date_from %}{% set _ = qs_parts.append("date_from=" ~ date_from) %}{% endif %}
+  {% if date_to %}{% set _ = qs_parts.append("date_to=" ~ date_to) %}{% endif %}
+  {% if sort %}{% set _ = qs_parts.append("sort=" ~ sort) %}{% endif %}
+  {% set qs_base = qs_parts | join("&") %}
+
+  <nav class="pagination" aria-label="Pagination">
+    {% if has_prev %}
+      {% set prev_page = page - 1 %}
+      {% set prev_qs = (qs_base ~ "&page=" ~ prev_page) if qs_base else ("page=" ~ prev_page) %}
+      <a href="/analysis?{{ prev_qs }}" rel="prev" aria-label="Go to previous page">&larr; Previous</a>
+    {% else %}
+      <span class="disabled" aria-disabled="true">&larr; Previous</span>
+    {% endif %}
+
+    <span>Page {{ page }} of {{ total_pages }}</span>
+
+    {% if has_next %}
+      {% set next_page = page + 1 %}
+      {% set next_qs = (qs_base ~ "&page=" ~ next_page) if qs_base else ("page=" ~ next_page) %}
+      <a href="/analysis?{{ next_qs }}" rel="next" aria-label="Go to next page">Next &rarr;</a>
+    {% else %}
+      <span class="disabled" aria-disabled="true">Next &rarr;</span>
+    {% endif %}
+  </nav>
+
+  {% else %}
+  <div class="empty-state" role="status" aria-live="polite">
+    {% if slug or item_type or date_from or date_to %}
+      <p>No runs match the current filters.</p>
+      <p><a href="/analysis">Clear filters</a> to see all runs.</p>
+    {% else %}
+      <p>No cost data recorded yet.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+
+{# ── Cost by work item ──────────────────────────────────────────────────────── #}
+<section aria-labelledby="hd-cost-slug" style="margin-bottom:2.5rem;">
+  <h2 id="hd-cost-slug">Cost by Work Item</h2>
+
+  {% if slug_costs %}
+  <div class="table-wrap" role="region" aria-label="Cost by work item table">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Slug</th>
+          <th scope="col">Type</th>
+          <th scope="col">Total ~$</th>
+          <th scope="col">Tasks</th>
+          <th scope="col">Avg ~$</th>
         </tr>
-        {% endif %}
-
+      </thead>
+      <tbody>
+        {% for sc in slug_costs %}
+        <tr>
+          <td>
+            <a href="/item/{{ sc.item_slug | e }}"
+               aria-label="View work item {{ sc.item_slug | e }}">{{ sc.item_slug | e }}</a>
+          </td>
+          <td>
+            {% if sc.item_type %}
+            <span class="badge-item-type">{{ sc.item_type | e }}</span>
+            {% else %}
+            &mdash;
+            {% endif %}
+          </td>
+          <td>~${{ "%.4f" | format(sc.total_cost_usd) }}</td>
+          <td>{{ sc.task_count }}</td>
+          <td>~${{ "%.4f" | format(sc.avg_cost_usd) }}</td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% else %}
   <div class="empty-state" role="status">
-    <p>No items match the current filter.</p>
-    {% if agent_filter %}
-    <p><a href="/analysis">Clear filter</a> to see all items.</p>
-    {% endif %}
+    <p>No work-item cost data available.</p>
   </div>
   {% endif %}
 </section>
 
-{# ── Wasted reads panel ──────────────────────────────────────────────────────── #}
-{% if wasted_reads %}
-<section aria-labelledby="hd-wasted-reads" style="margin-top:2rem;">
-  <h2 id="hd-wasted-reads">Wasted Reads</h2>
-  <p style="font-size:13px;color:#666;margin-top:-0.25rem;">
-    Files read in 2 or more distinct tasks within the same item — candidates for earlier caching or consolidation.
-  </p>
-  <div class="table-wrap" role="region" aria-label="Wasted reads table">
+{# ── Cost by node type ──────────────────────────────────────────────────────── #}
+<section aria-labelledby="hd-cost-node" style="margin-bottom:2.5rem;">
+  <h2 id="hd-cost-node">Cost by Node Type</h2>
+
+  <div class="analysis-chart" aria-label="Cost by node type bar chart" style="margin-bottom:1rem;">
+    {{ node_cost_svg | safe }}
+  </div>
+
+  {% if node_costs %}
+  <div class="table-wrap" role="region" aria-label="Cost by node type table">
     <table>
       <thead>
         <tr>
-          <th scope="col">Item</th>
-          <th scope="col">File Path</th>
-          <th scope="col">Task Count</th>
+          <th scope="col">Node</th>
+          <th scope="col">Tasks</th>
+          <th scope="col">Total ~$</th>
+          <th scope="col">Avg ~$</th>
         </tr>
       </thead>
       <tbody>
-        {% for wr in wasted_reads %}
+        {% for nc in node_costs %}
         <tr>
-          <td>{{ wr.item_slug | e }}</td>
-          <td><code title="{{ wr.file_path | e }}">{{ wr.file_path | e }}</code></td>
-          <td>{{ wr.task_count }}</td>
+          <td>{{ nc.node_name | e }}</td>
+          <td>{{ nc.task_count }}</td>
+          <td>~${{ "%.4f" | format(nc.total_cost_usd) }}</td>
+          <td>~${{ "%.4f" | format(nc.avg_cost_usd) }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-</section>
-{% endif %}
-
-{# ── Duration histogram note ─────────────────────────────────────────────────── #}
-<section aria-labelledby="hd-duration" style="margin-top:2rem;">
-  <h2 id="hd-duration">Tool-Call Duration Histogram</h2>
-  <div class="duration-note" role="note">
-    Per-tool-call duration data is not yet available. The current cost log schema
-    records <code>duration_s</code> at the task level, not per individual tool call.
-    This histogram will be enabled once the log schema is extended to include
-    per-tool-call timing.
+  {% else %}
+  <div class="empty-state" role="status">
+    <p>No node cost data available.</p>
   </div>
+  {% endif %}
 </section>
 
-{% endif %}{# end has_data #}
-
-<script src="/static/analysis.js" defer></script>
 {% endblock %}
