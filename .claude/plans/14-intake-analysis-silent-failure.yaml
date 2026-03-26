@@ -1,91 +1,90 @@
 meta:
   id: '14'
   title: 'Intake analysis: silent failure on call_claude errors'
-  source_item: '.claude/plans/.claimed/14-intake-analysis-silent-failure.md'
-  design: 'docs/plans/2026-03-26-14-intake-analysis-silent-failure-design.md'
+  source_item: .claude/plans/.claimed/14-intake-analysis-silent-failure.md
+  design: docs/plans/2026-03-26-14-intake-analysis-silent-failure-design.md
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
-
 sections:
-  - id: '1'
-    name: 'Expose failure reason from call_claude'
+- id: '1'
+  name: Expose failure reason from call_claude
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add ClaudeResult NamedTuple and update call_claude return type
+    agent: coder
+    status: in_progress
+    description: 'Implement the fix described in: .claude/plans/.claimed/14-intake-analysis-silent-failure.md
+
+      Design doc: docs/plans/2026-03-26-14-intake-analysis-silent-failure-design.md
+
+      In langgraph_pipeline/shared/claude_cli.py, add a ClaudeResult NamedTuple with
+      fields (text: str, failure_reason: Optional[str]). Change call_claude() to return
+      ClaudeResult instead of str. On success return ClaudeResult(text=..., failure_reason=None).
+      On each failure path (TimeoutExpired, non-zero returncode, JSONDecodeError,
+      OSError) set failure_reason to a descriptive string that includes the full stderr
+      (not truncated to 200 chars) or the exception message. Update probe_quota_available()
+      in langgraph_pipeline/shared/quota.py to use result.text. Update any other direct
+      callers of call_claude() in the codebase that treat the return value as a plain
+      string.
+
+      '
+    last_attempt: '2026-03-26T10:42:40.346290'
+    attempts: 1
+    model_used: sonnet
+  - id: '1.2'
+    name: Update tests for ClaudeResult return type
+    agent: coder
     status: pending
-    tasks:
-      - id: '1.1'
-        name: 'Add ClaudeResult NamedTuple and update call_claude return type'
-        agent: coder
-        status: pending
-        description: >
-          Implement the fix described in:
-          .claude/plans/.claimed/14-intake-analysis-silent-failure.md
+    description: 'Implement the fix described in: .claude/plans/.claimed/14-intake-analysis-silent-failure.md
 
-          Design doc: docs/plans/2026-03-26-14-intake-analysis-silent-failure-design.md
+      Design doc: docs/plans/2026-03-26-14-intake-analysis-silent-failure-design.md
 
-          In langgraph_pipeline/shared/claude_cli.py, add a ClaudeResult NamedTuple
-          with fields (text: str, failure_reason: Optional[str]). Change call_claude()
-          to return ClaudeResult instead of str. On success return ClaudeResult(text=...,
-          failure_reason=None). On each failure path (TimeoutExpired, non-zero returncode,
-          JSONDecodeError, OSError) set failure_reason to a descriptive string that
-          includes the full stderr (not truncated to 200 chars) or the exception message.
-          Update probe_quota_available() in langgraph_pipeline/shared/quota.py to use
-          result.text. Update any other direct callers of call_claude() in the codebase
-          that treat the return value as a plain string.
+      Update or create tests in tests/langgraph/shared/test_claude_cli.py that verify
+      call_claude() returns ClaudeResult with correct text and failure_reason on each
+      path (success, timeout, non-zero returncode, JSON error, OSError). Update mock
+      return values in tests/langgraph/slack/test_suspension.py from plain strings
+      to ClaudeResult instances. Run the full test suite and fix any failures.
 
-      - id: '1.2'
-        name: 'Update tests for ClaudeResult return type'
-        agent: coder
-        status: pending
-        description: >
-          Implement the fix described in:
-          .claude/plans/.claimed/14-intake-analysis-silent-failure.md
-
-          Design doc: docs/plans/2026-03-26-14-intake-analysis-silent-failure-design.md
-
-          Update or create tests in tests/langgraph/shared/test_claude_cli.py that verify
-          call_claude() returns ClaudeResult with correct text and failure_reason on each
-          path (success, timeout, non-zero returncode, JSON error, OSError). Update mock
-          return values in tests/langgraph/slack/test_suspension.py from plain strings to
-          ClaudeResult instances. Run the full test suite and fix any failures.
-
-  - id: '2'
-    name: 'Surface failures in Slack intake and dashboard'
+      '
+- id: '2'
+  name: Surface failures in Slack intake and dashboard
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Gate intake on quota and call add_error on failure
+    agent: coder
     status: pending
-    tasks:
-      - id: '2.1'
-        name: 'Gate intake on quota and call add_error on failure'
-        agent: coder
-        status: pending
-        description: >
-          Implement the fix described in:
-          .claude/plans/.claimed/14-intake-analysis-silent-failure.md
+    description: 'Implement the fix described in: .claude/plans/.claimed/14-intake-analysis-silent-failure.md
 
-          Design doc: docs/plans/2026-03-26-14-intake-analysis-silent-failure-design.md
+      Design doc: docs/plans/2026-03-26-14-intake-analysis-silent-failure-design.md
 
-          In langgraph_pipeline/slack/suspension.py _run_intake_analysis_inner(), gate
-          the call_claude invocation on probe_quota_available(). When result.text is
-          empty, call get_dashboard_state().add_error() with the failure detail (wrapped
-          in try/except). Include the failure_reason in the Slack fallback message so
-          the user sees why analysis failed. Run the full test suite and fix any failures.
+      In langgraph_pipeline/slack/suspension.py _run_intake_analysis_inner(), gate
+      the call_claude invocation on probe_quota_available(). When result.text is empty,
+      call get_dashboard_state().add_error() with the failure detail (wrapped in try/except).
+      Include the failure_reason in the Slack fallback message so the user sees why
+      analysis failed. Run the full test suite and fix any failures.
 
-      - id: '2.2'
-        name: 'Add and update suspension tests for failure paths'
-        agent: coder
-        status: pending
-        description: >
-          Implement the fix described in:
-          .claude/plans/.claimed/14-intake-analysis-silent-failure.md
+      '
+  - id: '2.2'
+    name: Add and update suspension tests for failure paths
+    agent: coder
+    status: pending
+    description: 'Implement the fix described in: .claude/plans/.claimed/14-intake-analysis-silent-failure.md
 
-          Design doc: docs/plans/2026-03-26-14-intake-analysis-silent-failure-design.md
+      Design doc: docs/plans/2026-03-26-14-intake-analysis-silent-failure-design.md
 
-          In tests/langgraph/slack/test_suspension.py, add tests that verify the Slack
-          fallback message contains the failure_reason when call_claude returns empty
-          text, that add_error() is called on the dashboard state, and that when
-          probe_quota_available() returns False the failure message indicates quota
-          exhaustion. Run the full test suite and fix any failures before completing.
+      In tests/langgraph/slack/test_suspension.py, add tests that verify the Slack
+      fallback message contains the failure_reason when call_claude returns empty
+      text, that add_error() is called on the dashboard state, and that when probe_quota_available()
+      returns False the failure message indicates quota exhaustion. Run the full test
+      suite and fix any failures before completing.
+
+      '
