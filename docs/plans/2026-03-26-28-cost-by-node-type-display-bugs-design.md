@@ -1,60 +1,62 @@
-# Cost by Node Type Display Bugs — Design
+# Cost by Node Type: Display Bugs Design
 
-## Problem
+## Overview
 
-Two display bugs in the "Total Cost by Node Type" SVG chart and table:
+Two bugs exist in `svg_bar_chart()` in `cost_log_reader.py` when rendering the
+"Total Cost by Node Type" chart on the `/analysis` page:
 
-1. **"E" label on top bar**: The SVG value label for the maximum-value bar is
-   placed at `x = SVG_BAR_LABEL_PADDING + bar_area_width + SVG_TEXT_OFFSET_X`,
-   which equals approximately `width - SVG_VALUE_LABEL_PADDING + SVG_TEXT_OFFSET_X`.
-   With `SVG_VALUE_LABEL_PADDING = 10` and `SVG_TEXT_OFFSET_X = 5`, the text
-   starts only 5px before the right SVG edge. The long float string
-   `"55.605055300000004"` (~18 chars x 7px = ~126px) extends far beyond the
-   viewport, leaving barely a sliver visible — which browser rendering may
-   display as a partial glyph resembling "E".
-
-2. **Full floating-point precision**: `svg_bar_chart` uses `{value:,}` (integer
-   comma format) on float values, producing `55.605055300000004` instead of
-   `$55.61`. The table in `analysis.html` uses `"%.4f"` for the node type rows.
+1. The top bar's value label is clipped — the bar fills nearly all of the chart's
+   drawable area, leaving fewer pixels than the value label requires.
+2. Cost values display with full floating-point precision (e.g.
+   `55.605055300000004`) because the function was written for integer values but is
+   called with `float` costs and uses `{value:,}` without precision control.
 
 ## Root Cause
 
-- `svg_bar_chart` in `cost_log_reader.py` has `values: list[int]` type and
-  `{value:,}` display format — designed for integer counts, not USD floats.
-- `SVG_VALUE_LABEL_PADDING = 10` is too small to reserve space for a formatted
-  dollar amount label to the right of the max-width bar.
-- `analysis.html` node type table uses `"%.4f"` instead of `"%.2f"`.
+`svg_bar_chart` reserves `SVG_VALUE_LABEL_PADDING = 10` pixels to the right of
+bars for value labels. A label like `$55.61` is ~35-40 pixels wide at 12px font,
+so a bar that fills close to `bar_area_width` leaves the label clipped or pushed
+outside the SVG viewport.
+
+The function signature declares `values: list[int]` but the two callers in
+`analysis.py` pass `list[float]`. Python's `{value:,}` on a float renders all
+significant digits.
 
 ## Fix
 
-### `langgraph_pipeline/web/cost_log_reader.py`
+### 1. Reserve enough space for value labels
 
-- Increase `SVG_VALUE_LABEL_PADDING` from `10` to `60` (enough for `$999.99`).
-- Add optional `value_formatter` callable parameter to `svg_bar_chart`
-  (default: `lambda v: f"${v:.2f}"`). Change `{value:,}` to
-  `value_formatter(value)`.
-- Update type annotation `values: list[int]` to `values: list[float]`.
+Increase `SVG_VALUE_LABEL_PADDING` from `10` to `80`. This reserves 80 pixels to
+the right of every bar for the formatted value label, preventing clipping even for
+labels like `$55.61` at 12px font.
 
-### `langgraph_pipeline/web/templates/analysis.html`
+`bar_area_width` is calculated as `width - SVG_BAR_LABEL_PADDING - SVG_VALUE_LABEL_PADDING`,
+so increasing the padding shrinks the bar area proportionally. The bars remain
+proportional to each other; only the maximum bar width decreases slightly.
 
-- In the "Cost by node type" table, change `"%.4f"` to `"%.2f"` for
-  `nc.total_cost_usd` and `nc.avg_cost_usd`.
+### 2. Format cost values to 2 decimal places with "$" prefix
 
-### `tests/langgraph/web/test_cost_log_reader.py`
+Change `values: list[int]` to `values: list[float]` in `svg_bar_chart` and
+update the value label rendering from `{value:,}` to `f"${value:.2f}"`.
 
-- Update any `svg_bar_chart` tests that check value label text to expect the
-  `$X.XX` format and verify the label fits within the SVG width.
+Both existing callers (`_build_cost_over_time_svg` and `_build_node_cost_svg`)
+pass USD float values, so the "$" prefix and 2-decimal formatting is correct for
+both. This matches the project convention that cost values display as plain
+`$0.0123` without tilde.
 
 ## Key Files
 
-| File | Change |
-|------|--------|
-| `langgraph_pipeline/web/cost_log_reader.py` | `SVG_VALUE_LABEL_PADDING`, `svg_bar_chart` signature and value format |
-| `langgraph_pipeline/web/templates/analysis.html` | Node type table precision |
-| `tests/langgraph/web/test_cost_log_reader.py` | Update format assertions |
+- `langgraph_pipeline/web/cost_log_reader.py` - `svg_bar_chart()` function and
+  `SVG_VALUE_LABEL_PADDING` constant
+- `tests/langgraph/web/test_cost_log_reader.py` - existing SVG bar chart tests
+  need to be updated to pass float values and assert `$`-prefixed formatted labels
 
-## Non-Goals
+## Design Decisions
 
-- Fixing the tilde prefix elsewhere on the page (separate item).
-- The `value_formatter` default will also fix the daily cost chart float display
-  as a side effect, which is acceptable.
+- No change to the callers in `analysis.py` — the fix belongs in the chart
+  function, not the callers.
+- `SVG_VALUE_LABEL_PADDING = 80` is sufficient for any realistic USD cost label
+  up to 7 characters (`$999.99`) at 12px font (~7px/char = ~49px), with margin.
+- Changing the type annotation from `list[int]` to `list[float]` corrects the
+  existing mismatch; the chart works identically for integer values passed as
+  floats.
