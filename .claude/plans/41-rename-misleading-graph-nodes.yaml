@@ -28,6 +28,9 @@ sections:
     agent: coder
     description: 'Bump plugin.json version (patch) and add a RELEASE-NOTES.md entry
       for this fix. Work item: .claude/plans/.claimed/41-rename-misleading-graph-nodes.md'
-    status: pending
+    status: in_progress
     depends_on:
     - '1.1'
+    last_attempt: '2026-03-26T18:55:01.209933'
+    attempts: 1
+    model_used: sonnet
