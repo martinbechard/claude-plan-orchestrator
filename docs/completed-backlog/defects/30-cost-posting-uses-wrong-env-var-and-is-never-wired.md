@@ -24,5 +24,3 @@ the pipeline config, no real cost data has ever been posted.
 4. Delete the fake "12-test-item" rows from the cost_tasks table.
 5. Verify that after the fix, running a real work item produces real rows
    in cost_tasks with actual token counts and costs.
-
-## LangSmith Trace: 16208dc2-b641-418d-85da-c8d075afb4a0

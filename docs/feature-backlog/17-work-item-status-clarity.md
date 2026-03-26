@@ -2,7 +2,7 @@
 
 ## Status: Open
 
-## Priority: Medium
+## Priority: High
 
 ## Summary
 
