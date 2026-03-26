@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS traces (
     run_id        TEXT NOT NULL,
     parent_run_id TEXT,
     name          TEXT NOT NULL,
+    model         TEXT NOT NULL DEFAULT '',
     start_time    TEXT,
     end_time      TEXT,
     inputs_json   TEXT,
@@ -42,6 +43,8 @@ CREATE TABLE IF NOT EXISTS traces (
     created_at    TEXT NOT NULL
 );
 """
+
+_ALTER_ADD_MODEL_SQL = "ALTER TABLE traces ADD COLUMN model TEXT NOT NULL DEFAULT ''"
 
 _CREATE_COMPLETIONS_SQL = """
 CREATE TABLE IF NOT EXISTS completions (
@@ -76,6 +79,7 @@ _CREATE_INDEXES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_traces_run_id        ON traces (run_id);",
     "CREATE INDEX IF NOT EXISTS idx_traces_parent_run_id ON traces (parent_run_id);",
     "CREATE INDEX IF NOT EXISTS idx_traces_created_at    ON traces (created_at);",
+    "CREATE INDEX IF NOT EXISTS idx_traces_model         ON traces (model);",
     "CREATE INDEX IF NOT EXISTS idx_completions_finished ON completions (finished_at);",
     "CREATE INDEX IF NOT EXISTS idx_cost_tasks_item_slug ON cost_tasks (item_slug);",
 ]
@@ -114,6 +118,10 @@ class TracingProxy:
             conn.execute(_CREATE_TABLE_SQL)
             conn.execute(_CREATE_COMPLETIONS_SQL)
             conn.execute(_CREATE_COST_TASKS_SQL)
+            try:
+                conn.execute(_ALTER_ADD_MODEL_SQL)
+            except sqlite3.OperationalError:
+                pass  # Column already exists in an existing database
             for index_sql in _CREATE_INDEXES_SQL:
                 conn.execute(index_sql)
 
@@ -198,6 +206,43 @@ class TracingProxy:
                 self._forward_async(payload)
             except Exception:
                 logger.debug("TracingProxy: failed to schedule forward for run_id=%s", run_id, exc_info=True)
+
+    def propagate_model_to_root(self, parent_run_id: str, model: str) -> None:
+        """Walk up the parent chain and set model on the root run if currently empty.
+
+        Only the root run (parent_run_id IS NULL) is updated. First-write wins:
+        if the root already has a model value, the update is skipped.
+
+        Args:
+            parent_run_id: The parent_run_id of the child run that carries model info.
+            model: The model name extracted from the child run's extra.invocation_params.
+        """
+        if not model:
+            return
+        try:
+            with self._connect() as conn:
+                current_id = parent_run_id
+                while current_id:
+                    row = conn.execute(
+                        "SELECT run_id, parent_run_id FROM traces WHERE run_id = ? LIMIT 1",
+                        [current_id],
+                    ).fetchone()
+                    if row is None:
+                        break
+                    if row["parent_run_id"] is None:
+                        # This is the root run
+                        conn.execute(
+                            "UPDATE traces SET model = ? WHERE run_id = ? AND model = ''",
+                            [model, current_id],
+                        )
+                        break
+                    current_id = row["parent_run_id"]
+        except Exception:
+            logger.debug(
+                "TracingProxy: failed to propagate model to root for parent_run_id=%s",
+                parent_run_id,
+                exc_info=True,
+            )
 
     # ─── Async Forwarder ──────────────────────────────────────────────────────
 
@@ -376,7 +421,7 @@ class TracingProxy:
             conditions.append("name LIKE ?")
             params.append(f"%{slug}%")
         if model:
-            conditions.append("metadata_json LIKE ?")
+            conditions.append("LOWER(model) LIKE LOWER(?)")
             params.append(f"%{model}%")
         if date_from:
             conditions.append("created_at >= ?")
@@ -428,7 +473,7 @@ class TracingProxy:
             conditions.append("name LIKE ?")
             params.append(f"%{slug}%")
         if model:
-            conditions.append("metadata_json LIKE ?")
+            conditions.append("LOWER(model) LIKE LOWER(?)")
             params.append(f"%{model}%")
         if date_from:
             conditions.append("created_at >= ?")

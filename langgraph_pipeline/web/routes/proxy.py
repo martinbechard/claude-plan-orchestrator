@@ -101,7 +101,7 @@ def _enrich_run(run: dict) -> dict:
             meta = {}
 
     run["display_slug"] = meta.get("slug") or meta.get("item_slug") or ""
-    run["display_model"] = meta.get("model") or meta.get("model_name") or ""
+    run["display_model"] = run.get("model") or ""
     cost = meta.get("cost") or meta.get("total_cost")
     run["display_cost"] = f"~${float(cost):.4f}" if cost is not None else ""
     return run
@@ -161,9 +161,9 @@ def proxy_list(
     total_pages = max(1, math.ceil(total_count / PAGE_SIZE_DEFAULT))
 
     return templates.TemplateResponse(
+        request,
         "proxy_list.html",
         {
-            "request": request,
             "runs": runs,
             "page": page,
             "total_pages": total_pages,
@@ -199,9 +199,9 @@ def proxy_trace(request: Request, run_id: str) -> HTMLResponse:
 
     children = proxy.get_children(run_id)
     return templates.TemplateResponse(
+        request,
         "proxy_trace.html",
         {
-            "request": request,
             "run": _enrich_run(run),
             "children": [_enrich_run(c) for c in children],
         },
