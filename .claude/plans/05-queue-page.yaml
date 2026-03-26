@@ -1,0 +1,50 @@
+meta:
+  source_item: .claude/plans/.claimed/05-queue-page.md
+  item_type: feature
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Backend queue route
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Create GET /queue and GET /api/queue endpoints
+    agent: coder
+    description: 'Implement the work item: .claude/plans/.claimed/05-queue-page.md
+
+
+      See the design doc at docs/plans/2026-03-26-05-queue-page-design.md
+
+      for the data model, directory list, sort order, and endpoint contracts.
+
+      Register the new router in langgraph_pipeline/web/server.py.
+
+      '
+    status: pending
+- id: '2'
+  name: Frontend queue template and nav link
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Create queue.html template and update base.html nav
+    agent: frontend-coder
+    description: 'Implement the work item: .claude/plans/.claimed/05-queue-page.md
+
+
+      See the design doc at docs/plans/2026-03-26-05-queue-page-design.md
+
+      for the table layout, badge CSS classes, inline detail panel behaviour,
+
+      and auto-refresh logic. Also add the Queue nav link to base.html and
+
+      link the dashboard queue count to /queue.
+
+      '
+    status: pending
