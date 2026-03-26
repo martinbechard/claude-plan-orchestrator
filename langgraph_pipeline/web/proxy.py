@@ -83,6 +83,16 @@ CREATE TABLE IF NOT EXISTS cost_tasks (
 );
 """
 
+_DEDUPLICATE_RUN_IDS_SQL = """
+DELETE FROM traces
+WHERE id NOT IN (
+    SELECT MAX(id) FROM traces GROUP BY run_id
+)
+AND run_id IN (
+    SELECT run_id FROM traces GROUP BY run_id HAVING COUNT(*) > 1
+);
+"""
+
 _CREATE_UNIQUE_INDEX_RUN_ID_SQL = (
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_traces_run_id_unique ON traces (run_id);"
 )
@@ -231,10 +241,8 @@ class TracingProxy:
                 conn.execute(_ALTER_ADD_COMPLETIONS_RUN_ID_SQL)
             except sqlite3.OperationalError:
                 pass  # Column already exists in an existing database
-            try:
-                conn.execute(_CREATE_UNIQUE_INDEX_RUN_ID_SQL)
-            except sqlite3.IntegrityError:
-                pass  # Pre-existing duplicate run_ids; unique index skipped for this DB
+            conn.execute(_DEDUPLICATE_RUN_IDS_SQL)
+            conn.execute(_CREATE_UNIQUE_INDEX_RUN_ID_SQL)
             for index_sql in _CREATE_INDEXES_SQL:
                 conn.execute(index_sql)
 
@@ -290,12 +298,16 @@ class TracingProxy:
             with self._connect() as conn:
                 conn.execute(
                     """
-                    INSERT OR IGNORE INTO traces
+                    INSERT INTO traces
                         (run_id, parent_run_id, name, start_time, end_time,
                          inputs_json, outputs_json, metadata_json, error, created_at)
                     VALUES
                         (:run_id, :parent_run_id, :name, :start_time, :end_time,
                          :inputs_json, :outputs_json, :metadata_json, :error, :created_at)
+                    ON CONFLICT(run_id) DO UPDATE SET
+                        end_time     = excluded.end_time,
+                        outputs_json = excluded.outputs_json,
+                        error        = excluded.error
                     """,
                     row,
                 )

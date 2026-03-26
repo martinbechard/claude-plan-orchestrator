@@ -606,7 +606,7 @@ def test_duplicate_record_run_inserts_only_one_row(proxy):
     runs = proxy.list_runs(page=1)
     assert len(runs) == 1
     assert runs[0]["run_id"] == SAMPLE_RUN_ID
-    # First-write wins: original inputs preserved
+    # Upsert preserves inputs_json from the first write; only end_time/outputs_json/error are updated
     row = proxy.get_run(SAMPLE_RUN_ID)
     assert '"prompt": "hello"' in row["inputs_json"]
 
@@ -615,12 +615,12 @@ def test_list_root_traces_by_slug_deduplicates_pre_existing_rows(proxy):
     """list_root_traces_by_slug returns one row per run_id even with duplicate DB rows.
 
     This covers databases that had duplicate rows before the UNIQUE index was added:
-    we bypass INSERT OR IGNORE and write two rows with the same run_id directly,
+    we bypass record_run by writing two rows with the same run_id directly,
     then verify the query collapses them to a single result.
     """
     slug = "item-99"
     run_id = "run-dup-slug-001"
-    # Bypass record_run (which uses INSERT OR IGNORE) by writing directly to SQLite
+    # Bypass record_run by writing directly to SQLite after dropping the unique index
     with proxy._connect() as conn:
         conn.execute(
             "INSERT INTO traces (run_id, parent_run_id, name, created_at) VALUES (?, NULL, ?, ?)",
@@ -638,6 +638,113 @@ def test_list_root_traces_by_slug_deduplicates_pre_existing_rows(proxy):
     assert results[0]["run_id"] == run_id
     # MIN(created_at) should return the earlier timestamp
     assert results[0]["created_at"] == "2026-03-25T09:00:00"
+
+
+def test_upsert_merges_start_and_completion_events(proxy):
+    """record_run with the same run_id merges completion data into the start-event row.
+
+    The start event arrives first (no outputs, no end_time). The completion event
+    arrives second (with outputs and end_time). The upsert must update end_time,
+    outputs_json, and error while preserving inputs_json from the start event.
+    """
+    # Start event: has inputs but no outputs or end_time
+    proxy.record_run(
+        run_id=SAMPLE_RUN_ID,
+        parent_run_id=None,
+        name=SAMPLE_RUN_NAME,
+        inputs=SAMPLE_INPUTS,
+        outputs=None,
+        metadata=SAMPLE_METADATA,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=None,
+    )
+    # Completion event: has outputs and end_time
+    proxy.record_run(
+        run_id=SAMPLE_RUN_ID,
+        parent_run_id=None,
+        name=SAMPLE_RUN_NAME,
+        inputs=None,
+        outputs=SAMPLE_OUTPUTS,
+        metadata=SAMPLE_METADATA,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+
+    runs = proxy.list_runs(page=1)
+    assert len(runs) == 1
+
+    row = proxy.get_run(SAMPLE_RUN_ID)
+    assert row is not None
+    # inputs_json preserved from start event
+    assert '"prompt"' in row["inputs_json"]
+    # outputs_json updated from completion event
+    assert '"result"' in row["outputs_json"]
+    # end_time updated from completion event
+    assert row["end_time"] == SAMPLE_END_TIME
+
+
+def test_init_db_deduplicates_pre_existing_duplicate_run_ids(tmp_path):
+    """_init_db removes pre-existing duplicate run_id rows on startup.
+
+    Simulates a database that accumulated duplicates before the unique index
+    existed. The deduplication in _init_db must clean them up so that
+    CREATE UNIQUE INDEX succeeds without an IntegrityError.
+    """
+    import sqlite3 as _sqlite3
+
+    db_path = str(tmp_path / "dup-traces.db")
+    run_id = "run-preexisting-dup"
+
+    # Seed the DB with duplicate rows directly (no unique index yet)
+    conn = _sqlite3.connect(db_path)
+    conn.execute(
+        """CREATE TABLE traces (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            parent_run_id TEXT,
+            name TEXT NOT NULL,
+            model TEXT NOT NULL DEFAULT '',
+            start_time TEXT, end_time TEXT,
+            inputs_json TEXT, outputs_json TEXT, metadata_json TEXT,
+            error TEXT, created_at TEXT NOT NULL
+        )"""
+    )
+    conn.execute(
+        "INSERT INTO traces (run_id, name, created_at) VALUES (?, ?, ?)",
+        (run_id, "start-event", "2026-03-25T09:00:00"),
+    )
+    conn.execute(
+        "INSERT INTO traces (run_id, name, created_at) VALUES (?, ?, ?)",
+        (run_id, "completion-event", "2026-03-25T09:00:05"),
+    )
+    conn.commit()
+    conn.close()
+
+    # Creating TracingProxy against this DB triggers _init_db which must deduplicate
+    config = {"db_path": db_path, "forward_to_langsmith": False}
+    p = TracingProxy(config)
+
+    # Only one row should remain (the one with MAX(id), i.e. the completion event)
+    row = p.get_run(run_id)
+    assert row is not None
+    assert row["name"] == "completion-event"
+
+    # The unique index must now exist and enforce uniqueness
+    p.record_run(
+        run_id=run_id,
+        parent_run_id=None,
+        name="updated-name",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=None,
+        end_time=None,
+    )
+    rows = p.list_runs(page=1)
+    assert len(rows) == 1
 
 
 # ─── get_children_batch Tests ────────────────────────────────────────────────
