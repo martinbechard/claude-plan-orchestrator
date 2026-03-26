@@ -8,6 +8,11 @@
 
 const SSE_ENDPOINT = "/api/stream";
 const RECONNECT_DELAY_MS = 3000;
+const LS_VIEW_KEY = "dashboard.workers.view";
+const VIEW_TABLE = "table";
+const VIEW_TIMELINE = "timeline";
+const AXIS_TICK_PERCENTS = [0, 25, 50, 75, 100];
+const FLASH_DURATION_MS = 1200;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -53,6 +58,45 @@ function outcomeBadgeClass(outcome) {
 function stampTemplate(templateId) {
   const tpl = document.getElementById(templateId);
   return document.importNode(tpl.content, true);
+}
+
+// ── View state ────────────────────────────────────────────────────────────────
+
+var currentView = VIEW_TABLE;
+var previousWorkerSlugs = new Set();
+var latestCompletions = [];
+
+function getStoredView() {
+  try {
+    var v = localStorage.getItem(LS_VIEW_KEY);
+    return v === VIEW_TIMELINE ? VIEW_TIMELINE : VIEW_TABLE;
+  } catch (_) {
+    return VIEW_TABLE;
+  }
+}
+
+function setStoredView(view) {
+  try { localStorage.setItem(LS_VIEW_KEY, view); } catch (_) { /* noop */ }
+}
+
+// ── Timeline bar colour ──────────────────────────────────────────────────────
+
+function timelineBarClass(itemType) {
+  switch (itemType) {
+    case "defect": return "timeline-bar--defect";
+    case "feature": return "timeline-bar--feature";
+    case "analysis": return "timeline-bar--analysis";
+    default: return "";
+  }
+}
+
+function flashClass(outcome) {
+  switch (outcome) {
+    case "success": return "timeline-bar--flash-success";
+    case "warn": return "timeline-bar--flash-warn";
+    case "fail": return "timeline-bar--flash-fail";
+    default: return "timeline-bar--flash-success";
+  }
 }
 
 // ── Render helpers ─────────────────────────────────────────────────────────────
@@ -193,13 +237,169 @@ function renderErrors(errors) {
   container.appendChild(fragment);
 }
 
+// ── Timeline view ─────────────────────────────────────────────────────────────
+
+function renderTimelineAxis(maxElapsed) {
+  var axis = document.getElementById("timeline-axis");
+  axis.innerHTML = "";
+  AXIS_TICK_PERCENTS.forEach(function(pct) {
+    var span = document.createElement("span");
+    span.className = "timeline-axis-tick";
+    span.style.left = pct + "%";
+    var secs = Math.round((pct / 100) * maxElapsed);
+    span.textContent = fmtElapsed(secs);
+    axis.appendChild(span);
+  });
+}
+
+function renderTimeline(workers) {
+  var container = document.getElementById("timeline-container");
+  var rowsEl = document.getElementById("timeline-rows");
+
+  if (!workers || workers.length === 0) {
+    rowsEl.innerHTML = "";
+    document.getElementById("timeline-axis").innerHTML = "";
+    return;
+  }
+
+  var maxElapsed = 0;
+  workers.forEach(function(w) {
+    if ((w.elapsed_s || 0) > maxElapsed) maxElapsed = w.elapsed_s;
+  });
+  if (maxElapsed === 0) maxElapsed = 1;
+
+  renderTimelineAxis(maxElapsed);
+
+  var fragment = document.createDocumentFragment();
+  workers.forEach(function(w) {
+    var clone = stampTemplate("tpl-timeline-row");
+    var row = clone.querySelector(".timeline-row");
+    row.setAttribute("data-slug", w.slug);
+
+    var label = clone.querySelector(".timeline-label");
+    var labelLink = document.createElement("a");
+    labelLink.href = "/item/" + encodeURIComponent(w.slug);
+    labelLink.textContent = w.slug;
+    label.appendChild(labelLink);
+
+    var bar = clone.querySelector(".timeline-bar");
+    var pct = Math.min(100, ((w.elapsed_s || 0) / maxElapsed) * 100);
+    bar.style.width = pct + "%";
+    bar.classList.add(timelineBarClass(w.item_type));
+
+    clone.querySelector(".timeline-elapsed").textContent = fmtElapsed(w.elapsed_s || 0);
+
+    fragment.appendChild(clone);
+  });
+
+  rowsEl.innerHTML = "";
+  rowsEl.appendChild(fragment);
+}
+
+// ── Completion flash ──────────────────────────────────────────────────────────
+
+function findCompletionOutcome(slug, completions) {
+  if (!completions) return null;
+  for (var i = 0; i < completions.length; i++) {
+    if (completions[i].slug === slug) return completions[i].outcome;
+  }
+  return null;
+}
+
+function showCompletionFlash(departedSlugs, completions) {
+  departedSlugs.forEach(function(slug) {
+    var outcome = findCompletionOutcome(slug, completions);
+    var cls = flashClass(outcome);
+
+    if (currentView === VIEW_TIMELINE) {
+      var rowsEl = document.getElementById("timeline-rows");
+      var clone = stampTemplate("tpl-timeline-row");
+      var row = clone.querySelector(".timeline-row");
+      row.setAttribute("data-slug", slug);
+      clone.querySelector(".timeline-label").textContent = slug;
+      var bar = clone.querySelector(".timeline-bar");
+      bar.className = "timeline-bar " + cls;
+      bar.style.width = "100%";
+      clone.querySelector(".timeline-elapsed").textContent = "done";
+      rowsEl.appendChild(clone);
+    } else {
+      var container = document.getElementById("workers-container");
+      var cards = container.querySelectorAll(".worker-card");
+      cards.forEach(function(card) {
+        if (card.getAttribute("aria-label") === "Worker: " + slug) {
+          card.style.transition = "opacity 1.2s ease";
+          card.style.opacity = "0";
+        }
+      });
+    }
+
+    setTimeout(function() {
+      if (currentView === VIEW_TIMELINE) {
+        var rowsEl = document.getElementById("timeline-rows");
+        rowsEl.querySelectorAll(".timeline-row").forEach(function(row) {
+          if (row.getAttribute("data-slug") === slug) row.remove();
+        });
+      } else {
+        var container = document.getElementById("workers-container");
+        container.querySelectorAll(".worker-card").forEach(function(card) {
+          if (card.getAttribute("aria-label") === "Worker: " + slug) card.remove();
+        });
+      }
+    }, FLASH_DURATION_MS);
+  });
+}
+
+// ── Toggle logic ──────────────────────────────────────────────────────────────
+
+function applyView(view) {
+  currentView = view;
+  setStoredView(view);
+
+  var workersContainer = document.getElementById("workers-container");
+  var timelineContainer = document.getElementById("timeline-container");
+  var btn = document.getElementById("workers-view-toggle");
+
+  if (view === VIEW_TIMELINE) {
+    workersContainer.style.display = "none";
+    timelineContainer.hidden = false;
+    btn.textContent = "Table";
+    btn.setAttribute("aria-pressed", "true");
+    btn.setAttribute("title", "Switch to table view");
+  } else {
+    workersContainer.style.display = "";
+    timelineContainer.hidden = true;
+    btn.textContent = "Timeline";
+    btn.setAttribute("aria-pressed", "false");
+    btn.setAttribute("title", "Switch to timeline view");
+  }
+}
+
 // ── Main render ────────────────────────────────────────────────────────────────
 
 function renderAll(data) {
+  var workers = data.active_workers || [];
+  latestCompletions = data.recent_completions || [];
+
+  var currentSlugs = new Set();
+  workers.forEach(function(w) { currentSlugs.add(w.slug); });
+
+  var departed = [];
+  previousWorkerSlugs.forEach(function(slug) {
+    if (!currentSlugs.has(slug)) departed.push(slug);
+  });
+
   renderSessionSummary(data);
-  renderWorkers(data.active_workers);
-  renderCompletions(data.recent_completions);
+  renderWorkers(workers);
+  renderTimeline(workers);
+  applyView(currentView);
+  renderCompletions(latestCompletions);
   renderErrors(data.recent_errors);
+
+  if (departed.length > 0) {
+    showCompletionFlash(departed, latestCompletions);
+  }
+
+  previousWorkerSlugs = currentSlugs;
 }
 
 // ── Connection status ──────────────────────────────────────────────────────────
@@ -249,5 +449,17 @@ function connect() {
 
 document.addEventListener("DOMContentLoaded", function() {
   setConnectionStatus(false);
+
+  currentView = getStoredView();
+  applyView(currentView);
+
+  var toggleBtn = document.getElementById("workers-view-toggle");
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", function() {
+      var next = currentView === VIEW_TABLE ? VIEW_TIMELINE : VIEW_TABLE;
+      applyView(next);
+    });
+  }
+
   connect();
 });
