@@ -40,5 +40,3 @@ Graph nodes (Other) — everything else: scan_backlog, execute_plan, etc.
 Also verify in the LangSmith trace how Claude Code worker invocations are
 logged — confirm whether they appear as a single child run named "LangGraph"
 or "ChatAnthropic" or something else, and classify accordingly.
-
-## LangSmith Trace: 9400483e-f58f-4e68-8732-9d9542340b60
