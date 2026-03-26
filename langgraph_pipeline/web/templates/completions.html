@@ -193,19 +193,19 @@
   {% if has_prev %}
     {% set prev_page = page - 1 %}
     {% set prev_qs = (qs_base ~ "&page=" ~ prev_page) if qs_base else ("page=" ~ prev_page) %}
-    <a href="/completions?{{ prev_qs }}" rel="prev" aria-label="Go to previous page">&larr; Previous</a>
+    <a href="/completions?{{ prev_qs }}" rel="prev" aria-label="Go to previous page">&laquo; Prev</a>
   {% else %}
-    <span class="disabled" aria-disabled="true">&larr; Previous</span>
+    <span class="disabled" aria-disabled="true">&laquo; Prev</span>
   {% endif %}
 
-  <span>Page {{ page }} of {{ total_pages }}</span>
+  <span class="pagination-page-info">Page {{ page }} of {{ total_pages }}</span>
 
   {% if has_next %}
     {% set next_page = page + 1 %}
     {% set next_qs = (qs_base ~ "&page=" ~ next_page) if qs_base else ("page=" ~ next_page) %}
-    <a href="/completions?{{ next_qs }}" rel="next" aria-label="Go to next page">Next &rarr;</a>
+    <a href="/completions?{{ next_qs }}" rel="next" aria-label="Go to next page">Next &raquo;</a>
   {% else %}
-    <span class="disabled" aria-disabled="true">Next &rarr;</span>
+    <span class="disabled" aria-disabled="true">Next &raquo;</span>
   {% endif %}
 </nav>
 
