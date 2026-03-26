@@ -1,8 +1,9 @@
 {# langgraph_pipeline/web/templates/item.html
    Work-item detail page: requirements, plan tasks, completions, traces.
-   Context: slug, item_type, status, total_cost_usd, requirements_html,
+   Context: slug, item_type, pipeline_stage, active_worker, total_cost_usd, requirements_html,
             plan_tasks [{id, name, status}], completions, traces [{run_id, name, created_at}]
-   Design: docs/plans/2026-03-26-06-work-item-detail-page-design.md #}
+   Design: docs/plans/2026-03-26-06-work-item-detail-page-design.md
+           docs/plans/2026-03-26-17-work-item-status-clarity-design.md #}
 {% extends "base.html" %}
 
 {% block title %}{{ slug }} — Plan Orchestrator{% endblock %}
@@ -75,11 +76,69 @@
     font-variant-numeric: tabular-nums;
 }
 
-/* Status badges */
+/* Status / pipeline-stage badges */
 .status-running   { background: #d1fae5; color: #065f46; }
 .status-completed { background: #dbeafe; color: #1e40af; }
 .status-queued    { background: #fef3c7; color: #92400e; }
 .status-unknown   { background: #f3f4f6; color: #6b7280; }
+.status-claimed   { background: #fef9c3; color: #854d0e; }
+.status-designing { background: #ede9fe; color: #5b21b6; }
+.status-planning  { background: #dbeafe; color: #1d4ed8; }
+.status-executing { background: #ffedd5; color: #c2410c; }
+.status-stuck     { background: #fee2e2; color: #b91c1c; }
+
+/* ── Active-worker banner ─────────────────────────────────────────────── */
+.active-worker-banner {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    padding: 0.75rem 1.25rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.25rem;
+    font-size: 13px;
+    color: #7c2d12;
+}
+
+.active-worker-label {
+    font-weight: 700;
+    color: #c2410c;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.active-worker-label::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #c2410c;
+    animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.35; }
+}
+
+.active-worker-sep {
+    color: #fdba74;
+    user-select: none;
+}
+
+.active-worker-trace {
+    margin-left: auto;
+    color: #c2410c;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.active-worker-trace:hover { text-decoration: underline; }
 
 /* ── Two-column layout ────────────────────────────────────────────────── */
 .item-layout {
@@ -323,8 +382,8 @@
         <span class="badge item-type-{{ item_type }}"
               aria-label="Type: {{ item_type }}">{{ item_type }}</span>
       {% endif %}
-      <span class="badge status-{{ status }}"
-            aria-label="Status: {{ status }}">{{ status }}</span>
+      <span class="badge status-{{ pipeline_stage }}"
+            aria-label="Pipeline stage: {{ pipeline_stage }}">{{ pipeline_stage }}</span>
     </div>
   </div>
   <div class="item-header-cost" aria-label="Total API cost">
@@ -332,6 +391,24 @@
     <span class="item-cost-value">~${{ "%.4f"|format(total_cost_usd) }}</span>
   </div>
 </div>
+
+{# ── Active-worker banner ─────────────────────────────────────────────────── #}
+{% if active_worker %}
+<div class="active-worker-banner" role="status" aria-live="polite"
+     aria-label="Active worker running this item">
+  <span class="active-worker-label">Currently running</span>
+  <span class="active-worker-sep" aria-hidden="true">|</span>
+  <span>PID {{ active_worker.pid }}</span>
+  <span class="active-worker-sep" aria-hidden="true">|</span>
+  <span>Running for {{ active_worker.elapsed_s }}</span>
+  {% if active_worker.run_id %}
+    <span class="active-worker-sep" aria-hidden="true">|</span>
+    <a class="active-worker-trace"
+       href="/proxy?trace_id={{ active_worker.run_id }}"
+       aria-label="View trace for this run">View trace &rarr;</a>
+  {% endif %}
+</div>
+{% endif %}
 
 {# ── Two-column layout ───────────────────────────────────────────────────── #}
 <div class="item-layout">
