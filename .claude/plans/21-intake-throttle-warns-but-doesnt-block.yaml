@@ -1,0 +1,65 @@
+meta:
+  id: '21'
+  title: Intake throttle warns but does not actually block processing
+  source_item: .claude/plans/.claimed/21-intake-throttle-warns-but-doesnt-block.md
+  design: docs/plans/2026-03-26-21-intake-throttle-warns-but-doesnt-block-design.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Add shared shutdown singleton and blocking throttle wait
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Create shared shutdown event module and wire into cli.py
+    agent: coder
+    status: pending
+    description: 'Implement the fix described in: .claude/plans/.claimed/21-intake-throttle-warns-but-doesnt-block.md
+
+      Design doc: docs/plans/2026-03-26-21-intake-throttle-warns-but-doesnt-block-design.md
+
+      Create langgraph_pipeline/shared/shutdown.py with get_shutdown_event() and
+      register_shutdown_event() as described in the design doc. Wire it into cli.py
+      by calling register_shutdown_event(shutdown_event) immediately after the shutdown
+      event is created in main().
+
+      '
+  - id: '1.2'
+    name: Implement blocking throttle wait in intake.py and update limits
+    agent: coder
+    status: pending
+    description: 'Implement the fix described in: .claude/plans/.claimed/21-intake-throttle-warns-but-doesnt-block.md
+
+      Design doc: docs/plans/2026-03-26-21-intake-throttle-warns-but-doesnt-block-design.md
+
+      In intake.py: raise MAX_INTAKES_PER_HOUR to 50 for all types, add
+      THROTTLE_WAIT_INTERVAL_SECONDS constant, and replace the warning-only throttle
+      check in intake_analyze() with a blocking wait loop using get_shutdown_event()
+      as described in the design doc. Update tests/langgraph/pipeline/nodes/test_intake.py
+      to cover the new blocking behavior and updated limits.
+
+      '
+- id: '2'
+  name: Harmonise poller.py throttle limits
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Update poller.py MAX_DEFECTS_PER_HOUR and MAX_FEATURES_PER_HOUR to 50
+    agent: coder
+    status: pending
+    description: 'Implement the fix described in: .claude/plans/.claimed/21-intake-throttle-warns-but-doesnt-block.md
+
+      Design doc: docs/plans/2026-03-26-21-intake-throttle-warns-but-doesnt-block-design.md
+
+      In poller.py, update MAX_DEFECTS_PER_HOUR and MAX_FEATURES_PER_HOUR from 20
+      to 50 to match the updated intake.py limits. Run the full test suite after the
+      change to confirm no regressions.
+
+      '
