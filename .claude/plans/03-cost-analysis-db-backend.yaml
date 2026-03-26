@@ -31,6 +31,10 @@ sections:
     result_message: Added _CREATE_COST_TASKS_SQL schema and idx_cost_tasks_item_slug
       index to proxy.py; _init_db() now creates the cost_tasks table alongside traces
       and completions. All 1494 tests pass.
+    validation_attempts: 1
+    validation_findings: cost_tasks table schema matches spec exactly; idx_cost_tasks_item_slug
+      index added; _init_db() calls conn.execute(_CREATE_COST_TASKS_SQL); build OK;
+      1494/1494 tests pass.
   - id: '1.2'
     name: Add POST /api/cost endpoint
     agent: coder
@@ -43,7 +47,10 @@ sections:
       return {"ok": true} with status 202. Register the router in langgraph_pipeline/web/server.py
       create_app(). Write unit tests in tests/langgraph/web/test_cost_endpoint.py
       using FastAPI TestClient.'
-    status: pending
+    status: in_progress
+    last_attempt: '2026-03-26T01:06:07.155842'
+    attempts: 1
+    model_used: sonnet
 - id: '2'
   name: Worker and Reader Updates
   status: pending
