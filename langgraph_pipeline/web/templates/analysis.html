@@ -31,6 +31,13 @@
        .total_cost_usd   float
        .avg_cost_usd     float
      node_cost_svg      str          — inline SVG bar chart by node type
+     tool_attribution   list[ToolCallCost] — top tool calls by proportional cost
+       .tool_name        str
+       .detail           str         — file path, command prefix, or glob pattern
+       .result_bytes     int
+       .estimated_cost_usd float
+       .item_slug        str
+       .task_id          str
      slug               str          — active filter value
      item_type          str          — active filter value
      date_from          str          — active filter value
@@ -38,6 +45,7 @@
      sort               str          — active sort value
      sort_options       list[str]    — valid sort option constants
    Design: docs/plans/2026-03-26-10-trace-cost-analysis-page-design.md
+         docs/plans/2026-03-26-11-tool-call-cost-attribution-design.md
 #}
 {% extends "base.html" %}
 
@@ -66,6 +74,14 @@
   .badge-item-type { font-size: 11px; padding: 1px 6px; border-radius: 3px;
     background: #e8f0fe; color: #3b5bdb; border: 1px solid #b8caff; }
   .sort-col { white-space: nowrap; }
+  .tool-attr-detail {
+    font-family: monospace; font-size: 12px; color: #444;
+    max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tool-attr-disclaimer {
+    background: #f0f4ff; border: 1px solid #c5d0e6; border-radius: 4px;
+    padding: 0.6rem 1rem; font-size: 13px; color: #3a4a70; margin-bottom: 1.5rem;
+  }
 </style>
 {% endblock %}
 
@@ -348,6 +364,59 @@
   {% else %}
   <div class="empty-state" role="status">
     <p>No node cost data available.</p>
+  </div>
+  {% endif %}
+</section>
+{# end cost by node type #}
+
+{# ── Tool Call Cost Attribution ──────────────────────────────────────────────── #}
+<section aria-labelledby="hd-tool-attr" style="margin-bottom:2.5rem;">
+  <h2 id="hd-tool-attr">Tool Call Cost Attribution</h2>
+
+  <div class="tool-attr-disclaimer" role="note">
+    Estimated costs based on result_bytes; tools returning no data are excluded.
+    This is a proportional estimate, not exact billing.
+  </div>
+
+  {% if tool_attribution %}
+  <div class="table-wrap" role="region" aria-label="Tool call cost attribution table">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Tool</th>
+          <th scope="col">Slug</th>
+          <th scope="col">Task</th>
+          <th scope="col">Detail</th>
+          <th scope="col">Result KB</th>
+          <th scope="col">Est. ~$</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ta in tool_attribution %}
+        <tr>
+          <td>{{ ta.tool_name | e }}</td>
+          <td>
+            {% if ta.item_slug %}
+              <a href="/item/{{ ta.item_slug | e }}"
+                 aria-label="View work item {{ ta.item_slug | e }}">{{ ta.item_slug | e }}</a>
+            {% else %}
+              &mdash;
+            {% endif %}
+          </td>
+          <td>{{ ta.task_id | e if ta.task_id else "&mdash;" | safe }}</td>
+          <td>
+            <span class="tool-attr-detail" title="{{ ta.detail | e }}">{{ ta.detail | e }}</span>
+          </td>
+          <td>{{ "%.1f" | format(ta.result_bytes / 1024) }}</td>
+          <td>~${{ "%.6f" | format(ta.estimated_cost_usd) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state" role="status">
+    <p>No tool call attribution data available.</p>
   </div>
   {% endif %}
 </section>
