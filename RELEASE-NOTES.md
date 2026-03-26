@@ -1,5 +1,14 @@
 # Release Notes
 
+## 1.10.13 (2026-03-26)
+
+### Bug Fixes
+- **Replace collapsible disclaimer with hover tooltip on cost analysis page:** The
+  collapsible info-icon toggle on /analysis was replaced with a CSS-only hover tooltip
+  anchored to the heading. The tooltip appears on hover with no JavaScript required,
+  keeps the disclaimer always accessible, and avoids the expand/collapse interaction
+  that added unnecessary friction.
+
 ## 1.10.12 (2026-03-26)
 
 ### Bug Fixes
