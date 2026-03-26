@@ -46,7 +46,9 @@ sections:
       Remove the ~ character from cost displays in: langgraph_pipeline/web/static/dashboard.js
       (formatCost function), langgraph_pipeline/web/templates/analysis.html (column
       headers and cell values).'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:51:44.774677'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T01:52:33.196813'
+    result_message: 'PASS: All good'
