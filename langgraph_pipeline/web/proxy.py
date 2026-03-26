@@ -54,9 +54,12 @@ CREATE TABLE IF NOT EXISTS completions (
     outcome     TEXT NOT NULL,
     cost_usd    REAL NOT NULL DEFAULT 0.0,
     duration_s  REAL NOT NULL DEFAULT 0.0,
-    finished_at TEXT NOT NULL
+    finished_at TEXT NOT NULL,
+    run_id      TEXT
 );
 """
+
+_ALTER_ADD_COMPLETIONS_RUN_ID_SQL = "ALTER TABLE completions ADD COLUMN run_id TEXT"
 
 _CREATE_COST_TASKS_SQL = """
 CREATE TABLE IF NOT EXISTS cost_tasks (
@@ -120,6 +123,10 @@ class TracingProxy:
             conn.execute(_CREATE_COST_TASKS_SQL)
             try:
                 conn.execute(_ALTER_ADD_MODEL_SQL)
+            except sqlite3.OperationalError:
+                pass  # Column already exists in an existing database
+            try:
+                conn.execute(_ALTER_ADD_COMPLETIONS_RUN_ID_SQL)
             except sqlite3.OperationalError:
                 pass  # Column already exists in an existing database
             for index_sql in _CREATE_INDEXES_SQL:
@@ -293,6 +300,7 @@ class TracingProxy:
         outcome: str,
         cost_usd: float,
         duration_s: float,
+        run_id: Optional[str] = None,
     ) -> None:
         """Persist a worker completion record to the completions table.
 
@@ -302,16 +310,17 @@ class TracingProxy:
             outcome: One of "success", "warn", or "fail".
             cost_usd: API cost incurred by this worker.
             duration_s: Wall-clock seconds the worker ran.
+            run_id: LangSmith trace UUID, if available.
         """
         finished_at = datetime.now(timezone.utc).isoformat()
         try:
             with self._connect() as conn:
                 conn.execute(
                     """
-                    INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, finished_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    [slug, item_type, outcome, cost_usd, duration_s, finished_at],
+                    [slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id],
                 )
         except Exception:
             logger.debug("TracingProxy: failed to record completion for %s", slug, exc_info=True)
@@ -323,9 +332,9 @@ class TracingProxy:
             limit: Maximum number of rows to return.
 
         Returns:
-            List of dicts with keys: slug, item_type, outcome, cost_usd, duration_s, finished_at.
+            List of dicts with keys: slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id.
         """
-        sql = "SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at FROM completions ORDER BY finished_at DESC LIMIT ?"
+        sql = "SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id FROM completions ORDER BY finished_at DESC LIMIT ?"
         with self._connect() as conn:
             rows = conn.execute(sql, [limit]).fetchall()
         return [dict(row) for row in rows]
