@@ -12,18 +12,21 @@ sections:
   name: Remove scan_backlog from graph
   status: pending
   tasks:
-  - id: "1.1"
+  - id: '1.1'
     name: Remove scan_backlog node from graph and update integration tests
     agent: coder
-    description: "Implement the fix described in the work item and the design doc.
+    description: 'Implement the fix described in the work item and the design doc.
       Work item: .claude/plans/.claimed/40-remove-redundant-scan-backlog-node.md.
-      Design: docs/plans/2026-03-26-40-remove-redundant-scan-backlog-node-design.md"
-    status: pending
-  - id: "1.2"
+      Design: docs/plans/2026-03-26-40-remove-redundant-scan-backlog-node-design.md'
+    status: in_progress
+    last_attempt: '2026-03-26T18:45:24.343363'
+    attempts: 1
+    model_used: sonnet
+  - id: '1.2'
     name: Bump plugin version and update release notes
     agent: coder
-    description: "Bump plugin.json version (patch) and add a RELEASE-NOTES.md entry
-      for this fix. Work item: .claude/plans/.claimed/40-remove-redundant-scan-backlog-node.md"
+    description: 'Bump plugin.json version (patch) and add a RELEASE-NOTES.md entry
+      for this fix. Work item: .claude/plans/.claimed/40-remove-redundant-scan-backlog-node.md'
     status: pending
     depends_on:
-    - "1.1"
+    - '1.1'
