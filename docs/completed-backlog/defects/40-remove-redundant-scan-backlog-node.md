@@ -49,5 +49,3 @@ without pre-scanning.
 - Do all existing tests pass? YES = pass, NO = fail
 - Does the scan_backlog function still exist and work when called directly?
   YES = pass, NO = fail
-
-## LangSmith Trace: 0be86088-58fa-469e-b41b-1909631de36e
