@@ -96,12 +96,16 @@ sections:
       + sub-text pattern across queue, completions, traces, and dashboard. Fix table
       th/td padding, left-align text columns, right-align numeric columns across all
       pages.'
-    status: in_progress
+    status: completed
     depends_on:
     - '2.1'
     last_attempt: '2026-03-26T18:44:06.672072'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-26T18:48:53.707248'
+    result_message: Removed scan_backlog node from graph.py, deleted has_items from
+      edges.py, rewrote integration tests to pre-populate item_path. All 1290 tests
+      pass.
   - id: '2.3'
     name: Fix cost display tildes and misc issues
     agent: frontend-coder
