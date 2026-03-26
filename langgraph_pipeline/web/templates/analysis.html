@@ -354,8 +354,8 @@
         <tr>
           <td>{{ nc.node_name | e }}</td>
           <td>{{ nc.task_count }}</td>
-          <td>~${{ "%.4f" | format(nc.total_cost_usd) }}</td>
-          <td>~${{ "%.4f" | format(nc.avg_cost_usd) }}</td>
+          <td>${{ "%.2f" | format(nc.total_cost_usd) }}</td>
+          <td>${{ "%.2f" | format(nc.avg_cost_usd) }}</td>
         </tr>
         {% endfor %}
       </tbody>
