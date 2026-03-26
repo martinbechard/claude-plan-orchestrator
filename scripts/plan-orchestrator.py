@@ -952,6 +952,50 @@ def parse_task_usage(result_data: dict) -> TaskUsage:
     )
 
 
+def _post_cost_to_db(
+    endpoint: str,
+    item_slug: str,
+    item_type: str,
+    task_id: str,
+    agent_type: str,
+    model: str,
+    usage: TaskUsage,
+    duration_s: float,
+    tool_call_dicts: list[dict],
+) -> bool:
+    """POST a per-task cost record to {endpoint}/api/cost.
+
+    Returns True on success, False on any error (caller falls back to JSON file).
+    """
+    COST_API_TIMEOUT_S = 10
+    payload = {
+        "item_slug": item_slug,
+        "item_type": item_type,
+        "task_id": task_id,
+        "agent_type": agent_type,
+        "model": model,
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "cost_usd": usage.total_cost_usd,
+        "duration_s": round(duration_s, 1),
+        "tool_calls": tool_call_dicts,
+    }
+    url = f"{endpoint}/api/cost"
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=COST_API_TIMEOUT_S):
+            return True
+    except Exception as exc:
+        print(f"[cost-log] POST to {url} failed: {exc} — falling back to JSON file")
+        return False
+
+
 def write_execution_cost_log(
     item_slug: str,
     item_type: str,
@@ -962,23 +1006,15 @@ def write_execution_cost_log(
     duration_s: float,
     tool_calls: list[ToolCallRecord],
 ) -> None:
-    """Append a per-task cost record to docs/reports/execution-costs/<item_slug>.json.
+    """Append a per-task cost record, preferring the DB endpoint when available.
 
-    Creates the log file on the first call for a given item_slug with the outer
-    structure (item_slug, item_type, tasks[]). On subsequent calls, loads the
-    existing file, appends the new task record, and writes it back atomically.
+    When LANGCHAIN_ENDPOINT starts with "http://localhost", POSTs the record to
+    {LANGCHAIN_ENDPOINT}/api/cost. Falls back to writing a JSON file under
+    docs/reports/execution-costs/<item_slug>.json when the endpoint is absent or
+    the POST fails.
 
     Design: docs/plans/2026-03-24-12-structured-execution-cost-log-and-analysis-design.md
     """
-    COST_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log_path = COST_LOG_DIR / f"{item_slug}.json"
-
-    if log_path.exists():
-        with open(log_path, "r", encoding="utf-8") as f:
-            log_data = json.load(f)
-    else:
-        log_data = {"item_slug": item_slug, "item_type": item_type, "tasks": []}
-
     tool_call_dicts = [
         {k: v for k, v in {
             "tool": tc.tool,
@@ -988,6 +1024,31 @@ def write_execution_cost_log(
         }.items() if v is not None}
         for tc in tool_calls
     ]
+
+    langchain_endpoint = os.environ.get("LANGCHAIN_ENDPOINT", "")
+    if langchain_endpoint.startswith("http://localhost"):
+        posted = _post_cost_to_db(
+            langchain_endpoint,
+            item_slug,
+            item_type,
+            task_id,
+            agent_type,
+            model,
+            usage,
+            duration_s,
+            tool_call_dicts,
+        )
+        if posted:
+            return
+
+    COST_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_path = COST_LOG_DIR / f"{item_slug}.json"
+
+    if log_path.exists():
+        with open(log_path, "r", encoding="utf-8") as f:
+            log_data = json.load(f)
+    else:
+        log_data = {"item_slug": item_slug, "item_type": item_type, "tasks": []}
 
     log_data["tasks"].append({
         "task_id": task_id,
