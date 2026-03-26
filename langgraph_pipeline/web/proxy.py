@@ -115,6 +115,18 @@ COST_SORT_INCLUSIVE_DESC = "inclusive_desc"
 COST_SORT_EXCLUSIVE_DESC = "exclusive_desc"
 COST_SORT_DATE_DESC = "date_desc"
 
+_WORKER_TOKEN_COUNTS_SQL = """
+WITH RECURSIVE subtree(run_id) AS (
+    SELECT run_id FROM traces WHERE run_id = ?
+    UNION ALL
+    SELECT t.run_id FROM traces t JOIN subtree s ON t.parent_run_id = s.run_id
+)
+SELECT
+    COALESCE(SUM(json_extract(t.metadata_json, '$.input_tokens')), 0),
+    COALESCE(SUM(json_extract(t.metadata_json, '$.output_tokens')), 0)
+FROM traces t JOIN subtree s ON t.run_id = s.run_id
+"""
+
 # Recursive CTE fragment: computes inclusive cost (run + all descendants) for a given run_id.
 # Bind parameter :anchor_id must be set to the run_id of the row being computed.
 _INCLUSIVE_COST_CTE = """
@@ -427,6 +439,7 @@ class TracingProxy:
         cost_usd: float,
         duration_s: float,
         run_id: Optional[str] = None,
+        tokens_per_minute: float = 0.0,
     ) -> None:
         """Persist a worker completion record to the completions table.
 
@@ -437,16 +450,18 @@ class TracingProxy:
             cost_usd: API cost incurred by this worker.
             duration_s: Wall-clock seconds the worker ran.
             run_id: LangSmith trace UUID, if available.
+            tokens_per_minute: Final token throughput velocity at reap time.
         """
         finished_at = datetime.now(timezone.utc).isoformat()
         try:
             with self._connect() as conn:
                 conn.execute(
                     """
-                    INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO completions
+                        (slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    [slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id],
+                    [slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute],
                 )
         except Exception:
             logger.debug("TracingProxy: failed to record completion for %s", slug, exc_info=True)
@@ -475,14 +490,14 @@ class TracingProxy:
             date_to: ISO date string upper bound for finished_at (inclusive).
 
         Returns:
-            List of dicts with keys: slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id.
+            List of dicts with keys: slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute.
         """
         conditions, params = self._completions_filter(slug, outcome, date_from, date_to)
         where = " AND ".join(conditions) if conditions else "1"
         offset = (page - 1) * page_size
         params.extend([page_size, offset])
         sql = f"""
-            SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id
+            SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute
             FROM completions
             WHERE {where}
             ORDER BY finished_at DESC
@@ -579,10 +594,10 @@ class TracingProxy:
             slug: Work item slug to filter by.
 
         Returns:
-            List of dicts with keys: slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id.
+            List of dicts with keys: slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute.
         """
         sql = """
-            SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id
+            SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute
             FROM completions
             WHERE slug = ?
             ORDER BY finished_at DESC
@@ -610,6 +625,29 @@ class TracingProxy:
         with self._connect() as conn:
             rows = conn.execute(sql, [f"%{slug}%"]).fetchall()
         return [dict(row) for row in rows]
+
+    def get_worker_token_counts(self, run_id: str) -> tuple[int, int]:
+        """Return cumulative (input_tokens, output_tokens) across all traces in the run subtree.
+
+        Uses a recursive CTE to sum token counts from metadata_json across the root run
+        and all descendant traces.
+
+        Args:
+            run_id: The root run_id of the worker session.
+
+        Returns:
+            Tuple of (input_tokens, output_tokens) as integers.
+        """
+        try:
+            with self._connect() as conn:
+                row = conn.execute(_WORKER_TOKEN_COUNTS_SQL, [run_id]).fetchone()
+            if row:
+                return (int(row[0]), int(row[1]))
+        except Exception:
+            logger.debug(
+                "TracingProxy: failed to get token counts for run_id=%s", run_id, exc_info=True
+            )
+        return (0, 0)
 
     # ─── Cost Tasks ───────────────────────────────────────────────────────────
 
