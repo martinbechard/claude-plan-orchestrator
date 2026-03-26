@@ -68,18 +68,18 @@
   .chart-section { margin-bottom: 2.5rem; }
   .analysis-chart { overflow-x: auto; }
   .cost-heading { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
-  .cost-info-toggle { font-size: 1rem; color: #888; position: relative; }
-  .cost-info-toggle summary { list-style: none; user-select: none; cursor: pointer; }
-  .cost-info-toggle summary::-webkit-details-marker { display: none; }
-  .cost-info-toggle summary:hover { color: #3b6fcf; }
-  .cost-info-panel {
+  .cost-info-icon { font-size: 1rem; color: #888; position: relative; cursor: default; }
+  .cost-info-icon:hover { color: #3b6fcf; }
+  .cost-info-tooltip {
+    display: none;
     position: absolute; left: 0; top: 1.6rem; z-index: 10;
     background: #fffbe6; border: 1px solid #ffe58f; border-radius: 4px;
     padding: 0.6rem 1rem; font-size: 13px; color: #7a5f00;
     white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.10);
   }
-  .cost-info-panel p { margin: 0 0 0.35rem; }
-  .cost-info-panel p:last-child { margin-bottom: 0; }
+  .cost-info-icon:hover .cost-info-tooltip { display: block; }
+  .cost-info-tooltip p { margin: 0 0 0.35rem; }
+  .cost-info-tooltip p:last-child { margin-bottom: 0; }
   .badge-item-type { font-size: 11px; padding: 1px 6px; border-radius: 3px;
     background: #e8f0fe; color: #3b5bdb; border: 1px solid #b8caff; }
   .sort-col { white-space: nowrap; }
@@ -97,13 +97,10 @@
 {% block content %}
 <div class="cost-heading">
   <h1>Cost Analysis</h1>
-  <details class="cost-info-toggle" aria-label="Cost disclaimer information">
-    <summary title="Show cost disclaimer">ⓘ</summary>
-    <div class="cost-info-panel" role="note">
-      <p>API-Equivalent Estimates — subscription charges may differ.</p>
-      <p>Cost is recorded at the agent task level only. Tool calls carry no direct cost.</p>
-    </div>
-  </details>
+  <span class="cost-info-icon">ⓘ<span class="cost-info-tooltip">
+    <p>API-Equivalent Estimates — subscription charges may differ.</p>
+    <p>Cost is recorded at the agent task level only. Tool calls carry no direct cost.</p>
+  </span></span>
 </div>
 
 {# ── Summary cards ──────────────────────────────────────────────────────────── #}
