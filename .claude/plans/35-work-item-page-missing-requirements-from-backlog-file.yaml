@@ -62,3 +62,7 @@ sections:
     completed_at: '2026-03-26T18:27:46.534643'
     result_message: Bumped plugin.json version from 1.10.5 to 1.10.6 and added RELEASE-NOTES.md
       entry documenting the requirements lookup priority chain fix.
+    validation_attempts: 1
+    validation_findings: plugin.json bumped from 1.10.4 to 1.10.5 (patch). RELEASE-NOTES.md
+      has accurate 1.10.5 entry for the web server auto-enable fix. Build passes,
+      1295 tests pass, no placeholders or test-data leaks found.
