@@ -32,6 +32,11 @@ sections:
     result_message: Replaced _derive_status with _derive_pipeline_stage (8-stage waterfall
       with stuck sub-case) and added _get_active_worker helper. Updated route to pass
       pipeline_stage and active_worker to template.
+    validation_attempts: 1
+    validation_findings: 'All requirements met: _derive_status replaced with _derive_pipeline_stage
+      (8-stage waterfall with stuck sub-case), _get_active_worker added, route passes
+      pipeline_stage and active_worker to template. Build compiles, all 1295 tests
+      pass, no placeholders or any types found.'
 - id: '2'
   name: Frontend - Status Display and Active Worker Banner
   status: pending
@@ -39,7 +44,7 @@ sections:
   - id: '2.1'
     name: Update item template for pipeline stage and worker banner
     agent: frontend-coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: .claude/plans/.claimed/17-work-item-status-clarity.md
 
 
@@ -48,3 +53,6 @@ sections:
 
       In item.html rename status to pipeline_stage, add CSS for new stages, and add
       active-worker banner per design doc.'
+    last_attempt: '2026-03-26T18:17:55.852844'
+    attempts: 1
+    model_used: sonnet
