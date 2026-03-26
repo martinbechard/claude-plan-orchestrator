@@ -64,6 +64,7 @@ def _make_usage(**kwargs) -> TaskUsage:
 
 def test_write_creates_file_on_first_call(tmp_path, monkeypatch):
     """First call should create the JSON file with correct outer structure."""
+    monkeypatch.delenv("LANGCHAIN_ENDPOINT", raising=False)
     monkeypatch.setattr(mod, "COST_LOG_DIR", tmp_path)
 
     write_execution_cost_log(
@@ -98,6 +99,7 @@ def test_write_creates_file_on_first_call(tmp_path, monkeypatch):
 
 def test_write_appends_on_subsequent_calls(tmp_path, monkeypatch):
     """Subsequent calls should append to the existing tasks list."""
+    monkeypatch.delenv("LANGCHAIN_ENDPOINT", raising=False)
     monkeypatch.setattr(mod, "COST_LOG_DIR", tmp_path)
 
     write_execution_cost_log(
@@ -130,6 +132,7 @@ def test_write_appends_on_subsequent_calls(tmp_path, monkeypatch):
 
 def test_write_includes_tool_calls(tmp_path, monkeypatch):
     """Tool calls should be serialised into the task record."""
+    monkeypatch.delenv("LANGCHAIN_ENDPOINT", raising=False)
     monkeypatch.setattr(mod, "COST_LOG_DIR", tmp_path)
 
     tool_calls = [
@@ -156,6 +159,7 @@ def test_write_includes_tool_calls(tmp_path, monkeypatch):
 
 def test_write_omits_none_fields_from_tool_calls(tmp_path, monkeypatch):
     """None optional fields should not appear in the serialised tool call dicts."""
+    monkeypatch.delenv("LANGCHAIN_ENDPOINT", raising=False)
     monkeypatch.setattr(mod, "COST_LOG_DIR", tmp_path)
 
     tool_calls = [ToolCallRecord(tool="Agent")]

@@ -6553,7 +6553,7 @@ def run_orchestrator(
                 print(usage_tracker.format_summary_line(task_id))
                 write_execution_cost_log(
                     item_slug=Path(plan_path).stem,
-                    item_type=meta.get("item_type", "feature"),
+                    item_type="defect" if "defect" in meta.get("source_item", "") else "feature",
                     task_id=task_id,
                     agent_type=agent_name,
                     model=effective_model,
