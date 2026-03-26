@@ -27,13 +27,14 @@ sections:
       Register the new router in langgraph_pipeline/web/server.py.
 
       '
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:55:43.734585'
     attempts: 2
     model_used: opus
-    completed_at: '2026-03-26T01:53:43.723821'
-    result_message: Created queue.py with GET /queue and GET /api/queue endpoints.
-      Registered router in server.py.
+    completed_at: '2026-03-26T01:58:16.815366'
+    result_message: 'Fixed three missing deliverables: created queue.html template
+      with table/detail panels/auto-refresh, added Queue nav link to base.html, wrapped
+      dashboard queue count in anchor linking to /queue. All 1525 tests pass.'
     validation_attempts: 1
     validation_findings: 'queue.py and server.py registration are correct and all
       1525 tests pass, but three required deliverables are missing: (1) queue.html
