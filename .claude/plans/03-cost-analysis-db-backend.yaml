@@ -23,7 +23,9 @@ sections:
       tests in tests/test_execution_cost_log.py, and (2) fix item_type derivation
       in scripts/plan-orchestrator.py to inspect the source_item path instead of using
       a static "feature" default.'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T17:52:27.807857'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T17:55:16.542502'
+    result_message: 'PASS: All good'
