@@ -1,6 +1,7 @@
 # tests/langgraph/web/test_proxy.py
 # Unit tests for TracingProxy (SQLite persistence) and /proxy FastAPI endpoints.
 # Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md
+# Design: docs/plans/2026-03-26-16-tool-calls-missing-from-traces-design.md
 
 """Unit tests for langgraph_pipeline.web.proxy and langgraph_pipeline.web.routes.proxy."""
 
@@ -20,9 +21,12 @@ SAMPLE_RUN_ID = "run-abc-123"
 SAMPLE_PARENT_RUN_ID = "run-parent-001"
 SAMPLE_CHILD_RUN_ID_A = "run-child-a"
 SAMPLE_CHILD_RUN_ID_B = "run-child-b"
+SAMPLE_GRANDCHILD_RUN_ID = "run-grandchild-a"
 SAMPLE_RUN_NAME = "test-tool-call"
+SAMPLE_GRANDCHILD_NAME = "Read"
 SAMPLE_START_TIME = "2026-03-25T10:00:00"
 SAMPLE_END_TIME = "2026-03-25T10:00:05"
+SAMPLE_GRANDCHILD_END_TIME = "2026-03-25T10:00:10"
 SAMPLE_INPUTS = {"prompt": "hello"}
 SAMPLE_OUTPUTS = {"result": "world"}
 SAMPLE_METADATA = {"model": "claude-opus", "slug": "item-42"}
@@ -576,6 +580,193 @@ def test_list_root_traces_by_slug_deduplicates_pre_existing_rows(proxy):
     assert results[0]["run_id"] == run_id
     # MIN(created_at) should return the earlier timestamp
     assert results[0]["created_at"] == "2026-03-25T09:00:00"
+
+
+# ─── get_children_batch Tests ────────────────────────────────────────────────
+
+
+def test_get_children_batch_returns_grouped_children(proxy):
+    """get_children_batch returns children grouped by parent_run_id."""
+    child_id_b2 = "run-child-b2"
+    for run_id, parent_id, name in [
+        (SAMPLE_PARENT_RUN_ID, None, "root"),
+        (SAMPLE_CHILD_RUN_ID_A, SAMPLE_PARENT_RUN_ID, "child-a"),
+        (SAMPLE_CHILD_RUN_ID_B, SAMPLE_PARENT_RUN_ID, "child-b"),
+        (SAMPLE_GRANDCHILD_RUN_ID, SAMPLE_CHILD_RUN_ID_A, "grandchild-a1"),
+        (child_id_b2, SAMPLE_CHILD_RUN_ID_A, "grandchild-a2"),
+    ]:
+        proxy.record_run(
+            run_id=run_id,
+            parent_run_id=parent_id,
+            name=name,
+            inputs=None,
+            outputs=None,
+            metadata=None,
+            error=None,
+            start_time=SAMPLE_START_TIME,
+            end_time=SAMPLE_END_TIME,
+        )
+
+    result = proxy.get_children_batch([SAMPLE_CHILD_RUN_ID_A, SAMPLE_CHILD_RUN_ID_B])
+
+    assert SAMPLE_CHILD_RUN_ID_A in result
+    assert len(result[SAMPLE_CHILD_RUN_ID_A]) == 2
+    gc_names = {gc["name"] for gc in result[SAMPLE_CHILD_RUN_ID_A]}
+    assert gc_names == {"grandchild-a1", "grandchild-a2"}
+    # SAMPLE_CHILD_RUN_ID_B has no children, so it should not appear in the result
+    assert SAMPLE_CHILD_RUN_ID_B not in result
+
+
+def test_get_children_batch_empty_run_ids_returns_empty(proxy):
+    """get_children_batch with an empty list returns an empty dict without error."""
+    result = proxy.get_children_batch([])
+    assert result == {}
+
+
+# ─── Grandchild Rendering Endpoint Tests ─────────────────────────────────────
+
+
+def _record_three_level_trace(proxy_instance, child_end: str = SAMPLE_END_TIME) -> None:
+    """Write a root → child → grandchild hierarchy to the given proxy."""
+    proxy_instance.record_run(
+        run_id=SAMPLE_RUN_ID,
+        parent_run_id=None,
+        name=SAMPLE_RUN_NAME,
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    proxy_instance.record_run(
+        run_id=SAMPLE_CHILD_RUN_ID_A,
+        parent_run_id=SAMPLE_RUN_ID,
+        name="execute_plan",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=child_end,
+    )
+    proxy_instance.record_run(
+        run_id=SAMPLE_GRANDCHILD_RUN_ID,
+        parent_run_id=SAMPLE_CHILD_RUN_ID_A,
+        name=SAMPLE_GRANDCHILD_NAME,
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+
+
+def test_proxy_detail_grandchild_name_in_svg(enabled_client):
+    """GET /proxy/{run_id} renders grandchild tool call as an aria-label in the SVG."""
+    proxy_instance = get_proxy()
+    assert proxy_instance is not None
+    _record_three_level_trace(proxy_instance)
+
+    response = enabled_client.get(f"/proxy/{SAMPLE_RUN_ID}")
+    assert response.status_code == 200
+    # The grandchild bar is rendered with aria-label="{{ gc.name }}: ..."
+    assert f'aria-label="{SAMPLE_GRANDCHILD_NAME}:' in response.text
+
+
+def test_proxy_detail_grandchild_name_in_expandable_section(enabled_client):
+    """GET /proxy/{run_id} renders grandchild name in the expandable details section."""
+    proxy_instance = get_proxy()
+    assert proxy_instance is not None
+    _record_three_level_trace(proxy_instance)
+
+    response = enabled_client.get(f"/proxy/{SAMPLE_RUN_ID}")
+    assert response.status_code == 200
+    # Expandable section has "(1 tool call)" summary and the grandchild name in a span
+    assert "1 tool call" in response.text
+    assert SAMPLE_GRANDCHILD_NAME in response.text
+
+
+def test_proxy_detail_grandchild_extends_svg_height(enabled_client):
+    """SVG height increases when grandchild rows are present.
+
+    With 1 child and 1 grandchild the total_rows = 2.
+    Without grandchildren total_rows = 1.
+    SVG_H = PAD_TOP + total_rows * ROW_H + AXIS_H = 10 + rows*30 + 36.
+    """
+    PAD_TOP = 10
+    ROW_H = 30
+    AXIS_H = 36
+
+    proxy_instance = get_proxy()
+    assert proxy_instance is not None
+
+    # First: root + child only (no grandchild)
+    proxy_instance.record_run(
+        run_id="height-root",
+        parent_run_id=None,
+        name="height-test",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    proxy_instance.record_run(
+        run_id="height-child",
+        parent_run_id="height-root",
+        name="child-only",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+
+    resp_no_gc = enabled_client.get("/proxy/height-root")
+    assert resp_no_gc.status_code == 200
+    expected_height_1_row = PAD_TOP + 1 * ROW_H + AXIS_H
+    assert f'height="{expected_height_1_row}"' in resp_no_gc.text
+
+    # Add a grandchild under height-child
+    proxy_instance.record_run(
+        run_id="height-grandchild",
+        parent_run_id="height-child",
+        name="Bash",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+
+    resp_with_gc = enabled_client.get("/proxy/height-root")
+    assert resp_with_gc.status_code == 200
+    expected_height_2_rows = PAD_TOP + 2 * ROW_H + AXIS_H
+    assert f'height="{expected_height_2_rows}"' in resp_with_gc.text
+
+
+def test_proxy_detail_grandchild_later_end_extends_span(enabled_client):
+    """span_s is computed from grandchild end times, not just children.
+
+    When a grandchild ends later than its parent child, the SVG still renders
+    correctly (no division-by-zero or template error) and the grandchild
+    name appears in the output.
+    """
+    proxy_instance = get_proxy()
+    assert proxy_instance is not None
+    # Grandchild ends at SAMPLE_GRANDCHILD_END_TIME (10s after root start),
+    # parent child ends at SAMPLE_END_TIME (5s). span_s must use the grandchild.
+    _record_three_level_trace(proxy_instance, child_end=SAMPLE_END_TIME)
+
+    response = enabled_client.get(f"/proxy/{SAMPLE_RUN_ID}")
+    assert response.status_code == 200
+    assert "<svg" in response.text
+    assert SAMPLE_GRANDCHILD_NAME in response.text
 
 
 # ─── Error Resilience ────────────────────────────────────────────────────────
