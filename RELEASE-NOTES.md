@@ -1,5 +1,14 @@
 # Release Notes
 
+## 1.10.7 (2026-03-26)
+
+### Improvements
+- **Cost analysis page UI polish:** Replaced the two static disclaimer lines at the
+  top of /analysis with a collapsible info icon toggle next to the heading, reclaiming
+  vertical space. Standardized pagination styling across all paginated pages (analysis,
+  completions, proxy list) with guillemet arrows, consistent button sizing, readable
+  page info text, and proper alignment with table content.
+
 ## 1.10.6 (2026-03-26)
 
 ### Bug Fixes
