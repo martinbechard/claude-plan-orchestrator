@@ -18,15 +18,22 @@ sections:
     description: 'Implement the fix described in the work item and the design doc.
       Work item: .claude/plans/.claimed/40-remove-redundant-scan-backlog-node.md.
       Design: docs/plans/2026-03-26-40-remove-redundant-scan-backlog-node-design.md'
-    status: in_progress
+    status: failed
     last_attempt: '2026-03-26T18:45:24.343363'
     attempts: 1
     model_used: sonnet
+    result_message: No status file written by Claude
   - id: '1.2'
     name: Bump plugin version and update release notes
     agent: coder
     description: 'Bump plugin.json version (patch) and add a RELEASE-NOTES.md entry
       for this fix. Work item: .claude/plans/.claimed/40-remove-redundant-scan-backlog-node.md'
-    status: pending
+    status: completed
     depends_on:
     - '1.1'
+    last_attempt: '2026-03-26T18:49:00.232088'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-26T18:49:46.457743'
+    result_message: Bumped plugin.json version from 1.10.8 to 1.10.9 and added RELEASE-NOTES.md
+      entry for scan_backlog removal fix
