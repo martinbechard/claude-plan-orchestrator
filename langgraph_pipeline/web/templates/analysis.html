@@ -202,11 +202,11 @@
           <th scope="col">Slug</th>
           <th scope="col">Node</th>
           <th scope="col">Model</th>
-          <th scope="col" class="sort-col">Exclusive ~$</th>
-          <th scope="col" class="sort-col">Inclusive ~$</th>
-          <th scope="col">Tokens In</th>
-          <th scope="col">Tokens Out</th>
-          <th scope="col">Duration</th>
+          <th scope="col" class="sort-col" style="text-align:right">Exclusive ~$</th>
+          <th scope="col" class="sort-col" style="text-align:right">Inclusive ~$</th>
+          <th scope="col" style="text-align:right">Tokens In</th>
+          <th scope="col" style="text-align:right">Tokens Out</th>
+          <th scope="col" style="text-align:right">Duration</th>
           <th scope="col">Timestamp</th>
         </tr>
       </thead>
@@ -226,11 +226,11 @@
           </td>
           <td>{{ run.name | e }}</td>
           <td>{{ run.model | e }}</td>
-          <td>~${{ "%.4f" | format(run.exclusive_cost_usd) }}</td>
-          <td>~${{ "%.4f" | format(run.inclusive_cost_usd) }}</td>
-          <td>{{ "{:,}".format(run.input_tokens) }}</td>
-          <td>{{ "{:,}".format(run.output_tokens) }}</td>
-          <td>
+          <td style="text-align:right">~${{ "%.4f" | format(run.exclusive_cost_usd) }}</td>
+          <td style="text-align:right">~${{ "%.4f" | format(run.inclusive_cost_usd) }}</td>
+          <td style="text-align:right">{{ "{:,}".format(run.input_tokens) }}</td>
+          <td style="text-align:right">{{ "{:,}".format(run.output_tokens) }}</td>
+          <td style="text-align:right">
             {% if run.duration_ms %}
               {{ "%.1f" | format(run.duration_ms / 1000) }}s
             {% else %}
@@ -286,11 +286,13 @@
 
   {% else %}
   <div class="empty-state" role="status" aria-live="polite">
+    <div class="icon" aria-hidden="true">&#128176;</div>
     {% if slug or item_type or date_from or date_to %}
-      <p>No runs match the current filters.</p>
-      <p><a href="/analysis">Clear filters</a> to see all runs.</p>
+      <div><strong>No runs match the current filters</strong></div>
+      <div><a href="/analysis">Clear filters</a> to see all runs.</div>
     {% else %}
-      <p>No cost data recorded yet.</p>
+      <div><strong>No cost data recorded yet</strong></div>
+      <div>Cost data will appear here once traces are recorded.</div>
     {% endif %}
   </div>
   {% endif %}
@@ -307,9 +309,9 @@
         <tr>
           <th scope="col">Slug</th>
           <th scope="col">Type</th>
-          <th scope="col">Total ~$</th>
-          <th scope="col">Tasks</th>
-          <th scope="col">Avg ~$</th>
+          <th scope="col" style="text-align:right">Total ~$</th>
+          <th scope="col" style="text-align:right">Tasks</th>
+          <th scope="col" style="text-align:right">Avg ~$</th>
         </tr>
       </thead>
       <tbody>
@@ -326,9 +328,9 @@
             &mdash;
             {% endif %}
           </td>
-          <td>~${{ "%.4f" | format(sc.total_cost_usd) }}</td>
-          <td>{{ sc.task_count }}</td>
-          <td>~${{ "%.4f" | format(sc.avg_cost_usd) }}</td>
+          <td style="text-align:right">~${{ "%.4f" | format(sc.total_cost_usd) }}</td>
+          <td style="text-align:right">{{ sc.task_count }}</td>
+          <td style="text-align:right">~${{ "%.4f" | format(sc.avg_cost_usd) }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -336,7 +338,9 @@
   </div>
   {% else %}
   <div class="empty-state" role="status">
-    <p>No work-item cost data available.</p>
+    <div class="icon" aria-hidden="true">&#128176;</div>
+    <div><strong>No work-item cost data available</strong></div>
+    <div>Cost breakdowns will appear once traces are recorded.</div>
   </div>
   {% endif %}
 </section>
@@ -355,18 +359,18 @@
       <thead>
         <tr>
           <th scope="col">Node</th>
-          <th scope="col">Tasks</th>
-          <th scope="col">Total ~$</th>
-          <th scope="col">Avg ~$</th>
+          <th scope="col" style="text-align:right">Tasks</th>
+          <th scope="col" style="text-align:right">Total ~$</th>
+          <th scope="col" style="text-align:right">Avg ~$</th>
         </tr>
       </thead>
       <tbody>
         {% for nc in node_costs %}
         <tr>
           <td>{{ nc.node_name | e }}</td>
-          <td>{{ nc.task_count }}</td>
-          <td>${{ "%.2f" | format(nc.total_cost_usd) }}</td>
-          <td>${{ "%.2f" | format(nc.avg_cost_usd) }}</td>
+          <td style="text-align:right">{{ nc.task_count }}</td>
+          <td style="text-align:right">${{ "%.2f" | format(nc.total_cost_usd) }}</td>
+          <td style="text-align:right">${{ "%.2f" | format(nc.avg_cost_usd) }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -374,7 +378,9 @@
   </div>
   {% else %}
   <div class="empty-state" role="status">
-    <p>No node cost data available.</p>
+    <div class="icon" aria-hidden="true">&#128176;</div>
+    <div><strong>No node cost data available</strong></div>
+    <div>Node cost breakdowns will appear once traces are recorded.</div>
   </div>
   {% endif %}
 </section>
@@ -398,8 +404,8 @@
           <th scope="col">Slug</th>
           <th scope="col">Task</th>
           <th scope="col">Detail</th>
-          <th scope="col">Result KB</th>
-          <th scope="col">Est. ~$</th>
+          <th scope="col" style="text-align:right">Result KB</th>
+          <th scope="col" style="text-align:right">Est. ~$</th>
         </tr>
       </thead>
       <tbody>
@@ -418,8 +424,8 @@
           <td>
             <span class="tool-attr-detail" title="{{ ta.detail | e }}">{{ ta.detail | e }}</span>
           </td>
-          <td>{{ "%.1f" | format(ta.result_bytes / 1024) }}</td>
-          <td>~${{ "%.6f" | format(ta.estimated_cost_usd) }}</td>
+          <td style="text-align:right">{{ "%.1f" | format(ta.result_bytes / 1024) }}</td>
+          <td style="text-align:right">~${{ "%.6f" | format(ta.estimated_cost_usd) }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -427,7 +433,9 @@
   </div>
   {% else %}
   <div class="empty-state" role="status">
-    <p>No tool call attribution data available.</p>
+    <div class="icon" aria-hidden="true">&#128295;</div>
+    <div><strong>No tool call attribution data available</strong></div>
+    <div>Tool cost attribution will appear once traces with tool calls are recorded.</div>
   </div>
   {% endif %}
 </section>

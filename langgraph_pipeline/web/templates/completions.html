@@ -95,9 +95,9 @@
         <th scope="col">Slug</th>
         <th scope="col">Type</th>
         <th scope="col">Outcome</th>
-        <th scope="col">Cost</th>
-        <th scope="col">Duration</th>
-        <th scope="col">Velocity</th>
+        <th scope="col" style="text-align:right">Cost</th>
+        <th scope="col" style="text-align:right">Duration</th>
+        <th scope="col" style="text-align:right">Velocity</th>
         <th scope="col">Finished At</th>
       </tr>
     </thead>
@@ -133,7 +133,7 @@
           </span>
         </td>
 
-        <td>
+        <td style="text-align:right">
           {% if row.cost_usd is not none and row.cost_usd != "" %}
             ~${{ "%.4f" | format(row.cost_usd | float) }}
           {% else %}
@@ -141,7 +141,7 @@
           {% endif %}
         </td>
 
-        <td>
+        <td style="text-align:right">
           {% if row.duration_s is not none and row.duration_s != "" %}
             {{ "%.1f" | format(row.duration_s | float) }}s
           {% else %}
@@ -149,7 +149,7 @@
           {% endif %}
         </td>
 
-        <td>
+        <td style="text-align:right">
           {% if row.tokens_per_minute and row.tokens_per_minute > 0 %}
             {% set tpm = row.tokens_per_minute | float %}
             {% if tpm >= 1000 %}
@@ -214,13 +214,11 @@
 <div class="empty-state" role="status" aria-live="polite">
   <div class="icon" aria-hidden="true">&#9989;</div>
   {% if slug or outcome or date_from or date_to %}
-    <p>No completions match the current filters.</p>
-    <p><a href="/completions">Clear filters</a> to see all completions.</p>
+    <div><strong>No completions match the current filters</strong></div>
+    <div><a href="/completions">Clear filters</a> to see all completions.</div>
   {% else %}
-    <p>No completions recorded yet.</p>
-    <p style="font-size:12px;color:#aaa;margin-top:0.25rem;">
-      Completions appear here once work items finish processing.
-    </p>
+    <div><strong>No completions yet</strong></div>
+    <div>Completed runs will appear here.</div>
   {% endif %}
 </div>
 {% endif %}

@@ -47,8 +47,9 @@
   </div>
   <div id="workers-container" class="worker-grid" aria-live="polite" aria-label="Active workers">
     <div class="empty-state" id="workers-empty">
-      <div class="icon" aria-hidden="true">&#9881;</div>
-      <p>No active workers</p>
+      <div class="icon" aria-hidden="true">&#128736;</div>
+      <div><strong>No active workers</strong></div>
+      <div>All workers are idle.</div>
     </div>
   </div>
   <div id="timeline-container" class="timeline-container" aria-live="polite" aria-label="Workers timeline" hidden>
@@ -80,15 +81,17 @@
           <th scope="col">Trace</th>
           <th scope="col">Type</th>
           <th scope="col">Outcome</th>
-          <th scope="col">Cost</th>
-          <th scope="col">Duration</th>
+          <th scope="col" style="text-align:right">Cost</th>
+          <th scope="col" style="text-align:right">Duration</th>
           <th scope="col">Finished</th>
         </tr>
       </thead>
       <tbody id="completions-container" aria-live="polite" aria-label="Recent completions">
         <tr id="completions-empty">
           <td colspan="7" class="empty-state">
-            <p>No completions yet</p>
+            <div class="icon" aria-hidden="true">&#9989;</div>
+            <div><strong>No completions yet</strong></div>
+            <div>Completed runs will appear here.</div>
           </td>
         </tr>
       </tbody>
@@ -107,7 +110,10 @@
       <span class="error-count-badge" id="error-count-badge" aria-live="polite"></span>
     </summary>
     <div class="error-list" id="errors-container" aria-label="Error stream" role="log" aria-live="polite">
-      <p class="empty-state" id="errors-empty">No errors recorded</p>
+      <div class="empty-state" id="errors-empty">
+        <div><strong>No errors recorded</strong></div>
+        <div>Errors will appear here if any occur.</div>
+      </div>
     </div>
   </details>
 </section>
@@ -138,8 +144,8 @@
     </td>
     <td><span class="badge item-type-badge"></span></td>
     <td><span class="badge outcome-badge"></span></td>
-    <td class="completion-cost"></td>
-    <td class="completion-duration"></td>
+    <td class="completion-cost" style="text-align:right"></td>
+    <td class="completion-duration" style="text-align:right"></td>
     <td class="completion-finished"></td>
   </tr>
 </template>

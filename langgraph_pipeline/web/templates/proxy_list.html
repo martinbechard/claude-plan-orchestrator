@@ -98,8 +98,8 @@
         <th scope="col">Run name</th>
         <th scope="col">Item slug</th>
         <th scope="col">Start time</th>
-        <th scope="col">Duration</th>
-        <th scope="col">Cost</th>
+        <th scope="col" style="text-align:right">Duration</th>
+        <th scope="col" style="text-align:right">Cost</th>
         <th scope="col">Model</th>
         <th scope="col">Status</th>
       </tr>
@@ -157,8 +157,8 @@
           {% endif %}
         </td>
 
-        <td>{{ run.display_duration if run.display_duration else "&mdash;" | safe }}</td>
-        <td>{{ run.display_cost if run.display_cost else "&mdash;" | safe }}</td>
+        <td style="text-align:right">{{ run.display_duration if run.display_duration else "&mdash;" | safe }}</td>
+        <td style="text-align:right">{{ run.display_cost if run.display_cost else "&mdash;" | safe }}</td>
         <td>{{ run.display_model | e if run.display_model else "&mdash;" | safe }}</td>
 
         <td>
@@ -233,15 +233,13 @@
 {% else %}
 {# ── Empty state ───────────────────────────────────────────────────────────── #}
 <div class="empty-state" role="status" aria-live="polite">
-  <div class="icon" aria-hidden="true">&#128203;</div>
+  <div class="icon" aria-hidden="true">&#128270;</div>
   {% if slug or trace_id or model or date_from or date_to %}
-    <p>No traces match the current filters.</p>
-    <p><a href="/proxy">Clear filters</a> to see all traces.</p>
+    <div><strong>No traces match the current filters</strong></div>
+    <div><a href="/proxy">Clear filters</a> to see all traces.</div>
   {% else %}
-    <p>No traces recorded yet.</p>
-    <p style="font-size:12px;color:#aaa;margin-top:0.25rem;">
-      Traces appear here once the proxy intercepts LangSmith calls.
-    </p>
+    <div><strong>No traces</strong></div>
+    <div>Proxy traces will appear here once requests are made.</div>
   {% endif %}
 </div>
 {% endif %}
