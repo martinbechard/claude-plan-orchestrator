@@ -8,7 +8,8 @@
      grandchildren_by_parent  dict[str, list]  — {child_run_id: [enriched grandchild dicts]}
    Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md
    Design: docs/plans/2026-03-26-04-timeline-duplicate-labels-and-elapsed-time-design.md
-   Design: docs/plans/2026-03-26-16-tool-calls-missing-from-traces-design.md #}
+   Design: docs/plans/2026-03-26-16-tool-calls-missing-from-traces-design.md
+   Design: docs/plans/2026-03-26-17-trace-expand-chevron-duplicate-and-inline-design.md #}
 {% extends "base.html" %}
 
 {% block title %}{{ run.name }} — Plan Orchestrator{% endblock %}
@@ -341,23 +342,40 @@
   {% set gcs = grandchildren_by_parent.get(child.run_id, []) %}
   {% if gcs %}
     <details class="grandchild-toggle" style="margin:0.25rem 0; padding-left:0.5rem; border-left:3px solid {{ bar_color(child.name) }};">
-      <summary style="cursor:pointer; font-size:13px; padding:0.25rem 0;">
+      <summary style="font-size:13px; padding:0.25rem 0;">
         {{ child.name }}
         <span style="color:#6b7280; font-size:12px;">({{ gcs | length }} tool call{{ "s" if gcs | length != 1 else "" }})</span>
       </summary>
-      <ul style="margin:0.25rem 0 0.5rem 0; padding-left:1.25rem; list-style:disc;">
+      <div style="margin:0.25rem 0 0.5rem 0; padding-left:0.5rem;">
         {% for gc in gcs %}
-          <li style="font-size:12px; color:#374151; padding:0.1rem 0;">
-            <span style="font-family:monospace; color:{{ bar_color(gc.name) }};">{{ gc.name }}</span>
-            <span style="color:#6b7280; margin-left:0.5rem;">{{ gc.display_duration }}</span>
-          </li>
+          <div style="margin:0.4rem 0; padding:0.4rem 0.5rem; background:#f8fafc; border-radius:4px; border-left:2px solid {{ bar_color(gc.name) }};">
+            <div style="display:flex; align-items:baseline; gap:0.75rem; flex-wrap:wrap;">
+              <span style="font-family:monospace; font-size:12px; font-weight:600; color:{{ bar_color(gc.name) }};">{{ gc.name }}</span>
+              <span style="font-size:12px; color:#6b7280;">{{ gc.display_duration }}</span>
+              <span style="font-size:11px; color:#9ca3af;">{{ fmt_elapsed(gc.elapsed_start_s) }}</span>
+            </div>
+            {% if gc.error %}
+              <div style="margin-top:0.25rem; font-size:12px; color:#991b1b;">{{ gc.error }}</div>
+            {% endif %}
+            {% if gc.inputs_json %}
+              <div class="json-block" style="margin-top:0.3rem;">
+                <details>
+                  <summary style="font-size:11px;">Inputs</summary>
+                  <pre style="font-size:11px;">{{ gc.inputs_json }}</pre>
+                </details>
+              </div>
+            {% endif %}
+            {% if gc.outputs_json %}
+              <div class="json-block" style="margin-top:0.3rem;">
+                <details>
+                  <summary style="font-size:11px;">Outputs</summary>
+                  <pre style="font-size:11px;">{{ gc.outputs_json }}</pre>
+                </details>
+              </div>
+            {% endif %}
+          </div>
         {% endfor %}
-      </ul>
-      <p style="font-size:12px; color:#6b7280; margin:0.25rem 0 0.5rem 0;">
-        <a href="/proxy/{{ child.run_id }}" aria-label="View full trace for {{ child.name }}">
-          View full trace &rarr;
-        </a>
-      </p>
+      </div>
     </details>
   {% endif %}
 {% endfor %}
