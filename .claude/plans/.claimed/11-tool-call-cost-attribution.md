@@ -40,3 +40,5 @@ into which tool calls are expensive.
    its child tool calls based on result size.
 
 Option 2 is simpler and requires no pipeline changes.
+
+## LangSmith Trace: 21bf864f-6af2-412f-be5d-2231bbc49e0f
