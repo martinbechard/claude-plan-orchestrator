@@ -36,13 +36,17 @@ slowdowns are visible at a glance.
   tokens_in, tokens_out, tokens_per_minute (floats, 0 if not yet available)
 
 ### Timeline visualization
-- In the active workers timeline, colour the bar based on velocity:
-  - High velocity (e.g. > 5000 tokens/min): bright/saturated colour
-  - Medium velocity: normal colour
-  - Low velocity (e.g. < 1000 tokens/min): desaturated/dim colour
-  - No data yet: grey
+- Add a colour mode toggle button in the timeline toolbar with two modes:
+  - "Type" (default): bars coloured by item type (defect/feature/analysis)
+    using the existing orange/cyan/yellow palette
+  - "Velocity": bars coloured by throughput intensity:
+    - High velocity (> 5000 tokens/min): bright/saturated
+    - Medium velocity: normal
+    - Low velocity (< 1000 tokens/min): desaturated/dim
+    - No data yet: grey
+- The toggle persists in localStorage (key "dashboard.timeline.colorMode")
 - Show the numeric velocity next to the elapsed time label (e.g.
-  "3m 42s  2.4k tok/min")
+  "3m 42s  2.4k tok/min") regardless of which colour mode is active
 
 ### Historical analysis
 - Store final velocity for each completion in the completions table (new
