@@ -123,6 +123,10 @@ sections:
     result_message: Added trace-link anchor to worker card body and new Trace column
       to completion row template. Links hidden by default; task 2.2 wires href and
       visibility in JS.
+    validation_attempts: 1
+    validation_findings: 'Template changes correct: trace-link anchors added to worker
+      card body and completion row with new Trace column. Links hidden by default,
+      accessible labels present, colspan updated. Build passes, 1525 tests pass.'
   - id: '2.2'
     name: Wire trace link href in dashboard.js renderWorkers and renderCompletions
     agent: frontend-coder
@@ -134,4 +138,11 @@ sections:
       to View Trace (or similar); otherwise hide it (style.display = none). In renderCompletions(),
       apply the same pattern using c.run_id on the .trace-link anchor in the completion
       row clone. See design doc: docs/plans/2026-03-26-06-dashboard-drill-down-to-trace-design.md'
-    status: pending
+    status: completed
+    last_attempt: '2026-03-26T01:47:34.552770'
+    attempts: 1
+    model_used: opus
+    completed_at: '2026-03-26T01:48:33.061049'
+    result_message: 'Wired trace-link anchors in renderWorkers() and renderCompletions():
+      set href=/proxy?trace_id=<run_id> and show link when run_id is truthy, hide
+      otherwise.'
