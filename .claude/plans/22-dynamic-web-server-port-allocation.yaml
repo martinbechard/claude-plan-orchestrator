@@ -1,23 +1,25 @@
 meta:
-  name: "Feature 22: Dynamic Web Server Port Allocation"
-  source_item: ".claude/plans/.claimed/22-dynamic-web-server-port-allocation.md"
+  name: 'Feature 22: Dynamic Web Server Port Allocation'
+  source_item: .claude/plans/.claimed/22-dynamic-web-server-port-allocation.md
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
-
 sections:
-  - id: "1"
-    name: Implementation
-    status: pending
-    tasks:
-      - id: "1.1"
-        name: Implement dynamic port allocation
-        agent: coder
-        description: "Implement the work item: .claude/plans/.claimed/22-dynamic-web-server-port-allocation.md"
-        status: pending
+- id: '1'
+  name: Implementation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Implement dynamic port allocation
+    agent: coder
+    description: 'Implement the work item: .claude/plans/.claimed/22-dynamic-web-server-port-allocation.md'
+    status: in_progress
+    last_attempt: '2026-03-25T23:51:05.156367'
+    attempts: 1
+    model_used: sonnet
