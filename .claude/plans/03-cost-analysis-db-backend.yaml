@@ -47,10 +47,12 @@ sections:
       return {"ok": true} with status 202. Register the router in langgraph_pipeline/web/server.py
       create_app(). Write unit tests in tests/langgraph/web/test_cost_endpoint.py
       using FastAPI TestClient.'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:06:07.155842'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T01:09:23.928872'
+    result_message: 'PASS: All good'
 - id: '2'
   name: Worker and Reader Updates
   status: pending
