@@ -44,7 +44,7 @@ sections:
   - id: '1.2'
     name: Implement blocking throttle wait in intake.py and update limits
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the fix described in: .claude/plans/.claimed/21-intake-throttle-warns-but-doesnt-block.md
 
       Design doc: docs/plans/2026-03-26-21-intake-throttle-warns-but-doesnt-block-design.md
@@ -56,9 +56,9 @@ sections:
       behavior and updated limits.
 
       '
-    last_attempt: '2026-03-26T11:49:54.676751'
-    attempts: 1
-    model_used: opus
+    last_attempt: '2026-03-26T11:56:32.405402'
+    attempts: 2
+    model_used: sonnet
 - id: '2'
   name: Harmonise poller.py throttle limits
   status: pending

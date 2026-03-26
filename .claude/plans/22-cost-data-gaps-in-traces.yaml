@@ -20,7 +20,7 @@ sections:
   - id: '1.1'
     name: Add total_cost_usd to ClaudeResult and fix intake.py and verification.py
     agent: coder
-    status: in_progress
+    status: pending
     description: 'Implement the fix described in: .claude/plans/.claimed/22-cost-data-gaps-in-traces.md
 
 
