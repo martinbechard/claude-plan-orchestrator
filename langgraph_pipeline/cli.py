@@ -802,7 +802,8 @@ def main() -> int:
 
     # Start web server BEFORE configure_tracing() so the tracing redirect to
     # localhost can detect the active port and set LANGCHAIN_ENDPOINT accordingly.
-    web_enabled = args.web or (config.get("web", {}).get("enabled", False))
+    web_config = config.get("web", {})
+    web_enabled = args.web or web_config.get("enabled", False) or bool(web_config.get("port"))
     if web_enabled:
         from langgraph_pipeline.web.server import (
             WEB_SERVER_DEFAULT_PORT,
