@@ -52,3 +52,7 @@ sections:
     model_used: sonnet
     completed_at: '2026-03-26T01:52:33.196813'
     result_message: 'PASS: All good'
+    validation_attempts: 1
+    validation_findings: Tilde removed from dashboard.js fmtCost and 4 locations in
+      analysis.html. Build OK, 1525 tests pass, no remaining tilde-dollar patterns
+      in target files.

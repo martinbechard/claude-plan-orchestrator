@@ -32,3 +32,5 @@ sections:
     model_used: sonnet
     completed_at: '2026-03-26T01:52:08.311591'
     result_message: 'PASS: All good'
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
