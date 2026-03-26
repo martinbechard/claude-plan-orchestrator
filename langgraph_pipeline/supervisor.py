@@ -120,7 +120,12 @@ def _unclaim_orphaned_items() -> None:
             try:
                 with open(sidecar_path, "r") as f:
                     meta = json.load(f)
-                item_type = meta.get("item_type", "feature")
+                source_item = meta.get("source_item", "")
+                item_type = meta.get("item_type") or (
+                    "defect" if "defect" in source_item.lower()
+                    else "analysis" if "analysis" in source_item.lower()
+                    else "feature"
+                )
                 sidecar_path.unlink()
             except (OSError, json.JSONDecodeError):
                 item_type = "feature"
