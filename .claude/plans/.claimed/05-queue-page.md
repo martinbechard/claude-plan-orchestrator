@@ -31,3 +31,5 @@ items across the backlog directories with their type, slug, and age.
   BACKLOG_DIR it lives in), mtime, and raw markdown content.
 - No write operations on this page — read-only view.
 - The queue count in the dashboard summary bar can link to /queue.
+
+## LangSmith Trace: 90d499c6-8d8a-485f-8089-56adfdef1d7d
