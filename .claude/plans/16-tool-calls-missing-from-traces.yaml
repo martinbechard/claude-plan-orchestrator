@@ -40,7 +40,7 @@ sections:
   - id: '1.2'
     name: Render grandchild rows in SVG timeline and expandable detail section
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the frontend changes described in: .claude/plans/.claimed/16-tool-calls-missing-from-traces.md
 
 
@@ -50,6 +50,14 @@ sections:
     last_attempt: '2026-03-26T10:59:05.448902'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T11:03:13.413231'
+    result_message: Updated proxy_trace.html to render grandchild tool call rows in
+      SVG timeline and expandable details. SVG Gantt chart now inserts grandchild
+      bars indented below each parent row (GC_BAR_H=12, GC_INDENT=16, lighter blue
+      background, connector line). Total row count computed with Jinja2 namespace
+      for correct SVG height, grid lines, and axis position. Expandable details section
+      replaced link-only with inline tool call list (name + duration) plus secondary
+      trace link. All 49 proxy web tests pass.
   - id: '1.3'
     name: Add unit tests for grandchild rendering in proxy route and template
     agent: coder
