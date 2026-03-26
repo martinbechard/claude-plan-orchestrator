@@ -50,5 +50,3 @@ sub-second spans, or +0s/+30s for longer spans.
 
 This fix also resolves the duplicate tick label issue described in the
 related item (same secs() macro root cause).
-
-## LangSmith Trace: f7024d0b-96b1-4604-8726-4a40a5ae4222
