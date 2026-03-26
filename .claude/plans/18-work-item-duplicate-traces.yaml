@@ -20,7 +20,7 @@ sections:
   - id: '1.1'
     name: Add unique index and deduplication to proxy.py
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the fix described in: .claude/plans/.claimed/18-work-item-duplicate-traces.md
 
       Design doc: docs/plans/2026-03-26-18-work-item-duplicate-traces-design.md
@@ -29,6 +29,10 @@ sections:
     last_attempt: '2026-03-26T10:57:20.764625'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T10:59:57.302203'
+    result_message: Added UNIQUE index on traces.run_id with graceful handling for
+      existing duplicates, changed record_run INSERT to INSERT OR IGNORE, updated
+      list_root_traces_by_slug to GROUP BY run_id. All 1160 tests pass.
   - id: '1.2'
     name: Add unit tests for duplicate-run deduplication
     agent: coder
