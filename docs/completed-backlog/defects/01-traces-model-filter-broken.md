@@ -34,5 +34,3 @@ the orchestrator config) by calling `proxy.record_run()` or a new helper that
 annotates the root trace with model info. Alternatively, extract model from child
 run metadata (LangGraph nodes store model info in their outputs) and backfill the
 root trace `metadata_json`.
-
-## LangSmith Trace: c3d68aab-4a5c-4e1d-aa14-2565e563033b
