@@ -39,3 +39,5 @@ to use plain "$" without tilde.
   YES = pass, NO = fail (WARN if cannot verify at validation time)
 - Does grep '~\$' across ALL files in langgraph_pipeline/web/ return
   zero matches? YES = pass, NO = fail
+
+## LangSmith Trace: e3fea1f5-4f41-4c7e-a866-78301de9d9bf
