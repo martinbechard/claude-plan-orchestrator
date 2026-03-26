@@ -23,10 +23,14 @@ sections:
       instead of the current strptime call that truncates the timestamp to 19 characters
       (discarding fractional seconds). This also fixes _format_duration() and display_duration
       for fast runs. See design doc: docs/plans/2026-03-26-08-timeline-sub-second-precision-lost-design.md'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:31:51.816528'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T01:34:10.344006'
+    result_message: Fixed _parse_iso() to use datetime.fromisoformat() instead of
+      strptime(ts[:19]), preserving fractional seconds. Removed unused _ISO_FMT and
+      _ISO_FMT_WITH_TZ constants. All 1520 tests pass.
 - id: '2'
   name: Refactor Gantt chart to use elapsed float values
   status: pending
