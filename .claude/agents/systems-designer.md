@@ -80,7 +80,7 @@ These are the criteria the judge uses to score your design:
 
 ## Output Protocol
 
-When your design is complete, write a status file to .claude/plans/task-status.json:
+When your design is complete, write a status file to tmp/task-status.json:
 
     {
       "task_id": "<the task id>",

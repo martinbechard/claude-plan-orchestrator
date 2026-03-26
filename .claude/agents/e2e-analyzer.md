@@ -70,7 +70,7 @@ Use markdown tables for structured data. Include:
 
 ## Output Protocol
 
-When your analysis is complete, write a status file to .claude/plans/task-status.json:
+When your analysis is complete, write a status file to tmp/task-status.json:
 
     {
       "task_id": "<the task id>",

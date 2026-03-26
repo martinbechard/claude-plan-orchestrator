@@ -119,7 +119,7 @@ Trigger phrase to include in frontend task descriptions:
 
 ## Output Protocol
 
-When your plan is complete, write a status file to .claude/plans/task-status.json:
+When your plan is complete, write a status file to tmp/task-status.json:
 
     {
       "task_id": "<the task id>",

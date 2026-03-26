@@ -85,7 +85,7 @@ These are the key rules from CODING-RULES.md. Read the full document for details
 
 ## Output Protocol
 
-When your task is complete, write a status file to .claude/plans/task-status.json:
+When your task is complete, write a status file to tmp/task-status.json:
 
     {
       "task_id": "<the task id>",

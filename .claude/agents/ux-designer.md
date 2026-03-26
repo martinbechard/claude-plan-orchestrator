@@ -115,7 +115,7 @@ Document every assumption you made while answering questions:
 
 ## Output Protocol
 
-Write status to .claude/plans/task-status.json:
+Write status to tmp/task-status.json:
 - status: "completed" with design document written
 - status: "suspended" with question details (for human escalation)
 - status: "failed" if unable to produce any design

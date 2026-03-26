@@ -92,7 +92,7 @@ Produce your findings using this exact format:
 
 ## Output Protocol
 
-When your verification is complete, write a status file to .claude/plans/task-status.json:
+When your verification is complete, write a status file to tmp/task-status.json:
 
     {
       "task_id": "<the task id>",

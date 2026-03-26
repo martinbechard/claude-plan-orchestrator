@@ -161,7 +161,7 @@ Produce your findings using this exact format:
 
 ## Output Protocol
 
-When your review is complete, write a status file to .claude/plans/task-status.json:
+When your review is complete, write a status file to tmp/task-status.json:
 
     {
       "task_id": "<the task id>",

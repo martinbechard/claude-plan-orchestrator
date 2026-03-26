@@ -88,4 +88,4 @@ The coder is required to clean up test data before completion.
 - Be specific: file:line references in all findings.
 
 ## Output Protocol
-Write .claude/plans/task-status.json when done.
+Write tmp/task-status.json when done.
