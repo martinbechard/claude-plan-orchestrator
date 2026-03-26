@@ -147,6 +147,7 @@ def create_app(config: Optional[dict] = None):
         return JSONResponse({"status": "ok", "supervisor": {"uptime_seconds": uptime}})
 
     from langgraph_pipeline.web.routes.analysis import router as analysis_router
+    from langgraph_pipeline.web.routes.completions import router as completions_router
     from langgraph_pipeline.web.routes.cost import router as cost_router
     from langgraph_pipeline.web.routes.dashboard import router as dashboard_router
     from langgraph_pipeline.web.routes.item import router as item_router
@@ -154,6 +155,7 @@ def create_app(config: Optional[dict] = None):
 
     app.include_router(dashboard_router)
     app.include_router(analysis_router)
+    app.include_router(completions_router)
     app.include_router(cost_router)
     app.include_router(queue_router)
     app.include_router(item_router)

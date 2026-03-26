@@ -22,6 +22,10 @@
        {% if request.url.path.startswith('/analysis') %}class="active" aria-current="page"{% endif %}>
       Cost Analysis
     </a>
+    <a href="/completions"
+       {% if request.url.path == '/completions' %}class="active" aria-current="page"{% endif %}>
+      Completions
+    </a>
     <a href="/queue"
        {% if request.url.path == '/queue' %}class="active" aria-current="page"{% endif %}>
       Queue
