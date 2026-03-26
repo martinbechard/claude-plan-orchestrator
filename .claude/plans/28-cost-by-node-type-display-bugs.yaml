@@ -13,22 +13,26 @@ meta:
     max_validation_attempts: 2
 sections:
 - id: '1'
-  name: Fix svg_bar_chart value label clipping and float formatting
+  name: Fix SVG chart value display and cost precision
   status: pending
   tasks:
   - id: '1.1'
-    name: Fix SVG_VALUE_LABEL_PADDING and float value formatting in svg_bar_chart
+    name: Fix svg_bar_chart float formatting and SVG_VALUE_LABEL_PADDING
     agent: coder
     status: completed
     description: 'Implement the work item: .claude/plans/.claimed/28-cost-by-node-type-display-bugs.md
-      -- fix both bugs in svg_bar_chart() in langgraph_pipeline/web/cost_log_reader.py:
-      (1) increase SVG_VALUE_LABEL_PADDING from 10 to 80 so value labels are not clipped;
-      (2) change values parameter type from list[int] to list[float] and format value
-      labels as f"${value:.2f}" instead of {value:,}. Update tests/langgraph/web/test_cost_log_reader.py
-      to pass float values and assert the "$"-prefixed formatted output. Run the full
-      test suite and fix any failures.'
-    last_attempt: '2026-03-26T14:48:37.972567'
+      -- fix svg_bar_chart in langgraph_pipeline/web/cost_log_reader.py: increase
+      SVG_VALUE_LABEL_PADDING from 10 to 60, add optional value_formatter callable
+      parameter (default: lambda v: f''${v:.2f}''), change {value:,} to value_formatter(value),
+      and update type annotation from list[int] to list[float]. Then fix analysis.html
+      node type table to use %.2f instead of %.4f for nc.total_cost_usd and nc.avg_cost_usd.
+      Update tests in tests/langgraph/web/test_cost_log_reader.py to match new format.
+      Run the full test suite and fix any failures.'
+    last_attempt: '2026-03-26T14:47:42.207400'
     attempts: 1
     model_used: sonnet
-    completed_at: '2026-03-26T14:50:49.505993'
-    result_message: 'PASS: All good'
+    completed_at: '2026-03-26T14:51:47.171108'
+    result_message: 'Increased SVG_VALUE_LABEL_PADDING to 80, added value_formatter
+      callable parameter to svg_bar_chart (default: $%.2f), updated type annotation
+      to list[float], fixed node type table in analysis.html to use %.2f without tilde
+      prefix. All 1561 tests pass.'
