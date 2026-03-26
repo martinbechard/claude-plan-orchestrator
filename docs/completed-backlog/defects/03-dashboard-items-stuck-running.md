@@ -41,5 +41,3 @@ missing process, always call `dashboard_state.remove_active_worker()` — even
 on the crash/signal path. Additionally, add a periodic sweep in
 `DashboardState.snapshot()` or in the supervisor that checks each PID in
 `active_workers` with `os.kill(pid, 0)` and removes entries for dead processes.
-
-## LangSmith Trace: b54d31e5-e705-4050-8bf4-1b596ab5db9c
