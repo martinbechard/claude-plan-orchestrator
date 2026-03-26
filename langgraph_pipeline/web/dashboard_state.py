@@ -36,6 +36,7 @@ class WorkerInfo:
     item_type: str  # "defect" | "feature" | "analysis"
     start_time: float  # time.monotonic()
     estimated_cost_usd: float = 0.0
+    run_id: Optional[str] = None
 
 
 @dataclass
@@ -48,6 +49,7 @@ class CompletionRecord:
     cost_usd: float
     duration_s: float
     finished_at: float  # time.time() for display
+    run_id: Optional[str] = None
 
 
 # ─── DashboardState ───────────────────────────────────────────────────────────
@@ -78,6 +80,7 @@ class DashboardState:
         item_type: str,
         start_time: float,
         estimated_cost_usd: float = 0.0,
+        run_id: Optional[str] = None,
     ) -> None:
         """Register a newly dispatched worker.
 
@@ -87,6 +90,7 @@ class DashboardState:
             item_type: One of "defect", "feature", or "analysis".
             start_time: Monotonic timestamp at dispatch (time.monotonic()).
             estimated_cost_usd: Optional pre-run cost estimate.
+            run_id: LangSmith trace UUID, if available at dispatch time.
         """
         with self._lock:
             self.active_workers[pid] = WorkerInfo(
@@ -95,6 +99,7 @@ class DashboardState:
                 item_type=item_type,
                 start_time=start_time,
                 estimated_cost_usd=estimated_cost_usd,
+                run_id=run_id,
             )
 
     def remove_active_worker(
@@ -127,6 +132,7 @@ class DashboardState:
                 cost_usd=cost_usd,
                 duration_s=duration_s,
                 finished_at=time.time(),
+                run_id=worker.run_id,
             )
             self.recent_completions.insert(0, record)
             if len(self.recent_completions) > MAX_RECENT_COMPLETIONS:
@@ -193,6 +199,7 @@ class DashboardState:
                     "item_type": w.item_type,
                     "elapsed_s": time.monotonic() - w.start_time,
                     "estimated_cost_usd": w.estimated_cost_usd,
+                    "run_id": w.run_id,
                 }
                 for w in self.active_workers.values()
             ]
@@ -208,6 +215,7 @@ class DashboardState:
                         "cost_usd": c.cost_usd,
                         "duration_s": c.duration_s,
                         "finished_at": c.finished_at,
+                        "run_id": c.run_id,
                     }
                     for c in self.recent_completions
                 ]
