@@ -138,6 +138,19 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default=False,
         help="Skip LangSmith tracing configuration.",
     )
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        default=False,
+        help="Start the embedded web UI (dashboard, proxy, analysis) on --web-port.",
+    )
+    parser.add_argument(
+        "--web-port",
+        type=int,
+        default=None,
+        metavar="PORT",
+        help="Port for the embedded web UI. Default: 7070.",
+    )
     return parser
 
 
@@ -783,6 +796,39 @@ def main() -> int:
     max_parallel_items = get_max_parallel_items(config)
     _log_startup_banner(args, config, max_parallel_items)
 
+    # Start web server BEFORE configure_tracing() so the tracing redirect to
+    # localhost can detect the active port and set LANGCHAIN_ENDPOINT accordingly.
+    web_enabled = args.web or (config.get("web", {}).get("enabled", False))
+    if web_enabled:
+        from langgraph_pipeline.web.server import (
+            WEB_SERVER_DEFAULT_PORT,
+            find_free_port,
+            start_web_server,
+            write_port_to_config,
+        )
+        from langgraph_pipeline.shared.paths import ORCHESTRATOR_CONFIG_PATH
+
+        if args.web_port:
+            # Tier 1: CLI flag — ephemeral override, no write-back
+            web_port = args.web_port
+            start_web_server(port=web_port, config=config)
+        elif config.get("web", {}).get("port"):
+            # Tier 2: already persisted in config — use it directly
+            web_port = config["web"]["port"]
+            start_web_server(port=web_port, config=config)
+        else:
+            # Tier 3: auto-discover a free port, write it back for future runs
+            from pathlib import Path as _Path
+            _config_path = _Path(ORCHESTRATOR_CONFIG_PATH)
+            web_port = find_free_port(WEB_SERVER_DEFAULT_PORT)
+            write_port_to_config(web_port, _config_path)
+            logger.info(
+                "Web server started on port=%d (written to %s)",
+                web_port,
+                _config_path,
+            )
+            start_web_server(port=web_port, config=config, config_path=_config_path)
+
     if not args.no_tracing:
         if configure_tracing():
             logger.info("LangSmith tracing enabled.")
@@ -831,6 +877,9 @@ def main() -> int:
             )
     finally:
         _remove_pid_file()
+        if web_enabled:
+            from langgraph_pipeline.web.server import stop_web_server
+            stop_web_server()
         if slack is not None:
             try:
                 slack.stop_background_polling()
