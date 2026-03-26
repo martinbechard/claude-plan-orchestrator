@@ -40,7 +40,12 @@ sections:
 
 
       Run the full test suite and fix any failures.'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:08:12.104787'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T01:09:53.504971'
+    result_message: Added sweep_dead_workers() to DashboardState (probes PIDs via
+      os.kill, removes dead workers) and called it from snapshot(). Fixed ChildProcessError
+      path in _reap_finished_workers() to pop the record and call remove_active_worker()
+      with computed elapsed_s. All 1502 tests pass.
