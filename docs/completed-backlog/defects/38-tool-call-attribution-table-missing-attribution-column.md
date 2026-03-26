@@ -19,5 +19,3 @@ table just lists tool calls with no cost insight.
   to parent agent cost)? YES = pass, NO = fail
 - Does the column header clearly say "Est. Cost" or similar?
   YES = pass, NO = fail
-
-## LangSmith Trace: 2c251a0b-5cb7-44fe-b97d-61eef9342078
