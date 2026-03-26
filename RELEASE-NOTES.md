@@ -1,5 +1,14 @@
 # Release Notes
 
+## 1.10.5 (2026-03-26)
+
+### Bug Fixes
+- **Web server auto-enable when port is configured:** `cli.py` now enables the web
+  server automatically when `web.port` is set in `orchestrator-config.yaml`, even if
+  `web.enabled` is not explicitly set to `true`. Previously the check required an
+  explicit `enabled: true` flag, causing cost data to never reach the web UI when
+  users only configured the port.
+
 ## 1.10.4 (2026-03-26)
 
 ### Bug Fixes
