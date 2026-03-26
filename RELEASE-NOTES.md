@@ -1,5 +1,15 @@
 # Release Notes
 
+## 1.10.6 (2026-03-26)
+
+### Bug Fixes
+- **Work item page requirements lookup priority chain:** The /item/<slug> page now
+  searches for requirements in priority order: design doc first, then claimed backlog
+  item, then feature/defect backlog, then completed backlog, and only falls back to
+  "No requirements document found" when none of these exist. Previously the page
+  only checked for a design doc and showed an empty state even when the backlog
+  item contained full acceptance criteria.
+
 ## 1.10.5 (2026-03-26)
 
 ### Bug Fixes
