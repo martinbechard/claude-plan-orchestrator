@@ -51,5 +51,3 @@ All web UI work items should go through a design quality process:
   YES = pass, NO = fail
 - Is there a style guide or reference page that enforces consistency?
   YES = pass, NO = fail
-
-## LangSmith Trace: ed839a7f-4f51-4e58-b550-f6c6b79dde69
