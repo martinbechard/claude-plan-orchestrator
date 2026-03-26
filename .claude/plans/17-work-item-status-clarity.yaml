@@ -16,7 +16,7 @@ sections:
   - id: '1.1'
     name: Expand item route with pipeline stage and active worker
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: .claude/plans/.claimed/17-work-item-status-clarity.md
 
 
@@ -28,6 +28,10 @@ sections:
     last_attempt: '2026-03-26T18:12:46.600413'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T18:15:48.367053'
+    result_message: Replaced _derive_status with _derive_pipeline_stage (8-stage waterfall
+      with stuck sub-case) and added _get_active_worker helper. Updated route to pass
+      pipeline_stage and active_worker to template.
 - id: '2'
   name: Frontend - Status Display and Active Worker Banner
   status: pending
