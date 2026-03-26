@@ -1,5 +1,15 @@
 # Release Notes
 
+## 1.10.12 (2026-03-26)
+
+### Bug Fixes
+- **Move task-status.json out of .claude/ to avoid sensitive file protection:** Coder
+  and validator agents now write their task status file to tmp/task-status.json instead
+  of .claude/plans/task-status.json. The .claude/ directory is protected by Claude Code's
+  sensitive file guard, which blocks writes to it during automated pipeline runs. All
+  agent markdown files (coder.md, validator.md, implement skill, executing-plans skill)
+  updated to reference the new path. The tmp/ directory is created automatically if absent.
+
 ## 1.10.11 (2026-03-26)
 
 ### Bug Fixes
