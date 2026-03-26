@@ -36,5 +36,3 @@ completion directly to the Traces page, pre-filtered to that item's trace_id.
 ## Dependencies
 
 Depends on defect-backlog/05 (trace_id filter on /proxy endpoint).
-
-## LangSmith Trace: b09b6a79-2268-4716-9a14-11dfbecd19aa
