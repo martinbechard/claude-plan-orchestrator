@@ -52,3 +52,7 @@ sections:
       test_plan_orchestrator, test_slack_notifier, test_qa_auditor_integration, test_spec_verifier_ux_reviewer)
       that all imported from it via importlib. These tested the old monolith; equivalent
       coverage exists in tests/langgraph/. Full test suite: 1295 passed.'
+    validation_attempts: 1
+    validation_findings: scripts/plan-orchestrator.py deleted, 8 legacy test files
+      deleted, stale pyc cache not present, full test suite passes (1295 passed).
+      Build command tried to compile deleted file which is expected.
