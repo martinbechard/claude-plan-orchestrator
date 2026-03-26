@@ -18,10 +18,13 @@ sections:
     agent: frontend-coder
     description: 'Implement the UI changes for the work item: .claude/plans/.claimed/36-cost-analysis-ui-polish.md.
       Design: docs/plans/2026-03-26-36-cost-analysis-ui-polish-design.md'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T18:23:12.160736'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T18:25:06.655402'
+    result_message: Replaced two static disclaimer paragraphs with a collapsible info
+      icon toggle next to the Cost Analysis heading using native details/summary element.
   - id: '1.2'
     name: Fix pagination styling
     agent: frontend-coder
