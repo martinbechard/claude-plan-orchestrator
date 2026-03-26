@@ -32,3 +32,5 @@ ID for correlation, and filter the list to a single trace.
    TracingProxy.list_runs() / count_runs() with a "run_id LIKE ?" or
    "run_id = ?" filter.
 3. Add a trace_id text input to the filter form in proxy_list.html.
+
+## LangSmith Trace: 1722c436-7e17-433a-9dd3-1fedcad24fcd

@@ -38,6 +38,8 @@ sections:
     result_message: Added run_name to thread_config in worker.main() when item_slug
       is non-empty; created tests/langgraph/test_worker.py with 4 unit tests. All
       1506 tests pass.
+    validation_attempts: 1
+    validation_findings: Mock task done
   - id: '1.2'
     name: Extract model in server.py and fix enrich_run display
     agent: coder
@@ -56,4 +58,7 @@ sections:
       of parsing metadata_json. Update tests in tests/langgraph/web/test_proxy.py:
       add tests for propagate_model_to_root(), model filter in list_runs()/count_runs(),
       and multipart model extraction via the /runs/multipart endpoint.'
-    status: pending
+    status: in_progress
+    last_attempt: '2026-03-26T01:13:29.595636'
+    attempts: 1
+    model_used: sonnet
