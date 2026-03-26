@@ -1,6 +1,6 @@
 # langgraph_pipeline/web/routes/item.py
 # FastAPI router for the GET /item/{slug} work-item detail page.
-# Design: docs/plans/2026-03-26-17-work-item-status-clarity-design.md
+# Design: docs/plans/2026-03-26-35-work-item-page-missing-requirements-from-backlog-file-design.md
 
 """FastAPI router that serves the work-item detail page.
 
@@ -65,6 +65,7 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
         Rendered item.html template.
     """
     requirements_html = _load_requirements_html(slug)
+    original_request_html = _load_original_request_html(slug)
     item_type = _detect_item_type(slug)
     plan_tasks = _load_plan_tasks(slug)
     completions = _load_completions(slug)
@@ -83,6 +84,7 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
             "active_worker": active_worker,
             "total_cost_usd": total_cost_usd,
             "requirements_html": requirements_html,
+            "original_request_html": original_request_html,
             "plan_tasks": plan_tasks,
             "completions": completions,
             "traces": traces,
@@ -93,10 +95,90 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def _load_requirements_html(slug: str) -> str:
-    """Return requirements markdown rendered as HTML, or empty string if not found.
+def _render_md_to_html(md_path: Path) -> str:
+    """Render a markdown file to an HTML string.
 
-    Scans all backlog and completed directories for a file named ``<slug>.md``.
+    Args:
+        md_path: Path to the markdown file.
+
+    Returns:
+        HTML string, or empty string on error.
+    """
+    try:
+        import markdown
+        text = md_path.read_text(encoding="utf-8")
+        return markdown.markdown(text, extensions=["fenced_code", "tables"])
+    except Exception:
+        return ""
+
+
+def _find_requirements_file(slug: str) -> Optional[Path]:
+    """Locate the primary requirements document using the priority chain.
+
+    Priority order:
+    1. Design doc  — ``docs/plans/*-<slug>-design.md`` (most-recent glob match)
+    2. Claimed     — ``.claude/plans/.claimed/<slug>.md``
+    3. Active backlog dirs
+    4. Completed backlog dirs
+
+    Args:
+        slug: Work item slug.
+
+    Returns:
+        Path to the highest-priority file found, or None.
+    """
+    design = _find_design_doc(slug)
+    if design is not None:
+        return design
+
+    claimed = _CLAIMED_PATH / f"{slug}.md"
+    if claimed.exists():
+        return claimed
+
+    for dir_str in BACKLOG_DIRS.values():
+        candidate = Path(dir_str) / f"{slug}.md"
+        if candidate.exists():
+            return candidate
+
+    for dir_str in COMPLETED_DIRS.values():
+        candidate = Path(dir_str) / f"{slug}.md"
+        if candidate.exists():
+            return candidate
+
+    return None
+
+
+def _find_original_request_file(slug: str) -> Optional[Path]:
+    """Return the original backlog/claimed file when the primary source is a design doc.
+
+    When the highest-priority requirements source is a design doc, the original
+    backlog or claimed file is surfaced as a secondary "Original request" block.
+
+    Args:
+        slug: Work item slug.
+
+    Returns:
+        Path to the original request file, or None if not applicable.
+    """
+    if _find_design_doc(slug) is None:
+        return None
+
+    claimed = _CLAIMED_PATH / f"{slug}.md"
+    if claimed.exists():
+        return claimed
+
+    for dir_str in BACKLOG_DIRS.values():
+        candidate = Path(dir_str) / f"{slug}.md"
+        if candidate.exists():
+            return candidate
+
+    return None
+
+
+def _load_requirements_html(slug: str) -> str:
+    """Return primary requirements markdown rendered as HTML, or empty string if not found.
+
+    Uses the priority chain in ``_find_requirements_file``.
 
     Args:
         slug: Work item slug.
@@ -107,29 +189,26 @@ def _load_requirements_html(slug: str) -> str:
     md_path = _find_requirements_file(slug)
     if md_path is None:
         return ""
-    try:
-        import markdown
-        text = md_path.read_text(encoding="utf-8")
-        return markdown.markdown(text, extensions=["fenced_code", "tables"])
-    except Exception:
-        return ""
+    return _render_md_to_html(md_path)
 
 
-def _find_requirements_file(slug: str) -> Optional[Path]:
-    """Locate the ``<slug>.md`` file across all backlog and completed directories.
+def _load_original_request_html(slug: str) -> Optional[str]:
+    """Return original backlog/claimed request rendered as HTML, or None if not applicable.
+
+    Only returns content when the primary requirements source is a design doc and
+    an original backlog or claimed file also exists.
 
     Args:
         slug: Work item slug.
 
     Returns:
-        Path to the file, or None if not found.
+        HTML string, or None when not applicable.
     """
-    search_dirs = list(BACKLOG_DIRS.values()) + list(COMPLETED_DIRS.values())
-    for dir_str in search_dirs:
-        candidate = Path(dir_str) / f"{slug}.md"
-        if candidate.exists():
-            return candidate
-    return None
+    md_path = _find_original_request_file(slug)
+    if md_path is None:
+        return None
+    html = _render_md_to_html(md_path)
+    return html if html else None
 
 
 def _detect_item_type(slug: str) -> Optional[str]:
