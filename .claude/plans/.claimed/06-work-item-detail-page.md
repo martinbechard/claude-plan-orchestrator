@@ -58,3 +58,5 @@ page by slug.
 - Defect 06 (drill-down links from dashboard) shares the same slug→URL pattern.
 - Defect 02 (traces named LangGraph) blocks the traces section being useful,
   but the page should be built regardless with a placeholder.
+
+## LangSmith Trace: 40fe6af1-b868-424e-ad03-97477ef45427

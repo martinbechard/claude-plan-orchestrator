@@ -34,6 +34,8 @@ sections:
     completed_at: '2026-03-26T01:50:03.006052'
     result_message: Removed ~ prefix from all cost format strings in 8 Python files
       and updated 3 test assertions. All 1525 tests pass.
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
   - id: '1.2'
     name: Remove ~ from cost displays in frontend templates
     agent: frontend-coder
@@ -44,4 +46,7 @@ sections:
       Remove the ~ character from cost displays in: langgraph_pipeline/web/static/dashboard.js
       (formatCost function), langgraph_pipeline/web/templates/analysis.html (column
       headers and cell values).'
-    status: pending
+    status: in_progress
+    last_attempt: '2026-03-26T01:51:44.774677'
+    attempts: 1
+    model_used: sonnet
