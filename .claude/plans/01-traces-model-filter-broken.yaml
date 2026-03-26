@@ -58,7 +58,11 @@ sections:
       of parsing metadata_json. Update tests in tests/langgraph/web/test_proxy.py:
       add tests for propagate_model_to_root(), model filter in list_runs()/count_runs(),
       and multipart model extraction via the /runs/multipart endpoint.'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:13:29.595636'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T01:17:56.622025'
+    result_message: Updated server.py runs_multipart and runs_create to extract model
+      from extra.invocation_params/metadata and call propagate_model_to_root(); routes/proxy.py
+      _enrich_run() was already correct. Added 7 new tests. All 1512 tests pass.
