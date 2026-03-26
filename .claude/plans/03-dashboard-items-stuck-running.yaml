@@ -49,3 +49,8 @@ sections:
       os.kill, removes dead workers) and called it from snapshot(). Fixed ChildProcessError
       path in _reap_finished_workers() to pop the record and call remove_active_worker()
       with computed elapsed_s. All 1502 tests pass.
+    validation_attempts: 1
+    validation_findings: Added model column to traces table with ALTER TABLE migration,
+      idx_traces_model index, propagate_model_to_root() method, updated list_runs/count_runs
+      to use LOWER(model) LIKE LOWER(?), and updated _enrich_run() to read model column
+      directly. All 1502 tests pass.

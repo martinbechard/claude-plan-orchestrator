@@ -53,6 +53,8 @@ sections:
     model_used: sonnet
     completed_at: '2026-03-26T01:09:23.928872'
     result_message: 'PASS: All good'
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
 - id: '2'
   name: Worker and Reader Updates
   status: pending
@@ -68,7 +70,10 @@ sections:
       POST the per-task cost payload to {LANGCHAIN_ENDPOINT}/api/cost using urllib.request
       (no new dependencies). Keep existing JSON file write as the fallback. Handle
       HTTP errors and timeouts gracefully (log and continue).'
-    status: pending
+    status: in_progress
+    last_attempt: '2026-03-26T01:11:04.345037'
+    attempts: 1
+    model_used: sonnet
   - id: '2.2'
     name: Update CostLogReader to query DB
     agent: coder
