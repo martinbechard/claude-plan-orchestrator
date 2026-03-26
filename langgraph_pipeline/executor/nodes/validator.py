@@ -15,6 +15,7 @@ import os
 import subprocess
 import threading
 import time
+import urllib.request
 from typing import Optional
 
 import yaml
@@ -23,6 +24,7 @@ from langgraph_pipeline.executor.state import TaskState, ValidationVerdict
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.claude_cli import (
     OutputCollector,
+    ToolCallRecord,
     stream_json_output,
     stream_output,
 )
@@ -37,6 +39,7 @@ DEFAULT_VALIDATOR_AGENT = "validator"
 DEFAULT_BUILD_COMMAND = "pnpm run build"
 DEFAULT_TEST_COMMAND = "pnpm test"
 STRIPPED_ENV_VAR = "CLAUDECODE"       # removed so Claude can spawn from Claude Code
+COST_API_TIMEOUT_S = 10               # timeout for POST /api/cost
 
 # Maps ModelTier literals to full Claude CLI model identifiers
 MODEL_TIER_TO_CLI_NAME: dict[str, str] = {
@@ -147,13 +150,14 @@ def _build_child_env() -> dict:
     return env
 
 
-def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, int, dict, str]:
+def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, int, dict, str, list[ToolCallRecord]]:
     """Spawn Claude CLI and stream its output.
 
-    Returns (success, returncode, result_capture, stderr_text).
+    Returns (success, returncode, result_capture, stderr_text, tool_calls).
     success is True when Claude exits with return code 0.
     returncode is process.returncode on normal exit, -1 on TimeoutExpired, -2 on Exception.
     result_capture holds the parsed 'result' JSON event with usage data.
+    tool_calls accumulates ToolCallRecord entries from each tool_use event.
     """
     cmd = [
         "claude",
@@ -166,6 +170,7 @@ def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, int, dict, str]
     stdout_collector = OutputCollector()
     stderr_collector = OutputCollector()
     result_capture: dict = {}
+    tool_calls: list[ToolCallRecord] = []
 
     start_time = time.time()
     try:
@@ -180,7 +185,7 @@ def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, int, dict, str]
         )
         stdout_thread = threading.Thread(
             target=stream_json_output,
-            args=(process.stdout, stdout_collector, result_capture),
+            args=(process.stdout, stdout_collector, result_capture, tool_calls),
         )
         stderr_thread = threading.Thread(
             target=stream_output,
@@ -199,14 +204,103 @@ def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, int, dict, str]
         stdout_thread.join(timeout=5)
         stderr_thread.join(timeout=5)
 
-        return (process.returncode == 0, process.returncode, result_capture, stderr_collector.get_output())
+        return (process.returncode == 0, process.returncode, result_capture, stderr_collector.get_output(), tool_calls)
 
     except subprocess.TimeoutExpired:
         print(f"[validate_task] Claude CLI timed out after {CLAUDE_TIMEOUT_SECONDS}s")
-        return (False, -1, {}, "Timed out")
+        return (False, -1, {}, "Timed out", [])
     except Exception as exc:
         print(f"[validate_task] Failed to spawn Claude CLI: {exc}")
-        return (False, -2, {}, str(exc))
+        return (False, -2, {}, str(exc), [])
+
+
+# ─── Cost Reporting ───────────────────────────────────────────────────────────
+
+
+import logging
+
+_logger = logging.getLogger(__name__)
+
+
+def _tool_call_to_dict(tc: ToolCallRecord) -> dict:
+    """Convert a ToolCallRecord to a ToolCallEntry dict for the cost API."""
+    tool_name = tc["tool_name"]
+    tool_input = tc.get("tool_input") or {}
+    file_path: Optional[str] = None
+    command: Optional[str] = None
+    if tool_name in ("Read", "Edit", "Write"):
+        file_path = tool_input.get("file_path")
+    elif tool_name in ("Grep", "Glob"):
+        file_path = tool_input.get("path")
+    elif tool_name == "Bash":
+        command = tool_input.get("command")
+    entry: dict = {"tool": tool_name}
+    if file_path is not None:
+        entry["file_path"] = file_path
+    if command is not None:
+        entry["command"] = command
+    result_bytes = tc.get("result_bytes")
+    if result_bytes is not None:
+        entry["result_bytes"] = result_bytes
+    return entry
+
+
+def _post_cost_to_api(
+    plan_data: dict,
+    task_id: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cost_usd: float,
+    duration_s: float,
+    tool_calls: list[ToolCallRecord],
+) -> None:
+    """POST a validator cost record to {LANGCHAIN_ENDPOINT}/api/cost.
+
+    Only posts when LANGCHAIN_ENDPOINT is set to a localhost URL.
+    Fire-and-forget: logs a warning on error but never raises.
+    """
+    from pathlib import Path as _Path
+    endpoint = os.environ.get("LANGCHAIN_ENDPOINT", "")
+    if not endpoint.startswith("http://localhost"):
+        return
+
+    source_item = plan_data.get("meta", {}).get("source_item", "")
+    item_slug = _Path(source_item).stem if source_item else ""
+    item_type = "defect" if source_item and "defect" in source_item.lower() else "feature"
+
+    tool_call_dicts = [
+        _tool_call_to_dict(tc)
+        for tc in tool_calls
+        if tc.get("type") == "tool_use"
+    ]
+
+    payload = {
+        "item_slug": item_slug,
+        "item_type": item_type,
+        "task_id": task_id,
+        "agent_type": "validator",
+        "model": model,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cost_usd": cost_usd,
+        "duration_s": round(duration_s, 1),
+        "tool_calls": tool_call_dicts,
+    }
+
+    url = f"{endpoint}/api/cost"
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=COST_API_TIMEOUT_S):
+            pass
+    except Exception as exc:
+        _logger.warning("[validate_task] Failed to POST cost to %s: %s", url, exc)
 
 
 # ─── Status File ──────────────────────────────────────────────────────────────
@@ -348,7 +442,7 @@ def validate_task(state: TaskState) -> dict:
 
     _clear_status_file()
     _exec_start = time.time()
-    cli_success, returncode, result_capture, stderr_text = _run_claude(full_prompt, model_cli_name)
+    cli_success, returncode, result_capture, stderr_text, tool_calls = _run_claude(full_prompt, model_cli_name)
     _duration_ms = int((time.time() - _exec_start) * 1000)
 
     if returncode == 0:
@@ -377,6 +471,18 @@ def validate_task(state: TaskState) -> dict:
     usage = result_capture.get("usage", {})
     input_tokens = int(usage.get("input_tokens", 0))
     output_tokens = int(usage.get("output_tokens", 0))
+
+    # Post cost record to the web API (fire-and-forget)
+    _post_cost_to_api(
+        plan_data=plan_data,
+        task_id=task_id,
+        model=model_cli_name,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cost_usd=cost_usd,
+        duration_s=_duration_ms / 1000.0,
+        tool_calls=tool_calls,
+    )
 
     add_trace_metadata({
         "node_name": "validate_task",

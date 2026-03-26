@@ -15,6 +15,7 @@ import os
 import subprocess
 import threading
 import time
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -47,6 +48,7 @@ DEFAULT_BUILD_COMMAND = "pnpm run build"
 DEFAULT_DEV_SERVER_PORT = 3000
 DEFAULT_DEV_SERVER_COMMAND = "pnpm dev"
 STRIPPED_ENV_VAR = "CLAUDECODE"   # removed so Claude can spawn from Claude Code
+COST_API_TIMEOUT_S = 10           # timeout for POST /api/cost
 
 logger = logging.getLogger(__name__)
 
@@ -344,6 +346,94 @@ def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, int, dict, str,
         return (False, -2, {}, "", str(exc), [])
 
 
+# ─── Cost Reporting ───────────────────────────────────────────────────────────
+
+
+def _tool_call_to_dict(tc: ToolCallRecord) -> dict:
+    """Convert a ToolCallRecord to a ToolCallEntry dict for the cost API.
+
+    Derives file_path from tool_input for file-oriented tools and command for
+    Bash, mirroring the field-mapping logic in proxy.get_tool_call_attribution().
+    """
+    tool_name = tc["tool_name"]
+    tool_input = tc.get("tool_input") or {}
+    file_path: Optional[str] = None
+    command: Optional[str] = None
+    if tool_name in ("Read", "Edit", "Write"):
+        file_path = tool_input.get("file_path")
+    elif tool_name in ("Grep", "Glob"):
+        file_path = tool_input.get("path")
+    elif tool_name == "Bash":
+        command = tool_input.get("command")
+    entry: dict = {"tool": tool_name}
+    if file_path is not None:
+        entry["file_path"] = file_path
+    if command is not None:
+        entry["command"] = command
+    result_bytes = tc.get("result_bytes")
+    if result_bytes is not None:
+        entry["result_bytes"] = result_bytes
+    return entry
+
+
+def _post_cost_to_api(
+    plan_data: dict,
+    task_id: str,
+    agent_type: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cost_usd: float,
+    duration_s: float,
+    tool_calls: list[ToolCallRecord],
+) -> None:
+    """POST a per-task cost record to {LANGCHAIN_ENDPOINT}/api/cost.
+
+    Only posts when LANGCHAIN_ENDPOINT is set to a localhost URL.
+    Fire-and-forget: logs a warning on error but never raises.
+    """
+    endpoint = os.environ.get("LANGCHAIN_ENDPOINT", "")
+    if not endpoint.startswith("http://localhost"):
+        return
+
+    source_item = plan_data.get("meta", {}).get("source_item", "")
+    item_slug = Path(source_item).stem if source_item else ""
+    item_type = "defect" if source_item and "defect" in source_item.lower() else "feature"
+
+    tool_call_dicts = [
+        _tool_call_to_dict(tc)
+        for tc in tool_calls
+        if tc.get("type") == "tool_use"
+    ]
+
+    payload = {
+        "item_slug": item_slug,
+        "item_type": item_type,
+        "task_id": task_id,
+        "agent_type": agent_type,
+        "model": model,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cost_usd": cost_usd,
+        "duration_s": round(duration_s, 1),
+        "tool_calls": tool_call_dicts,
+    }
+
+    url = f"{endpoint}/api/cost"
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=COST_API_TIMEOUT_S):
+            pass
+    except Exception as exc:
+        logger.warning("[execute_task] Failed to POST cost to %s: %s", url, exc)
+
+
 # ─── Status File ──────────────────────────────────────────────────────────────
 
 
@@ -494,8 +584,10 @@ def execute_task(state: TaskState) -> dict:
     cli_success, returncode, result_capture, _stdout, _stderr, tool_calls = _run_claude(prompt, model_cli_name)
     _duration_ms = int((time.time() - _exec_start) * 1000)
 
-    # Detect quota exhaustion before processing outcome
-    if detect_quota_exhaustion(_stdout + _stderr):
+    # Detect quota exhaustion before processing outcome.
+    # Only check stderr — stdout contains Claude's response which may include
+    # rate-limit keywords literally when the work item discusses them.
+    if detect_quota_exhaustion(_stderr):
         print(f"[execute_task] Quota exhaustion detected for task {task_id!r}; resetting to pending")
         task["status"] = "pending"
         _save_plan_yaml(plan_path, plan_data)
@@ -514,6 +606,19 @@ def execute_task(state: TaskState) -> dict:
     usage = result_capture.get("usage", {})
     input_tokens = int(usage.get("input_tokens", 0))
     output_tokens = int(usage.get("output_tokens", 0))
+
+    # Post cost record to the web API (fire-and-forget)
+    _post_cost_to_api(
+        plan_data=plan_data,
+        task_id=task_id,
+        agent_type=task.get("agent", "coder"),
+        model=model_cli_name,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cost_usd=cost_usd,
+        duration_s=_duration_ms / 1000.0,
+        tool_calls=tool_calls,
+    )
 
     # Read agent's status report
     status_dict = _read_status_file()

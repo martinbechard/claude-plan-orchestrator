@@ -370,7 +370,7 @@ class TestExecutorGraphWithValidation:
                     {"verdict": "PASS", "status": "completed", "message": "PASS: All good"},
                     f,
                 )
-            return (True, 0, {}, "")
+            return (True, 0, {}, "", [])
 
         call_count = {"n": 0}
 
