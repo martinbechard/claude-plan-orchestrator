@@ -23,13 +23,14 @@ sections:
       str) -> Optional[str] function that delegates to the existing private _read_trace_id_from_file().
       The supervisor needs to import this to read the trace UUID from claimed item
       files. See design doc: docs/plans/2026-03-26-06-dashboard-drill-down-to-trace-design.md'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:29:10.732074'
     attempts: 2
     model_used: opus
-    completed_at: '2026-03-26T01:27:17.160608'
-    result_message: bar_color, text_color macros, and legend rects all updated to
-      violet/cyan/amber palette. Build clean, 1517 tests pass.
+    completed_at: '2026-03-26T01:30:11.028660'
+    result_message: 'Fixed Gantt chart template: replaced secs() macro with pre-computed
+      elapsed fields; float division for bars/ticks; elapsed offset labels; grandchildren
+      expandable section. All 14 proxy tests pass.'
     validation_attempts: 1
     validation_findings: 'Validator ''validator'' failed to execute: No status file
       written by Claude'
