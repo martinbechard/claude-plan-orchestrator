@@ -126,7 +126,7 @@
           <th scope="col" data-sortable="agent_types">Agent Types</th>
           <th scope="col" data-sortable="input_tokens">Input Tokens</th>
           <th scope="col" data-sortable="output_tokens">Output Tokens</th>
-          <th scope="col" data-sortable="cost_usd">Cost (~$)</th>
+          <th scope="col" data-sortable="cost_usd">Cost ($)</th>
           <th scope="col" data-sortable="num_tasks">Tasks</th>
           <th scope="col" data-sortable="num_wasted_reads">Wasted Reads</th>
         </tr>
@@ -162,7 +162,7 @@
           <td>{{ item.agent_types | join(', ') | e }}</td>
           <td>{{ "{:,}".format(item.input_tokens) }}</td>
           <td>{{ "{:,}".format(item.output_tokens) }}</td>
-          <td>~${{ "%.4f" | format(item.cost_usd) }}</td>
+          <td>${{ "%.4f" | format(item.cost_usd) }}</td>
           <td>{{ item.num_tasks }}</td>
           <td>
             {% if item.num_wasted_reads > 0 %}
@@ -188,7 +188,7 @@
                   <th scope="col">Model</th>
                   <th scope="col">Input Tokens</th>
                   <th scope="col">Output Tokens</th>
-                  <th scope="col">Cost (~$)</th>
+                  <th scope="col">Cost ($)</th>
                   <th scope="col">Duration (s)</th>
                 </tr>
               </thead>
@@ -200,7 +200,7 @@
                   <td>{{ task.model | e }}</td>
                   <td>{{ "{:,}".format(task.input_tokens) }}</td>
                   <td>{{ "{:,}".format(task.output_tokens) }}</td>
-                  <td>~${{ "%.4f" | format(task.cost_usd) }}</td>
+                  <td>${{ "%.4f" | format(task.cost_usd) }}</td>
                   <td>{{ "%.1f" | format(task.duration_s) }}</td>
                 </tr>
                 {% endfor %}

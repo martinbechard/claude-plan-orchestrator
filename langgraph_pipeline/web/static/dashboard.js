@@ -23,8 +23,8 @@ function fmtElapsed(seconds) {
 }
 
 function fmtCost(usd) {
-  if (usd == null || usd === 0) return "~$0.00";
-  return "~$" + usd.toFixed(4);
+  if (usd == null || usd === 0) return "$0.00";
+  return "$" + usd.toFixed(4);
 }
 
 function fmtFinished(finishedAt) {
