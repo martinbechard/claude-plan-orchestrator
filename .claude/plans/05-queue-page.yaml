@@ -61,7 +61,9 @@ sections:
       link the dashboard queue count to /queue.
 
       '
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T02:00:31.837809'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-26T02:03:27.146065'
+    result_message: 'PASS: All good'
