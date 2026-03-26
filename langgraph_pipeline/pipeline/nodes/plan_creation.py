@@ -13,6 +13,7 @@ a previous pipeline run). Otherwise, runs the plan creation prompt and verifies
 the YAML plan was written before returning the paths.
 """
 
+import json
 import os
 import subprocess
 from datetime import datetime
@@ -120,6 +121,7 @@ def _build_planner_command(prompt: str) -> list[str]:
     else:
         cmd += ["--dangerously-skip-permissions"]
     cmd += ["--model", PLANNER_MODEL]
+    cmd += ["--output-format", "json"]
     cmd += ["--print", prompt]
     return cmd
 
@@ -147,6 +149,15 @@ def _run_subprocess(cmd: list[str]) -> tuple[int, str, str]:
         return -1, "", "Plan creation subprocess timed out"
     except (OSError, subprocess.SubprocessError) as exc:
         return -1, "", str(exc)
+
+
+def _extract_cost_from_json_output(stdout: str) -> float:
+    """Extract total_cost_usd from Claude CLI JSON output. Returns 0.0 on parse failure."""
+    try:
+        data = json.loads(stdout)
+        return float(data.get("total_cost_usd", 0.0))
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return 0.0
 
 
 def _plan_exists(plan_path: str) -> bool:
@@ -196,6 +207,7 @@ def create_plan(state: PipelineState) -> dict:
 
     cmd = _build_planner_command(prompt)
     exit_code, stdout, stderr = _run_subprocess(cmd)
+    total_cost_usd = _extract_cost_from_json_output(stdout)
 
     combined_output = stdout + stderr
     is_rate_limited, reset_time = check_rate_limit(combined_output)
@@ -227,6 +239,7 @@ def create_plan(state: PipelineState) -> dict:
         "graph_level": "pipeline",
         "item_slug": item_slug,
         "item_type": item_type,
+        "total_cost_usd": total_cost_usd,
         "tags": [item_slug, item_type],
     })
     return {
