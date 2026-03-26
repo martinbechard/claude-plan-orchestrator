@@ -31,13 +31,18 @@ sections:
     result_message: 'All 6 requirements verified: SVG_VALUE_LABEL_PADDING=80, value_formatter
       callable added, type annotation list[float], analysis.html uses %.2f without
       tilde, tests updated. All 1561 tests pass.'
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
   - id: '1.2'
     name: Delete scripts/plan-orchestrator.py and stale pyc cache
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '1.1'
     description: 'Complete the work item: .claude/plans/.claimed/25-migrate-tests-off-legacy-plan-orchestrator.md
       -- once task 1.1 is verified green, delete scripts/plan-orchestrator.py and
       delete tests/__pycache__/test_auto_pipeline*.pyc (stale cache), then confirm
       the full test suite still passes.'
+    last_attempt: '2026-03-26T14:57:11.204321'
+    attempts: 1
+    model_used: sonnet
