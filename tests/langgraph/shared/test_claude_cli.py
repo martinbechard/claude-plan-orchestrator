@@ -6,14 +6,18 @@
 
 import io
 import json
+import subprocess
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from langgraph_pipeline.shared.claude_cli import (
     OUTPUT_PREVIEW_MAX_CHARS,
     TOOL_CMD_PREVIEW_MAX_CHARS,
+    ClaudeResult,
     OutputCollector,
     ToolCallRecord,
+    call_claude,
     stream_json_output,
     stream_output,
 )
@@ -589,6 +593,84 @@ class TestStreamJsonOutputDurationTracking:
         tool_calls: list[ToolCallRecord] = []
         stream_json_output(pipe, c, result, tool_calls)
         assert len(tool_calls) == 0  # No tool_use was emitted
+
+
+# ─── call_claude ──────────────────────────────────────────────────────────────
+
+
+def _make_proc(returncode: int = 0, stdout: str = "", stderr: str = "") -> MagicMock:
+    """Return a fake CompletedProcess with the given attributes."""
+    proc = MagicMock()
+    proc.returncode = returncode
+    proc.stdout = stdout
+    proc.stderr = stderr
+    return proc
+
+
+class TestCallClaude:
+    def test_success_returns_result_text(self):
+        payload = json.dumps({"result": "  Hello from Claude  "})
+        with patch("subprocess.run", return_value=_make_proc(stdout=payload)):
+            result = call_claude("ping")
+        assert isinstance(result, ClaudeResult)
+        assert result.text == "Hello from Claude"
+        assert result.failure_reason is None
+
+    def test_success_failure_reason_is_none(self):
+        payload = json.dumps({"result": "ok"})
+        with patch("subprocess.run", return_value=_make_proc(stdout=payload)):
+            result = call_claude("ping")
+        assert result.failure_reason is None
+
+    def test_success_result_key_missing_gives_empty_text(self):
+        payload = json.dumps({})
+        with patch("subprocess.run", return_value=_make_proc(stdout=payload)):
+            result = call_claude("ping")
+        assert result.text == ""
+        assert result.failure_reason is None
+
+    def test_nonzero_returncode_sets_failure_reason(self):
+        with patch("subprocess.run", return_value=_make_proc(returncode=1, stderr="quota exhausted")):
+            result = call_claude("ping")
+        assert result.text == ""
+        assert result.failure_reason is not None
+        assert "quota exhausted" in result.failure_reason
+        assert "1" in result.failure_reason
+
+    def test_nonzero_returncode_includes_full_stderr(self):
+        long_stderr = "error: " + "x" * 500
+        with patch("subprocess.run", return_value=_make_proc(returncode=2, stderr=long_stderr)):
+            result = call_claude("ping")
+        assert long_stderr in result.failure_reason
+
+    def test_timeout_sets_failure_reason(self):
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="claude", timeout=120)):
+            result = call_claude("ping", timeout=120)
+        assert result.text == ""
+        assert "timed out" in result.failure_reason
+        assert "120" in result.failure_reason
+
+    def test_json_decode_error_sets_failure_reason(self):
+        with patch("subprocess.run", return_value=_make_proc(stdout="not valid json")):
+            result = call_claude("ping")
+        assert result.text == ""
+        assert result.failure_reason is not None
+        assert "JSON decode error" in result.failure_reason
+
+    def test_oserror_sets_failure_reason(self):
+        with patch("subprocess.run", side_effect=OSError("No such file")):
+            result = call_claude("ping")
+        assert result.text == ""
+        assert result.failure_reason is not None
+        assert "OS error" in result.failure_reason
+        assert "No such file" in result.failure_reason
+
+    def test_returns_claude_result_namedtuple(self):
+        payload = json.dumps({"result": "response"})
+        with patch("subprocess.run", return_value=_make_proc(stdout=payload)):
+            result = call_claude("ping")
+        assert hasattr(result, "text")
+        assert hasattr(result, "failure_reason")
 
 
 # ─── Constants ────────────────────────────────────────────────────────────────
