@@ -64,5 +64,3 @@ slowdowns are visible at a glance.
 - Velocity = (tokens_in + tokens_out) / (elapsed_s / 60)
 - For the timeline bar colour, use CSS opacity or HSL lightness scaled
   by velocity relative to the session's average velocity
-
-## LangSmith Trace: ff681e20-c91a-4982-9c64-0bfd3703fed0
