@@ -10,11 +10,28 @@
      model       str         — active model filter value (substring in metadata_json)
      date_from   str         — active date-from filter value (ISO date)
      date_to     str         — active date-to filter value (ISO date)
+     trace_id    str         — active trace_id filter value (run_id prefix/substring)
    Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md
 #}
 {% extends "base.html" %}
 
 {% block title %}Traces — Plan Orchestrator{% endblock %}
+
+{% block extra_head %}
+<style>
+  .copy-btn {
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    padding: 1px 4px;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .copy-btn:hover { background: #eee; }
+</style>
+{% endblock %}
 
 {% block content %}
 <h1>LangSmith Traces</h1>
@@ -27,6 +44,12 @@
     Run name
     <input type="search" name="slug" value="{{ slug | e }}"
            placeholder="Substring match&hellip;" aria-label="Filter by run name substring">
+  </label>
+
+  <label>
+    Trace ID
+    <input type="search" name="trace_id" value="{{ trace_id | e }}"
+           placeholder="ID prefix&hellip;" aria-label="Filter by trace ID">
   </label>
 
   <label>
@@ -60,7 +83,7 @@
 
   <button type="submit">Apply</button>
 
-  {% if slug or model or date_from or date_to %}
+  {% if slug or trace_id or model or date_from or date_to %}
   <a class="reset-link" href="/proxy" aria-label="Clear all filters">Clear filters</a>
   {% endif %}
 </form>
@@ -71,6 +94,7 @@
   <table>
     <thead>
       <tr>
+        <th scope="col">Trace ID</th>
         <th scope="col">Run name</th>
         <th scope="col">Item slug</th>
         <th scope="col">Start time</th>
@@ -97,6 +121,18 @@
 
       {# Main data row ──────────────────────────────────────────────────────── #}
       <tr>
+        <td class="trace-id" style="font-family:monospace;font-size:12px;white-space:nowrap;">
+          {% if run.run_id %}
+            <span title="{{ run.run_id | e }}">{{ run.run_id[:8] | e }}</span>
+            <button type="button" class="copy-btn" aria-label="Copy trace ID {{ run.run_id | e }}"
+                    onclick="navigator.clipboard.writeText('{{ run.run_id | e }}')">
+              &#128203;
+            </button>
+          {% else %}
+            &mdash;
+          {% endif %}
+        </td>
+
         <td class="name">
           <a href="/proxy/{{ run.run_id | e }}">{{ run.name | e }}</a>
         </td>
@@ -132,7 +168,7 @@
 
       {# Expandable detail row ──────────────────────────────────────────────── #}
       <tr class="row-details" aria-label="Details for {{ run.name | e }}">
-        <td colspan="7">
+        <td colspan="8">
           <details>
             <summary>
               Details ({{ run.child_count }} child run{{ "s" if run.child_count != 1 else "" }}) &mdash;
@@ -168,6 +204,7 @@
 
 {% set qs_parts = [] %}
 {% if slug %}{% set _ = qs_parts.append("slug=" ~ slug) %}{% endif %}
+{% if trace_id %}{% set _ = qs_parts.append("trace_id=" ~ trace_id) %}{% endif %}
 {% if model %}{% set _ = qs_parts.append("model=" ~ model) %}{% endif %}
 {% if date_from %}{% set _ = qs_parts.append("date_from=" ~ date_from) %}{% endif %}
 {% if date_to %}{% set _ = qs_parts.append("date_to=" ~ date_to) %}{% endif %}
@@ -197,7 +234,7 @@
 {# ── Empty state ───────────────────────────────────────────────────────────── #}
 <div class="empty-state" role="status" aria-live="polite">
   <div class="icon" aria-hidden="true">&#128203;</div>
-  {% if slug or model or date_from or date_to %}
+  {% if slug or trace_id or model or date_from or date_to %}
     <p>No traces match the current filters.</p>
     <p><a href="/proxy">Clear filters</a> to see all traces.</p>
   {% else %}
