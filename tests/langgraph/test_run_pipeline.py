@@ -368,6 +368,8 @@ class TestSingleItemMode:
 
 # ─── Scan loop ────────────────────────────────────────────────────────────────
 
+_DUMMY_PRE_SCAN_STATE = _make_state(item_slug="item-x", item_path="docs/feature-backlog/1-x.md")
+
 
 def _graph_cm_with_states(states: list):
     """Return a CM mock whose graph.invoke() returns successive states from the list."""
@@ -381,13 +383,35 @@ def _graph_cm_with_states(states: list):
     return _cm, mock_graph
 
 
+def _scan_loop_infra_patches(pre_scan_state=_DUMMY_PRE_SCAN_STATE):
+    """Return a list of patch() context managers for all _run_scan_loop infrastructure.
+
+    Patches _pre_scan, process_ideas, _reinstate_answered_suspensions,
+    _post_pending_suspension_questions, and CodeChangeMonitor so tests
+    run instantly without touching the real filesystem or waiting for
+    SCAN_SLEEP_SECONDS.
+    """
+    mock_monitor = MagicMock()
+    mock_monitor.restart_pending = MagicMock()
+    mock_monitor.restart_pending.is_set.return_value = False
+    return [
+        patch.object(_mod, "_pre_scan", return_value=pre_scan_state),
+        patch.object(_mod, "process_ideas", return_value=0),
+        patch.object(_mod, "_reinstate_answered_suspensions"),
+        patch.object(_mod, "_post_pending_suspension_questions"),
+        patch.object(_mod, "CodeChangeMonitor", return_value=mock_monitor),
+    ]
+
+
 class TestScanLoop:
     def test_exits_2_when_first_invocation_exceeds_budget(self):
         states = [_make_state(session_cost_usd=6.0, item_slug="item-a")]
         mock_cm, mock_graph = _graph_cm_with_states(states)
         shutdown_event = threading.Event()
+        patches = _scan_loop_infra_patches()
         with patch.object(_mod, "pipeline_graph", mock_cm):
-            code = _run_scan_loop(5.0, False, shutdown_event)
+            with patches[0], patches[1], patches[2], patches[3], patches[4]:
+                code = _run_scan_loop(5.0, False, shutdown_event)
         assert code == EXIT_CODE_BUDGET_EXHAUSTED
         mock_graph.invoke.assert_called_once()
 
@@ -399,8 +423,10 @@ class TestScanLoop:
         ]
         mock_cm, mock_graph = _graph_cm_with_states(states)
         shutdown_event = threading.Event()
+        patches = _scan_loop_infra_patches()
         with patch.object(_mod, "pipeline_graph", mock_cm):
-            code = _run_scan_loop(5.0, False, shutdown_event)
+            with patches[0], patches[1], patches[2], patches[3], patches[4]:
+                code = _run_scan_loop(5.0, False, shutdown_event)
         assert code == EXIT_CODE_BUDGET_EXHAUSTED
         assert mock_graph.invoke.call_count == 2
 
@@ -419,8 +445,10 @@ class TestScanLoop:
         def _cm(*args, **kwargs):
             yield mock_graph
 
+        patches = _scan_loop_infra_patches()
         with patch.object(_mod, "pipeline_graph", _cm):
-            code = _run_scan_loop(None, False, shutdown_event)
+            with patches[0], patches[1], patches[2], patches[3], patches[4]:
+                code = _run_scan_loop(None, False, shutdown_event)
         assert code == EXIT_CODE_CLEAN
 
     def test_dry_run_exits_0_when_shutdown_set_immediately(self):
@@ -438,8 +466,10 @@ class TestScanLoop:
             yield mock_graph
 
         shutdown_event = threading.Event()
+        patches = _scan_loop_infra_patches()
         with patch.object(_mod, "pipeline_graph", _failing_cm):
-            code = _run_scan_loop(None, False, shutdown_event)
+            with patches[0], patches[1], patches[2], patches[3], patches[4]:
+                code = _run_scan_loop(None, False, shutdown_event)
         assert code == EXIT_CODE_ERROR
 
     def test_no_budget_cap_loops_until_shutdown(self):
@@ -460,7 +490,9 @@ class TestScanLoop:
         def _cm(*args, **kwargs):
             yield mock_graph
 
+        patches = _scan_loop_infra_patches()
         with patch.object(_mod, "pipeline_graph", _cm):
-            code = _run_scan_loop(None, False, shutdown_event)
+            with patches[0], patches[1], patches[2], patches[3], patches[4]:
+                code = _run_scan_loop(None, False, shutdown_event)
         assert code == EXIT_CODE_CLEAN
         assert call_count[0] == 3
