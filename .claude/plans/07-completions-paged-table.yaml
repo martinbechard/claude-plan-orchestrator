@@ -91,7 +91,7 @@ sections:
   - id: '3.1'
     name: Register completions router and add View all link and nav entry
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: .claude/plans/.claimed/07-completions-paged-table.md
 
 
@@ -110,3 +110,7 @@ sections:
     last_attempt: '2026-03-26T11:49:43.699221'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-26T11:50:56.003581'
+    result_message: Completions router already registered in server.py, View all link
+      already present in dashboard.html, Completions nav entry already in base.html
+      - all wired up by prior task 2.1. Verified build passes.
