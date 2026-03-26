@@ -76,6 +76,11 @@ sections:
       failure_reason, findings, requirements_checked, requirements_met to add_trace_metadata.
       Updated validator prompt to document optional fields. Fixed test mocks. All
       1551 tests pass.
+    validation_attempts: 1
+    validation_findings: Build OK, 1551 tests pass. _run_claude() returns (success,
+      returncode, result_capture, stderr_text). failure_reason computed as ok/timeout/exit_code_N.
+      subprocess_exit_code, subprocess_error (500-char cap), failure_reason, findings,
+      requirements_checked, requirements_met all added to add_trace_metadata call.
 - id: '2'
   name: Validator verdict richness
   status: pending
@@ -83,7 +88,7 @@ sections:
   - id: '2.1'
     name: Add findings and requirements counts to validate_task trace metadata
     agent: coder
-    status: pending
+    status: completed
     description: 'Implement Gap 2 from: .claude/plans/.claimed/13-trace-observability-gaps.md
 
 
@@ -98,6 +103,14 @@ sections:
       example status file JSON. Run the full test suite after changes.
 
       '
+    last_attempt: '2026-03-26T12:30:46.435393'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-26T12:31:28.683540'
+    result_message: Build OK, 1551 tests pass. _run_claude() returns (success, returncode,
+      result_capture, stderr_text). failure_reason computed as ok/timeout/exit_code_N.
+      subprocess_exit_code, subprocess_error (500-char cap), failure_reason, findings,
+      requirements_checked, requirements_met all added to add_trace_metadata call.
 - id: '3'
   name: Pipeline decision traces and plan state snapshots
   status: pending
