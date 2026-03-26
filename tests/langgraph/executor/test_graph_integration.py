@@ -370,8 +370,7 @@ class TestExecutorGraphWithValidation:
                     {"verdict": "PASS", "status": "completed", "message": "PASS: All good"},
                     f,
                 )
-            # validator._run_claude returns (success, result_capture) — a 2-tuple
-            return (True, {})
+            return (True, 0, {}, "")
 
         call_count = {"n": 0}
 

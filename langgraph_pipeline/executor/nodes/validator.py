@@ -126,9 +126,13 @@ def _build_validator_prompt(
         f'  "task_id": "{task["id"]}",\n'
         '  "verdict": "PASS",\n'
         '  "status": "completed",\n'
-        '  "message": "Brief summary of findings"\n'
+        '  "message": "Brief summary of findings",\n'
+        '  "requirements_checked": 5,\n'
+        '  "requirements_met": 5\n'
         "}\n"
         "```\n\n"
+        "The `requirements_checked` and `requirements_met` fields are optional but "
+        "recommended when you can count discrete acceptance criteria.\n\n"
         "IMPORTANT: You MUST write the status file before finishing.\n"
     )
 
@@ -143,8 +147,14 @@ def _build_child_env() -> dict:
     return env
 
 
-def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, dict]:
-    """Spawn Claude CLI and stream its output. Returns (success, result_capture)."""
+def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, int, dict, str]:
+    """Spawn Claude CLI and stream its output.
+
+    Returns (success, returncode, result_capture, stderr_text).
+    success is True when Claude exits with return code 0.
+    returncode is process.returncode on normal exit, -1 on TimeoutExpired, -2 on Exception.
+    result_capture holds the parsed 'result' JSON event with usage data.
+    """
     cmd = [
         "claude",
         "--dangerously-skip-permissions",
@@ -189,14 +199,14 @@ def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, dict]:
         stdout_thread.join(timeout=5)
         stderr_thread.join(timeout=5)
 
-        return (process.returncode == 0, result_capture)
+        return (process.returncode == 0, process.returncode, result_capture, stderr_collector.get_output())
 
     except subprocess.TimeoutExpired:
         print(f"[validate_task] Claude CLI timed out after {CLAUDE_TIMEOUT_SECONDS}s")
-        return (False, {})
+        return (False, -1, {}, "Timed out")
     except Exception as exc:
         print(f"[validate_task] Failed to spawn Claude CLI: {exc}")
-        return (False, {})
+        return (False, -2, {}, str(exc))
 
 
 # ─── Status File ──────────────────────────────────────────────────────────────
@@ -338,8 +348,15 @@ def validate_task(state: TaskState) -> dict:
 
     _clear_status_file()
     _exec_start = time.time()
-    cli_success, result_capture = _run_claude(full_prompt, model_cli_name)
+    cli_success, returncode, result_capture, stderr_text = _run_claude(full_prompt, model_cli_name)
     _duration_ms = int((time.time() - _exec_start) * 1000)
+
+    if returncode == 0:
+        failure_reason = "ok"
+    elif returncode == -1:
+        failure_reason = "timeout"
+    else:
+        failure_reason = f"exit_code_{returncode}"
 
     status_dict = _read_status_file()
     verdict = _parse_verdict(status_dict, cli_success)
@@ -371,6 +388,12 @@ def validate_task(state: TaskState) -> dict:
         "output_tokens": output_tokens,
         "duration_ms": _duration_ms,
         "verdict": verdict,
+        "subprocess_exit_code": returncode,
+        "subprocess_error": stderr_text[:500] if not cli_success else "",
+        "failure_reason": failure_reason,
+        "findings": task.get("validation_findings", ""),
+        "requirements_checked": status_dict.get("requirements_checked") if status_dict else None,
+        "requirements_met": status_dict.get("requirements_met") if status_dict else None,
     })
 
     return {

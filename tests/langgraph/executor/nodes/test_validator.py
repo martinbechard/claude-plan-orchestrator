@@ -387,7 +387,7 @@ class TestValidateTask:
         with (
             patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.validator._run_claude",
-                  return_value=(True, {})),
+                  return_value=(True, 0, {}, "")),
             patch("langgraph_pipeline.executor.nodes.validator._clear_status_file"),
             patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -409,7 +409,7 @@ class TestValidateTask:
         with (
             patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.validator._run_claude",
-                  return_value=(True, {})),
+                  return_value=(True, 0, {}, "")),
             patch("langgraph_pipeline.executor.nodes.validator._clear_status_file"),
             patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -431,7 +431,7 @@ class TestValidateTask:
         with (
             patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.validator._run_claude",
-                  return_value=(True, {})),
+                  return_value=(True, 0, {}, "")),
             patch("langgraph_pipeline.executor.nodes.validator._clear_status_file"),
             patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -453,7 +453,7 @@ class TestValidateTask:
         with (
             patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.validator._run_claude",
-                  return_value=(True, {})),
+                  return_value=(True, 0, {}, "")),
             patch("langgraph_pipeline.executor.nodes.validator._clear_status_file"),
             patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -473,7 +473,7 @@ class TestValidateTask:
         with (
             patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(absent_path)),
             patch("langgraph_pipeline.executor.nodes.validator._run_claude",
-                  return_value=(True, {})),
+                  return_value=(True, 0, {}, "")),
             patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
         ):
@@ -492,7 +492,7 @@ class TestValidateTask:
         with (
             patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(absent_path)),
             patch("langgraph_pipeline.executor.nodes.validator._run_claude",
-                  return_value=(False, {})),
+                  return_value=(False, -1, {}, "Timed out")),
             patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
         ):
@@ -515,7 +515,7 @@ class TestValidateTask:
         with (
             patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.validator._run_claude",
-                  return_value=(True, rc)),
+                  return_value=(True, 0, rc, "")),
             patch("langgraph_pipeline.executor.nodes.validator._clear_status_file"),
             patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -548,7 +548,7 @@ class TestValidateTask:
         with (
             patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.validator._run_claude",
-                  return_value=(True, {})),
+                  return_value=(True, 0, {}, "")),
             patch("langgraph_pipeline.executor.nodes.validator._clear_status_file",
                   side_effect=fake_clear),
             patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
@@ -576,7 +576,7 @@ class TestValidateTask:
         with (
             patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.validator._run_claude",
-                  side_effect=lambda p, m: captured_prompts.append(p) or (True, {})),
+                  side_effect=lambda p, m: captured_prompts.append(p) or (True, 0, {}, "")),
             patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
                   return_value={"agents_dir": str(agents_dir), "build_command": "echo ok"}),
         ):
@@ -597,7 +597,7 @@ class TestValidateTask:
         with (
             patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.validator._run_claude",
-                  return_value=(True, {})),
+                  return_value=(True, 0, {}, "")),
             patch("langgraph_pipeline.executor.nodes.validator._clear_status_file"),
             patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
@@ -619,7 +619,7 @@ class TestValidateTask:
         with (
             patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(status_file)),
             patch("langgraph_pipeline.executor.nodes.validator._run_claude",
-                  return_value=(True, {})),
+                  return_value=(True, 0, {}, "")),
             patch("langgraph_pipeline.executor.nodes.validator._clear_status_file"),
             patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
                   return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
