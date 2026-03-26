@@ -59,6 +59,7 @@ class ToolCallRecord(TypedDict):
     tool_use_id: NotRequired[Optional[str]]
     start_time: NotRequired[Optional[datetime]]
     duration_s: NotRequired[Optional[float]]
+    result_bytes: NotRequired[Optional[int]]
 
 
 # ─── call_claude ─────────────────────────────────────────────────────────────
@@ -264,6 +265,8 @@ def stream_json_output(
                         if tool_use_id and tool_use_id in pending:
                             start, record = pending.pop(tool_use_id)
                             record["duration_s"] = (datetime.now() - start).total_seconds()
+                            content = block.get("content", "")
+                            record["result_bytes"] = len(json.dumps(content))
 
             elif event_type == "result":
                 cost = event.get("total_cost_usd", 0)
