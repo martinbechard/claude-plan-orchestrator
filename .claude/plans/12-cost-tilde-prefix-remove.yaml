@@ -27,7 +27,10 @@ sections:
       langgraph_pipeline/pipeline/nodes/execute_plan.py, scripts/plan-orchestrator.py,
       langgraph_pipeline/web/routes/proxy.py. Also update tests/test_token_usage.py
       assertions from ~$ to $. Run the full test suite after.'
-    status: pending
+    status: in_progress
+    last_attempt: '2026-03-26T01:48:16.209006'
+    attempts: 1
+    model_used: sonnet
   - id: '1.2'
     name: Remove ~ from cost displays in frontend templates
     agent: frontend-coder
