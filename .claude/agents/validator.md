@@ -6,7 +6,7 @@ tools:
   - Grep
   - Glob
   - Bash
-model: sonnet
+model: opus
 ---
 
 # Validator Agent
@@ -46,6 +46,26 @@ Code review issues = WARN unless broken functionality = FAIL.
 ### Step 5: Requirements
 Verify each requirement from the work item file is satisfied.
 Missing requirements = FAIL.
+
+Before concluding a requirement is satisfied, run these three sub-checks:
+
+**5a. Placeholder scan**
+Grep created/modified files (and any referenced UI pages) for: TODO, not yet
+available, placeholder, dummy, fake, FIXME, lorem ipsum.
+Any hit = WARN. If the hit maps to an unmet acceptance criterion = FAIL.
+
+**5b. End-to-end gate**
+For acceptance criteria that say "displays X", "shows Y", or "after at least one
+worker completes": if the validator cannot confirm the behavior against a running
+server, it MUST report WARN with the note:
+"cannot verify at validation time - requires runtime confirmation"
+Do NOT silently pass criteria that require runtime behavior.
+
+**5c. Test-data leak check**
+Grep all modified source files and DB migrations for known test-fixture strings
+such as: foo.py, 12-test-item, test-slug, example.com (in non-test
+files), hardcoded, mock_data.
+Any hit in a file that should not contain test data = WARN.
 
 ## Output Format
 
