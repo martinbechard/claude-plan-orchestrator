@@ -149,10 +149,12 @@ def create_app(config: Optional[dict] = None):
     from langgraph_pipeline.web.routes.analysis import router as analysis_router
     from langgraph_pipeline.web.routes.cost import router as cost_router
     from langgraph_pipeline.web.routes.dashboard import router as dashboard_router
+    from langgraph_pipeline.web.routes.queue import router as queue_router
 
     app.include_router(dashboard_router)
     app.include_router(analysis_router)
     app.include_router(cost_router)
+    app.include_router(queue_router)
 
     _STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
