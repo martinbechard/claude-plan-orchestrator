@@ -33,5 +33,3 @@ _handle_polled_messages on poller, bot_user_id on poller).
 3. Once all 64 tests pass against the new imports, delete
    scripts/plan-orchestrator.py.
 4. Also delete the stale pyc cache at tests/__pycache__/test_auto_pipeline*.
-
-## LangSmith Trace: 5d5a1c85-37f6-458f-8ee0-0fab888a429d
