@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 DB_DEFAULT_PATH = "~/.claude/orchestrator-traces.db"
 PAGE_SIZE_DEFAULT = 50
 
+COMPLETIONS_LIMIT = 20
+
 _CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS traces (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,10 +43,41 @@ CREATE TABLE IF NOT EXISTS traces (
 );
 """
 
+_CREATE_COMPLETIONS_SQL = """
+CREATE TABLE IF NOT EXISTS completions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug        TEXT NOT NULL,
+    item_type   TEXT NOT NULL,
+    outcome     TEXT NOT NULL,
+    cost_usd    REAL NOT NULL DEFAULT 0.0,
+    duration_s  REAL NOT NULL DEFAULT 0.0,
+    finished_at TEXT NOT NULL
+);
+"""
+
+_CREATE_COST_TASKS_SQL = """
+CREATE TABLE IF NOT EXISTS cost_tasks (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_slug       TEXT NOT NULL,
+    item_type       TEXT NOT NULL,
+    task_id         TEXT NOT NULL,
+    agent_type      TEXT NOT NULL,
+    model           TEXT NOT NULL,
+    input_tokens    INTEGER NOT NULL DEFAULT 0,
+    output_tokens   INTEGER NOT NULL DEFAULT 0,
+    cost_usd        REAL NOT NULL DEFAULT 0.0,
+    duration_s      REAL NOT NULL DEFAULT 0.0,
+    tool_calls_json TEXT,
+    recorded_at     TEXT NOT NULL
+);
+"""
+
 _CREATE_INDEXES_SQL = [
-    "CREATE INDEX IF NOT EXISTS idx_traces_run_id       ON traces (run_id);",
+    "CREATE INDEX IF NOT EXISTS idx_traces_run_id        ON traces (run_id);",
     "CREATE INDEX IF NOT EXISTS idx_traces_parent_run_id ON traces (parent_run_id);",
-    "CREATE INDEX IF NOT EXISTS idx_traces_created_at   ON traces (created_at);",
+    "CREATE INDEX IF NOT EXISTS idx_traces_created_at    ON traces (created_at);",
+    "CREATE INDEX IF NOT EXISTS idx_completions_finished ON completions (finished_at);",
+    "CREATE INDEX IF NOT EXISTS idx_cost_tasks_item_slug ON cost_tasks (item_slug);",
 ]
 
 _LANGSMITH_RUNS_URL = "https://api.smith.langchain.com/runs"
@@ -79,6 +112,8 @@ class TracingProxy:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.execute(_CREATE_TABLE_SQL)
+            conn.execute(_CREATE_COMPLETIONS_SQL)
+            conn.execute(_CREATE_COST_TASKS_SQL)
             for index_sql in _CREATE_INDEXES_SQL:
                 conn.execute(index_sql)
 
@@ -203,6 +238,52 @@ class TracingProxy:
 
         thread = threading.Thread(target=_send, daemon=True, name="proxy-forward")
         thread.start()
+
+    # ─── Completions ──────────────────────────────────────────────────────────
+
+    def record_completion(
+        self,
+        slug: str,
+        item_type: str,
+        outcome: str,
+        cost_usd: float,
+        duration_s: float,
+    ) -> None:
+        """Persist a worker completion record to the completions table.
+
+        Args:
+            slug: Work item slug.
+            item_type: One of "defect", "feature", or "analysis".
+            outcome: One of "success", "warn", or "fail".
+            cost_usd: API cost incurred by this worker.
+            duration_s: Wall-clock seconds the worker ran.
+        """
+        finished_at = datetime.now(timezone.utc).isoformat()
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, finished_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    [slug, item_type, outcome, cost_usd, duration_s, finished_at],
+                )
+        except Exception:
+            logger.debug("TracingProxy: failed to record completion for %s", slug, exc_info=True)
+
+    def list_completions(self, limit: int = COMPLETIONS_LIMIT) -> list[dict]:
+        """Return the most recent completions ordered by finished_at descending.
+
+        Args:
+            limit: Maximum number of rows to return.
+
+        Returns:
+            List of dicts with keys: slug, item_type, outcome, cost_usd, duration_s, finished_at.
+        """
+        sql = "SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at FROM completions ORDER BY finished_at DESC LIMIT ?"
+        with self._connect() as conn:
+            rows = conn.execute(sql, [limit]).fetchall()
+        return [dict(row) for row in rows]
 
     # ─── Read Helpers ─────────────────────────────────────────────────────────
 
