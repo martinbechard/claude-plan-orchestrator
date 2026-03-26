@@ -55,3 +55,8 @@ sections:
     model_used: sonnet
     completed_at: '2026-03-26T14:59:56.298641'
     result_message: 'PASS: All good'
+    validation_attempts: 1
+    validation_findings: 'All functional requirements met. 1563 tests pass. Two code
+      style issues in validator.py: import logging mid-file (line 220) and from pathlib
+      import Path as _Path inside function body (line 263). Dummy data cleanup confirmed
+      (0 rows for 12-test-item).'

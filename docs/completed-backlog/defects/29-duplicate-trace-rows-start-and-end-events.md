@@ -49,5 +49,3 @@ result: one row per node, updated in place when the completion event arrives.
 Alternatively, the proxy list/detail queries could filter to only show
 rows WHERE end_time IS NOT NULL (completed events), but this would hide
 currently-running nodes. The upsert approach is cleaner.
-
-## LangSmith Trace: 57753157-04c8-4a7c-b9d8-2236a97a48bf
