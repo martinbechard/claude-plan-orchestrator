@@ -20,7 +20,7 @@ sections:
   - id: '1.1'
     name: Create shared shutdown event module and wire into cli.py
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the fix described in: .claude/plans/.claimed/21-intake-throttle-warns-but-doesnt-block.md
 
       Design doc: docs/plans/2026-03-26-21-intake-throttle-warns-but-doesnt-block-design.md
@@ -33,6 +33,10 @@ sections:
     last_attempt: '2026-03-26T11:42:53.690590'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T11:44:08.000516'
+    result_message: Created langgraph_pipeline/shared/shutdown.py with get_shutdown_event()
+      and register_shutdown_event(). Wired register_shutdown_event(shutdown_event)
+      into cli.py immediately after threading.Event() creation.
   - id: '1.2'
     name: Implement blocking throttle wait in intake.py and update limits
     agent: coder
