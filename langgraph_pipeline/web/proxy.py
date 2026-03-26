@@ -663,7 +663,11 @@ class TracingProxy:
         date_to: str = "",
         trace_id: str = "",
     ) -> list[dict]:
-        """Return a paginated list of root runs (parent_run_id IS NULL).
+        """Return a paginated list of runs.
+
+        Without trace_id, returns only root runs (parent_run_id IS NULL).
+        With trace_id, returns the root run and all direct children so the
+        trace page is non-empty while a worker is still active.
 
         Args:
             page: 1-based page number.
@@ -672,13 +676,20 @@ class TracingProxy:
             model: Filter on metadata_json containing this model string.
             date_from: ISO date string lower bound for created_at (inclusive).
             date_to: ISO date string upper bound for created_at (inclusive).
-            trace_id: Filter on run_id starting with this prefix (trailing wildcard match).
+            trace_id: Exact trace UUID. When provided, returns the root run and
+                its direct children (run_id = ? OR parent_run_id = ?).
 
         Returns:
             List of row dicts ordered by created_at descending.
         """
-        conditions = ["parent_run_id IS NULL"]
+        conditions: list[str] = []
         params: list = []
+
+        if trace_id:
+            conditions.append("(run_id = ? OR parent_run_id = ?)")
+            params.extend([trace_id, trace_id])
+        else:
+            conditions.append("parent_run_id IS NULL")
 
         if slug:
             conditions.append("name LIKE ?")
@@ -692,9 +703,6 @@ class TracingProxy:
         if date_to:
             conditions.append("created_at <= ?")
             params.append(date_to)
-        if trace_id:
-            conditions.append("run_id LIKE ?")
-            params.append(f"{trace_id}%")
 
         where = " AND ".join(conditions)
         offset = (page - 1) * page_size
@@ -729,12 +737,20 @@ class TracingProxy:
         date_to: str = "",
         trace_id: str = "",
     ) -> int:
-        """Return total count of root runs matching the given filters.
+        """Return total count of runs matching the given filters.
 
         Uses the same filter logic as list_runs but returns only the count.
+        Without trace_id, counts only root runs (parent_run_id IS NULL).
+        With trace_id, counts the root run and all direct children.
         """
-        conditions = ["parent_run_id IS NULL"]
+        conditions: list[str] = []
         params: list = []
+
+        if trace_id:
+            conditions.append("(run_id = ? OR parent_run_id = ?)")
+            params.extend([trace_id, trace_id])
+        else:
+            conditions.append("parent_run_id IS NULL")
 
         if slug:
             conditions.append("name LIKE ?")
@@ -748,9 +764,6 @@ class TracingProxy:
         if date_to:
             conditions.append("created_at <= ?")
             params.append(date_to)
-        if trace_id:
-            conditions.append("run_id LIKE ?")
-            params.append(f"{trace_id}%")
 
         where = " AND ".join(conditions)
         sql = f"SELECT COUNT(*) FROM traces WHERE {where}"

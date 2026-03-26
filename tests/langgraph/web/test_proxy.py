@@ -304,13 +304,18 @@ def test_propagate_model_to_root_walks_chain(proxy):
 
 # ─── Trace ID Filter Tests ────────────────────────────────────────────────────
 
+TRACE_UUID = "a1b2c3d4-0000-0000-0000-000000000001"
+TRACE_CHILD_A = "a1b2c3d4-0000-0000-0000-000000000002"
+TRACE_CHILD_B = "a1b2c3d4-0000-0000-0000-000000000003"
+TRACE_OTHER_UUID = "ffffffff-0000-0000-0000-000000000099"
 
-def test_trace_id_filter_list_runs(proxy):
-    """list_runs with trace_id= returns only root runs whose run_id starts with the prefix."""
+
+def test_trace_id_filter_list_runs_returns_root_and_children(proxy):
+    """list_runs with trace_id= returns the exact root run and its direct children."""
     proxy.record_run(
-        run_id="abc-123-match",
+        run_id=TRACE_UUID,
         parent_run_id=None,
-        name="match-run",
+        name="root-run",
         inputs=None,
         outputs=None,
         metadata=None,
@@ -319,9 +324,20 @@ def test_trace_id_filter_list_runs(proxy):
         end_time=SAMPLE_END_TIME,
     )
     proxy.record_run(
-        run_id="xyz-456-other",
+        run_id=TRACE_CHILD_A,
+        parent_run_id=TRACE_UUID,
+        name="child-a",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    proxy.record_run(
+        run_id=TRACE_OTHER_UUID,
         parent_run_id=None,
-        name="other-run",
+        name="other-root",
         inputs=None,
         outputs=None,
         metadata=None,
@@ -330,9 +346,40 @@ def test_trace_id_filter_list_runs(proxy):
         end_time=SAMPLE_END_TIME,
     )
 
-    runs = proxy.list_runs(trace_id="abc-123")
-    assert len(runs) == 1
-    assert runs[0]["run_id"] == "abc-123-match"
+    runs = proxy.list_runs(trace_id=TRACE_UUID)
+    run_ids = {r["run_id"] for r in runs}
+    assert run_ids == {TRACE_UUID, TRACE_CHILD_A}
+    assert TRACE_OTHER_UUID not in run_ids
+
+
+def test_trace_id_filter_list_runs_child_only_visible_before_root(proxy):
+    """list_runs with trace_id= finds children even when root run is not yet in DB."""
+    proxy.record_run(
+        run_id=TRACE_CHILD_A,
+        parent_run_id=TRACE_UUID,
+        name="in-flight-child",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    proxy.record_run(
+        run_id=TRACE_CHILD_B,
+        parent_run_id=TRACE_UUID,
+        name="in-flight-child-b",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+
+    runs = proxy.list_runs(trace_id=TRACE_UUID)
+    run_ids = {r["run_id"] for r in runs}
+    assert run_ids == {TRACE_CHILD_A, TRACE_CHILD_B}
 
 
 def test_trace_id_filter_list_runs_empty_returns_all(proxy):
@@ -355,11 +402,11 @@ def test_trace_id_filter_list_runs_empty_returns_all(proxy):
 
 
 def test_trace_id_filter_count_runs(proxy):
-    """count_runs with trace_id= counts only root runs whose run_id starts with the prefix."""
+    """count_runs with trace_id= counts root and direct children; no trace_id counts roots only."""
     proxy.record_run(
-        run_id="prefix-aaa",
+        run_id=TRACE_UUID,
         parent_run_id=None,
-        name="run-a",
+        name="root-run",
         inputs=None,
         outputs=None,
         metadata=None,
@@ -368,9 +415,9 @@ def test_trace_id_filter_count_runs(proxy):
         end_time=SAMPLE_END_TIME,
     )
     proxy.record_run(
-        run_id="prefix-bbb",
-        parent_run_id=None,
-        name="run-b",
+        run_id=TRACE_CHILD_A,
+        parent_run_id=TRACE_UUID,
+        name="child-a",
         inputs=None,
         outputs=None,
         metadata=None,
@@ -379,9 +426,20 @@ def test_trace_id_filter_count_runs(proxy):
         end_time=SAMPLE_END_TIME,
     )
     proxy.record_run(
-        run_id="other-ccc",
+        run_id=TRACE_CHILD_B,
+        parent_run_id=TRACE_UUID,
+        name="child-b",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    proxy.record_run(
+        run_id=TRACE_OTHER_UUID,
         parent_run_id=None,
-        name="run-c",
+        name="other-root",
         inputs=None,
         outputs=None,
         metadata=None,
@@ -390,10 +448,10 @@ def test_trace_id_filter_count_runs(proxy):
         end_time=SAMPLE_END_TIME,
     )
 
-    assert proxy.count_runs(trace_id="prefix") == 2
-    assert proxy.count_runs(trace_id="other") == 1
-    assert proxy.count_runs(trace_id="nonexistent") == 0
-    assert proxy.count_runs() == 3
+    assert proxy.count_runs(trace_id=TRACE_UUID) == 3  # root + 2 children
+    assert proxy.count_runs(trace_id=TRACE_OTHER_UUID) == 1  # root only
+    assert proxy.count_runs(trace_id="nonexistent-uuid") == 0
+    assert proxy.count_runs() == 2  # only root runs: TRACE_UUID and TRACE_OTHER_UUID
 
 
 # ─── Model Filter Tests ───────────────────────────────────────────────────────
