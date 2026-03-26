@@ -23,10 +23,13 @@ sections:
       str) -> Optional[str] function that delegates to the existing private _read_trace_id_from_file().
       The supervisor needs to import this to read the trace UUID from claimed item
       files. See design doc: docs/plans/2026-03-26-06-dashboard-drill-down-to-trace-design.md'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:26:39.949188'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T01:27:17.160608'
+    result_message: bar_color, text_color macros, and legend rects all updated to
+      violet/cyan/amber palette. Build clean, 1517 tests pass.
   - id: '1.2'
     name: Add run_id to WorkerInfo, CompletionRecord, and DashboardState snapshot
     agent: coder
