@@ -339,6 +339,21 @@ def finalize_root_run(root_run_id: Optional[str], outputs: dict[str, Any]) -> No
         logger.debug("finalize_root_run failed (non-fatal): %s", exc)
 
 
+def read_trace_id_from_file(item_path: str) -> Optional[str]:
+    """Return the LangSmith trace UUID from an item file, or None if absent.
+
+    Public wrapper around _read_trace_id_from_file so supervisors can read
+    the trace UUID from claimed item files without importing private helpers.
+
+    Args:
+        item_path: Absolute path to the item markdown file.
+
+    Returns:
+        UUID string if a trace marker line is present, None otherwise.
+    """
+    return _read_trace_id_from_file(item_path)
+
+
 def add_trace_metadata(metadata: dict[str, Any]) -> None:
     """Attach custom key-value metadata to the current LangSmith run.
 
