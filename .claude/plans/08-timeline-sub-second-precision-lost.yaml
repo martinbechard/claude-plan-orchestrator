@@ -51,7 +51,8 @@ sections:
       labels. Update axis tick labels to show elapsed format: sub-second spans use
       +Nms, longer spans use +Ns or +Nm Ns. Guard against span_s == 0 by clamping
       to 0.001 in the template. See design doc: docs/plans/2026-03-26-08-timeline-sub-second-precision-lost-design.md'
-    status: in_progress
+    status: failed
     last_attempt: '2026-03-26T01:36:11.977070'
     attempts: 1
     model_used: sonnet
+    result_message: No status file written by Claude

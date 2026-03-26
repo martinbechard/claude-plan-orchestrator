@@ -70,6 +70,11 @@ sections:
       ALTER TABLE migration guard for existing DBs, updated record_completion() to
       accept optional run_id param, updated list_completions() SELECT to include run_id.
       All 14 proxy tests and 6 dashboard state tests pass.
+    validation_attempts: 1
+    validation_findings: 'All requirements met: nullable run_id TEXT column added
+      to completions schema, ALTER TABLE migration with try/except guard for existing
+      DBs, record_completion() accepts optional run_id, list_completions() SELECT
+      includes run_id. Build succeeds, all 1520 tests pass.'
   - id: '1.4'
     name: Read trace_id in supervisor at dispatch and reap; pass to dashboard state
       and proxy
@@ -82,7 +87,10 @@ sections:
       In _reap_worker(), after the worker exits, call read_trace_id_from_file(claimed_path)
       and pass run_id to proxy.record_completion() for all outcome paths (success,
       fail, warn/crash). See design doc: docs/plans/2026-03-26-06-dashboard-drill-down-to-trace-design.md'
-    status: pending
+    status: in_progress
+    last_attempt: '2026-03-26T01:38:18.407990'
+    attempts: 1
+    model_used: opus
 - id: '2'
   name: Frontend - add trace links to worker cards and completion rows
   status: pending
