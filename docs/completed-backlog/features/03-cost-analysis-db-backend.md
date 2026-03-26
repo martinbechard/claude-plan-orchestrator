@@ -1,5 +1,22 @@
 # Cost Analysis DB Backend
 
+## Status: Open
+
+## RETURNED FROM COMPLETED — Previous Implementation Was Incomplete
+
+This item was previously marked as completed but the implementation is half-baked:
+- The cost_tasks DB table exists but only contains fake test data (item
+  "12-test-item" with dummy coder/validator tasks).
+- The POST /api/cost endpoint may exist but no real pipeline worker is calling it.
+- The /analysis page shows test data (foo.py file, test item) not real pipeline data.
+- The "Tool-Call Duration Histogram" section says "not yet available".
+- CostLogReader reads from DB but the DB is empty of real data.
+
+The previous agent used Sonnet (not Opus) and appears to have inserted test
+fixtures then declared success without verifying real end-to-end data flow.
+
+This item needs to be re-done properly with real integration testing.
+
 ## Problem
 
 The `/analysis` page is always empty. `write_execution_cost_log()` exists only in
