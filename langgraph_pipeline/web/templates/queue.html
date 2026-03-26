@@ -9,7 +9,7 @@
 <section aria-labelledby="hd-queue">
   <h2 id="hd-queue">Backlog Queue</h2>
   <div class="table-wrap">
-    <table>
+    <table role="grid" aria-label="Backlog queue items">
       <thead>
         <tr>
           <th scope="col">Type</th>
@@ -17,7 +17,7 @@
           <th scope="col">Age</th>
         </tr>
       </thead>
-      <tbody id="queue-body" aria-live="polite" aria-label="Queue items">
+      <tbody id="queue-body" aria-live="polite">
         <tr id="queue-empty">
           <td colspan="3" class="empty-state">
             <p>No items in queue</p>
@@ -29,7 +29,7 @@
 </section>
 
 <template id="tpl-queue-row">
-  <tr class="queue-row" data-slug="">
+  <tr class="queue-row" data-slug="" tabindex="0" role="row" aria-expanded="false">
     <td><span class="badge item-type-badge"></span></td>
     <td class="queue-slug"></td>
     <td class="queue-age"></td>
@@ -37,8 +37,8 @@
 </template>
 
 <template id="tpl-queue-detail">
-  <tr class="queue-detail-row" data-slug="">
-    <td colspan="3">
+  <tr class="queue-detail-row" data-slug="" aria-hidden="false">
+    <td colspan="3" class="queue-detail-cell">
       <pre class="queue-content"></pre>
     </td>
   </tr>
@@ -48,6 +48,7 @@
 (function() {
   var POLL_INTERVAL_MS = 12000;
   var openSlugs = {};
+  var lastItems = null;
 
   function formatAge(seconds) {
     if (seconds < 60) return seconds + "s";
@@ -78,6 +79,9 @@
       var tr = row.querySelector("tr");
       tr.dataset.slug = item.slug;
 
+      var isOpen = !!openSlugs[item.slug];
+      tr.setAttribute("aria-expanded", isOpen ? "true" : "false");
+
       var badge = tr.querySelector(".item-type-badge");
       badge.textContent = item.item_type;
       badge.classList.add("item-type-" + item.item_type);
@@ -85,14 +89,22 @@
       tr.querySelector(".queue-slug").textContent = item.slug;
       tr.querySelector(".queue-age").textContent = formatAge(item.age_seconds);
 
-      tr.style.cursor = "pointer";
       tr.addEventListener("click", (function(slug) {
         return function() { toggleDetail(slug); };
       })(item.slug));
 
+      tr.addEventListener("keydown", (function(slug) {
+        return function(e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggleDetail(slug);
+          }
+        };
+      })(item.slug));
+
       tbody.appendChild(tr);
 
-      if (openSlugs[item.slug]) {
+      if (isOpen) {
         var detail = detailTpl.content.cloneNode(true);
         var detailTr = detail.querySelector("tr");
         detailTr.dataset.slug = item.slug;
@@ -110,8 +122,6 @@
     }
     if (lastItems) renderItems(lastItems);
   }
-
-  var lastItems = null;
 
   function fetchQueue() {
     fetch("/api/queue")

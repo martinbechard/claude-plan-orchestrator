@@ -531,3 +531,36 @@ svg.gantt text { font-family: inherit; }
     word-break: break-all;
     white-space: pre-wrap;
 }
+
+/* ── Queue page ────────────────────────────────────────────────────────── */
+.queue-row {
+    cursor: pointer;
+}
+
+.queue-row:focus {
+    outline: 2px solid #3b6fcf;
+    outline-offset: -2px;
+}
+
+.queue-detail-cell {
+    padding: 0 12px 12px;
+    background: #f8fafc;
+}
+
+.queue-content {
+    margin: 0;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #334155;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 10px 12px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.queue-detail-row > td {
+    border-bottom: 2px solid #e2e8f0;
+}
