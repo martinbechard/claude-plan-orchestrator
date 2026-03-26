@@ -1,9 +1,12 @@
 {# langgraph_pipeline/web/templates/proxy_trace.html
    Trace detail page: run header, SVG Gantt chart, collapsible JSON blocks.
    Context variables:
-     run       dict        — single row from TracingProxy.get_run()
-     children  list[dict]  — rows from TracingProxy.get_children()
-   Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md #}
+     run               dict        — single row from TracingProxy.get_run()
+     children          list[dict]  — enriched rows with elapsed_start_s / elapsed_end_s
+     span_s            float       — total elapsed span across all children
+     grandchild_counts dict        — {run_id: int} grandchild counts per child
+   Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md
+   Design: docs/plans/2026-03-26-04-timeline-duplicate-labels-and-elapsed-time-design.md #}
 {% extends "base.html" %}
 
 {% block title %}{{ run.name }} — Plan Orchestrator{% endblock %}
@@ -46,6 +49,16 @@
     {%- else -%}{{- dur }}s
     {%- endif -%}
   {%- else -%}—{%- endif -%}
+{%- endmacro %}
+
+{# ── Elapsed offset label macro ───────────────────────────────────────── #}
+{% macro fmt_elapsed(offset_s) -%}
+  {%- set offset_int = offset_s | int -%}
+  {%- if offset_int >= 60 -%}
+    +{{ offset_int // 60 }}m {{ offset_int % 60 }}s
+  {%- else -%}
+    +{{ offset_int }}s
+  {%- endif -%}
 {%- endmacro %}
 
 {# ── Header card ───────────────────────────────────────────────────────── #}
@@ -114,20 +127,8 @@
 {% set SVG_W = LABEL_W + CHART_W + PAD_RIGHT %}
 {% set SVG_H = PAD_TOP + (children | length) * ROW_H + AXIS_H %}
 
-{# ── Time bounds ───────────────────────────────────────────────────────── #}
-{% set parent_s = secs(run.start_time) | int %}
-{% set parent_end_s = secs(run.end_time) | int if run.end_time else parent_s %}
-
-{# Expand bounds to cover all children #}
-{% set ns = namespace(min_s=parent_s, max_s=parent_end_s) %}
-{% for child in children %}
-  {% set cs = secs(child.start_time) | int %}
-  {% set ce = secs(child.end_time) | int if child.end_time else cs %}
-  {% if cs < ns.min_s %}{% set ns.min_s = cs %}{% endif %}
-  {% if ce > ns.max_s %}{% set ns.max_s = ce %}{% endif %}
-{% endfor %}
-
-{% set span_s = [ns.max_s - ns.min_s, 1] | max %}
+{# ── Time bounds (pre-computed in route) ──────────────────────────────── #}
+{% set safe_span = [span_s, 1.0] | max %}
 
 {# ── Bar colour by inferred run type ──────────────────────────────────── #}
 {% macro bar_color(name) -%}
@@ -163,7 +164,7 @@
 
     {# ── Background grid lines ──────────────────────────────────────── #}
     {% for i in range(N_TICKS + 1) %}
-      {% set gx = LABEL_W + (i * CHART_W // N_TICKS) %}
+      {% set gx = LABEL_W + (i * CHART_W / N_TICKS) %}
       <line x1="{{ gx }}" y1="{{ PAD_TOP }}"
             x2="{{ gx }}" y2="{{ PAD_TOP + (children | length) * ROW_H }}"
             stroke="#e2e8f0" stroke-width="1"/>
@@ -174,11 +175,10 @@
       {% set row_y = PAD_TOP + loop.index0 * ROW_H %}
       {% set bar_y = row_y + BAR_Y_OFF %}
 
-      {# Compute bar x position and width #}
-      {% set cs = secs(child.start_time) | int %}
-      {% set ce = secs(child.end_time) | int if child.end_time else cs + 1 %}
-      {% set bar_x = LABEL_W + ((cs - ns.min_s) * CHART_W // span_s) %}
-      {% set bar_w = [((ce - cs) * CHART_W // span_s), 4] | max %}
+      {# Compute bar x position and width from pre-computed elapsed fields #}
+      {% set bar_x = LABEL_W + (child.elapsed_start_s * CHART_W / safe_span) %}
+      {% set bar_dur = child.elapsed_end_s - child.elapsed_start_s %}
+      {% set bar_w = [(bar_dur * CHART_W / safe_span), 4] | max %}
 
       {# Clamp bar_x to chart area #}
       {% set bar_x = [bar_x, LABEL_W] | max %}
@@ -195,7 +195,7 @@
       {% endif %}
 
       {# Label #}
-      <text x="{{ LABEL_W - 8 }}" y="{{ bar_y + BAR_H // 2 + 4 }}"
+      <text x="{{ LABEL_W - 8 }}" y="{{ bar_y + BAR_H / 2 + 4 }}"
             text-anchor="end"
             font-size="11"
             fill="#374151"
@@ -213,8 +213,8 @@
       {# Duration label inside bar (only if bar is wide enough) #}
       {% if bar_w >= 40 %}
         {% set dur_label = fmt_duration(child.start_time, child.end_time) %}
-        <text x="{{ bar_x + bar_w // 2 }}"
-              y="{{ bar_y + BAR_H // 2 + 4 }}"
+        <text x="{{ bar_x + bar_w / 2 }}"
+              y="{{ bar_y + BAR_H / 2 + 4 }}"
               text-anchor="middle"
               font-size="10"
               fill="{{ text_color(child.name) }}"
@@ -229,11 +229,8 @@
           stroke="#94a3b8" stroke-width="1"/>
 
     {% for i in range(N_TICKS + 1) %}
-      {% set tx = LABEL_W + (i * CHART_W // N_TICKS) %}
-      {% set tick_s = ns.min_s + (i * span_s // N_TICKS) %}
-      {% set tick_h = tick_s // 3600 %}
-      {% set tick_m = (tick_s % 3600) // 60 %}
-      {% set tick_sec = tick_s % 60 %}
+      {% set tx = LABEL_W + (i * CHART_W / N_TICKS) %}
+      {% set tick_offset = (i * safe_span / N_TICKS) | int %}
 
       <line x1="{{ tx }}" y1="{{ axis_y }}"
             x2="{{ tx }}" y2="{{ axis_y + TICK_H }}"
@@ -244,7 +241,7 @@
             font-size="10"
             fill="#6b7280"
             aria-hidden="true">
-        {{ "%02d" | format(tick_h) }}:{{ "%02d" | format(tick_m) }}:{{ "%02d" | format(tick_sec) }}
+        {{ fmt_elapsed(tick_offset) }}
       </text>
     {% endfor %}
 
@@ -258,6 +255,31 @@
     <text x="{{ LABEL_W + 124 }}" y="{{ legend_y }}" font-size="10" fill="#6b7280">Other</text>
   </svg>
 </div>
+
+{# ── Grandchildren expandable section ──────────────────────────────────── #}
+{% set has_grandchildren = false %}
+{% for child in children %}
+  {% if grandchild_counts.get(child.run_id, 0) > 0 %}
+    {% set has_grandchildren = true %}
+  {% endif %}
+{% endfor %}
+
+{% for child in children %}
+  {% set gc_count = grandchild_counts.get(child.run_id, 0) %}
+  {% if gc_count > 0 %}
+    <details class="grandchild-toggle" style="margin:0.25rem 0; padding-left:0.5rem; border-left:3px solid {{ bar_color(child.name) }};">
+      <summary style="cursor:pointer; font-size:13px; padding:0.25rem 0;">
+        {{ child.name }}
+        <span style="color:#6b7280; font-size:12px;">({{ gc_count }} sub-run{{ "s" if gc_count != 1 else "" }})</span>
+      </summary>
+      <p style="font-size:12px; color:#6b7280; margin:0.5rem 0;">
+        <a href="/proxy/{{ child.run_id }}" aria-label="View trace detail for {{ child.name }}">
+          View {{ gc_count }} sub-run{{ "s" if gc_count != 1 else "" }} &rarr;
+        </a>
+      </p>
+    </details>
+  {% endif %}
+{% endfor %}
 
 {% else %}
 <div class="empty-state" role="status">
