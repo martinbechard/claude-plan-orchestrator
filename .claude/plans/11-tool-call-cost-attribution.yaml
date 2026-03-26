@@ -41,6 +41,8 @@ sections:
       to TracingProxy. Also added TOP_TOOL_CALLS_LIMIT=250 and BASH_COMMAND_PREVIEW_LENGTH=50
       constants, plus _parse_tool_calls_json() and _tool_call_detail() private helpers.
       All 1551 tests pass.
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
 - id: '2'
   name: Expose tool call cost attribution on the analysis page
   status: pending
@@ -48,7 +50,7 @@ sections:
   - id: '2.1'
     name: Update analysis route to query and pass tool attribution data
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: .claude/plans/.claimed/11-tool-call-cost-attribution.md
 
 
@@ -63,6 +65,9 @@ sections:
       Run the full test suite after changes.
 
       '
+    last_attempt: '2026-03-26T12:04:41.154040'
+    attempts: 1
+    model_used: sonnet
   - id: '2.2'
     name: Add tool attribution section to analysis template
     agent: frontend-coder
