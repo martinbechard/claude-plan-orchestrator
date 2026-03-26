@@ -149,6 +149,7 @@ def proxy_list(
     model: str = Query(default=""),
     date_from: str = Query(default=""),
     date_to: str = Query(default=""),
+    trace_id: str = Query(default=""),
 ) -> HTMLResponse:
     """Render the paginated trace list with optional filters.
 
@@ -159,6 +160,7 @@ def proxy_list(
         model: Optional model string filter.
         date_from: Optional ISO date lower bound for created_at.
         date_to: Optional ISO date upper bound for created_at.
+        trace_id: Optional run_id prefix filter.
 
     Returns:
         Rendered proxy_list.html template.
@@ -176,6 +178,7 @@ def proxy_list(
         model=model,
         date_from=date_from,
         date_to=date_to,
+        trace_id=trace_id,
     )
     runs = [_enrich_run(r) for r in raw_runs]
 
@@ -187,7 +190,7 @@ def proxy_list(
 
     # Total pages for pagination
     total_count = proxy.count_runs(
-        slug=slug, model=model, date_from=date_from, date_to=date_to
+        slug=slug, model=model, date_from=date_from, date_to=date_to, trace_id=trace_id
     )
     total_pages = max(1, math.ceil(total_count / PAGE_SIZE_DEFAULT))
 
@@ -202,6 +205,7 @@ def proxy_list(
             "model": model,
             "date_from": date_from,
             "date_to": date_to,
+            "trace_id": trace_id,
         },
     )
 

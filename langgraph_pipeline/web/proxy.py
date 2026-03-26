@@ -400,6 +400,7 @@ class TracingProxy:
         model: str = "",
         date_from: str = "",
         date_to: str = "",
+        trace_id: str = "",
     ) -> list[dict]:
         """Return a paginated list of root runs (parent_run_id IS NULL).
 
@@ -410,6 +411,7 @@ class TracingProxy:
             model: Filter on metadata_json containing this model string.
             date_from: ISO date string lower bound for created_at (inclusive).
             date_to: ISO date string upper bound for created_at (inclusive).
+            trace_id: Filter on run_id starting with this prefix (trailing wildcard match).
 
         Returns:
             List of row dicts ordered by created_at descending.
@@ -429,6 +431,9 @@ class TracingProxy:
         if date_to:
             conditions.append("created_at <= ?")
             params.append(date_to)
+        if trace_id:
+            conditions.append("run_id LIKE ?")
+            params.append(f"{trace_id}%")
 
         where = " AND ".join(conditions)
         offset = (page - 1) * page_size
@@ -461,6 +466,7 @@ class TracingProxy:
         model: str = "",
         date_from: str = "",
         date_to: str = "",
+        trace_id: str = "",
     ) -> int:
         """Return total count of root runs matching the given filters.
 
@@ -481,6 +487,9 @@ class TracingProxy:
         if date_to:
             conditions.append("created_at <= ?")
             params.append(date_to)
+        if trace_id:
+            conditions.append("run_id LIKE ?")
+            params.append(f"{trace_id}%")
 
         where = " AND ".join(conditions)
         sql = f"SELECT COUNT(*) FROM traces WHERE {where}"

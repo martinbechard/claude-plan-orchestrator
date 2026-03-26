@@ -298,6 +298,100 @@ def test_propagate_model_to_root_walks_chain(proxy):
     assert mid["model"] == ""  # Only root is updated
 
 
+# ─── Trace ID Filter Tests ────────────────────────────────────────────────────
+
+
+def test_trace_id_filter_list_runs(proxy):
+    """list_runs with trace_id= returns only root runs whose run_id starts with the prefix."""
+    proxy.record_run(
+        run_id="abc-123-match",
+        parent_run_id=None,
+        name="match-run",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    proxy.record_run(
+        run_id="xyz-456-other",
+        parent_run_id=None,
+        name="other-run",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+
+    runs = proxy.list_runs(trace_id="abc-123")
+    assert len(runs) == 1
+    assert runs[0]["run_id"] == "abc-123-match"
+
+
+def test_trace_id_filter_list_runs_empty_returns_all(proxy):
+    """list_runs with trace_id="" returns all root runs (no regression)."""
+    for run_id in ("run-a", "run-b"):
+        proxy.record_run(
+            run_id=run_id,
+            parent_run_id=None,
+            name=f"name-{run_id}",
+            inputs=None,
+            outputs=None,
+            metadata=None,
+            error=None,
+            start_time=SAMPLE_START_TIME,
+            end_time=SAMPLE_END_TIME,
+        )
+
+    runs = proxy.list_runs(trace_id="")
+    assert len(runs) == 2
+
+
+def test_trace_id_filter_count_runs(proxy):
+    """count_runs with trace_id= counts only root runs whose run_id starts with the prefix."""
+    proxy.record_run(
+        run_id="prefix-aaa",
+        parent_run_id=None,
+        name="run-a",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    proxy.record_run(
+        run_id="prefix-bbb",
+        parent_run_id=None,
+        name="run-b",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    proxy.record_run(
+        run_id="other-ccc",
+        parent_run_id=None,
+        name="run-c",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+
+    assert proxy.count_runs(trace_id="prefix") == 2
+    assert proxy.count_runs(trace_id="other") == 1
+    assert proxy.count_runs(trace_id="nonexistent") == 0
+    assert proxy.count_runs() == 3
+
+
 # ─── Model Filter Tests ───────────────────────────────────────────────────────
 
 
