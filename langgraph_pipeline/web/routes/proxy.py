@@ -1,6 +1,7 @@
 # langgraph_pipeline/web/routes/proxy.py
 # FastAPI router for the /proxy trace list and detail endpoints.
 # Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md
+# Design: docs/plans/2026-03-26-04-timeline-duplicate-labels-and-elapsed-time-design.md
 
 """Read-only FastAPI router that serves the LangSmith trace proxy UI.
 
@@ -83,6 +84,36 @@ def _format_duration(start: Optional[str], end: Optional[str]) -> str:
     minutes = int(delta // 60)
     seconds = int(delta % 60)
     return f"{minutes}m {seconds:02d}s"
+
+
+ELAPSED_FALLBACK_DURATION_S = 1.0
+
+
+def _compute_elapsed(child: dict, root_start: datetime) -> dict:
+    """Add elapsed_start_s and elapsed_end_s (floats) to a child run dict.
+
+    Both values are seconds from root_start to child start/end respectively.
+    If the child has no end_time, elapsed_end_s = elapsed_start_s + ELAPSED_FALLBACK_DURATION_S.
+    """
+    child = dict(child)
+    child_start = _parse_iso(child.get("start_time"))
+    child_end = _parse_iso(child.get("end_time"))
+
+    if child_start is None:
+        child["elapsed_start_s"] = 0.0
+        child["elapsed_end_s"] = ELAPSED_FALLBACK_DURATION_S
+        return child
+
+    elapsed_start = (child_start - root_start).total_seconds()
+    child["elapsed_start_s"] = max(0.0, elapsed_start)
+
+    if child_end is not None:
+        elapsed_end = (child_end - root_start).total_seconds()
+        child["elapsed_end_s"] = max(child["elapsed_start_s"], elapsed_end)
+    else:
+        child["elapsed_end_s"] = child["elapsed_start_s"] + ELAPSED_FALLBACK_DURATION_S
+
+    return child
 
 
 def _enrich_run(run: dict) -> dict:
@@ -198,11 +229,30 @@ def proxy_trace(request: Request, run_id: str) -> HTMLResponse:
         raise HTTPException(status_code=HTTP_NOT_FOUND, detail=f"Run not found: {run_id}")
 
     children = proxy.get_children(run_id)
+    enriched_run = _enrich_run(run)
+
+    root_start = _parse_iso(run.get("start_time"))
+    if root_start is None:
+        root_start = datetime.fromtimestamp(0, tz=timezone.utc)
+
+    enriched_children = [
+        _compute_elapsed(_enrich_run(c), root_start) for c in children
+    ]
+
+    span_s = 0.0
+    if enriched_children:
+        span_s = max(c["elapsed_end_s"] for c in enriched_children)
+
+    child_ids = [c["run_id"] for c in enriched_children if c.get("run_id")]
+    grandchild_counts = proxy.count_children_batch(child_ids)
+
     return templates.TemplateResponse(
         request,
         "proxy_trace.html",
         {
-            "run": _enrich_run(run),
-            "children": [_enrich_run(c) for c in children],
+            "run": enriched_run,
+            "children": enriched_children,
+            "span_s": span_s,
+            "grandchild_counts": grandchild_counts,
         },
     )
