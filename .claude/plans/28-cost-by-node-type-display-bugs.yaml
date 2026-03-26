@@ -19,12 +19,14 @@ sections:
   - id: '1.1'
     name: Fix SVG_VALUE_LABEL_PADDING and float value formatting in svg_bar_chart
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: .claude/plans/.claimed/28-cost-by-node-type-display-bugs.md
       -- fix both bugs in svg_bar_chart() in langgraph_pipeline/web/cost_log_reader.py:
-      (1) increase SVG_VALUE_LABEL_PADDING from 10 to 80 so value labels are not
-      clipped; (2) change values parameter type from list[int] to list[float] and
-      format value labels as f"${value:.2f}" instead of {value:,}. Update
-      tests/langgraph/web/test_cost_log_reader.py to pass float values and assert
-      the "$"-prefixed formatted output. Run the full test suite and fix any
-      failures.'
+      (1) increase SVG_VALUE_LABEL_PADDING from 10 to 80 so value labels are not clipped;
+      (2) change values parameter type from list[int] to list[float] and format value
+      labels as f"${value:.2f}" instead of {value:,}. Update tests/langgraph/web/test_cost_log_reader.py
+      to pass float values and assert the "$"-prefixed formatted output. Run the full
+      test suite and fix any failures.'
+    last_attempt: '2026-03-26T14:48:37.972567'
+    attempts: 1
+    model_used: sonnet
