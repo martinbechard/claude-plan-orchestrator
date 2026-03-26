@@ -119,10 +119,14 @@ sections:
       called after _refresh_worker_run_ids() each poll cycle. _compute_final_velocity()
       computes final velocity from WorkerInfo token fields. All three record_completion()
       call sites pass tokens_per_minute. All 1295 tests pass.
+    validation_attempts: 1
+    validation_findings: 'Button at dashboard.html:61: id=tl-btn-color-mode, label=Velocity,
+      aria-pressed=false, correct title, placed after tl-btn-live. Build OK, 1295
+      tests pass.'
   - id: '3.2'
     name: Implement velocity colour mode and label in dashboard.js and style.css
     agent: frontend-coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: .claude/plans/.claimed/16-worker-velocity-tracking.md
       -- Read the design doc at docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
       for full details. In langgraph_pipeline/web/static/dashboard.js: (1) add LS_COLOR_MODE_KEY
@@ -134,3 +138,6 @@ sections:
       to buildTimelineRow. In langgraph_pipeline/web/static/style.css: add velocity
       CSS classes timeline-bar--vel-none (grey), timeline-bar--vel-low (desaturated),
       timeline-bar--vel-medium (normal blue-green), timeline-bar--vel-high (bright/saturated).'
+    last_attempt: '2026-03-26T15:18:17.787925'
+    attempts: 1
+    model_used: sonnet
