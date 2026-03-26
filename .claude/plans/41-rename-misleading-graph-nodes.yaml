@@ -36,3 +36,7 @@ sections:
     model_used: sonnet
     completed_at: '2026-03-26T18:55:47.453780'
     result_message: 'PASS: All good'
+    validation_attempts: 1
+    validation_findings: plugin.json bumped from 1.10.9 to 1.10.10 (patch). RELEASE-NOTES.md
+      has accurate entry for graph node/edge renames. All 1290 tests pass. No placeholders
+      found.
