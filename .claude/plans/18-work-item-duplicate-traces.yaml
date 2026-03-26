@@ -20,12 +20,15 @@ sections:
   - id: '1.1'
     name: Add unique index and deduplication to proxy.py
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the fix described in: .claude/plans/.claimed/18-work-item-duplicate-traces.md
 
       Design doc: docs/plans/2026-03-26-18-work-item-duplicate-traces-design.md
 
       '
+    last_attempt: '2026-03-26T10:57:20.764625'
+    attempts: 1
+    model_used: sonnet
   - id: '1.2'
     name: Add unit tests for duplicate-run deduplication
     agent: coder
