@@ -106,6 +106,12 @@ sections:
     result_message: Removed scan_backlog node from graph.py, deleted has_items from
       edges.py, rewrote integration tests to pre-populate item_path. All 1290 tests
       pass.
+    validation_attempts: 1
+    validation_findings: 'Empty states and table styling fixes correctly implemented
+      across all required templates. All empty states follow icon + heading + sub-text
+      pattern. Numeric columns right-aligned. 1290 tests pass. WARN: result_message
+      in YAML references wrong task (defect 39 scan_backlog removal). Actual changes
+      in commit 8239cc38.'
   - id: '2.3'
     name: Fix cost display tildes and misc issues
     agent: frontend-coder
@@ -114,9 +120,12 @@ sections:
       Style guide: docs/ui-style-guide.md. Scan all templates for tilde-prefixed cost
       values (~$) and replace with plain $ format. Check analysis.html and any other
       templates for this pattern.'
-    status: pending
+    status: in_progress
     depends_on:
     - '2.2'
+    last_attempt: '2026-03-26T18:51:15.308353'
+    attempts: 1
+    model_used: opus
 - id: phase-3
   name: Release
   status: pending
