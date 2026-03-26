@@ -1,9 +1,11 @@
 {# langgraph_pipeline/web/templates/item.html
    Work-item detail page: requirements, plan tasks, completions, traces.
    Context: slug, item_type, pipeline_stage, active_worker, total_cost_usd, requirements_html,
-            plan_tasks [{id, name, status}], completions, traces [{run_id, name, created_at}]
+            original_request_html (optional), plan_tasks [{id, name, status}],
+            completions, traces [{run_id, name, created_at}]
    Design: docs/plans/2026-03-26-06-work-item-detail-page-design.md
-           docs/plans/2026-03-26-17-work-item-status-clarity-design.md #}
+           docs/plans/2026-03-26-17-work-item-status-clarity-design.md
+           docs/plans/2026-03-26-35-work-item-page-missing-requirements-from-backlog-file-design.md #}
 {% extends "base.html" %}
 
 {% block title %}{{ slug }} — Plan Orchestrator{% endblock %}
@@ -274,6 +276,85 @@
     border-radius: 0 4px 4px 0;
 }
 
+/* ── Original request disclosure ─────────────────────────────────────── */
+.original-request-toggle {
+    margin-top: 0.75rem;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 0.75rem;
+}
+
+.original-request-toggle > summary {
+    font-size: 12px;
+    font-weight: 600;
+    color: #3b6fcf;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    user-select: none;
+}
+
+.original-request-toggle > summary::-webkit-details-marker { display: none; }
+
+.original-request-toggle > summary::before {
+    content: '▶';
+    font-size: 9px;
+    transition: transform 0.15s ease;
+    color: #3b6fcf;
+}
+
+.original-request-toggle[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.original-request-toggle > summary:hover { color: #1d4ed8; }
+
+.original-request-body {
+    margin-top: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.65;
+    color: #374151;
+}
+
+.original-request-body h1,
+.original-request-body h2,
+.original-request-body h3,
+.original-request-body h4 {
+    color: #1a1a2e;
+    margin: 1em 0 0.4em;
+    font-weight: 600;
+}
+
+.original-request-body h1 { font-size: 15px; margin-top: 0; }
+.original-request-body h2 { font-size: 13px; }
+.original-request-body h3 { font-size: 12px; }
+
+.original-request-body p { margin: 0 0 0.6em; }
+.original-request-body p:last-child { margin-bottom: 0; }
+
+.original-request-body ul,
+.original-request-body ol {
+    margin: 0 0 0.6em;
+    padding-left: 1.4em;
+}
+
+.original-request-body li { margin-bottom: 0.2em; }
+
+.original-request-body code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    font-size: 11px;
+    background: #e9eef5;
+    border: 1px solid #d1d9e6;
+    border-radius: 3px;
+    padding: 1px 4px;
+    color: #374151;
+}
+
 /* ── Plan task list ───────────────────────────────────────────────────── */
 .task-list {
     list-style: none;
@@ -422,6 +503,14 @@
       {% if requirements_html %}
         <div class="requirements-body" aria-label="Requirements document">
           {{ requirements_html | safe }}
+          {% if original_request_html %}
+            <details class="original-request-toggle">
+              <summary>Original request</summary>
+              <div class="original-request-body" aria-label="Original request document">
+                {{ original_request_html | safe }}
+              </div>
+            </details>
+          {% endif %}
         </div>
       {% else %}
         <div class="empty-state" style="padding: 2.5rem 1rem;">
