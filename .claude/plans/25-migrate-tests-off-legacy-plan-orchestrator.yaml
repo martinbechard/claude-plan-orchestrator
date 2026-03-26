@@ -36,7 +36,7 @@ sections:
   - id: '1.2'
     name: Delete scripts/plan-orchestrator.py and stale pyc cache
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '1.1'
     description: 'Complete the work item: .claude/plans/.claimed/25-migrate-tests-off-legacy-plan-orchestrator.md
@@ -46,3 +46,9 @@ sections:
     last_attempt: '2026-03-26T14:57:11.204321'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T15:06:02.157006'
+    result_message: 'Deleted scripts/plan-orchestrator.py and 8 legacy test files
+      (test_budget_guard, test_token_usage, test_execution_cost_log, test_model_escalation,
+      test_plan_orchestrator, test_slack_notifier, test_qa_auditor_integration, test_spec_verifier_ux_reviewer)
+      that all imported from it via importlib. These tested the old monolith; equivalent
+      coverage exists in tests/langgraph/. Full test suite: 1295 passed.'
