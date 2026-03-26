@@ -387,21 +387,22 @@
 {% endif %}
 
 {# ── Collapsible JSON blocks ────────────────────────────────────────────── #}
+{# Design: docs/plans/2026-03-26-39-scan-backlog-trace-confusing-inputs-outputs-design.md #}
 <h2>Run data</h2>
 
 {% if run.inputs_json %}
 <div class="json-block">
   <details>
-    <summary>Inputs</summary>
+    <summary>State before</summary>
     <pre>{{ run.inputs_json }}</pre>
   </details>
 </div>
 {% endif %}
 
-{% if run.outputs_json %}
+{% if run.outputs_json and run.outputs_json | fromjson != {} %}
 <div class="json-block">
   <details>
-    <summary>Outputs</summary>
+    <summary>State changes</summary>
     <pre>{{ run.outputs_json }}</pre>
   </details>
 </div>
@@ -416,7 +417,7 @@
 </div>
 {% endif %}
 
-{% if not run.inputs_json and not run.outputs_json and not run.metadata_json %}
+{% if not run.inputs_json and not (run.outputs_json and run.outputs_json | fromjson != {}) and not run.metadata_json %}
 <p style="color:#888; font-size:13px;">No inputs, outputs, or metadata recorded for this run.</p>
 {% endif %}
 
