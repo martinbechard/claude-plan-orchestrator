@@ -183,16 +183,20 @@ function renderAll(data) {
 
 function setConnectionStatus(connected) {
   const dot = document.getElementById("connection-dot");
+  const label = document.getElementById("connection-label");
   if (connected) {
     dot.classList.add("connection-dot--live");
     dot.classList.remove("connection-dot--dead");
     dot.setAttribute("aria-label", "Connected");
     dot.setAttribute("title", "Connected — live updates active");
+    if (label) label.textContent = "LIVE";
   } else {
     dot.classList.remove("connection-dot--live");
     dot.classList.add("connection-dot--dead");
     dot.setAttribute("aria-label", "Disconnected");
     dot.setAttribute("title", "Disconnected — attempting to reconnect");
+    if (label) label.textContent = "OFFLINE";
+    document.getElementById("stat-uptime").textContent = "N/A";
   }
 }
 

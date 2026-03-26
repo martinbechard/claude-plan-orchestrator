@@ -39,9 +39,13 @@ identity:
 # LANGSMITH_WORKSPACE_ID (set in .env.local or as environment variables).
 # Get a free key at https://smith.langchain.com/settings/api-keys
 langsmith:
-  enabled: true
+  enabled: false
   project: "claude-plan-orchestrator"
   # endpoint: "https://api.smith.langchain.com"  # uncomment for self-hosted
+  # Set enabled: true to send traces directly to LangSmith (requires API key and quota).
+  # When the web server is running (--web), traces always go to the local proxy
+  # regardless of this flag, and forward_to_langsmith controls whether they are
+  # also forwarded to LangSmith from there.
 
 # Pipeline parallelism configuration.
 # max_parallel_items controls how many backlog items are processed concurrently.
@@ -59,3 +63,6 @@ pipeline:
 #   validators:
 #     - validator       # Validator agent names to run
 #   max_validation_attempts: 1  # Max validation retries per task
+
+web:
+  port: 7070

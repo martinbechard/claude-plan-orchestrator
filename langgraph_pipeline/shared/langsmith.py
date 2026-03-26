@@ -93,15 +93,54 @@ def configure_tracing() -> bool:
     _tracing_configured = True
     _tracing_active = False
 
+    # If the environment is already wired for a local proxy (e.g. inherited from
+    # the supervisor process that called configure_tracing() first), trust it.
+    # This covers worker subprocesses which share the parent's env vars but not
+    # its in-memory module state.
+    if (
+        os.environ.get(ENV_LANGSMITH_TRACING) == TRACING_ENABLED_VALUE
+        and os.environ.get(ENV_LANGSMITH_ENDPOINT, "").startswith("http://localhost")
+    ):
+        logger.debug(
+            "configure_tracing: using inherited proxy endpoint %s",
+            os.environ[ENV_LANGSMITH_ENDPOINT],
+        )
+        _tracing_active = True
+        return True
+
     config = load_orchestrator_config()
     langsmith_config = config.get("langsmith", {})
+
+    # If the local web server proxy is running, activate tracing and redirect
+    # to it — regardless of langsmith.enabled.  Traces are captured locally
+    # and only forwarded to LangSmith when forward_to_langsmith: true is set.
+    try:
+        from langgraph_pipeline.web.server import get_active_port
+        local_port = get_active_port()
+        if local_port is not None:
+            os.environ[ENV_LANGSMITH_API_KEY] = os.environ.get(ENV_LANGSMITH_API_KEY, "local-proxy")
+            os.environ[ENV_LANGSMITH_TRACING] = TRACING_ENABLED_VALUE
+            os.environ[ENV_LANGSMITH_PROJECT] = _resolve_value(
+                ENV_LANGSMITH_PROJECT, langsmith_config, "project"
+            ) or DEFAULT_LANGSMITH_PROJECT
+            os.environ[ENV_LANGSMITH_ENDPOINT] = f"http://localhost:{local_port}"
+            logger.info(
+                "LangSmith traces redirected to local proxy at http://localhost:%d "
+                "(forward_to_langsmith=False by default)",
+                local_port,
+            )
+            _tracing_active = True
+            return True
+    except Exception:
+        pass
 
     # Check the enabled flag. Default to False (opt-in).
     enabled = langsmith_config.get("enabled", False)
     if not enabled:
         logger.info(
             "LangSmith tracing is not enabled. "
-            "Set langsmith.enabled: true in orchestrator-config.yaml to enable."
+            "Set langsmith.enabled: true in orchestrator-config.yaml to enable, "
+            "or start with --web to capture traces locally without consuming quota."
         )
         # Explicitly disable tracing so LangGraph doesn't try to trace
         os.environ[ENV_LANGSMITH_TRACING] = TRACING_DISABLED_VALUE
@@ -219,45 +258,10 @@ def emit_tool_call_traces(
                 child.end(outputs=record["tool_input"], end_time=end_time)
             else:
                 child.end(outputs=record["tool_input"])
-            child.post()
-            try:
-                proxy = _get_tracing_proxy()
-                if proxy is not None:
-                    child_end_iso: Optional[str] = None
-                    if duration_s is not None and start_time is not None:
-                        child_end_iso = (start_time + timedelta(seconds=duration_s)).isoformat()
-                    proxy.record_run(
-                        run_id=str(child.id),
-                        parent_run_id=str(parent.id),
-                        name=record["tool_name"] if is_tool else "assistant_text",
-                        inputs=record["tool_input"],
-                        outputs=record["tool_input"],
-                        metadata={**metadata, "timestamp": record["timestamp"]},
-                        error=None,
-                        start_time=start_time.isoformat() if start_time is not None else None,
-                        end_time=child_end_iso,
-                    )
-            except Exception as proxy_exc:
-                logger.debug("proxy record_run (child) failed (non-fatal): %s", proxy_exc)
+            child.post()  # routes to LANGCHAIN_ENDPOINT (local proxy when web is running)
 
         parent.end()
         parent.post()
-        try:
-            proxy = _get_tracing_proxy()
-            if proxy is not None:
-                proxy.record_run(
-                    run_id=str(parent.id),
-                    parent_run_id=parent_run_id,
-                    name=run_name,
-                    inputs={"task_metadata": metadata},
-                    outputs=None,
-                    metadata=metadata,
-                    error=None,
-                    start_time=None,
-                    end_time=None,
-                )
-        except Exception as proxy_exc:
-            logger.debug("proxy record_run (parent) failed (non-fatal): %s", proxy_exc)
 
     except ImportError:
         pass  # langsmith package not installed -- degrade silently
@@ -298,23 +302,6 @@ def create_root_run(item_slug: str, item_path: str) -> tuple[Any, Optional[str]]
             run_tree = RunTree(id=trace_id, name=item_slug, run_type="chain")
             _write_trace_id_to_file(item_path, trace_id)
 
-        try:
-            proxy = _get_tracing_proxy()
-            if proxy is not None:
-                proxy.record_run(
-                    run_id=trace_id,
-                    parent_run_id=None,
-                    name=item_slug,
-                    inputs={"item_slug": item_slug, "item_path": item_path},
-                    outputs=None,
-                    metadata=None,
-                    error=None,
-                    start_time=None,
-                    end_time=None,
-                )
-        except Exception as proxy_exc:
-            logger.debug("proxy record_run (root) failed (non-fatal): %s", proxy_exc)
-
         return run_tree, trace_id
 
     except ImportError:
@@ -344,23 +331,7 @@ def finalize_root_run(root_run_id: Optional[str], outputs: dict[str, Any]) -> No
 
         root_run = RunTree(id=root_run_id, name="root", run_type="chain")
         root_run.end(outputs=outputs)
-        root_run.post()
-        try:
-            proxy = _get_tracing_proxy()
-            if proxy is not None:
-                proxy.record_run(
-                    run_id=root_run_id,
-                    parent_run_id=None,
-                    name="root",
-                    inputs=None,
-                    outputs=outputs,
-                    metadata=None,
-                    error=None,
-                    start_time=None,
-                    end_time=None,
-                )
-        except Exception as proxy_exc:
-            logger.debug("proxy record_run (finalize) failed (non-fatal): %s", proxy_exc)
+        root_run.post()  # routes to LANGCHAIN_ENDPOINT (local proxy when web is running)
 
     except ImportError:
         pass

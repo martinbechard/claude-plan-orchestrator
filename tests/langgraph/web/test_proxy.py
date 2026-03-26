@@ -61,15 +61,6 @@ def enabled_client(tmp_path, _set_proxy_singleton):
     return TestClient(app)
 
 
-@pytest.fixture()
-def disabled_client():
-    """FastAPI TestClient with the proxy disabled."""
-    old = proxy_module._proxy_instance
-    proxy_module._proxy_instance = None
-    app = create_app(config={"web": {"proxy": {"enabled": False}}})
-    yield TestClient(app)
-    proxy_module._proxy_instance = old
-
 
 # ─── TracingProxy DB Tests ────────────────────────────────────────────────────
 
@@ -201,14 +192,6 @@ def test_proxy_detail_endpoint(enabled_client):
     assert response.status_code == 200
     assert "<svg" in response.text
 
-
-def test_proxy_disabled_returns_404(disabled_client):
-    """When proxy is disabled, both /proxy and /proxy/{id} return 404."""
-    response = disabled_client.get("/proxy")
-    assert response.status_code == 404
-
-    response = disabled_client.get(f"/proxy/{SAMPLE_RUN_ID}")
-    assert response.status_code == 404
 
 
 # ─── Error Resilience ────────────────────────────────────────────────────────

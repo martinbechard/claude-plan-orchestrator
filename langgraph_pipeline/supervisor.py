@@ -37,7 +37,7 @@ from langgraph_pipeline.pipeline.nodes.scan import (
     unclaim_item,
 )
 from langgraph_pipeline.pipeline.state import PipelineState
-from langgraph_pipeline.shared.paths import BACKLOG_DIRS, CLAIMED_DIR, WORKER_RESULT_DIR
+from langgraph_pipeline.shared.paths import BACKLOG_DIRS, CLAIMED_DIR, PLANS_DIR, WORKER_RESULT_DIR
 from langgraph_pipeline.slack.notifier import SlackNotifier
 from langgraph_pipeline.web.dashboard_state import get_dashboard_state
 
@@ -132,6 +132,50 @@ def _unclaim_orphaned_items() -> None:
             logger.info("Returned orphan %s to %s backlog.", md_file.name, item_type)
         except (OSError, KeyError) as exc:
             logger.warning("Could not return orphan %s: %s", md_file.name, exc)
+
+
+def _cleanup_orphaned_plan_yamls() -> None:
+    """Delete plan YAML files in PLANS_DIR that have no corresponding active item.
+
+    A plan YAML is considered orphaned when the item it was created for no longer
+    exists in any backlog directory or in CLAIMED_DIR. This happens when the
+    pipeline is killed between plan creation and archival. Without this cleanup,
+    stale YAMLs accumulate indefinitely across restarts.
+
+    Called once at startup, after _unclaim_orphaned_items() so that any claimed
+    items returned to the backlog are visible before we evaluate active slugs.
+    """
+    plans_dir = Path(PLANS_DIR)
+    if not plans_dir.exists():
+        return
+
+    yaml_files = list(plans_dir.glob("*.yaml"))
+    if not yaml_files:
+        return
+
+    # Build the set of active slugs (claimed + all backlog dirs).
+    active_slugs: set[str] = set()
+    claimed_dir = Path(CLAIMED_DIR)
+    if claimed_dir.exists():
+        for md in claimed_dir.glob("*.md"):
+            active_slugs.add(md.stem)
+    for backlog_path in BACKLOG_DIRS.values():
+        backlog_dir = Path(backlog_path)
+        if backlog_dir.exists():
+            for md in backlog_dir.glob("*.md"):
+                active_slugs.add(md.stem)
+
+    removed = 0
+    for yaml_file in yaml_files:
+        if yaml_file.stem not in active_slugs:
+            try:
+                yaml_file.unlink()
+                removed += 1
+            except OSError as exc:
+                logger.warning("Could not remove stale plan YAML %s: %s", yaml_file.name, exc)
+
+    if removed:
+        logger.info("Startup: removed %d orphaned plan YAML(s) from %s.", removed, PLANS_DIR)
 
 
 def _build_scan_state() -> PipelineState:
@@ -452,8 +496,10 @@ def run_supervisor_loop(
     cumulative_cost_usd: list[float] = [0.0]
     budget_exceeded = False
 
-    # Cleanup: return any items orphaned in CLAIMED_DIR by a previous run.
+    # Cleanup: return any items orphaned in CLAIMED_DIR by a previous run,
+    # then delete any plan YAMLs that have no corresponding active item.
     _unclaim_orphaned_items()
+    _cleanup_orphaned_plan_yamls()
 
     logger.info(
         "Supervisor starting: max_workers=%d budget_cap=%s",

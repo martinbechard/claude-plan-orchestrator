@@ -8,6 +8,7 @@ Provides a health endpoint and a base route structure for future UI features.
 Gracefully degrades with a logged warning when fastapi or uvicorn are not installed.
 """
 
+import json
 import logging
 import re
 import socket
@@ -165,9 +166,65 @@ def create_app(config: Optional[dict] = None):
     app.include_router(proxy_router)
     logger.info("TracingProxy active (forward_to_langsmith=%s)", proxy_config.get("forward_to_langsmith", False))
 
-    # LangSmith-compatible shim: POST /runs and PATCH /runs/{run_id}.
+    # LangSmith-compatible shim endpoints.
     # The SDK routes here when LANGCHAIN_ENDPOINT points at this server.
+    # Newer SDK versions probe GET /info first, then use POST /runs/multipart
+    # for batch ingestion. We implement all three to avoid dropped traces.
     from fastapi import Request
+
+    @app.get("/info")
+    async def langsmith_info():
+        """Return server capability info so the LangSmith SDK uses multipart ingestion."""
+        return JSONResponse({
+            "version": "0.1.0",
+            "batch_ingest_config": {
+                "use_multipart_endpoint": True,
+                "size_limit": 100,
+                "size_limit_bytes": 20971520,
+                "scale_up_nthreads_limit": 16,
+                "scale_up_qsize_trigger": 1000,
+                "scale_down_nempty_trigger": 4,
+            },
+        })
+
+    @app.post("/runs/multipart")
+    async def runs_multipart(request: Request):
+        """Accept a LangSmith multipart batch and store each run via the proxy.
+
+        The SDK sends each run as a multipart field named 'post.<run_id>' or
+        'patch.<run_id>' with Content-Type application/json.
+        """
+        from langgraph_pipeline.web.proxy import get_proxy
+        proxy = get_proxy()
+        if proxy is None:
+            return JSONResponse({}, status_code=202)
+        try:
+            form = await request.form()
+            for field_name, field_value in form.multi_items():
+                if "." not in field_name:
+                    continue
+                operation, run_id = field_name.split(".", 1)
+                if operation not in ("post", "patch"):
+                    continue
+                try:
+                    raw = field_value if isinstance(field_value, (str, bytes)) else await field_value.read()
+                    body = json.loads(raw)
+                    proxy.record_run(
+                        run_id=run_id,
+                        parent_run_id=body.get("parent_run_id"),
+                        name=body.get("name", ""),
+                        inputs=body.get("inputs"),
+                        outputs=body.get("outputs"),
+                        metadata=(body.get("extra") or {}).get("metadata"),
+                        error=body.get("error"),
+                        start_time=body.get("start_time"),
+                        end_time=body.get("end_time"),
+                    )
+                except Exception as exc:
+                    logger.debug("runs_multipart: failed to process field %s: %s", field_name, exc)
+        except Exception as exc:
+            logger.debug("runs_multipart: failed to parse form: %s", exc)
+        return JSONResponse({}, status_code=202)
 
     @app.post("/runs")
     async def runs_create(request: Request):
