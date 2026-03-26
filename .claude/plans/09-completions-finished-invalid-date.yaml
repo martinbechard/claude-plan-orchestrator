@@ -1,0 +1,27 @@
+meta:
+  source_item: .claude/plans/.claimed/09-completions-finished-invalid-date.md
+  item_type: defect
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Fix fmtFinished to handle ISO 8601 strings
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Update fmtFinished in dashboard.js to handle both number and string timestamps
+    agent: frontend-coder
+    description: 'Implement the work item: .claude/plans/.claimed/09-completions-finished-invalid-date.md
+
+
+      Focus on langgraph_pipeline/web/static/dashboard.js. Update fmtFinished() to
+      branch on typeof finishedAt: if number, multiply by 1000 (existing Unix epoch
+      path); otherwise pass directly to new Date() (handles ISO 8601 strings from
+      the DB proxy path). See design doc: docs/plans/2026-03-26-09-completions-finished-invalid-date-design.md'
+    status: pending
