@@ -40,5 +40,3 @@ tooltip. Do NOT use a collapsible/accordion/details element.
   YES = pass, NO = fail
 - Does the disclaimer take zero vertical space when not hovered?
   YES = pass, NO = fail
-
-## LangSmith Trace: 9442f151-e6fe-4564-9fc8-64c59e20cdd2
