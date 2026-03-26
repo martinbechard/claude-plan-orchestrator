@@ -1,5 +1,19 @@
 # Release Notes
 
+## 1.10.11 (2026-03-26)
+
+### Bug Fixes
+- **Restore UI quality review process lost in LangGraph migration:** Added a UI Work
+  Item Detection section to the planner agent mandating invocation of the frontend-design
+  skill for any work item touching web UI templates or CSS. Added a requirement in the
+  frontend-coder agent to read docs/ui-style-guide.md before any UI change. Created
+  docs/ui-style-guide.md covering typography, spacing, colour palette, pagination,
+  empty states, table conventions, and card layouts. Fixed pagination styling across all
+  paginated pages (consistent guillemet arrows, pagination-page-info class, readable text).
+  Standardized empty states to icon + heading + sub-text pattern across all pages. Fixed
+  table column alignment (left-aligned text, right-aligned numerics). Removed tilde
+  prefixes from all cost display values across templates.
+
 ## 1.10.10 (2026-03-26)
 
 ### Bug Fixes
