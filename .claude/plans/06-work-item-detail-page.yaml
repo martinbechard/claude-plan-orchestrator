@@ -94,7 +94,11 @@ sections:
       in active-worker cards and recent-completions rows with /item/slug links.
 
       '
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T02:04:53.879409'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T02:06:24.623201'
+    result_message: 'Wrapped slug text in /item/<slug> links in dashboard.js: active-worker
+      cards (.worker-slug) and recent-completions rows (.completion-slug) now render
+      clickable anchor elements using encodeURIComponent(slug).'
