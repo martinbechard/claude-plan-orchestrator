@@ -1,0 +1,27 @@
+meta:
+  source_item: .claude/plans/.claimed/44-cost-analysis-disclaimer-use-tooltip-not-collapsible.md
+  plan_doc: docs/plans/2026-03-26-44-cost-analysis-disclaimer-use-tooltip-not-collapsible-design.md
+  validation:
+    enabled: true
+    run_after:
+      - frontend-coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+sections:
+  - id: phase-1
+    name: Replace collapsible disclaimer with hover tooltip
+    status: pending
+    tasks:
+      - id: "1.1"
+        name: Replace details/summary disclaimer with CSS-only tooltip icon
+        agent: frontend-coder
+        description: "Implement the work item: .claude/plans/.claimed/44-cost-analysis-disclaimer-use-tooltip-not-collapsible.md. Design: docs/plans/2026-03-26-44-cost-analysis-disclaimer-use-tooltip-not-collapsible-design.md"
+        status: pending
+      - id: "1.2"
+        name: Bump plugin version and update release notes
+        agent: coder
+        description: "Bump plugin.json version (patch) and add a RELEASE-NOTES.md entry for this fix. Work item: .claude/plans/.claimed/44-cost-analysis-disclaimer-use-tooltip-not-collapsible.md"
+        status: pending
+        depends_on:
+          - "1.1"
