@@ -59,7 +59,7 @@ sections:
   - id: '2.1'
     name: Add update_worker_run_id to DashboardState and refresh in supervisor loop
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the fix described in: .claude/plans/.claimed/20-worker-trace-link-finds-nothing.md
 
 
@@ -80,3 +80,10 @@ sections:
     last_attempt: '2026-03-26T13:25:31.083863'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T13:29:02.687600'
+    result_message: Added update_worker_run_id(pid, run_id) to DashboardState and
+      _refresh_worker_run_ids() helper to supervisor. The helper is called each poll
+      iteration for active workers with run_id=None, re-reading the item file and
+      updating run_id once the subprocess writes the trace ID. Added 3 tests to test_dashboard_state.py
+      and created tests/langgraph/test_supervisor.py with 5 new tests. All 1561 tests
+      pass.
