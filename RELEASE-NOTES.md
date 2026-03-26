@@ -1,5 +1,13 @@
 # Release Notes
 
+## 1.10.3 (2026-03-26)
+
+### Improvements
+- **Test data discipline policies:** Added policies to coder, validator, and planner
+  agents requiring cleanup of test data after implementation and use of random/UUID
+  values for test fixtures. Prevents leftover placeholder data from being mistaken
+  for real results by validators or users.
+
 ## 1.10.2 (2026-03-26)
 
 ### Improvements
