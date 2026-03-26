@@ -73,8 +73,8 @@ INTAKE_HISTORY_TTL_SECONDS = 3600  # 1 hour
 
 # Disk-persisted backlog creation throttle
 BACKLOG_CREATION_THROTTLE_PATH = ".claude/plans/.backlog-creation-throttle.json"
-MAX_DEFECTS_PER_HOUR = 20
-MAX_FEATURES_PER_HOUR = 20
+MAX_DEFECTS_PER_HOUR = 50
+MAX_FEATURES_PER_HOUR = 50
 BACKLOG_THROTTLE_WINDOW_SECONDS = 3600  # 1-hour sliding window
 
 STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
