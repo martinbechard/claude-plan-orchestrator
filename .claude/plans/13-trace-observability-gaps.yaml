@@ -53,7 +53,7 @@ sections:
   - id: '1.2'
     name: Add subprocess_exit_code and failure_reason to validate_task traces
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement Gap 1 for validate_task from: .claude/plans/.claimed/13-trace-observability-gaps.md
 
 
@@ -70,6 +70,12 @@ sections:
     last_attempt: '2026-03-26T12:25:16.714338'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T12:29:13.003288'
+    result_message: Extended _run_claude() in validator.py to return (success, returncode,
+      result_capture, stderr_text). Added subprocess_exit_code, subprocess_error,
+      failure_reason, findings, requirements_checked, requirements_met to add_trace_metadata.
+      Updated validator prompt to document optional fields. Fixed test mocks. All
+      1551 tests pass.
 - id: '2'
   name: Validator verdict richness
   status: pending
