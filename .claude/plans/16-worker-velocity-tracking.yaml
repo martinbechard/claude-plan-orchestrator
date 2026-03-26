@@ -41,7 +41,7 @@ sections:
   - id: '1.2'
     name: Add get_worker_token_counts and extend completions in proxy
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: .claude/plans/.claimed/16-worker-velocity-tracking.md
       -- Read the design doc at docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
       for full details. In langgraph_pipeline/web/proxy.py: (1) add ALTER TABLE migration
@@ -55,6 +55,12 @@ sections:
     last_attempt: '2026-03-26T15:04:51.264044'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T15:06:57.796571'
+    result_message: Added get_worker_token_counts(run_id) with recursive CTE, ALTER
+      TABLE migration for tokens_per_minute with OperationalError guard, extended
+      record_completion() with optional tokens_per_minute param, and included tokens_per_minute
+      in list_completions() and list_completions_by_slug() SELECTs. All 1295 tests
+      pass.
 - id: '2'
   name: Backend supervisor token refresh and velocity on reap
   status: pending
