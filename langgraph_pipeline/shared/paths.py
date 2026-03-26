@@ -10,6 +10,10 @@ from pathlib import Path
 
 ORCHESTRATOR_CONFIG_PATH = ".claude/orchestrator-config.yaml"
 
+# ─── Runtime env vars ─────────────────────────────────────────────────────────
+
+ENV_ORCHESTRATOR_WEB_URL = "ORCHESTRATOR_WEB_URL"
+
 # ─── Plans directory ───────────────────────────────────────────────────────────
 
 PLANS_DIR = ".claude/plans"

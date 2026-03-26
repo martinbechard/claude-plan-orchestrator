@@ -41,7 +41,7 @@ from langgraph_pipeline.shared.claude_cli import call_claude
 from langgraph_pipeline.shared.config import get_max_parallel_items, load_orchestrator_config
 from langgraph_pipeline.shared.dotenv import load_dotenv_files
 from langgraph_pipeline.shared.langsmith import configure_tracing
-from langgraph_pipeline.shared.paths import LANGGRAPH_PID_FILE_PATH
+from langgraph_pipeline.shared.paths import ENV_ORCHESTRATOR_WEB_URL, LANGGRAPH_PID_FILE_PATH
 from langgraph_pipeline.shared.shutdown import register_shutdown_event
 from langgraph_pipeline.shared.suspension import SUSPENDED_DIR, clear_suspension_marker
 from langgraph_pipeline.shared.hot_reload import CodeChangeMonitor, _perform_restart
@@ -832,6 +832,9 @@ def main() -> int:
                 _config_path,
             )
             start_web_server(port=web_port, config=config, config_path=_config_path)
+
+        os.environ[ENV_ORCHESTRATOR_WEB_URL] = f"http://localhost:{web_port}"
+        logger.info("ORCHESTRATOR_WEB_URL set to http://localhost:%d", web_port)
 
     if not args.no_tracing:
         if configure_tracing():

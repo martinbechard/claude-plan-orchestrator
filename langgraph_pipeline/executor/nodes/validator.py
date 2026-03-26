@@ -29,7 +29,7 @@ from langgraph_pipeline.shared.claude_cli import (
     stream_output,
 )
 from langgraph_pipeline.shared.config import load_orchestrator_config
-from langgraph_pipeline.shared.paths import STATUS_FILE_PATH
+from langgraph_pipeline.shared.paths import ENV_ORCHESTRATOR_WEB_URL, STATUS_FILE_PATH
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -255,14 +255,14 @@ def _post_cost_to_api(
     duration_s: float,
     tool_calls: list[ToolCallRecord],
 ) -> None:
-    """POST a validator cost record to {LANGCHAIN_ENDPOINT}/api/cost.
+    """POST a validator cost record to {ORCHESTRATOR_WEB_URL}/api/cost.
 
-    Only posts when LANGCHAIN_ENDPOINT is set to a localhost URL.
+    Only posts when ORCHESTRATOR_WEB_URL is set (by cli.py after web server starts).
     Fire-and-forget: logs a warning on error but never raises.
     """
     from pathlib import Path as _Path
-    endpoint = os.environ.get("LANGCHAIN_ENDPOINT", "")
-    if not endpoint.startswith("http://localhost"):
+    endpoint = os.environ.get(ENV_ORCHESTRATOR_WEB_URL, "")
+    if not endpoint:
         return
 
     source_item = plan_data.get("meta", {}).get("source_item", "")

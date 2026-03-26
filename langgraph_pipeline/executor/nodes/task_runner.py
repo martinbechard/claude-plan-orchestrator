@@ -35,7 +35,7 @@ from langgraph_pipeline.shared.claude_cli import (
 )
 from langgraph_pipeline.shared.config import load_orchestrator_config
 from langgraph_pipeline.shared.git import git_commit_files
-from langgraph_pipeline.shared.paths import STATUS_FILE_PATH, TASK_LOG_DIR
+from langgraph_pipeline.shared.paths import ENV_ORCHESTRATOR_WEB_URL, STATUS_FILE_PATH, TASK_LOG_DIR
 from langgraph_pipeline.shared.suspension import create_suspension_marker
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -387,13 +387,13 @@ def _post_cost_to_api(
     duration_s: float,
     tool_calls: list[ToolCallRecord],
 ) -> None:
-    """POST a per-task cost record to {LANGCHAIN_ENDPOINT}/api/cost.
+    """POST a per-task cost record to {ORCHESTRATOR_WEB_URL}/api/cost.
 
-    Only posts when LANGCHAIN_ENDPOINT is set to a localhost URL.
+    Only posts when ORCHESTRATOR_WEB_URL is set (by cli.py after web server starts).
     Fire-and-forget: logs a warning on error but never raises.
     """
-    endpoint = os.environ.get("LANGCHAIN_ENDPOINT", "")
-    if not endpoint.startswith("http://localhost"):
+    endpoint = os.environ.get(ENV_ORCHESTRATOR_WEB_URL, "")
+    if not endpoint:
         return
 
     source_item = plan_data.get("meta", {}).get("source_item", "")
