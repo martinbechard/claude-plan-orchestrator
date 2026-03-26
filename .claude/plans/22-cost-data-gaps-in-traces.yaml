@@ -118,3 +118,7 @@ sections:
     model_used: sonnet
     completed_at: '2026-03-26T12:11:35.987276'
     result_message: 'PASS: All good'
+    validation_attempts: 1
+    validation_findings: All three call_claude sites in suspension.py record total_cost_usd
+      via add_trace_metadata (answer_question, intake_analysis, dedup_check). Build
+      clean, 1551 tests pass.

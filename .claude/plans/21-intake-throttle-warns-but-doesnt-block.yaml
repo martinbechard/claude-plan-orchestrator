@@ -76,7 +76,7 @@ sections:
   - id: '2.1'
     name: Update poller.py MAX_DEFECTS_PER_HOUR and MAX_FEATURES_PER_HOUR to 50
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the fix described in: .claude/plans/.claimed/21-intake-throttle-warns-but-doesnt-block.md
 
 
@@ -89,3 +89,6 @@ sections:
 
 
       '
+    last_attempt: '2026-03-26T12:16:32.664423'
+    attempts: 1
+    model_used: sonnet
