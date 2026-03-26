@@ -26,6 +26,7 @@ from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
 from langgraph_pipeline.slack.identity import AGENT_ROLE_INTAKE, AGENT_ROLE_QA
+from langgraph_pipeline.shared.langsmith import add_trace_metadata
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -658,11 +659,18 @@ class SlackSuspension:
         )
 
         try:
-            answer = (
-                self._callbacks.call_claude(prompt, SLACK_LLM_MODEL, None).text
+            claude_result = (
+                self._callbacks.call_claude(prompt, SLACK_LLM_MODEL, None)
                 if self._callbacks.call_claude
-                else ""
+                else None
             )
+            answer = claude_result.text if claude_result else ""
+            if claude_result:
+                add_trace_metadata({
+                    "node_name": "answer_question",
+                    "graph_level": "slack",
+                    "total_cost_usd": claude_result.total_cost_usd,
+                })
             if not answer:
                 answer = f"_(LLM returned empty)_\n{state_context}"
         except Exception as e:
@@ -805,6 +813,13 @@ class SlackSuspension:
                 else None
             )
             response_text = result.text if result else ""
+            if result:
+                add_trace_metadata({
+                    "node_name": "intake_analysis",
+                    "graph_level": "slack",
+                    "item_type": intake.item_type,
+                    "total_cost_usd": result.total_cost_usd,
+                })
 
             if not response_text:
                 failure_reason = (result.failure_reason if result else None) or "LLM returned empty response"
@@ -1099,11 +1114,19 @@ class SlackSuspension:
             f'- {{"duplicate": false}} if not a duplicate'
         )
         try:
-            dedup_response = (
-                self._callbacks.call_claude(dedup_prompt, "haiku", 30).text
+            dedup_result_raw = (
+                self._callbacks.call_claude(dedup_prompt, "haiku", 30)
                 if self._callbacks.call_claude
-                else ""
+                else None
             )
+            dedup_response = dedup_result_raw.text if dedup_result_raw else ""
+            if dedup_result_raw:
+                add_trace_metadata({
+                    "node_name": "dedup_check",
+                    "graph_level": "slack",
+                    "item_type": intake.item_type,
+                    "total_cost_usd": dedup_result_raw.total_cost_usd,
+                })
             if dedup_response:
                 dedup_result = json.loads(dedup_response)
                 if isinstance(dedup_result, dict) and dedup_result.get("duplicate"):
