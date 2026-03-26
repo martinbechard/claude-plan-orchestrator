@@ -1,0 +1,41 @@
+meta:
+  id: '15'
+  title: 'Traces page: timestamps displayed in UTC instead of local time'
+  source_item: .claude/plans/.claimed/15-traces-timestamps-utc-not-local.md
+  design: docs/plans/2026-03-26-15-traces-timestamps-utc-not-local-design.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Convert UTC timestamps to local time in trace templates
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add local-time JS snippet to base.html and update proxy templates
+    agent: frontend-coder
+    status: pending
+    description: 'Implement the fix described in: .claude/plans/.claimed/15-traces-timestamps-utc-not-local.md
+
+      Design doc: docs/plans/2026-03-26-15-traces-timestamps-utc-not-local-design.md
+
+      In langgraph_pipeline/web/templates/base.html, add a <script> block before
+      </body> that queries all elements with class "local-time" and replaces their
+      text content with new Date(el.getAttribute("datetime")).toLocaleString().
+
+      In langgraph_pipeline/web/templates/proxy_list.html, add class="local-time"
+      to the existing <time> element in the Start time column so the JS snippet
+      converts it on load.
+
+      In langgraph_pipeline/web/templates/proxy_trace.html, replace the plain-text
+      start time rendering (run.start_time[:19] replace T with space) in the header
+      card with a <time datetime="{{ run.start_time | e }}" class="local-time"> element
+      whose fallback text is the existing UTC-formatted string.
+
+      '
