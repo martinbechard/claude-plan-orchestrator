@@ -2,20 +2,50 @@
 
 Feature 03 | 2026-03-26
 
-## Overview
+## Status
 
-The `/analysis` page is always empty because the LangGraph pipeline never writes cost data.
-`write_execution_cost_log()` exists only in `scripts/plan-orchestrator.py` and writes JSON
-files. This feature ports cost logging to the SQLite DB already used by the TracingProxy,
-adds an HTTP endpoint to accept per-task cost records, updates the worker to POST to that
-endpoint, and updates `CostLogReader` to query the DB.
+Most of the implementation was completed by a prior agent attempt. All four components
+are in place:
+
+- `cost_tasks` table — created by `_CREATE_COST_TASKS_SQL` in `proxy.py`, called from
+  `_init_db()` at startup
+- `TracingProxy.record_cost_task()` — persists rows to the DB
+- `POST /api/cost` endpoint — `routes/cost.py`, registered in `server.py`
+- `write_execution_cost_log()` in `plan-orchestrator.py` — calls `_post_cost_to_db()`
+  when `LANGCHAIN_ENDPOINT` starts with `http://localhost`, falls back to JSON files
+- `CostLogReader.load_all()` — queries `cost_tasks` first, falls back to JSON files
+
+## Remaining Issues
+
+### Issue 1 — 4 failing unit tests (test_execution_cost_log.py)
+
+Tests monkeypatch `COST_LOG_DIR` but not `LANGCHAIN_ENDPOINT`. When the pipeline web
+server is running in the environment, `write_execution_cost_log` POSTs successfully and
+returns early without writing the JSON file, causing `FileNotFoundError` in the tests.
+
+Fix: each test that exercises the JSON fallback path must also call
+`monkeypatch.delenv("LANGCHAIN_ENDPOINT", raising=False)`.
+
+### Issue 2 — item_type always "feature"
+
+`plan-orchestrator.py` line 6556:
+
+    item_type=meta.get("item_type", "feature")
+
+Plan YAML files do not include `item_type` in meta, so this always returns `"feature"`
+even for defect plans. The correct value is derivable from the `source_item` path stored
+in meta: if `"defect"` appears in the path, the item is a defect.
+
+Fix: replace the static default with a one-liner that inspects `meta.get("source_item", "")`.
 
 ## Architecture
+
+No new files, no schema changes. Both fixes are small targeted edits.
 
 ```
 plan-orchestrator.py (worker)
   write_execution_cost_log()
-    ├── if LANGCHAIN_ENDPOINT points at localhost:
+    ├── if LANGCHAIN_ENDPOINT starts with http://localhost:
     │     POST http://localhost:<port>/api/cost  ──► FastAPI /api/cost
     │                                                   │
     │                                          cost.py router
@@ -30,39 +60,18 @@ GET /analysis
     └── fallback: read JSON files (when DB unavailable)
 ```
 
-## Key Files
+## Files to Modify
 
-| File | Action |
+| File | Change |
 |------|--------|
-| `langgraph_pipeline/web/proxy.py` | Add `_CREATE_COST_TASKS_SQL` and create the table in `_init_db()` |
-| `langgraph_pipeline/web/routes/cost.py` | Create — `POST /api/cost` router |
-| `langgraph_pipeline/web/server.py` | Register `cost_router` in `create_app()` |
-| `langgraph_pipeline/web/cost_log_reader.py` | Add `_load_from_db()` path; fall back to JSON files |
-| `scripts/plan-orchestrator.py` | Update `write_execution_cost_log()` to POST when LANGCHAIN_ENDPOINT is localhost |
-| `tests/langgraph/web/test_cost_endpoint.py` | Create — unit tests for POST /api/cost |
-| `tests/langgraph/web/test_cost_log_reader.py` | Update/create — tests for DB-backed load_all() |
+| `tests/test_execution_cost_log.py` | Add `monkeypatch.delenv("LANGCHAIN_ENDPOINT", raising=False)` to 4 failing tests |
+| `scripts/plan-orchestrator.py` | Derive `item_type` from `source_item` path instead of static default |
 
 ## Design Decisions
 
-**DB reuse** — The `cost_tasks` table is added to the existing
-`~/.claude/orchestrator-traces.db` managed by `TracingProxy`. This avoids a second DB file
-and leverages the already-established connection pattern in `proxy.py`.
+**Tests drive the JSON path explicitly** — clearing the env var is simpler than mocking
+the HTTP call and tests the actual fallback condition used in production.
 
-**New route file** — `POST /api/cost` goes in `langgraph_pipeline/web/routes/cost.py`
-to mirror the existing router pattern (`analysis.py`, `dashboard.py`, `proxy.py`).
-
-**202 response** — The endpoint returns 202 so the caller (plan-orchestrator.py) is never
-blocked waiting for a DB commit ACK. The response body is `{"ok": true}`.
-
-**Caller detection** — `write_execution_cost_log()` in plan-orchestrator.py reads
-`LANGCHAIN_ENDPOINT` (already set by the supervisor before launching the worker process).
-When it starts with `http://localhost`, it POSTs to `/api/cost`; otherwise it writes a JSON
-file. Both paths remain active so the JSON fallback works when the web server is not running.
-
-**CostLogReader fallback** — `load_all()` tries the DB first (using `DB_DEFAULT_PATH` from
-`proxy.py`). If the DB file does not exist or the table is absent, it falls back to the
-existing JSON file glob. This keeps backward compatibility when the web server has never run.
-
-**No tool_calls in DB** — `tool_calls` is stored as a JSON text column (`tool_calls_json`)
-matching the design schema. `CostLogReader` deserialises it the same way it currently reads
-the JSON field from files.
+**item_type derivation** — a simple `"defect" in source_item` check is sufficient since
+backlog file paths use `defect-backlog/` or `feature-backlog/` directories consistently.
+No new constant or helper function needed beyond a conditional expression.
