@@ -27,7 +27,7 @@ SVG_TEXT_OFFSET_X = 5
 SVG_LABEL_MAX_CHARS = 40
 SVG_LABEL_TRUNCATE_SUFFIX = "…"
 SVG_BAR_LABEL_PADDING = 160
-SVG_VALUE_LABEL_PADDING = 10
+SVG_VALUE_LABEL_PADDING = 80
 SVG_FONT_SIZE = 12
 SVG_BAR_GAP = 4
 SVG_CHART_PADDING_TOP = 30
@@ -414,10 +414,11 @@ def _truncate_label(label: str, max_chars: int = SVG_LABEL_MAX_CHARS) -> str:
 
 def svg_bar_chart(
     labels: list[str],
-    values: list[int],
+    values: list[float],
     width: int,
     bar_height: int,
     title: str,
+    value_formatter: callable = lambda v: f"${v:.2f}",
 ) -> str:
     """Render a horizontal SVG bar chart as an inline HTML string.
 
@@ -427,10 +428,12 @@ def svg_bar_chart(
 
     Args:
         labels: Ordered list of string labels (e.g. file paths or agent names).
-        values: Ordered list of integer values corresponding to each label.
+        values: Ordered list of numeric values corresponding to each label.
         width: Total SVG width in pixels.
         bar_height: Height of each bar in pixels.
         title: Chart title shown above the bars.
+        value_formatter: Optional callable to format each value as a string.
+            Defaults to two-decimal dollar formatting (e.g. "$1.23").
 
     Returns:
         An inline SVG string starting with '<svg'.
@@ -469,7 +472,7 @@ def svg_bar_chart(
             f'<rect x="{SVG_BAR_LABEL_PADDING}" y="0" width="{bar_width}"'
             f' height="{bar_height}" fill="#4e79a7" rx="2"/>'
             f'<text x="{SVG_BAR_LABEL_PADDING + bar_width + SVG_TEXT_OFFSET_X}"'
-            f' y="{bar_height - 2}" font-size="{SVG_FONT_SIZE}" fill="#333">{value:,}</text>'
+            f' y="{bar_height - 2}" font-size="{SVG_FONT_SIZE}" fill="#333">{value_formatter(value)}</text>'
             f"</g>"
         )
 

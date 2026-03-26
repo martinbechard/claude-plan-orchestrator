@@ -382,12 +382,14 @@ def test_svg_bar_chart_returns_svg_string():
     """svg_bar_chart() with valid data returns a string starting with '<svg'."""
     result = svg_bar_chart(
         labels=["src/a.py", "src/b.py"],
-        values=[500, 200],
+        values=[5.50, 2.00],
         width=700,
         bar_height=18,
         title="Test Chart",
     )
     assert result.startswith("<svg")
+    assert "$5.50" in result
+    assert "$2.00" in result
 
 
 def test_svg_bar_chart_empty_data_returns_svg():
