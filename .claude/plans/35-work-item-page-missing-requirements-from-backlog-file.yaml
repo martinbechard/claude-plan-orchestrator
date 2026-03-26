@@ -1,0 +1,35 @@
+meta:
+  source_item: .claude/plans/.claimed/35-work-item-page-missing-requirements-from-backlog-file.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: phase-1
+  name: Fix requirements lookup priority chain
+  status: pending
+  tasks:
+  - id: "1.1"
+    name: Rewrite _find_requirements_file and _load_requirements_html in item.py
+    agent: coder
+    description: "Implement the work item: .claude/plans/.claimed/35-work-item-page-missing-requirements-from-backlog-file.md. Design: docs/plans/2026-03-26-35-work-item-page-missing-requirements-from-backlog-file-design.md"
+    status: pending
+  - id: "1.2"
+    name: Update item.html to render original request disclosure block
+    agent: frontend-coder
+    description: "Implement the template changes described in the work item: .claude/plans/.claimed/35-work-item-page-missing-requirements-from-backlog-file.md. Design: docs/plans/2026-03-26-35-work-item-page-missing-requirements-from-backlog-file-design.md"
+    status: pending
+    depends_on:
+    - "1.1"
+  - id: "1.3"
+    name: Bump plugin version and update release notes
+    agent: coder
+    description: "Bump plugin.json version (patch) and add a RELEASE-NOTES.md entry for this fix. Work item: .claude/plans/.claimed/35-work-item-page-missing-requirements-from-backlog-file.md"
+    status: pending
+    depends_on:
+    - "1.2"
