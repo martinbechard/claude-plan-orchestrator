@@ -1,5 +1,15 @@
 # Release Notes
 
+## 1.10.8 (2026-03-26)
+
+### Bug Fixes
+- **scan_backlog trace readability:** Relabeled node Inputs/Outputs to "State
+  before" and "State changes" in the trace detail UI to clarify LangGraph's
+  convention of logging full graph state rather than per-node inputs. Empty
+  state changes ({}) are now hidden instead of displaying an empty block.
+  Added short-circuit trace metadata in scan_backlog so viewers understand
+  why state is pre-populated when the CLI pre-scans the backlog.
+
 ## 1.10.7 (2026-03-26)
 
 ### Improvements
