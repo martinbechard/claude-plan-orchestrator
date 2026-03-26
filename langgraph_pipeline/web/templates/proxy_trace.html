@@ -53,11 +53,12 @@
 
 {# ── Elapsed offset label macro ───────────────────────────────────────── #}
 {% macro fmt_elapsed(offset_s) -%}
-  {%- set offset_int = offset_s | int -%}
-  {%- if offset_int >= 60 -%}
-    +{{ offset_int // 60 }}m {{ offset_int % 60 }}s
+  {%- if offset_s < 1.0 -%}
+    +{{ (offset_s * 1000) | int }}ms
+  {%- elif (offset_s | int) >= 60 -%}
+    +{{ (offset_s | int) // 60 }}m {{ (offset_s | int) % 60 }}s
   {%- else -%}
-    +{{ offset_int }}s
+    +{{ offset_s | int }}s
   {%- endif -%}
 {%- endmacro %}
 
@@ -128,7 +129,7 @@
 {% set SVG_H = PAD_TOP + (children | length) * ROW_H + AXIS_H %}
 
 {# ── Time bounds (pre-computed in route) ──────────────────────────────── #}
-{% set safe_span = [span_s, 1.0] | max %}
+{% set safe_span = [span_s, 0.001] | max %}
 
 {# ── Bar colour by inferred run type ──────────────────────────────────── #}
 {% macro bar_color(name) -%}
@@ -208,11 +209,11 @@
             height="{{ BAR_H }}"
             rx="3"
             fill="{{ bar_color(child.name) }}"
-            aria-label="{{ child.name }}: {{ fmt_duration(child.start_time, child.end_time) }}"/>
+            aria-label="{{ child.name }}: {{ child.display_duration }}"/>
 
       {# Duration label inside bar (only if bar is wide enough) #}
       {% if bar_w >= 40 %}
-        {% set dur_label = fmt_duration(child.start_time, child.end_time) %}
+        {% set dur_label = child.display_duration %}
         <text x="{{ bar_x + bar_w / 2 }}"
               y="{{ bar_y + BAR_H / 2 + 4 }}"
               text-anchor="middle"
@@ -230,7 +231,7 @@
 
     {% for i in range(N_TICKS + 1) %}
       {% set tx = LABEL_W + (i * CHART_W / N_TICKS) %}
-      {% set tick_offset = (i * safe_span / N_TICKS) | int %}
+      {% set tick_offset = i * safe_span / N_TICKS %}
 
       <line x1="{{ tx }}" y1="{{ axis_y }}"
             x2="{{ tx }}" y2="{{ axis_y + TICK_H }}"
