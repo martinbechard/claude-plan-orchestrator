@@ -20,7 +20,7 @@ sections:
   - id: '1.1'
     name: Fetch grandchildren in proxy_trace route and extend span_s
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the backend changes described in: .claude/plans/.claimed/16-tool-calls-missing-from-traces.md
 
 
@@ -30,6 +30,11 @@ sections:
     last_attempt: '2026-03-26T10:55:17.440671'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T10:57:04.900258'
+    result_message: In proxy_trace(), fetch grandchildren for each child that has
+      sub-runs using get_children(). Compute elapsed times via existing helpers. Pass
+      grandchildren_by_parent to template. span_s now covers grandchild end times.
+      All 1160 tests pass.
   - id: '1.2'
     name: Render grandchild rows in SVG timeline and expandable detail section
     agent: frontend-coder
