@@ -1,0 +1,88 @@
+meta:
+  name: worker-velocity-tracking
+  source_item: .claude/plans/.claimed/16-worker-velocity-tracking.md
+  design: docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: "1"
+  name: Backend token counts in DashboardState and proxy
+  status: pending
+  tasks:
+  - id: "1.1"
+    name: Extend WorkerInfo and DashboardState with token fields
+    agent: coder
+    status: pending
+    description: "Implement the work item: .claude/plans/.claimed/16-worker-velocity-tracking.md
+      -- Read the design doc at docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
+      for full details. In langgraph_pipeline/web/dashboard_state.py: (1) add tokens_in: int = 0
+      and tokens_out: int = 0 fields to WorkerInfo; (2) add update_worker_tokens(pid, tokens_in,
+      tokens_out) method mirroring update_worker_run_id; (3) extend snapshot() to compute
+      tokens_per_minute per active worker (elapsed_min = max(elapsed_s/60, 0.001); tpm =
+      (tokens_in + tokens_out) / elapsed_min, set 0.0 when both token fields are 0) and include
+      tokens_in, tokens_out, tokens_per_minute in each active_workers entry. Run the full test
+      suite and fix any failures."
+  - id: "1.2"
+    name: Add get_worker_token_counts and extend completions in proxy
+    agent: coder
+    status: pending
+    description: "Implement the work item: .claude/plans/.claimed/16-worker-velocity-tracking.md
+      -- Read the design doc at docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
+      for full details. In langgraph_pipeline/web/proxy.py: (1) add ALTER TABLE migration in
+      _init_db() for completions.tokens_per_minute REAL NOT NULL DEFAULT 0.0 with OperationalError
+      guard; (2) add get_worker_token_counts(run_id) using a recursive CTE to sum input_tokens
+      and output_tokens from metadata_json across all traces in the run subtree, returning a tuple
+      (int, int); (3) add optional tokens_per_minute: float = 0.0 param to record_completion()
+      and persist it; (4) include tokens_per_minute in the SELECT of list_completions() and
+      list_completions_by_slug() return dicts. Run the full test suite and fix any failures."
+- id: "2"
+  name: Backend supervisor token refresh and velocity on reap
+  status: pending
+  tasks:
+  - id: "2.1"
+    name: Refresh token counts each poll cycle and record final velocity
+    agent: coder
+    status: pending
+    description: "Implement the work item: .claude/plans/.claimed/16-worker-velocity-tracking.md
+      -- Read the design doc at docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
+      for full details. In langgraph_pipeline/supervisor.py: (1) add _refresh_worker_token_counts(
+      active_workers) that iterates active workers with a known run_id, calls
+      proxy.get_worker_token_counts(run_id), and calls dashboard.update_worker_tokens(pid,
+      tokens_in, tokens_out); call it each poll iteration after _refresh_worker_run_ids(); (2) in
+      _reap_one_worker() compute final velocity from the WorkerInfo token fields and pass
+      tokens_per_minute to proxy.record_completion(). Run the full test suite and fix any failures."
+- id: "3"
+  name: Frontend velocity colour mode and label in timeline
+  status: pending
+  tasks:
+  - id: "3.1"
+    name: Add colour mode toggle button to timeline toolbar HTML
+    agent: frontend-coder
+    status: pending
+    description: "Implement the work item: .claude/plans/.claimed/16-worker-velocity-tracking.md
+      -- Read the design doc at docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
+      for full details. In langgraph_pipeline/web/templates/dashboard.html: add a color-mode toggle
+      button after the existing timeline nav buttons in the timeline toolbar (id=tl-btn-color-mode,
+      initial label Velocity, aria-pressed=false, title=Switch to velocity colour mode)."
+  - id: "3.2"
+    name: Implement velocity colour mode and label in dashboard.js and style.css
+    agent: frontend-coder
+    status: pending
+    description: "Implement the work item: .claude/plans/.claimed/16-worker-velocity-tracking.md
+      -- Read the design doc at docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
+      for full details. In langgraph_pipeline/web/static/dashboard.js: (1) add
+      LS_COLOR_MODE_KEY constant; (2) add fmtVelocity(tpm) returning dash for 0 or 2.4k tok/min
+      style strings; (3) extend buildTimelineRow to apply velocity colour classes
+      (timeline-bar--vel-none/low/medium/high) in velocity mode, type classes otherwise; (4) add
+      elapsed+velocity label per row; (5) wire the toggle button to switch modes and re-render
+      with localStorage persistence; (6) pass tokens_per_minute from worker/completion data through
+      to buildTimelineRow. In langgraph_pipeline/web/static/style.css: add velocity CSS classes
+      timeline-bar--vel-none (grey), timeline-bar--vel-low (desaturated), timeline-bar--vel-medium
+      (normal blue-green), timeline-bar--vel-high (bright/saturated)."
