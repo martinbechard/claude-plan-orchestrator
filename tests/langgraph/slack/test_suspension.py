@@ -738,6 +738,83 @@ class TestRunIntakeAnalysis:
         assert "#7" in success_msg
         assert "07-add-feature.md" in success_msg
 
+    def test_fallback_message_contains_failure_reason_on_empty_response(self):
+        reason = "Claude process exited with code 1: permission denied"
+        cb = _make_callbacks(
+            call_claude=MagicMock(return_value=ClaudeResult(text="", failure_reason=reason))
+        )
+        s = _make_suspension(callbacks=cb)
+        intake = _make_intake()
+
+        mock_state = MagicMock()
+        with patch(
+            "langgraph_pipeline.web.dashboard_state.get_dashboard_state",
+            return_value=mock_state,
+        ):
+            s._run_intake_analysis(intake)
+
+        success_calls = [
+            c for c in cb.send_status.call_args_list if c[0][1] == "success"
+        ]
+        assert success_calls
+        slack_msg = success_calls[-1][0][0]
+        assert reason in slack_msg
+
+    def test_add_error_called_on_empty_llm_response(self):
+        reason = "Claude process exited with code 2: quota exceeded"
+        cb = _make_callbacks(
+            call_claude=MagicMock(return_value=ClaudeResult(text="", failure_reason=reason))
+        )
+        s = _make_suspension(callbacks=cb)
+        intake = _make_intake()
+
+        mock_state = MagicMock()
+        with patch(
+            "langgraph_pipeline.web.dashboard_state.get_dashboard_state",
+            return_value=mock_state,
+        ):
+            s._run_intake_analysis(intake)
+
+        mock_state.add_error.assert_called_once()
+        error_msg = mock_state.add_error.call_args[0][0]
+        assert reason in error_msg
+
+    def test_quota_exhausted_fallback_message_indicates_quota(self):
+        cb = _make_callbacks(probe_quota=MagicMock(return_value=False))
+        s = _make_suspension(callbacks=cb)
+        intake = _make_intake()
+
+        mock_state = MagicMock()
+        with patch(
+            "langgraph_pipeline.web.dashboard_state.get_dashboard_state",
+            return_value=mock_state,
+        ):
+            s._run_intake_analysis(intake)
+
+        cb.call_claude.assert_not_called()
+        success_calls = [
+            c for c in cb.send_status.call_args_list if c[0][1] == "success"
+        ]
+        assert success_calls
+        slack_msg = success_calls[-1][0][0]
+        assert "quota" in slack_msg.lower()
+
+    def test_add_error_called_on_quota_exhaustion(self):
+        cb = _make_callbacks(probe_quota=MagicMock(return_value=False))
+        s = _make_suspension(callbacks=cb)
+        intake = _make_intake()
+
+        mock_state = MagicMock()
+        with patch(
+            "langgraph_pipeline.web.dashboard_state.get_dashboard_state",
+            return_value=mock_state,
+        ):
+            s._run_intake_analysis(intake)
+
+        mock_state.add_error.assert_called_once()
+        error_msg = mock_state.add_error.call_args[0][0]
+        assert "quota" in error_msg.lower()
+
 
 # ── _run_dedup_check ──────────────────────────────────────────────────────────
 
