@@ -19,12 +19,14 @@ sections:
     agent: coder
     description: 'Implement the work item: .claude/plans/.claimed/08-timeline-sub-second-precision-lost.md
 
-      Focus on langgraph_pipeline/web/routes/proxy.py. Fix _parse_iso() to use
-      datetime.fromisoformat() instead of the current strptime call that truncates
-      the timestamp to 19 characters (discarding fractional seconds). This also
-      fixes _format_duration() and display_duration for fast runs. See design doc:
-      docs/plans/2026-03-26-08-timeline-sub-second-precision-lost-design.md'
-    status: pending
+      Focus on langgraph_pipeline/web/routes/proxy.py. Fix _parse_iso() to use datetime.fromisoformat()
+      instead of the current strptime call that truncates the timestamp to 19 characters
+      (discarding fractional seconds). This also fixes _format_duration() and display_duration
+      for fast runs. See design doc: docs/plans/2026-03-26-08-timeline-sub-second-precision-lost-design.md'
+    status: in_progress
+    last_attempt: '2026-03-26T01:31:51.816528'
+    attempts: 1
+    model_used: sonnet
 - id: '2'
   name: Refactor Gantt chart to use elapsed float values
   status: pending
@@ -36,9 +38,8 @@ sections:
 
       Focus on langgraph_pipeline/web/templates/proxy_trace.html. Replace the integer
       secs() macro-based bar placement with child.elapsed_start_s, child.elapsed_end_s,
-      and span_s (already passed from the route). Use child.display_duration for
-      bar labels. Update axis tick labels to show elapsed format: sub-second spans
-      use +Nms, longer spans use +Ns or +Nm Ns. Guard against span_s == 0 by
-      clamping to 0.001 in the template. See design doc:
-      docs/plans/2026-03-26-08-timeline-sub-second-precision-lost-design.md'
+      and span_s (already passed from the route). Use child.display_duration for bar
+      labels. Update axis tick labels to show elapsed format: sub-second spans use
+      +Nms, longer spans use +Ns or +Nm Ns. Guard against span_s == 0 by clamping
+      to 0.001 in the template. See design doc: docs/plans/2026-03-26-08-timeline-sub-second-precision-lost-design.md'
     status: pending

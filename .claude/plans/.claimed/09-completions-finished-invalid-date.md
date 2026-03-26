@@ -31,3 +31,5 @@ In dashboard.js, update fmtFinished to handle both types:
         : new Date(finishedAt);
       return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     }
+
+## LangSmith Trace: 18cf7823-2130-4fba-97ba-34ef99ead08b
