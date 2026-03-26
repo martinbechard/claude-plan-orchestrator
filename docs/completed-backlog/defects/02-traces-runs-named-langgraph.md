@@ -33,5 +33,3 @@ When the supervisor dispatches a worker, pass a `run_name` or set the LangGraph
 root run name. Alternatively, after the root run is created, update the `name`
 column in the local SQLite `traces` table using the `item_slug` from the first
 child run that arrives with metadata containing `item_slug`.
-
-## LangSmith Trace: c75a40a5-2b37-429d-94a9-308906fa9e64
