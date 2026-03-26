@@ -70,10 +70,14 @@ sections:
       POST the per-task cost payload to {LANGCHAIN_ENDPOINT}/api/cost using urllib.request
       (no new dependencies). Keep existing JSON file write as the fallback. Handle
       HTTP errors and timeouts gracefully (log and continue).'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-26T01:11:04.345037'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T01:12:51.805707'
+    result_message: Added _post_cost_to_db() helper and updated write_execution_cost_log()
+      to POST to LANGCHAIN_ENDPOINT/api/cost when endpoint starts with http://localhost,
+      with graceful fallback to JSON file on failure. All 1506 tests pass.
   - id: '2.2'
     name: Update CostLogReader to query DB
     agent: coder
