@@ -41,12 +41,19 @@
 
 {# ── Active workers panel ───────────────────────────────────────────────────── #}
 <section aria-labelledby="hd-workers">
-  <h2 id="hd-workers">Active Workers</h2>
+  <div class="section-header">
+    <h2 id="hd-workers">Active Workers</h2>
+    <button id="workers-view-toggle" class="view-toggle-btn" aria-pressed="false" title="Switch to timeline view">Timeline</button>
+  </div>
   <div id="workers-container" class="worker-grid" aria-live="polite" aria-label="Active workers">
     <div class="empty-state" id="workers-empty">
       <div class="icon" aria-hidden="true">&#9881;</div>
       <p>No active workers</p>
     </div>
+  </div>
+  <div id="timeline-container" class="timeline-container" aria-live="polite" aria-label="Active workers timeline" hidden>
+    <div class="timeline-axis" id="timeline-axis" aria-hidden="true"></div>
+    <div class="timeline-rows" id="timeline-rows"></div>
   </div>
 </section>
 
@@ -125,6 +132,17 @@
 {# Error row template — one <p> per recent_errors entry #}
 <template id="tpl-error-row">
   <p class="error-row"></p>
+</template>
+
+{# Timeline row template — one instance per active_workers entry in timeline view #}
+<template id="tpl-timeline-row">
+  <div class="timeline-row" role="row">
+    <span class="timeline-label" role="rowheader"></span>
+    <div class="timeline-bar-track" role="cell" aria-label="Elapsed time bar">
+      <div class="timeline-bar"></div>
+    </div>
+    <span class="timeline-elapsed" role="cell" aria-label="Elapsed time"></span>
+  </div>
 </template>
 
 <script src="/static/dashboard.js" defer></script>
