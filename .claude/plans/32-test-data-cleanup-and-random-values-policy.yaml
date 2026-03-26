@@ -1,0 +1,36 @@
+meta:
+  source_item: docs/plans/2026-03-26-32-test-data-cleanup-and-random-values-policy-design.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: phase-1
+  name: Verify defect 32 completion state
+  status: pending
+  tasks:
+  - id: "1.1"
+    name: Verify all acceptance criteria for defect 32 are satisfied
+    agent: coder
+    description: >
+      Verify and confirm that defect 32 is fully complete.
+      Design and requirements: docs/plans/2026-03-26-32-test-data-cleanup-and-random-values-policy-design.md
+
+      All work was done prior to archival but the YAML was deleted before recording
+      completion. Verify the following are in place, then write task-status.json as completed:
+
+      1. .claude/agents/coder.md has Test Data Discipline section
+      2. .claude/agents/validator.md has Step 5c test-data leak check
+      3. CODING-RULES.md has test data cleanup rules in section 12
+      4. ~/.claude/orchestrator-traces.db has no rows with item_slug=12-test-item
+      5. ~/.claude/orchestrator-traces.db has no rows with item_slug=test (zero-value placeholders)
+      6. plugin.json is at 1.10.3 or higher
+      7. RELEASE-NOTES.md has an entry for test data discipline policies
+
+      If any item is missing, fix it immediately before writing completion status.
+    status: pending

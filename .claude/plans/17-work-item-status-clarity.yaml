@@ -1,0 +1,43 @@
+meta:
+  source_item: .claude/plans/.claimed/17-work-item-status-clarity.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Backend - Pipeline Stage Detection
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Expand item route with pipeline stage and active worker
+    agent: coder
+    status: pending
+    description: 'Implement the work item: .claude/plans/.claimed/17-work-item-status-clarity.md
+
+
+      Design doc: docs/plans/2026-03-26-17-work-item-status-clarity-design.md
+
+
+      In langgraph_pipeline/web/routes/item.py replace _derive_status with _derive_pipeline_stage
+      and add _get_active_worker per design doc.'
+- id: '2'
+  name: Frontend - Status Display and Active Worker Banner
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Update item template for pipeline stage and worker banner
+    agent: frontend-coder
+    status: pending
+    description: 'Implement the work item: .claude/plans/.claimed/17-work-item-status-clarity.md
+
+
+      Design doc: docs/plans/2026-03-26-17-work-item-status-clarity-design.md
+
+
+      In item.html rename status to pipeline_stage, add CSS for new stages, and add
+      active-worker banner per design doc.'
