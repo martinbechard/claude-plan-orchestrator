@@ -5,6 +5,7 @@
 """Tests for langgraph_pipeline.pipeline.nodes.intake."""
 
 import json
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -14,6 +15,7 @@ import pytest
 from langgraph_pipeline.pipeline.nodes.intake import (
     INTAKE_CLARITY_THRESHOLD,
     MAX_INTAKES_PER_HOUR,
+    THROTTLE_WAIT_INTERVAL_SECONDS,
     THROTTLE_WINDOW_SECONDS,
     _check_rag_dedup,
     _check_throttle,
@@ -395,3 +397,93 @@ class TestIntakeAnalyzeQuotaDetection:
         ):
             result = intake_analyze(state)
         assert result == {"quota_exhausted": True}
+
+
+# ─── Updated limits ─────────────────────────────────────────────────────────
+
+
+class TestUpdatedLimits:
+    def test_all_types_have_limit_of_50(self):
+        """MAX_INTAKES_PER_HOUR should be 50 for all types after the update."""
+        assert MAX_INTAKES_PER_HOUR["defect"] == 50
+        assert MAX_INTAKES_PER_HOUR["feature"] == 50
+        assert MAX_INTAKES_PER_HOUR["analysis"] == 50
+
+    def test_throttle_wait_interval_is_60(self):
+        assert THROTTLE_WAIT_INTERVAL_SECONDS == 60
+
+
+# ─── Blocking throttle wait ─────────────────────────────────────────────────
+
+
+class TestBlockingThrottleWait:
+    def test_blocks_then_resumes_when_throttle_clears(self, tmp_path, monkeypatch):
+        """When throttled, intake_analyze waits and resumes once throttle clears."""
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+
+        call_count = 0
+
+        def mock_check_throttle(item_type: str) -> bool:
+            nonlocal call_count
+            call_count += 1
+            # First call: throttled. Second call (after wait): cleared.
+            return call_count <= 1
+
+        # Use a real event but make wait() return immediately.
+        mock_event = threading.Event()
+        monkeypatch.setattr(
+            "langgraph_pipeline.pipeline.nodes.intake.get_shutdown_event",
+            lambda: mock_event,
+        )
+        monkeypatch.setattr(
+            intake_mod, "THROTTLE_WAIT_INTERVAL_SECONDS", 0
+        )
+        monkeypatch.setattr(
+            intake_mod, "_check_throttle", mock_check_throttle
+        )
+
+        state = _make_state(item_type="feature")
+        with patch("langgraph_pipeline.pipeline.nodes.intake._invoke_claude"):
+            result = intake_analyze(state)
+
+        # Should have proceeded after throttle cleared.
+        assert call_count == 2
+        assert result.get("intake_count_features") == 1
+
+    def test_returns_empty_dict_on_shutdown_during_wait(self, tmp_path, monkeypatch):
+        """When shutdown event fires during throttle wait, returns empty dict."""
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+
+        # Always throttled so the loop keeps running.
+        monkeypatch.setattr(intake_mod, "_check_throttle", lambda item_type: True)
+
+        # Create an event that is already set (simulates shutdown).
+        shutdown_event = threading.Event()
+        shutdown_event.set()
+        monkeypatch.setattr(
+            "langgraph_pipeline.pipeline.nodes.intake.get_shutdown_event",
+            lambda: shutdown_event,
+        )
+        monkeypatch.setattr(intake_mod, "THROTTLE_WAIT_INTERVAL_SECONDS", 0)
+
+        state = _make_state(item_type="feature")
+        result = intake_analyze(state)
+
+        assert result == {}
+
+    def test_not_throttled_proceeds_without_waiting(self, tmp_path, monkeypatch):
+        """When not throttled, intake_analyze proceeds normally (no wait loop)."""
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+        monkeypatch.setattr(intake_mod, "_check_throttle", lambda item_type: False)
+
+        state = _make_state(item_type="feature")
+        with patch("langgraph_pipeline.pipeline.nodes.intake._invoke_claude"):
+            result = intake_analyze(state)
+
+        assert result.get("intake_count_features") == 1

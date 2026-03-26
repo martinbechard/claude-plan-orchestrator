@@ -28,6 +28,7 @@ from typing import Optional
 from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.quota import detect_quota_exhaustion
+from langgraph_pipeline.shared.shutdown import get_shutdown_event
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -36,10 +37,13 @@ THROTTLE_WINDOW_SECONDS = 3600  # 1-hour rolling window
 
 # Maximum new items to create per type per hour.
 MAX_INTAKES_PER_HOUR: dict[str, int] = {
-    "defect": 10,
-    "feature": 20,
-    "analysis": 10,
+    "defect": 50,
+    "feature": 50,
+    "analysis": 50,
 }
+
+# Seconds between re-checks when the throttle wait loop is active.
+THROTTLE_WAIT_INTERVAL_SECONDS = 60
 
 # Reject requests below this clarity level (1–5 scale).
 INTAKE_CLARITY_THRESHOLD = 3
@@ -262,12 +266,22 @@ def intake_analyze(state: PipelineState) -> dict:
     if plan_path:
         return {}
 
-    # Safety gate: log a warning when intake is throttled.
+    # Safety gate: block when intake is throttled, waiting for the window to clear.
     if _check_throttle(item_type):
         print(
-            f"[intake_analyze] Throttle limit reached for {item_type}: "
-            f"max {MAX_INTAKES_PER_HOUR.get(item_type, 10)} per hour"
+            f"[intake_analyze] Throttle limit reached for {item_type} "
+            "— pausing intake. Waiting for window to clear."
         )
+        shutdown_event = get_shutdown_event()
+        while True:
+            shutdown_event.wait(THROTTLE_WAIT_INTERVAL_SECONDS)
+            if shutdown_event.is_set():
+                return {}
+            if not _check_throttle(item_type):
+                print(
+                    f"[intake_analyze] Throttle cleared for {item_type} — resuming."
+                )
+                break
 
     # Safety gate: check for semantic duplicates.
     if item_slug and _check_rag_dedup(item_slug):
