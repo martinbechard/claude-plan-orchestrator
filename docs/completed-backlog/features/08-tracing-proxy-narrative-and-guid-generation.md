@@ -76,5 +76,3 @@ worth implementing if we decide to drop the LangSmith SDK dependency.
    reaching the network vs. being intercepted.
 3. Decide: keep SDK (simple, IDs generated for free) or replace with direct
    proxy calls + self-generated UUIDs.
-
-## LangSmith Trace: e8278012-1bfc-4d9c-b369-6c26008c82fa
