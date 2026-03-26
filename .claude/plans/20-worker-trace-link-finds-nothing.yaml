@@ -1,5 +1,5 @@
 meta:
-  id: "20"
+  id: '20'
   title: Dashboard "View Traces" link from active worker never finds any traces
   source_item: .claude/plans/.claimed/20-worker-trace-link-finds-nothing.md
   design: docs/plans/2026-03-26-20-worker-trace-link-finds-nothing-design.md
@@ -13,39 +13,56 @@ meta:
     - validator
     max_validation_attempts: 2
 sections:
-- id: "1"
+- id: '1'
   name: Fix proxy list_runs trace_id filter (Bug 2)
   status: pending
   tasks:
-  - id: "1.1"
+  - id: '1.1'
     name: Relax parent_run_id IS NULL when trace_id filter is provided
     agent: coder
-    status: pending
-    description: |
-      Implement the fix described in: .claude/plans/.claimed/20-worker-trace-link-finds-nothing.md
+    status: in_progress
+    description: 'Implement the fix described in: .claude/plans/.claimed/20-worker-trace-link-finds-nothing.md
+
 
       Design doc: docs/plans/2026-03-26-20-worker-trace-link-finds-nothing-design.md
 
+
       Focus on Fix 2 (proxy.py list_runs): when trace_id is provided, replace the
+
       combined parent_run_id IS NULL + run_id LIKE conditions with
+
       (run_id = ? OR parent_run_id = ?) so in-flight child runs are visible.
+
       Also update count_runs() with the same logic.
+
       Update tests/langgraph/web/test_proxy.py for the new behavior.
-- id: "2"
+
+      '
+    last_attempt: '2026-03-26T13:21:02.956378'
+    attempts: 1
+    model_used: sonnet
+- id: '2'
   name: Fix supervisor run_id refresh (Bug 1)
   status: pending
   tasks:
-  - id: "2.1"
+  - id: '2.1'
     name: Add update_worker_run_id to DashboardState and refresh in supervisor loop
     agent: coder
     status: pending
-    description: |
-      Implement the fix described in: .claude/plans/.claimed/20-worker-trace-link-finds-nothing.md
+    description: 'Implement the fix described in: .claude/plans/.claimed/20-worker-trace-link-finds-nothing.md
+
 
       Design doc: docs/plans/2026-03-26-20-worker-trace-link-finds-nothing-design.md
 
+
       Focus on Fix 1 (supervisor + dashboard_state): add update_worker_run_id(pid,
+
       run_id) to DashboardState, and in the supervisor polling loop re-read the item
+
       file for any active worker whose WorkerInfo.run_id is None, calling
+
       update_worker_run_id when a trace ID is found.
+
       Add tests for the new DashboardState method and supervisor refresh behavior.
+
+      '
