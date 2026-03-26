@@ -35,12 +35,13 @@ sections:
     result_message: 'Fixed three missing deliverables: created queue.html template
       with table/detail panels/auto-refresh, added Queue nav link to base.html, wrapped
       dashboard queue count in anchor linking to /queue. All 1525 tests pass.'
-    validation_attempts: 1
-    validation_findings: 'queue.py and server.py registration are correct and all
-      1525 tests pass, but three required deliverables are missing: (1) queue.html
-      template does not exist - GET /queue will raise TemplateNotFound at runtime;
-      (2) base.html has no Queue nav link; (3) dashboard.html queue count stat is
-      not wrapped in an anchor linking to /queue.'
+    validation_attempts: 2
+    validation_findings: 'All deliverables present: GET /queue and GET /api/queue
+      endpoints in routes/queue.py, router registered in server.py, queue.html template
+      with table/detail/auto-refresh, Queue nav link in base.html, dashboard queue
+      count linked to /queue. Data model, sort order, poll interval, detail panel
+      toggle, and graceful missing-dir handling all match the design doc. Build compiles
+      cleanly; 1525 tests pass.'
 - id: '2'
   name: Frontend queue template and nav link
   status: pending
@@ -60,4 +61,7 @@ sections:
       link the dashboard queue count to /queue.
 
       '
-    status: pending
+    status: in_progress
+    last_attempt: '2026-03-26T02:00:31.837809'
+    attempts: 1
+    model_used: opus

@@ -34,6 +34,12 @@ sections:
     result_message: Added list_completions_by_slug() and list_root_traces_by_slug()
       to TracingProxy; created GET /item/{slug} route in routes/item.py; registered
       router in server.py. All 1525 tests pass.
+    validation_attempts: 1
+    validation_findings: Build passes, 1525 tests pass. list_completions_by_slug()
+      and list_root_traces_by_slug() correctly added to TracingProxy with matching
+      SQL. GET /item/{slug} route created in routes/item.py with all required context
+      fields. Router registered in server.py. Missing item.html template and dashboard
+      links are deferred to tasks 2.1 and 3.1 respectively (confirmed in plan YAML).
 - id: '2'
   name: Frontend - item detail page template
   status: pending
@@ -54,7 +60,10 @@ sections:
       Use the frontend-design skill for a polished layout.
 
       '
-    status: pending
+    status: in_progress
+    last_attempt: '2026-03-26T01:59:54.538380'
+    attempts: 1
+    model_used: sonnet
 - id: '3'
   name: Dashboard - add slug drill-down links
   status: pending
