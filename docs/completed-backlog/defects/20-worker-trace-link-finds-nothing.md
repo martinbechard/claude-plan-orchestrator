@@ -51,5 +51,3 @@ with that worker, either by matching on run_id, thread_id, or item slug.
 - Defect 05: trace_id filter on /proxy endpoint
 - Defect 02: root runs named "LangGraph" with no slug association
 - Defect 06: drill-down from dashboard to traces
-
-## LangSmith Trace: 057ca458-0d6a-455d-bedf-c52ceee4ebf7
