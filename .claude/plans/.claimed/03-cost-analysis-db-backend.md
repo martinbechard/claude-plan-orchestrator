@@ -91,3 +91,5 @@ Replace the JSON file glob with a DB query:
 - `/analysis` displays real data after at least one worker completes
 - Existing JSON file fallback still works when web server is not running
 - All existing tests pass
+
+## LangSmith Trace: ef23382d-7200-4c7e-bb47-10a841fa5876
