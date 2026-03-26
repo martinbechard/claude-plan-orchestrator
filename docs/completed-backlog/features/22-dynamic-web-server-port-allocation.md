@@ -39,5 +39,3 @@ Allow each project to use its own stable port, auto-detected on first run to avo
 - After first auto-detection, `orchestrator-config.yaml` contains `web.port: <N>` and
   subsequent runs use that port without re-scanning.
 - `--web-port <N>` overrides the config value for that run only (no write-back).
-
-## LangSmith Trace: c0d4f466-94c7-446d-bbdb-513c86dd7dca
