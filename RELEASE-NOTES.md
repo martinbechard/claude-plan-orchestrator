@@ -1,5 +1,14 @@
 # Release Notes
 
+## 1.10.10 (2026-03-26)
+
+### Bug Fixes
+- **Rename misleading graph node and edge functions:** Renamed the `verify_symptoms`
+  graph node to `verify_fix` (defect verification checks the fix, not just symptoms)
+  and renamed edge routing functions from `after_intake`, `after_create_plan`, and
+  `is_defect` to `route_after_intake`, `route_after_plan`, and `route_after_execution`
+  to make the routing purpose explicit. No behavior changes.
+
 ## 1.10.9 (2026-03-26)
 
 ### Bug Fixes
