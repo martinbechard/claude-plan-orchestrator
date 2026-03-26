@@ -75,7 +75,7 @@ sections:
   - id: '2.1'
     name: Refresh token counts each poll cycle and record final velocity
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: .claude/plans/.claimed/16-worker-velocity-tracking.md
       -- Read the design doc at docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
       for full details. In langgraph_pipeline/supervisor.py: (1) add _refresh_worker_token_counts(
@@ -87,6 +87,11 @@ sections:
     last_attempt: '2026-03-26T15:09:21.444164'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T15:12:07.136634'
+    result_message: Added _refresh_worker_token_counts() called each poll cycle after
+      _refresh_worker_run_ids(), and _compute_final_velocity() helper. Final velocity
+      is now passed to proxy.record_completion() in all reap paths. All 1295 tests
+      pass.
 - id: '3'
   name: Frontend velocity colour mode and label in timeline
   status: pending
