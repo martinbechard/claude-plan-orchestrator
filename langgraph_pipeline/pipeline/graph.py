@@ -5,17 +5,17 @@
 """Pipeline StateGraph for the Claude plan orchestrator.
 
 Assembles the pipeline graph (intake_analyze, create_plan, execute_plan,
-verify_symptoms, archive) with conditional edges and SQLite-backed
+verify_fix, archive) with conditional edges and SQLite-backed
 checkpointing for crash recovery.
 
 The CLI pre-scans the backlog via scan_backlog_fn() before invoking the graph,
 so the graph entry point is intake_analyze (item_path is always pre-populated).
 
 Graph topology:
-  intake_analyze --[after_intake]--> create_plan | END
-  create_plan --[after_create_plan]--> execute_plan | END
-  execute_plan --[is_defect]--> verify_symptoms | archive
-  verify_symptoms --[verify_result]--> archive | create_plan
+  intake_analyze --[route_after_intake]--> create_plan | END
+  create_plan --[route_after_plan]--> execute_plan | END
+  execute_plan --[route_after_execution]--> verify_fix | archive
+  verify_fix --[verify_result]--> archive | create_plan
   archive --> END
 """
 
@@ -26,13 +26,13 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from langgraph_pipeline.pipeline.edges import after_create_plan, after_intake, is_defect, verify_result
+from langgraph_pipeline.pipeline.edges import route_after_execution, route_after_intake, route_after_plan, verify_result
 from langgraph_pipeline.pipeline.nodes import (
     archive,
     create_plan,
     execute_plan,
     intake_analyze,
-    verify_symptoms,
+    verify_fix,
 )
 from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.langsmith import configure_tracing
@@ -48,7 +48,7 @@ PIPELINE_THREAD_ID = "pipeline-main"
 NODE_INTAKE_ANALYZE = "intake_analyze"
 NODE_CREATE_PLAN = "create_plan"
 NODE_EXECUTE_PLAN = "execute_plan"
-NODE_VERIFY_SYMPTOMS = "verify_symptoms"
+NODE_VERIFY_FIX = "verify_fix"
 NODE_ARCHIVE = "archive"
 
 
@@ -68,22 +68,22 @@ def build_graph() -> StateGraph:
     graph.add_node(NODE_INTAKE_ANALYZE, intake_analyze)
     graph.add_node(NODE_CREATE_PLAN, create_plan)
     graph.add_node(NODE_EXECUTE_PLAN, execute_plan)
-    graph.add_node(NODE_VERIFY_SYMPTOMS, verify_symptoms)
+    graph.add_node(NODE_VERIFY_FIX, verify_fix)
     graph.add_node(NODE_ARCHIVE, archive)
 
     graph.set_entry_point(NODE_INTAKE_ANALYZE)
 
-    # intake_analyze → after_intake → create_plan | END
-    graph.add_conditional_edges(NODE_INTAKE_ANALYZE, after_intake)
+    # intake_analyze → route_after_intake → create_plan | END
+    graph.add_conditional_edges(NODE_INTAKE_ANALYZE, route_after_intake)
 
-    # create_plan → after_create_plan → execute_plan | END
-    graph.add_conditional_edges(NODE_CREATE_PLAN, after_create_plan)
+    # create_plan → route_after_plan → execute_plan | END
+    graph.add_conditional_edges(NODE_CREATE_PLAN, route_after_plan)
 
-    # execute_plan → is_defect → verify_symptoms | archive
-    graph.add_conditional_edges(NODE_EXECUTE_PLAN, is_defect)
+    # execute_plan → route_after_execution → verify_fix | archive
+    graph.add_conditional_edges(NODE_EXECUTE_PLAN, route_after_execution)
 
-    # verify_symptoms → verify_result → archive | create_plan
-    graph.add_conditional_edges(NODE_VERIFY_SYMPTOMS, verify_result)
+    # verify_fix → verify_result → archive | create_plan
+    graph.add_conditional_edges(NODE_VERIFY_FIX, verify_result)
 
     # archive → END (always)
     graph.add_edge(NODE_ARCHIVE, END)

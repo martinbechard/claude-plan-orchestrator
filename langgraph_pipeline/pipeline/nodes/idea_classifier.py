@@ -112,7 +112,7 @@ def classify_idea(idea_path: str, dry_run: bool = False) -> bool:
 
     try:
         result = subprocess.run(
-            ["claude", "--dangerously-skip-permissions", "--print", prompt],
+            ["claude", "--dangerously-skip-permissions", "--permission-mode", "acceptEdits", "--print", prompt],
             capture_output=True,
             text=True,
             timeout=IDEA_INTAKE_TIMEOUT_SECONDS,

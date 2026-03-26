@@ -42,7 +42,7 @@
     <span class="stat-label">Fail</span>
   </span>
   <span class="stat">
-    <span class="stat-value">~${{ "%.4f" | format(total_cost_usd) }}</span>
+    <span class="stat-value">${{ "%.4f" | format(total_cost_usd) }}</span>
     <span class="stat-label">Total Cost</span>
   </span>
 </div>
@@ -135,7 +135,7 @@
 
         <td style="text-align:right">
           {% if row.cost_usd is not none and row.cost_usd != "" %}
-            ~${{ "%.4f" | format(row.cost_usd | float) }}
+            ${{ "%.4f" | format(row.cost_usd | float) }}
           {% else %}
             &mdash;
           {% endif %}

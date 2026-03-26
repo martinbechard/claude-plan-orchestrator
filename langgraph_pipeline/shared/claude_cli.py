@@ -109,6 +109,7 @@ def call_claude(
         "--model", model,
         "--output-format", "json",
         "--dangerously-skip-permissions",
+        "--permission-mode", "acceptEdits",
     ]
     try:
         proc = subprocess.run(

@@ -162,6 +162,7 @@ def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, int, dict, str,
     cmd = [
         "claude",
         "--dangerously-skip-permissions",
+        "--permission-mode", "acceptEdits",
         "--output-format", "stream-json",
         "--verbose",
         "--model", model_cli_name,

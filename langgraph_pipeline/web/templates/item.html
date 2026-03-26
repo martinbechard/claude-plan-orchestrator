@@ -469,7 +469,7 @@
   </div>
   <div class="item-header-cost" aria-label="Total API cost">
     <span class="item-cost-label">Total Cost</span>
-    <span class="item-cost-value">~${{ "%.4f"|format(total_cost_usd) }}</span>
+    <span class="item-cost-value">${{ "%.4f"|format(total_cost_usd) }}</span>
   </div>
 </div>
 
@@ -588,7 +588,7 @@
                   <span class="badge outcome-{{ c.outcome }}"
                         aria-label="Outcome: {{ c.outcome }}">{{ c.outcome }}</span>
                 </td>
-                <td class="nowrap">~${{ "%.4f"|format(c.cost_usd) }}</td>
+                <td class="nowrap">${{ "%.4f"|format(c.cost_usd) }}</td>
                 <td class="nowrap">{{ "%.1f"|format(c.duration_s) }}s</td>
                 <td class="nowrap mono-sm">
                   {{ c.finished_at[:16] if c.finished_at else '—' }}

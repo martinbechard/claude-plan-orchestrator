@@ -120,6 +120,7 @@ def _build_planner_command(prompt: str) -> list[str]:
         cmd += ["--permission-mode", "acceptEdits"]
     else:
         cmd += ["--dangerously-skip-permissions"]
+        cmd += ["--permission-mode", "acceptEdits"]
     cmd += ["--model", PLANNER_MODEL]
     cmd += ["--output-format", "json"]
     cmd += ["--print", prompt]

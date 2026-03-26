@@ -52,7 +52,7 @@ PENDING_STATUS = "pending"
 STRIPPED_ENV_VAR = "CLAUDECODE"       # removed so Claude can spawn from Claude Code
 
 # Status file path relative to either the main repo or a worktree root
-WORKTREE_STATUS_FILE_RELATIVE = ".claude/plans/task-status.json"
+WORKTREE_STATUS_FILE_RELATIVE = "tmp/task-status.json"
 
 # Task outcome string constants
 _OUTCOME_COMPLETED = "completed"
@@ -253,6 +253,7 @@ def _run_claude_in_worktree(
     cmd = [
         "claude",
         "--dangerously-skip-permissions",
+        "--permission-mode", "acceptEdits",
         "--output-format", "stream-json",
         "--verbose",
         "--model", model_cli_name,

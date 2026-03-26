@@ -39,7 +39,7 @@ class PipelineState(TypedDict):
       intake_analyze   → (validates/enriches the item fields)
       create_plan      → plan_path, design_doc_path
       execute_plan     → session_cost_usd, session_input_tokens, session_output_tokens
-      verify_symptoms  → verification_history (append), verification_cycle
+      verify_fix  → verification_history (append), verification_cycle
     """
 
     # ── Item metadata (set by scan_backlog / intake_analyze) ──────────────────
@@ -52,9 +52,9 @@ class PipelineState(TypedDict):
     plan_path: Optional[str]
     design_doc_path: Optional[str]
 
-    # ── Verification (appended by verify_symptoms) ────────────────────────────
+    # ── Verification (appended by verify_fix) ────────────────────────────
     verification_cycle: int
-    # Annotated with operator.add so each verify_symptoms call appends its record.
+    # Annotated with operator.add so each verify_fix call appends its record.
     verification_history: Annotated[list[VerificationRecord], operator.add]
 
     # ── Control flags ─────────────────────────────────────────────────────────

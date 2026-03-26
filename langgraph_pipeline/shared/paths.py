@@ -17,7 +17,7 @@ ENV_ORCHESTRATOR_WEB_URL = "ORCHESTRATOR_WEB_URL"
 # ─── Plans directory ───────────────────────────────────────────────────────────
 
 PLANS_DIR = ".claude/plans"
-STATUS_FILE_PATH = ".claude/plans/task-status.json"
+STATUS_FILE_PATH = "tmp/task-status.json"
 TASK_LOG_DIR = Path(".claude/plans/logs")
 PID_FILE_PATH = ".claude/plans/.pipeline.pid"
 LANGGRAPH_PID_FILE_PATH = ".claude/plans/.lg-pipeline.pid"

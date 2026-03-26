@@ -24,28 +24,28 @@ MAX_VERIFICATION_CYCLES = 3
 NODE_INTAKE_ANALYZE = "intake_analyze"
 NODE_CREATE_PLAN = "create_plan"
 NODE_EXECUTE_PLAN = "execute_plan"
-NODE_VERIFY_SYMPTOMS = "verify_symptoms"
+NODE_VERIFY_FIX = "verify_fix"
 NODE_ARCHIVE = "archive"
 
 
 # ─── Edge routing functions ───────────────────────────────────────────────────
 
 
-def after_intake(state: PipelineState) -> str:
+def route_after_intake(state: PipelineState) -> str:
     """Route from intake_analyze: END on quota exhaustion, else create_plan."""
     if state.get("quota_exhausted"):
         return END
     return NODE_CREATE_PLAN
 
 
-def after_create_plan(state: PipelineState) -> str:
+def route_after_plan(state: PipelineState) -> str:
     """Route from create_plan: END on quota exhaustion, else execute_plan."""
     if state.get("quota_exhausted"):
         return END
     return NODE_EXECUTE_PLAN
 
 
-def is_defect(state: PipelineState) -> str:
+def route_after_execution(state: PipelineState) -> str:
     """Route from execute_plan based on the item type.
 
     Quota exhaustion takes priority: return END so the item remains on disk
@@ -55,7 +55,7 @@ def is_defect(state: PipelineState) -> str:
     if state.get("quota_exhausted"):
         return END
     if state.get("item_type") == "defect":
-        return NODE_VERIFY_SYMPTOMS
+        return NODE_VERIFY_FIX
     return NODE_ARCHIVE
 
 
@@ -69,7 +69,7 @@ def cycles_exhausted(state: PipelineState) -> bool:
 
 
 def verify_result(state: PipelineState) -> str:
-    """Route from verify_symptoms based on the last outcome and remaining cycles.
+    """Route from verify_fix based on the last outcome and remaining cycles.
 
     Decision tree:
     - No history yet            → NODE_ARCHIVE   (safety fallback)

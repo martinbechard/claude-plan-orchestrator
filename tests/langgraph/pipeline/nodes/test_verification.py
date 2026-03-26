@@ -1,8 +1,8 @@
 # tests/langgraph/pipeline/nodes/test_verification.py
-# Unit tests for the verify_symptoms node.
+# Unit tests for the verify_fix node.
 # Design: docs/plans/2026-02-26-04-pipeline-graph-nodes-design.md
 
-"""Tests for langgraph_pipeline.pipeline.nodes.verification."""
+"""Tests for langgraph_pipeline.pipeline.nodes.verification (verify_fix node)."""
 
 from unittest.mock import patch
 
@@ -13,7 +13,7 @@ from langgraph_pipeline.pipeline.nodes.verification import (
     _build_verification_record,
     _invoke_claude,
     _parse_verification_outcome,
-    verify_symptoms,
+    verify_fix,
 )
 
 
@@ -119,17 +119,17 @@ class TestInvokeClaude:
         assert cost == 0.0
 
 
-# ─── verify_symptoms node ─────────────────────────────────────────────────────
+# ─── verify_fix node ──────────────────────────────────────────────────────────
 
 
-class TestVerifySymptoms:
+class TestVerifyFix:
     def test_returns_verification_history_list_with_one_record(self):
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
             return_value=("Result: PASS\nNotes: All tests pass.", 0.0),
         ):
-            result = verify_symptoms(state)
+            result = verify_fix(state)
         assert "verification_history" in result
         assert len(result["verification_history"]) == 1
 
@@ -139,7 +139,7 @@ class TestVerifySymptoms:
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
             return_value=("Result: PASS\nNotes: Fixed.", 0.0),
         ):
-            result = verify_symptoms(state)
+            result = verify_fix(state)
         assert result["verification_history"][0]["outcome"] == "PASS"
 
     def test_returns_fail_outcome_when_claude_says_fail(self):
@@ -148,7 +148,7 @@ class TestVerifySymptoms:
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
             return_value=("Result: FAIL\nNotes: Tests still failing.", 0.0),
         ):
-            result = verify_symptoms(state)
+            result = verify_fix(state)
         assert result["verification_history"][0]["outcome"] == "FAIL"
 
     def test_returns_fail_when_claude_returns_empty_output(self):
@@ -157,7 +157,7 @@ class TestVerifySymptoms:
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
             return_value=("", 0.0),
         ):
-            result = verify_symptoms(state)
+            result = verify_fix(state)
         assert result["verification_history"][0]["outcome"] == "FAIL"
 
     def test_increments_verification_cycle(self):
@@ -166,7 +166,7 @@ class TestVerifySymptoms:
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
             return_value=("Result: PASS", 0.0),
         ):
-            result = verify_symptoms(state)
+            result = verify_fix(state)
         assert result["verification_cycle"] == 2
 
     def test_starts_cycle_at_one_when_zero(self):
@@ -175,12 +175,12 @@ class TestVerifySymptoms:
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
             return_value=("Result: PASS", 0.0),
         ):
-            result = verify_symptoms(state)
+            result = verify_fix(state)
         assert result["verification_cycle"] == 1
 
     def test_returns_fail_when_no_item_path(self):
         state = _make_state(item_path="")
-        result = verify_symptoms(state)
+        result = verify_fix(state)
         assert result["verification_history"][0]["outcome"] == "FAIL"
         assert result["verification_cycle"] == 1
 
@@ -190,7 +190,7 @@ class TestVerifySymptoms:
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
             return_value=("Result: PASS", 0.0),
         ):
-            result = verify_symptoms(state)
+            result = verify_fix(state)
         record = result["verification_history"][0]
         assert "timestamp" in record
         assert "T" in record["timestamp"]
@@ -201,5 +201,5 @@ class TestVerifySymptoms:
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
             return_value=("Result: PASS\nNotes: Everything is working.", 0.0),
         ):
-            result = verify_symptoms(state)
+            result = verify_fix(state)
         assert "PASS" in result["verification_history"][0]["notes"]

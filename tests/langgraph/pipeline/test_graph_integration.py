@@ -108,7 +108,7 @@ def _config(suffix: str) -> dict:
 
 
 class TestFeatureItem:
-    """Feature items skip verify_symptoms and go directly to archive."""
+    """Feature items skip verify_fix and go directly to archive."""
 
     def test_feature_routes_through_archive(self, checkpointer):
         """A feature item traverses: intake → create_plan → execute → archive."""
@@ -147,8 +147,8 @@ class TestFeatureItem:
         ]
         assert result["item_type"] == "feature"
 
-    def test_verify_symptoms_not_called_for_feature(self, checkpointer):
-        """verify_symptoms is never called when item_type is 'feature'."""
+    def test_verify_fix_not_called_for_feature(self, checkpointer):
+        """verify_fix is never called when item_type is 'feature'."""
         verify_called = False
 
         def mock_intake(state: dict) -> dict:
@@ -172,7 +172,7 @@ class TestFeatureItem:
             patch(f"{GRAPH_MODULE}.intake_analyze", mock_intake),
             patch(f"{GRAPH_MODULE}.create_plan", mock_create_plan),
             patch(f"{GRAPH_MODULE}.execute_plan", mock_execute_plan),
-            patch(f"{GRAPH_MODULE}.verify_symptoms", mock_verify),
+            patch(f"{GRAPH_MODULE}.verify_fix", mock_verify),
             patch(f"{GRAPH_MODULE}.archive", mock_archive),
         ):
             compiled = build_graph().compile(checkpointer=checkpointer)
@@ -182,7 +182,7 @@ class TestFeatureItem:
 
 
 class TestDefectItemPassVerification:
-    """Defect items that PASS verification route to archive after verify_symptoms."""
+    """Defect items that PASS verification route to archive after verify_fix."""
 
     def test_defect_routes_through_verification_to_archive(self, checkpointer):
         """A defect that PASSes routes: intake → create_plan → execute → verify → archive."""
@@ -201,7 +201,7 @@ class TestDefectItemPassVerification:
             return {}
 
         def mock_verify(state: dict) -> dict:
-            node_calls.append("verify_symptoms")
+            node_calls.append("verify_fix")
             cycle = (state.get("verification_cycle") or 0) + 1
             return {
                 "verification_cycle": cycle,
@@ -216,7 +216,7 @@ class TestDefectItemPassVerification:
             patch(f"{GRAPH_MODULE}.intake_analyze", mock_intake),
             patch(f"{GRAPH_MODULE}.create_plan", mock_create_plan),
             patch(f"{GRAPH_MODULE}.execute_plan", mock_execute_plan),
-            patch(f"{GRAPH_MODULE}.verify_symptoms", mock_verify),
+            patch(f"{GRAPH_MODULE}.verify_fix", mock_verify),
             patch(f"{GRAPH_MODULE}.archive", mock_archive),
         ):
             compiled = build_graph().compile(checkpointer=checkpointer)
@@ -226,7 +226,7 @@ class TestDefectItemPassVerification:
             "intake_analyze",
             "create_plan",
             "execute_plan",
-            "verify_symptoms",
+            "verify_fix",
             "archive",
         ]
         assert result["verification_history"][-1]["outcome"] == "PASS"
@@ -254,7 +254,7 @@ class TestDefectItemFailRetry:
 
         def mock_verify(state: dict) -> dict:
             nonlocal verify_call_count
-            node_calls.append("verify_symptoms")
+            node_calls.append("verify_fix")
             verify_call_count += 1
             cycle = (state.get("verification_cycle") or 0) + 1
             # First call FAILs, second call PASSes.
@@ -274,7 +274,7 @@ class TestDefectItemFailRetry:
             patch(f"{GRAPH_MODULE}.intake_analyze", mock_intake),
             patch(f"{GRAPH_MODULE}.create_plan", mock_create_plan),
             patch(f"{GRAPH_MODULE}.execute_plan", mock_execute_plan),
-            patch(f"{GRAPH_MODULE}.verify_symptoms", mock_verify),
+            patch(f"{GRAPH_MODULE}.verify_fix", mock_verify),
             patch(f"{GRAPH_MODULE}.archive", mock_archive),
         ):
             compiled = build_graph().compile(checkpointer=checkpointer)
@@ -284,10 +284,10 @@ class TestDefectItemFailRetry:
             "intake_analyze",
             "create_plan",
             "execute_plan",
-            "verify_symptoms",
+            "verify_fix",
             "create_plan",
             "execute_plan",
-            "verify_symptoms",
+            "verify_fix",
             "archive",
         ]
         assert result["verification_history"][-1]["outcome"] == "PASS"

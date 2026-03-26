@@ -1,10 +1,10 @@
 # langgraph_pipeline/pipeline/nodes/verification.py
-# verify_symptoms LangGraph node: run post-fix defect verification, parse PASS/FAIL.
+# verify_fix LangGraph node: run post-fix defect verification, parse PASS/FAIL.
 # Design: docs/plans/2026-02-26-04-pipeline-graph-nodes-design.md
 
-"""verify_symptoms node for the pipeline StateGraph.
+"""verify_fix node for the pipeline StateGraph.
 
-After execute_plan runs the plan that fixes a defect, verify_symptoms
+After execute_plan runs the plan that fixes a defect, verify_fix
 spawns Claude to check whether the original defect symptoms have been
 resolved.  It parses PASS or FAIL from Claude's response, appends a
 VerificationRecord to verification_history, and increments
@@ -96,7 +96,7 @@ def _build_verification_record(outcome: str, notes: str) -> VerificationRecord:
 # ─── Node ─────────────────────────────────────────────────────────────────────
 
 
-def verify_symptoms(state: PipelineState) -> dict:
+def verify_fix(state: PipelineState) -> dict:
     """LangGraph node: verify that a defect's symptoms have been resolved.
 
     Spawns Claude to inspect the backlog item and check whether the
@@ -114,14 +114,14 @@ def verify_symptoms(state: PipelineState) -> dict:
     cycle: int = state.get("verification_cycle") or 0
 
     if not item_path:
-        print(f"[verify_symptoms] No item_path in state for {item_slug}; skipping.")
+        print(f"[verify_fix] No item_path in state for {item_slug}; skipping.")
         record = _build_verification_record("FAIL", "No item_path available for verification.")
         return {
             "verification_history": [record],
             "verification_cycle": cycle + 1,
         }
 
-    print(f"[verify_symptoms] Verifying defect symptoms for {item_slug} (cycle {cycle + 1})")
+    print(f"[verify_fix] Verifying defect symptoms for {item_slug} (cycle {cycle + 1})")
 
     prompt = VERIFICATION_PROMPT.format(item_path=item_path)
     output, total_cost_usd = _invoke_claude(prompt)
@@ -131,10 +131,10 @@ def verify_symptoms(state: PipelineState) -> dict:
 
     record = _build_verification_record(outcome, notes)
 
-    print(f"[verify_symptoms] Verification outcome for {item_slug}: {outcome}")
+    print(f"[verify_fix] Verification outcome for {item_slug}: {outcome}")
 
     add_trace_metadata({
-        "node_name": "verify_symptoms",
+        "node_name": "verify_fix",
         "graph_level": "pipeline",
         "item_slug": item_slug,
         "item_type": "defect",

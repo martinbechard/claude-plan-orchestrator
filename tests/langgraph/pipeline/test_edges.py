@@ -13,11 +13,11 @@ from langgraph_pipeline.pipeline.edges import (
     NODE_CREATE_PLAN,
     NODE_EXECUTE_PLAN,
     NODE_INTAKE_ANALYZE,
-    NODE_VERIFY_SYMPTOMS,
-    after_create_plan,
-    after_intake,
+    NODE_VERIFY_FIX,
+    route_after_execution,
+    route_after_intake,
+    route_after_plan,
     cycles_exhausted,
-    is_defect,
     verify_result,
 )
 
@@ -66,42 +66,42 @@ class TestNodeNameConstants:
         assert isinstance(NODE_CREATE_PLAN, str)
         assert NODE_CREATE_PLAN
 
-    def test_verify_symptoms_is_string(self):
-        assert isinstance(NODE_VERIFY_SYMPTOMS, str)
-        assert NODE_VERIFY_SYMPTOMS
+    def test_verify_fix_is_string(self):
+        assert isinstance(NODE_VERIFY_FIX, str)
+        assert NODE_VERIFY_FIX
 
     def test_archive_is_string(self):
         assert isinstance(NODE_ARCHIVE, str)
         assert NODE_ARCHIVE
 
 
-class TestIsDefect:
-    """is_defect routes defects to verification, all others to archive."""
+class TestRouteAfterExecution:
+    """route_after_execution routes defects to verification, all others to archive."""
 
-    def test_routes_defect_to_verify_symptoms(self):
+    def test_routes_defect_to_verify_fix(self):
         state = _make_state(item_type="defect")
-        assert is_defect(state) == NODE_VERIFY_SYMPTOMS
+        assert route_after_execution(state) == NODE_VERIFY_FIX
 
     def test_routes_feature_to_archive(self):
         state = _make_state(item_type="feature")
-        assert is_defect(state) == NODE_ARCHIVE
+        assert route_after_execution(state) == NODE_ARCHIVE
 
     def test_routes_analysis_to_archive(self):
         state = _make_state(item_type="analysis")
-        assert is_defect(state) == NODE_ARCHIVE
+        assert route_after_execution(state) == NODE_ARCHIVE
 
     def test_routes_unknown_type_to_archive(self):
         state = _make_state(item_type="unknown")
-        assert is_defect(state) == NODE_ARCHIVE
+        assert route_after_execution(state) == NODE_ARCHIVE
 
     def test_routes_missing_type_to_archive(self):
         state = {}
-        assert is_defect(state) == NODE_ARCHIVE
+        assert route_after_execution(state) == NODE_ARCHIVE
 
     def test_quota_exhausted_routes_end(self):
         # quota_exhausted takes priority over item_type — item must stay on disk
         state = _make_state(item_type="defect", quota_exhausted=True)
-        assert is_defect(state) == END
+        assert route_after_execution(state) == END
 
 
 class TestCyclesExhausted:
@@ -179,33 +179,33 @@ class TestVerifyResult:
         assert verify_result(state) == NODE_ARCHIVE
 
 
-class TestAfterIntake:
-    """after_intake routes to END on quota exhaustion, else create_plan."""
+class TestRouteAfterIntake:
+    """route_after_intake routes to END on quota exhaustion, else create_plan."""
 
     def test_quota_exhausted_routes_to_end(self):
         state = _make_state(quota_exhausted=True)
-        assert after_intake(state) == END
+        assert route_after_intake(state) == END
 
     def test_normal_state_routes_to_create_plan(self):
         state = _make_state(quota_exhausted=False)
-        assert after_intake(state) == NODE_CREATE_PLAN
+        assert route_after_intake(state) == NODE_CREATE_PLAN
 
     def test_missing_quota_exhausted_routes_to_create_plan(self):
         state = _make_state()
-        assert after_intake(state) == NODE_CREATE_PLAN
+        assert route_after_intake(state) == NODE_CREATE_PLAN
 
 
-class TestAfterCreatePlan:
-    """after_create_plan routes to END on quota exhaustion, else execute_plan."""
+class TestRouteAfterPlan:
+    """route_after_plan routes to END on quota exhaustion, else execute_plan."""
 
     def test_quota_exhausted_routes_to_end(self):
         state = _make_state(quota_exhausted=True)
-        assert after_create_plan(state) == END
+        assert route_after_plan(state) == END
 
     def test_normal_state_routes_to_execute_plan(self):
         state = _make_state(quota_exhausted=False)
-        assert after_create_plan(state) == NODE_EXECUTE_PLAN
+        assert route_after_plan(state) == NODE_EXECUTE_PLAN
 
     def test_missing_quota_exhausted_routes_to_execute_plan(self):
         state = _make_state()
-        assert after_create_plan(state) == NODE_EXECUTE_PLAN
+        assert route_after_plan(state) == NODE_EXECUTE_PLAN

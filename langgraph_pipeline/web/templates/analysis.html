@@ -110,15 +110,15 @@
 <div class="summary-cards" role="region" aria-label="Cost summary">
   <div class="summary-card">
     <div class="card-label">All-Time Total</div>
-    <div class="card-value">~${{ "%.4f" | format(summary.total_cost_usd) }}</div>
+    <div class="card-value">${{ "%.4f" | format(summary.total_cost_usd) }}</div>
   </div>
   <div class="summary-card">
     <div class="card-label">Today</div>
-    <div class="card-value">~${{ "%.4f" | format(summary.today_cost_usd) }}</div>
+    <div class="card-value">${{ "%.4f" | format(summary.today_cost_usd) }}</div>
   </div>
   <div class="summary-card">
     <div class="card-label">This Week</div>
-    <div class="card-value">~${{ "%.4f" | format(summary.week_cost_usd) }}</div>
+    <div class="card-value">${{ "%.4f" | format(summary.week_cost_usd) }}</div>
   </div>
   <div class="summary-card">
     <div class="card-label">Most Expensive Slug</div>
@@ -126,7 +126,7 @@
       {{ summary.most_expensive_slug | e if summary.most_expensive_slug else "&mdash;" | safe }}
     </div>
     {% if summary.most_expensive_slug %}
-    <div class="card-sub">~${{ "%.4f" | format(summary.most_expensive_slug_cost_usd) }}</div>
+    <div class="card-sub">${{ "%.4f" | format(summary.most_expensive_slug_cost_usd) }}</div>
     {% endif %}
   </div>
 </div>
@@ -202,8 +202,8 @@
           <th scope="col">Slug</th>
           <th scope="col">Node</th>
           <th scope="col">Model</th>
-          <th scope="col" class="sort-col" style="text-align:right">Exclusive ~$</th>
-          <th scope="col" class="sort-col" style="text-align:right">Inclusive ~$</th>
+          <th scope="col" class="sort-col" style="text-align:right">Exclusive $</th>
+          <th scope="col" class="sort-col" style="text-align:right">Inclusive $</th>
           <th scope="col" style="text-align:right">Tokens In</th>
           <th scope="col" style="text-align:right">Tokens Out</th>
           <th scope="col" style="text-align:right">Duration</th>
@@ -226,8 +226,8 @@
           </td>
           <td>{{ run.name | e }}</td>
           <td>{{ run.model | e }}</td>
-          <td style="text-align:right">~${{ "%.4f" | format(run.exclusive_cost_usd) }}</td>
-          <td style="text-align:right">~${{ "%.4f" | format(run.inclusive_cost_usd) }}</td>
+          <td style="text-align:right">${{ "%.4f" | format(run.exclusive_cost_usd) }}</td>
+          <td style="text-align:right">${{ "%.4f" | format(run.inclusive_cost_usd) }}</td>
           <td style="text-align:right">{{ "{:,}".format(run.input_tokens) }}</td>
           <td style="text-align:right">{{ "{:,}".format(run.output_tokens) }}</td>
           <td style="text-align:right">
@@ -309,9 +309,9 @@
         <tr>
           <th scope="col">Slug</th>
           <th scope="col">Type</th>
-          <th scope="col" style="text-align:right">Total ~$</th>
+          <th scope="col" style="text-align:right">Total $</th>
           <th scope="col" style="text-align:right">Tasks</th>
-          <th scope="col" style="text-align:right">Avg ~$</th>
+          <th scope="col" style="text-align:right">Avg $</th>
         </tr>
       </thead>
       <tbody>
@@ -328,9 +328,9 @@
             &mdash;
             {% endif %}
           </td>
-          <td style="text-align:right">~${{ "%.4f" | format(sc.total_cost_usd) }}</td>
+          <td style="text-align:right">${{ "%.4f" | format(sc.total_cost_usd) }}</td>
           <td style="text-align:right">{{ sc.task_count }}</td>
-          <td style="text-align:right">~${{ "%.4f" | format(sc.avg_cost_usd) }}</td>
+          <td style="text-align:right">${{ "%.4f" | format(sc.avg_cost_usd) }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -360,8 +360,8 @@
         <tr>
           <th scope="col">Node</th>
           <th scope="col" style="text-align:right">Tasks</th>
-          <th scope="col" style="text-align:right">Total ~$</th>
-          <th scope="col" style="text-align:right">Avg ~$</th>
+          <th scope="col" style="text-align:right">Total $</th>
+          <th scope="col" style="text-align:right">Avg $</th>
         </tr>
       </thead>
       <tbody>
@@ -405,7 +405,7 @@
           <th scope="col">Task</th>
           <th scope="col">Detail</th>
           <th scope="col" style="text-align:right">Result KB</th>
-          <th scope="col" style="text-align:right">Est. ~$</th>
+          <th scope="col" style="text-align:right">Est. $</th>
         </tr>
       </thead>
       <tbody>
@@ -425,7 +425,7 @@
             <span class="tool-attr-detail" title="{{ ta.detail | e }}">{{ ta.detail | e }}</span>
           </td>
           <td style="text-align:right">{{ "%.1f" | format(ta.result_bytes / 1024) }}</td>
-          <td style="text-align:right">~${{ "%.6f" | format(ta.estimated_cost_usd) }}</td>
+          <td style="text-align:right">${{ "%.6f" | format(ta.estimated_cost_usd) }}</td>
         </tr>
         {% endfor %}
       </tbody>
