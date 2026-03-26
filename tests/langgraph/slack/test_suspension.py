@@ -68,6 +68,7 @@ def _make_callbacks(**kwargs) -> SuspensionCallbacks:
         "ensure_socket_mode": MagicMock(return_value=False),
         "should_notify": MagicMock(return_value=True),
         "call_claude": MagicMock(return_value=ClaudeResult(text="", failure_reason=None)),
+        "probe_quota": MagicMock(return_value=True),
         "gather_state": MagicMock(return_value={}),
         "format_state": MagicMock(return_value="state_context"),
         "create_backlog": MagicMock(return_value={"item_number": 1, "filename": "01-item.md", "filepath": "/tmp/01-item.md"}),
@@ -135,6 +136,7 @@ class TestSuspensionCallbacks:
         cb = SuspensionCallbacks()
         assert cb.post_message is None
         assert cb.call_claude is None
+        assert cb.probe_quota is None
         assert cb.intake_lock is None
         assert cb.pending_intakes is None
         assert cb.rag is None

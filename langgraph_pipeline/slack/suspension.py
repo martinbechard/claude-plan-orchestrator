@@ -191,7 +191,8 @@ class SuspensionCallbacks:
         as_role: Role context manager factory — (role) -> ContextManager.
         ensure_socket_mode: Socket Mode check — () -> bool.
         should_notify: Notify event check — (event) -> bool.
-        call_claude: LLM invocation — (prompt, model, timeout) -> str.
+        call_claude: LLM invocation — (prompt, model, timeout) -> ClaudeResult.
+        probe_quota: Quota availability probe — () -> bool. If None, quota is assumed available.
         gather_state: Pipeline state — () -> dict.
         format_state: State formatter — (state) -> str.
         create_backlog: Backlog creation — (item_type, title, body, user, ts) -> Optional[dict].
@@ -213,6 +214,7 @@ class SuspensionCallbacks:
     ensure_socket_mode: Optional[Callable] = None
     should_notify: Optional[Callable] = None
     call_claude: Optional[Callable] = None
+    probe_quota: Optional[Callable] = None
     gather_state: Optional[Callable] = None
     format_state: Optional[Callable] = None
     create_backlog: Optional[Callable] = None
@@ -766,19 +768,17 @@ class SlackSuspension:
             pass  # Best-effort acknowledgment, do not block analysis
 
         try:
-            prompt = INTAKE_ANALYSIS_PROMPT.format(
-                item_type=intake.item_type, text=intake.original_text
-            )
-            response_text = (
-                self._callbacks.call_claude(
-                    prompt, SLACK_LLM_MODEL, INTAKE_ANALYSIS_TIMEOUT_SECONDS
-                ).text
-                if self._callbacks.call_claude
-                else ""
-            )
-
-            if not response_text:
-                print("[INTAKE] LLM returned empty response")
+            # Gate intake on quota availability before spawning a doomed subprocess.
+            if self._callbacks.probe_quota and not self._callbacks.probe_quota():
+                failure_reason = "quota exhausted — analysis skipped"
+                print(f"[INTAKE] Quota unavailable: {failure_reason}")
+                try:
+                    from langgraph_pipeline.web.dashboard_state import get_dashboard_state
+                    get_dashboard_state().add_error(
+                        f"[INTAKE] call_claude skipped: {failure_reason}"
+                    )
+                except Exception:
+                    pass
                 item_info = self._create_backlog_item(
                     intake.item_type, fallback_title,
                     intake.original_text, intake.user, intake.ts,
@@ -787,7 +787,44 @@ class SlackSuspension:
                 if self._callbacks.send_status:
                     self._callbacks.send_status(
                         f"*{intake.item_type.title()} received{item_ref}:* {fallback_title}\n"
-                        "_(Analysis unavailable, created from raw text)_",
+                        f"_(Analysis unavailable: {failure_reason} — created from raw text)_",
+                        "success",
+                        intake.channel_id,
+                    )
+                intake.status = "done"
+                return
+
+            prompt = INTAKE_ANALYSIS_PROMPT.format(
+                item_type=intake.item_type, text=intake.original_text
+            )
+            result = (
+                self._callbacks.call_claude(
+                    prompt, SLACK_LLM_MODEL, INTAKE_ANALYSIS_TIMEOUT_SECONDS
+                )
+                if self._callbacks.call_claude
+                else None
+            )
+            response_text = result.text if result else ""
+
+            if not response_text:
+                failure_reason = (result.failure_reason if result else None) or "LLM returned empty response"
+                print(f"[INTAKE] LLM call failed: {failure_reason}")
+                try:
+                    from langgraph_pipeline.web.dashboard_state import get_dashboard_state
+                    get_dashboard_state().add_error(
+                        f"[INTAKE] call_claude failed: {failure_reason}"
+                    )
+                except Exception:
+                    pass
+                item_info = self._create_backlog_item(
+                    intake.item_type, fallback_title,
+                    intake.original_text, intake.user, intake.ts,
+                )
+                item_ref = _format_item_ref(item_info)
+                if self._callbacks.send_status:
+                    self._callbacks.send_status(
+                        f"*{intake.item_type.title()} received{item_ref}:* {fallback_title}\n"
+                        f"_(Analysis unavailable: {failure_reason} — created from raw text)_",
                         "success",
                         intake.channel_id,
                     )

@@ -18,6 +18,7 @@ from langgraph_pipeline.slack.identity import (
     AgentIdentity,
     load_agent_identity,
 )
+from langgraph_pipeline.shared.quota import probe_quota_available
 from langgraph_pipeline.slack.notifier import SLACK_CONFIG_PATH
 from langgraph_pipeline.slack.notifier import SlackNotifier as _SlackNotifierImpl
 from langgraph_pipeline.slack.poller import PollerCallbacks, SlackPoller
@@ -87,6 +88,7 @@ class SlackNotifier:
             ensure_socket_mode=self._notifier._ensure_socket_mode,
             should_notify=self._notifier._should_notify,
             call_claude=call_claude,
+            probe_quota=probe_quota_available,
             gather_state=gather_state,
             format_state=format_state,
             create_backlog=lambda *a, **kw: self._poller.create_backlog_item(*a, **kw),
