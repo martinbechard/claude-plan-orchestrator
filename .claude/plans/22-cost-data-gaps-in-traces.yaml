@@ -97,7 +97,7 @@ sections:
   - id: '2.1'
     name: Record call_claude cost in suspension.py trace metadata
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the fix described in: .claude/plans/.claimed/22-cost-data-gaps-in-traces.md
 
 
@@ -116,3 +116,5 @@ sections:
     last_attempt: '2026-03-26T12:09:02.357321'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T12:11:35.987276'
+    result_message: 'PASS: All good'
