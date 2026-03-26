@@ -27,13 +27,19 @@ sections:
       Register the new router in langgraph_pipeline/web/server.py.
 
       '
-    status: completed
-    last_attempt: '2026-03-26T01:52:27.160509'
-    attempts: 1
-    model_used: sonnet
+    status: in_progress
+    last_attempt: '2026-03-26T01:55:43.734585'
+    attempts: 2
+    model_used: opus
     completed_at: '2026-03-26T01:53:43.723821'
     result_message: Created queue.py with GET /queue and GET /api/queue endpoints.
       Registered router in server.py.
+    validation_attempts: 1
+    validation_findings: 'queue.py and server.py registration are correct and all
+      1525 tests pass, but three required deliverables are missing: (1) queue.html
+      template does not exist - GET /queue will raise TemplateNotFound at runtime;
+      (2) base.html has no Queue nav link; (3) dashboard.html queue count stat is
+      not wrapped in an anchor linking to /queue.'
 - id: '2'
   name: Frontend queue template and nav link
   status: pending
