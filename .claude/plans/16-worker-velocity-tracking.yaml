@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Extend WorkerInfo and DashboardState with token fields
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: .claude/plans/.claimed/16-worker-velocity-tracking.md
       -- Read the design doc at docs/plans/2026-03-26-16-worker-velocity-tracking-design.md
       for full details. In langgraph_pipeline/web/dashboard_state.py: (1) add tokens_in:
@@ -32,6 +32,10 @@ sections:
     last_attempt: '2026-03-26T15:01:06.275427'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T15:03:00.736374'
+    result_message: Added tokens_in/tokens_out fields to WorkerInfo, update_worker_tokens()
+      method to DashboardState, and tokens_per_minute computation (with 0.0 when both
+      token fields are 0) in snapshot(). All 1563 tests pass.
   - id: '1.2'
     name: Add get_worker_token_counts and extend completions in proxy
     agent: coder
