@@ -792,6 +792,9 @@ def main() -> int:
 
     _configure_logging(args.log_level)
 
+    from langgraph_pipeline.web.dashboard_state import DashboardErrorHandler
+    logging.getLogger("langgraph_pipeline").addHandler(DashboardErrorHandler())
+
     config = load_orchestrator_config()
     max_parallel_items = get_max_parallel_items(config)
     _log_startup_banner(args, config, max_parallel_items)

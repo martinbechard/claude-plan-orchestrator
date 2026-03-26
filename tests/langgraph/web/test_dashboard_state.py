@@ -1,9 +1,11 @@
 # tests/langgraph/web/test_dashboard_state.py
 # Unit tests for DashboardState and its module-level singleton helpers.
 # Design: docs/plans/2026-03-25-15-pipeline-activity-dashboard-design.md
+# Design: docs/plans/2026-03-26-10-error-stream-always-empty-design.md
 
 """Unit tests for langgraph_pipeline.web.dashboard_state."""
 
+import logging
 import threading
 import time
 
@@ -13,6 +15,7 @@ import langgraph_pipeline.web.dashboard_state as ds_module
 from langgraph_pipeline.web.dashboard_state import (
     MAX_RECENT_COMPLETIONS,
     MAX_RECENT_ERRORS,
+    DashboardErrorHandler,
     DashboardState,
     get_dashboard_state,
     reset_dashboard_state,
@@ -140,6 +143,112 @@ def test_reset_clears_state():
     assert new_state.active_workers == {}
     assert new_state.recent_completions == []
     assert new_state.recent_errors == []
+
+
+# ─── DashboardErrorHandler Tests ─────────────────────────────────────────────
+
+
+def test_handler_forwards_warning_record():
+    """DashboardErrorHandler.emit() adds WARNING records to recent_errors."""
+    handler = DashboardErrorHandler()
+    record = logging.LogRecord(
+        name="langgraph_pipeline.test",
+        level=logging.WARNING,
+        pathname="",
+        lineno=0,
+        msg="something went wrong",
+        args=(),
+        exc_info=None,
+    )
+
+    handler.emit(record)
+
+    state = get_dashboard_state()
+    assert len(state.recent_errors) == 1
+    assert "[WARNING]" in state.recent_errors[0]
+    assert "langgraph_pipeline.test" in state.recent_errors[0]
+    assert "something went wrong" in state.recent_errors[0]
+
+
+def test_handler_forwards_error_record():
+    """DashboardErrorHandler.emit() adds ERROR records to recent_errors."""
+    handler = DashboardErrorHandler()
+    record = logging.LogRecord(
+        name="langgraph_pipeline.supervisor",
+        level=logging.ERROR,
+        pathname="",
+        lineno=0,
+        msg="worker crashed",
+        args=(),
+        exc_info=None,
+    )
+
+    handler.emit(record)
+
+    state = get_dashboard_state()
+    assert len(state.recent_errors) == 1
+    assert "[ERROR]" in state.recent_errors[0]
+    assert "worker crashed" in state.recent_errors[0]
+
+
+def test_handler_ignores_debug_record():
+    """DashboardErrorHandler.emit() does not add DEBUG records to recent_errors.
+
+    The handler itself has no level filter — the caller (logging framework)
+    must enforce the minimum level. When emit() is called directly with a
+    DEBUG record it still adds it. This test verifies that installing the
+    handler on a logger with WARNING level filters DEBUG records before emit().
+    """
+    test_logger = logging.getLogger("langgraph_pipeline._test_debug_filter")
+    test_logger.setLevel(logging.WARNING)
+    handler = DashboardErrorHandler()
+    test_logger.addHandler(handler)
+    try:
+        test_logger.debug("this should be filtered")
+    finally:
+        test_logger.removeHandler(handler)
+
+    assert get_dashboard_state().recent_errors == []
+
+
+def test_handler_ignores_info_record():
+    """INFO records are filtered by the logger before reaching the handler."""
+    test_logger = logging.getLogger("langgraph_pipeline._test_info_filter")
+    test_logger.setLevel(logging.WARNING)
+    handler = DashboardErrorHandler()
+    test_logger.addHandler(handler)
+    try:
+        test_logger.info("this is informational")
+    finally:
+        test_logger.removeHandler(handler)
+
+    assert get_dashboard_state().recent_errors == []
+
+
+def test_handler_accumulates_multiple_records():
+    """Multiple emit() calls accumulate in recent_errors in LIFO order."""
+    handler = DashboardErrorHandler()
+    messages = ["first warning", "second warning", "third error"]
+    levels = [logging.WARNING, logging.WARNING, logging.ERROR]
+
+    for msg, level in zip(messages, levels):
+        record = logging.LogRecord(
+            name="langgraph_pipeline.node",
+            level=level,
+            pathname="",
+            lineno=0,
+            msg=msg,
+            args=(),
+            exc_info=None,
+        )
+        handler.emit(record)
+
+    state = get_dashboard_state()
+    assert len(state.recent_errors) == 3
+    # add_error prepends, so most-recent is first
+    assert "third error" in state.recent_errors[0]
+    assert "second warning" in state.recent_errors[1]
+    assert "first warning" in state.recent_errors[2]
 
 
 def test_thread_safety():

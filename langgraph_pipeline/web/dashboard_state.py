@@ -1,6 +1,7 @@
 # langgraph_pipeline/web/dashboard_state.py
 # Thread-safe DashboardState singleton for the pipeline activity dashboard.
 # Design: docs/plans/2026-03-26-03-dashboard-items-stuck-running-design.md
+# Design: docs/plans/2026-03-26-10-error-stream-always-empty-design.md
 
 """Thread-safe state container for the pipeline activity dashboard.
 
@@ -9,6 +10,7 @@ A module-level singleton is shared between the supervisor thread (writer) and
 the SSE endpoint in the uvicorn async loop (reader).
 """
 
+import logging
 import os
 import threading
 import time
@@ -281,3 +283,22 @@ def reset_dashboard_state() -> None:
     global _state
     with _state_lock:
         _state = DashboardState()
+
+
+# ─── Logging Handler ──────────────────────────────────────────────────────────
+
+
+class DashboardErrorHandler(logging.Handler):
+    """Logging handler that forwards WARNING+ records to the dashboard error stream.
+
+    Install on the 'langgraph_pipeline' logger (not root) to capture pipeline-internal
+    warnings without forwarding noise from third-party libraries.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Format the record and append it to DashboardState.recent_errors."""
+        try:
+            msg = f"[{record.levelname}] {record.name}: {self.format(record)}"
+            get_dashboard_state().add_error(msg)
+        except Exception:
+            self.handleError(record)
