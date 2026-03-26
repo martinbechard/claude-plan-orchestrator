@@ -285,6 +285,66 @@ class TracingProxy:
             rows = conn.execute(sql, [limit]).fetchall()
         return [dict(row) for row in rows]
 
+    # ─── Cost Tasks ───────────────────────────────────────────────────────────
+
+    def record_cost_task(
+        self,
+        item_slug: str,
+        item_type: str,
+        task_id: str,
+        agent_type: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost_usd: float,
+        duration_s: float,
+        tool_calls_json: Optional[str],
+        recorded_at: str,
+    ) -> None:
+        """Persist a per-task cost record to the cost_tasks table.
+
+        Never raises; errors are logged at DEBUG level so callers are not disrupted.
+
+        Args:
+            item_slug: Work item slug (e.g. "01-some-feature").
+            item_type: One of "defect" or "feature".
+            task_id: Plan task identifier (e.g. "1.1").
+            agent_type: Agent role (e.g. "coder", "validator").
+            model: Model ID used for the task.
+            input_tokens: Number of input tokens consumed.
+            output_tokens: Number of output tokens produced.
+            cost_usd: Estimated API cost in USD.
+            duration_s: Wall-clock seconds the task ran.
+            tool_calls_json: JSON-serialised list of tool call dicts, or None.
+            recorded_at: ISO-8601 timestamp when the record was created.
+        """
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO cost_tasks
+                        (item_slug, item_type, task_id, agent_type, model,
+                         input_tokens, output_tokens, cost_usd, duration_s,
+                         tool_calls_json, recorded_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        item_slug,
+                        item_type,
+                        task_id,
+                        agent_type,
+                        model,
+                        input_tokens,
+                        output_tokens,
+                        cost_usd,
+                        duration_s,
+                        tool_calls_json,
+                        recorded_at,
+                    ],
+                )
+        except Exception:
+            logger.debug("TracingProxy: failed to record cost_task for %s/%s", item_slug, task_id, exc_info=True)
+
     # ─── Read Helpers ─────────────────────────────────────────────────────────
 
     def list_runs(

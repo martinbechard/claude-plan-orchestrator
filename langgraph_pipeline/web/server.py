@@ -147,10 +147,12 @@ def create_app(config: Optional[dict] = None):
         return JSONResponse({"status": "ok", "supervisor": {"uptime_seconds": uptime}})
 
     from langgraph_pipeline.web.routes.analysis import router as analysis_router
+    from langgraph_pipeline.web.routes.cost import router as cost_router
     from langgraph_pipeline.web.routes.dashboard import router as dashboard_router
 
     app.include_router(dashboard_router)
     app.include_router(analysis_router)
+    app.include_router(cost_router)
 
     _STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
@@ -191,39 +193,86 @@ def create_app(config: Optional[dict] = None):
     async def runs_multipart(request: Request):
         """Accept a LangSmith multipart batch and store each run via the proxy.
 
-        The SDK sends each run as a multipart field named 'post.<run_id>' or
-        'patch.<run_id>' with Content-Type application/json.
+        The SDK (via requests_toolbelt MultipartEncoder) sends each run as multiple
+        parts: 'post.<uuid>' for the base run info, plus optional 'post.<uuid>.inputs',
+        'post.<uuid>.outputs', 'post.<uuid>.extra', etc.  We parse the raw body with
+        Python's email module (more robust than FastAPI form parsing for this format)
+        and merge sub-parts before storing each run.
         """
         from langgraph_pipeline.web.proxy import get_proxy
+        import email as _email
+
         proxy = get_proxy()
         if proxy is None:
             return JSONResponse({}, status_code=202)
         try:
-            form = await request.form()
-            for field_name, field_value in form.multi_items():
-                if "." not in field_name:
+            content_type = request.headers.get("content-type", "")
+            body = await request.body()
+            logger.debug("runs_multipart: received %d bytes, content-type=%s", len(body), content_type)
+
+            # Build a fake email message so the stdlib multipart parser handles it.
+            msg = _email.message_from_bytes(
+                b"Content-Type: " + content_type.encode() + b"\r\n\r\n" + body
+            )
+
+            # Collect all parts, grouped by run_id.
+            # runs[run_id] = merged dict of all fields for that run.
+            runs: dict[str, dict] = {}
+
+            for part in msg.get_payload():
+                if isinstance(part, str):
                     continue
-                operation, run_id = field_name.split(".", 1)
-                if operation not in ("post", "patch"):
+                disp = part.get("Content-Disposition", "")
+                name = None
+                for item in disp.split(";"):
+                    item = item.strip()
+                    if item.lower().startswith("name="):
+                        name = item[5:].strip('"').strip("'")
+                        break
+                if not name:
+                    continue
+
+                data = part.get_payload(decode=True)
+                if not data:
                     continue
                 try:
-                    raw = field_value if isinstance(field_value, (str, bytes)) else await field_value.read()
-                    body = json.loads(raw)
+                    value = json.loads(data)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+
+                # Name formats: "post.<uuid>", "post.<uuid>.inputs", "patch.<uuid>", etc.
+                tokens = name.split(".", 2)
+                if len(tokens) < 2 or tokens[0] not in ("post", "patch"):
+                    continue
+                run_id = tokens[1]
+                field = tokens[2] if len(tokens) > 2 else None
+
+                if run_id not in runs:
+                    runs[run_id] = {"_operation": tokens[0]}
+                if field is None:
+                    runs[run_id].update(value)
+                else:
+                    runs[run_id][field] = value
+
+            logger.debug("runs_multipart: parsed %d run(s)", len(runs))
+            for run_id, run_data in runs.items():
+                try:
+                    extra = run_data.get("extra") or {}
                     proxy.record_run(
                         run_id=run_id,
-                        parent_run_id=body.get("parent_run_id"),
-                        name=body.get("name", ""),
-                        inputs=body.get("inputs"),
-                        outputs=body.get("outputs"),
-                        metadata=(body.get("extra") or {}).get("metadata"),
-                        error=body.get("error"),
-                        start_time=body.get("start_time"),
-                        end_time=body.get("end_time"),
+                        parent_run_id=run_data.get("parent_run_id"),
+                        name=run_data.get("name", ""),
+                        inputs=run_data.get("inputs"),
+                        outputs=run_data.get("outputs"),
+                        metadata=extra.get("metadata"),
+                        error=run_data.get("error"),
+                        start_time=run_data.get("start_time"),
+                        end_time=run_data.get("end_time"),
                     )
                 except Exception as exc:
-                    logger.debug("runs_multipart: failed to process field %s: %s", field_name, exc)
+                    logger.debug("runs_multipart: failed to record run %s: %s", run_id, exc)
         except Exception as exc:
-            logger.debug("runs_multipart: failed to parse form: %s", exc)
+            logger.warning("runs_multipart: failed: %s", exc)
         return JSONResponse({}, status_code=202)
 
     @app.post("/runs")
