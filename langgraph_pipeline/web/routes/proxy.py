@@ -2,6 +2,7 @@
 # FastAPI router for the /proxy trace list and detail endpoints.
 # Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md
 # Design: docs/plans/2026-03-26-04-timeline-duplicate-labels-and-elapsed-time-design.md
+# Design: docs/plans/2026-03-26-16-tool-calls-missing-from-traces-design.md
 
 """Read-only FastAPI router that serves the LangSmith trace proxy UI.
 
@@ -242,12 +243,21 @@ def proxy_trace(request: Request, run_id: str) -> HTMLResponse:
         _compute_elapsed(_enrich_run(c), root_start) for c in children
     ]
 
-    span_s = 0.0
-    if enriched_children:
-        span_s = max(c["elapsed_end_s"] for c in enriched_children)
-
     child_ids = [c["run_id"] for c in enriched_children if c.get("run_id")]
     grandchild_counts = proxy.count_children_batch(child_ids)
+
+    grandchildren_by_parent: dict[str, list[dict]] = {}
+    for child_id in child_ids:
+        if grandchild_counts.get(child_id, 0) > 0:
+            raw_gc = proxy.get_children(child_id)
+            grandchildren_by_parent[child_id] = [
+                _compute_elapsed(_enrich_run(gc), root_start) for gc in raw_gc
+            ]
+
+    all_items = enriched_children + [
+        gc for gcs in grandchildren_by_parent.values() for gc in gcs
+    ]
+    span_s = max(c["elapsed_end_s"] for c in all_items) if all_items else 0.0
 
     return templates.TemplateResponse(
         request,
@@ -257,5 +267,6 @@ def proxy_trace(request: Request, run_id: str) -> HTMLResponse:
             "children": enriched_children,
             "span_s": span_s,
             "grandchild_counts": grandchild_counts,
+            "grandchildren_by_parent": grandchildren_by_parent,
         },
     )
