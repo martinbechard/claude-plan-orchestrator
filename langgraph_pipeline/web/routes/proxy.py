@@ -246,13 +246,13 @@ def proxy_trace(request: Request, run_id: str) -> HTMLResponse:
     child_ids = [c["run_id"] for c in enriched_children if c.get("run_id")]
     grandchild_counts = proxy.count_children_batch(child_ids)
 
-    grandchildren_by_parent: dict[str, list[dict]] = {}
-    for child_id in child_ids:
-        if grandchild_counts.get(child_id, 0) > 0:
-            raw_gc = proxy.get_children(child_id)
-            grandchildren_by_parent[child_id] = [
-                _compute_elapsed(_enrich_run(gc), root_start) for gc in raw_gc
-            ]
+    raw_grandchildren = proxy.get_children_batch(
+        [cid for cid in child_ids if grandchild_counts.get(cid, 0) > 0]
+    )
+    grandchildren_by_parent: dict[str, list[dict]] = {
+        parent_id: [_compute_elapsed(_enrich_run(gc), root_start) for gc in gcs]
+        for parent_id, gcs in raw_grandchildren.items()
+    }
 
     all_items = enriched_children + [
         gc for gcs in grandchildren_by_parent.values() for gc in gcs

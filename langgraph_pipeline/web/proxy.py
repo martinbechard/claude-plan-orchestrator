@@ -592,6 +592,35 @@ class TracingProxy:
             rows = conn.execute(sql, [run_id]).fetchall()
         return [dict(row) for row in rows]
 
+    def get_children_batch(self, run_ids: list[str]) -> dict[str, list[dict]]:
+        """Return direct child runs grouped by parent_run_id.
+
+        Uses a single SQL query with an IN clause to avoid N+1 queries.
+
+        Args:
+            run_ids: List of parent run identifiers.
+
+        Returns:
+            Dict mapping each parent run_id to its list of child run dicts,
+            ordered by start_time ascending within each group.
+        """
+        if not run_ids:
+            return {}
+        placeholders = ",".join("?" for _ in run_ids)
+        sql = f"""
+            SELECT * FROM traces
+            WHERE parent_run_id IN ({placeholders})
+            ORDER BY parent_run_id, start_time ASC
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql, run_ids).fetchall()
+        result: dict[str, list[dict]] = {}
+        for row in rows:
+            row_dict = dict(row)
+            parent_id = row_dict["parent_run_id"]
+            result.setdefault(parent_id, []).append(row_dict)
+        return result
+
 
 # ─── Module-Level Singleton ────────────────────────────────────────────────────
 
