@@ -42,5 +42,3 @@ instead of elapsed offsets.
 4. Pre-fetch grandchildren in the route and pass grandchildren_by_parent dict
    to the template; render each child with a details/summary toggle when
    grand_count > 0.
-
-## LangSmith Trace: bb4a20af-3ff3-44e6-a5ea-f88a3b486284

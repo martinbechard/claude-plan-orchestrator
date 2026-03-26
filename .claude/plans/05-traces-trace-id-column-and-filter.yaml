@@ -27,15 +27,18 @@ sections:
       str = Query(default="") to proxy_list() and thread it through to proxy method
       calls and the template context dict. Add unit tests in tests/langgraph/web/test_proxy.py.
       See the design doc at docs/plans/2026-03-26-05-traces-trace-id-column-and-filter-design.md.'
-    status: completed
-    last_attempt: '2026-03-26T01:26:09.404090'
-    attempts: 1
-    model_used: sonnet
+    status: in_progress
+    last_attempt: '2026-03-26T01:30:46.698769'
+    attempts: 2
+    model_used: opus
     completed_at: '2026-03-26T01:28:57.168243'
     result_message: Added trace_id parameter to list_runs() and count_runs() in TracingProxy
       (run_id LIKE ?% trailing wildcard), added trace_id query param to proxy_list()
       route threading it to proxy calls and template context, added 3 unit tests (prefix
       match, empty returns all, count). All 1520 tests pass.
+    validation_attempts: 1
+    validation_findings: 'Validator ''validator'' failed to execute: No status file
+      written by Claude'
 - id: '2'
   name: Frontend column and filter input
   status: pending
