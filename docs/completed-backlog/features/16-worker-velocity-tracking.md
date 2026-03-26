@@ -4,49 +4,59 @@
 
 ## Priority: Medium
 
+## RETURNED — Pipeline grabbed this before edits were complete
+
 ## Summary
 
 Track the token throughput (tokens per minute) of each active worker to
 understand whether running parallel workers degrades individual throughput.
-Display velocity as bar colour intensity in the active workers timeline so
-slowdowns are visible at a glance.
+Display velocity in the active workers timeline with a thermal colour
+gradient so slowdowns are visible at a glance.
 
 ## Requirements
 
 ### Velocity metric
-- For each active worker, compute tokens_per_minute = total_tokens /
-  elapsed_minutes, updated on each SSE tick.
+- For each active worker, track per-minute token deltas (not just a
+  running average). Store a rolling window of minute-by-minute token
+  counts so the colour reflects current throughput, not smoothed over
+  the full run. This lets the user see velocity changes — e.g. a worker
+  slowing down mid-run when another worker starts competing for quota.
 - total_tokens = input_tokens + output_tokens from the worker's trace
   metadata (already available in execute_task traces).
 - The metric needs to be exposed in the SSE /api/state payload per worker.
 
 ### Data source
-- The supervisor or worker process needs to periodically report token
-  counts back to the dashboard state. Options:
-  a. Read from the traces DB (query latest token counts for the worker's
-     run_id on each poll cycle).
-  b. Have the worker write incremental token counts to its result file or
-     a sidecar file that the supervisor reads.
-  c. Parse the Claude CLI streaming output for token usage updates.
-- Option (a) is simplest if traces are written incrementally during
-  execution (they are — the SDK sends start events with partial data).
+- The supervisor poll loop (every 5s) can query the traces DB for the
+  worker's run_id to get latest token counts.
+- Compute delta from previous poll to get current-minute velocity.
 
 ### SSE payload extension
 - Add to each active_worker entry in the SSE state:
   tokens_in, tokens_out, tokens_per_minute (floats, 0 if not yet available)
 
-### Timeline visualization
+### Timeline colour mode toggle
 - Add a colour mode toggle button in the timeline toolbar with two modes:
   - "Type" (default): bars coloured by item type (defect/feature/analysis)
     using the existing orange/cyan/yellow palette
-  - "Velocity": bars coloured by throughput intensity:
-    - High velocity (> 5000 tokens/min): bright/saturated
-    - Medium velocity: normal
-    - Low velocity (< 1000 tokens/min): desaturated/dim
-    - No data yet: grey
+  - "Velocity": bars use a thermal gradient based on current-minute
+    throughput:
+    - Blue (#2563eb): low velocity (< 500 tok/min)
+    - Green (#16a34a): moderate (500-2000 tok/min)
+    - Yellow (#eab308): high (2000-5000 tok/min)
+    - Red (#dc2626): very high (> 5000 tok/min)
+    - Grey: no data yet
+    Interpolate between stops for smooth transitions.
 - The toggle persists in localStorage (key "dashboard.timeline.colorMode")
-- Show the numeric velocity next to the elapsed time label (e.g.
-  "3m 42s  2.4k tok/min") regardless of which colour mode is active
+
+### Bar text and tooltips
+- Write the value directly inside the bar as dark text (#1a1a2e) so it
+  contrasts against all gradient colours.
+- In Type colour mode: show elapsed time inside the bar (e.g. "3m 42s").
+- In Velocity colour mode: show velocity inside the bar (e.g. "2.4k/m").
+- When text is clipped (bar too narrow), show a tooltip on hover with
+  full details: elapsed time, velocity, slug, item type. Use the title
+  attribute or a lightweight CSS tooltip.
+- Both modes: tooltip always shows full details regardless of clipping.
 
 ### Historical analysis
 - Store final velocity for each completion in the completions table (new
@@ -58,9 +68,8 @@ slowdowns are visible at a glance.
 
 ## Implementation Notes
 
-- DashboardState.WorkerInfo needs new fields: tokens_in, tokens_out
-- The supervisor poll loop (every 5s) can query the traces DB for the
-  worker's run_id to get latest token counts
-- Velocity = (tokens_in + tokens_out) / (elapsed_s / 60)
-- For the timeline bar colour, use CSS opacity or HSL lightness scaled
-  by velocity relative to the session's average velocity
+- DashboardState.WorkerInfo needs new fields: tokens_in, tokens_out,
+  prev_tokens (for delta calculation)
+- Velocity = token_delta_since_last_poll / (poll_interval_s / 60)
+- For the thermal gradient, compute an HSL hue from the velocity value
+  mapped to the blue-green-yellow-red range, or use discrete CSS classes
