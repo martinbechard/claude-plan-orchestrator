@@ -2,6 +2,12 @@
 
 ## Status: Open
 
+## RETURNED FROM COMPLETED — No Visible Implementation
+
+This item was previously marked as completed but there is no /completions page
+and no "View all" link in the dashboard Recent Completions panel. Needs
+re-verification and completion.
+
 ## Priority: Medium
 
 ## Summary
