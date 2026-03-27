@@ -109,3 +109,5 @@ Clarity: 4/5
 Root Need: Complete hierarchical visibility into plan execution — from root run through graph nodes down to individual tool calls — so users can fully understand, debug, and optimize orchestrated execution.
 
 Summary: The system's trace feature is incomplete without tool-level visibility, making it impossible for users to debug execution or understand what work was actually performed.
+
+## LangSmith Trace: d0c432fc-925c-4ac6-9f36-dfe72f12a637
