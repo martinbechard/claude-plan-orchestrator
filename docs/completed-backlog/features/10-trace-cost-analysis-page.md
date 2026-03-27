@@ -1,5 +1,12 @@
 # Trace-based cost analysis page
 
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
+
 ## Status: Open
 
 ## Priority: High
@@ -124,3 +131,33 @@ Based on the investigation, the following gaps need separate backlog items:
 3. Many traces have total_cost_usd = 0.01 (looks like a default/dummy
    value) — data quality issue
 4. No cost data for Slack intake LLM calls (call_claude in suspension.py)
+
+
+
+
+## 5 Whys Analysis
+
+Title: Replace fake test data with real trace-based cost analysis visibility
+
+Clarity: 4 (Detailed specification with data, design, and implementation notes; underlying urgency reasoning could be more explicit)
+
+5 Whys:
+
+1. Why is this feature being requested?
+   - The current `/analysis` page displays only fake test data from the `cost_tasks` table, but the team now has real cost data embedded in the `traces` table (~$56 across 1,129 cost-bearing operations) that could provide genuine insight into actual API spending.
+
+2. Why is having real cost data more valuable than working with fake data?
+   - Without real data, the team cannot see actual spending patterns across different operation types (execute_task, validate_task, tool calls, etc.), making it impossible to understand where budget is going or identify inefficiencies.
+
+3. Why does identifying cost patterns matter as a High-priority item right now?
+   - The system is actively accumulating costs (~$39.60 from execute_task, ~$16.84 from validate_task) across a complex hierarchy of operations, and the team has no visibility into which operations are most expensive or which work items consume disproportionate budget.
+
+4. Why is manual cost analysis insufficient without a dedicated tool?
+   - The cost attribution is nested (parent runs roll up child costs, tool calls have no direct cost, only their parent LLM call has cost), making it impossible to manually drill down and answer questions like "which work item was most expensive?" or "which operation type costs the most on average?"
+
+5. Why is surfacing these cost patterns critical to prioritize now, during development?
+   - Early visibility into cost hotspots allows the team to make architectural decisions (which operations to optimize, which to refactor) while the system is still in development, preventing expensive mistakes or runaway costs when scaling.
+
+Root Need: To establish cost visibility during active development so the team can make proactive architectural decisions rather than discovering cost problems only after scaling.
+
+Summary: The team needs a working cost analysis tool to understand API spending patterns and optimize expensive operations before the system scales.
