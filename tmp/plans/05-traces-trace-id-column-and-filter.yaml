@@ -1,0 +1,23 @@
+meta:
+  title: Traces trace_id column and filter
+  source_item: tmp/plans/.claimed/05-traces-trace-id-column-and-filter.md
+  type: defect
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Validate and fix trace_id column and filter
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Validate acceptance criteria and fix any failures
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/05-traces-trace-id-column-and-filter.md'
