@@ -82,3 +82,5 @@ Clarity: 4
 **Root Need:** Users need comprehensive, real-time visibility into all errors and warnings occurring anywhere in the pipeline system so they can diagnose failures, understand system behavior, and maintain confidence in reliability.
 
 **Summary:** The dashboard error stream was designed for catastrophic failures, not operational visibility—creating a false sense that the system is healthy when problems are silently accumulating in logs.
+
+## LangSmith Trace: 85fa074c-a646-497c-84ba-e1d099fa7379
