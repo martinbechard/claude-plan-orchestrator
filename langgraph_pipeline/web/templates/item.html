@@ -33,7 +33,7 @@
 .item-header {
     background: #fff;
     border: 1px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 6px;
     padding: 1.25rem 1.5rem;
     margin-bottom: 1.5rem;
     display: flex;
@@ -140,7 +140,7 @@
 .active-worker-banner {
     background: #fff7ed;
     border: 1px solid #fed7aa;
-    border-radius: 8px;
+    border-radius: 6px;
     padding: 0.75rem 1.25rem;
     margin-bottom: 1.5rem;
     display: flex;
@@ -205,7 +205,7 @@
 .item-card {
     background: #fff;
     border: 1px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 6px;
     overflow: hidden;
     margin-bottom: 1rem;
 }
@@ -425,7 +425,7 @@
     flex-shrink: 0;
     width: 15px;
     height: 15px;
-    border-radius: 50%;
+    border-radius: 3px;
     margin-top: 1px;
     display: flex;
     align-items: center;
@@ -491,11 +491,42 @@
 
 .nowrap { white-space: nowrap; }
 
+/* ── Outcome row color coding ─────────────────────────────────────────── */
+.completion-row--success td { background: #f0fdf4; }
+.completion-row--success:hover td { background: #dcfce7; }
+.completion-row--fail td { background: #fef2f2; }
+.completion-row--fail:hover td { background: #fee2e2; }
+.completion-row--warn td { background: #fffbeb; }
+.completion-row--warn:hover td { background: #fef3c7; }
+
+/* ── Validation results ──────────────────────────────────────────────── */
+.validation-row {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 13px;
+}
+
+.validation-row:last-child { border-bottom: none; }
+
+.validation-row .badge { margin-right: 6px; }
+
+.validation-criteria {
+    color: #6b7280;
+    font-size: 12px;
+    margin-left: 8px;
+}
+
+.validation-message {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #374151;
+}
+
 /* ── Console Output section ───────────────────────────────────────────── */
 .console-output-section {
     background: #fff;
     border: 1px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 6px;
     margin-top: 1.5rem;
     overflow: hidden;
 }
@@ -754,7 +785,8 @@
       {% else %}
         <div class="empty-state" style="padding: 2.5rem 1rem;">
           <div class="icon" aria-hidden="true">&#128462;</div>
-          <p>No requirements document found for this item.</p>
+          <div><strong>No requirements document</strong></div>
+          <div>No backlog file was found for this item.</div>
         </div>
       {% endif %}
     </div>
@@ -794,7 +826,9 @@
         </ul>
       {% else %}
         <div class="empty-state" style="padding: 1.5rem 1rem;">
-          <p>No plan found for this item.</p>
+          <div class="icon" aria-hidden="true">&#128203;</div>
+          <div><strong>No plan yet</strong></div>
+          <div>A plan will appear here once the orchestrator creates one.</div>
         </div>
       {% endif %}
     </div>
@@ -807,16 +841,15 @@
         <span class="item-card-count">{{ validation_results | length }}</span>
       </div>
       {% for vr in validation_results %}
-      <div style="padding: 8px 12px; border-bottom: 1px solid #f0f0f0;">
-        <span class="badge {% if vr.verdict == 'PASS' %}outcome-success{% elif vr.verdict == 'WARN' %}outcome-warn{% else %}outcome-fail{% endif %}"
-              style="margin-right: 6px;">{{ vr.verdict }}</span>
+      <div class="validation-row">
+        <span class="badge {% if vr.verdict == 'PASS' %}outcome-success{% elif vr.verdict == 'WARN' %}outcome-warn{% else %}outcome-fail{% endif %}">{{ vr.verdict }}</span>
         <strong>Task {{ vr.task_id }}</strong>
         {% if vr.requirements_checked %}
-          <span style="color:#888; font-size:12px; margin-left:8px;">
+          <span class="validation-criteria">
             {{ vr.requirements_met }}/{{ vr.requirements_checked }} criteria met
           </span>
         {% endif %}
-        <p style="margin: 4px 0 0; font-size: 13px; color: #374151;">{{ vr.message }}</p>
+        <p class="validation-message">{{ vr.message }}</p>
       </div>
       {% endfor %}
     </div>
@@ -845,7 +878,7 @@
             </thead>
             <tbody>
               {% for c in completions | sort(attribute='finished_at', reverse=True) %}
-              <tr>
+              <tr class="completion-row--{{ c.outcome }}">
                 <td>
                   <span class="badge outcome-{{ c.outcome }}"
                         aria-label="Outcome: {{ c.outcome }}">{{ c.outcome }}</span>
@@ -862,7 +895,9 @@
         </div>
       {% else %}
         <div class="empty-state" style="padding: 1.5rem 1rem;">
-          <p>No completions recorded yet.</p>
+          <div class="icon" aria-hidden="true">&#9989;</div>
+          <div><strong>No completions yet</strong></div>
+          <div>Completed runs will appear here.</div>
         </div>
       {% endif %}
     </div>
@@ -914,7 +949,9 @@
         </div>
       {% else %}
         <div class="empty-state" style="padding: 1.5rem 1rem;">
-          <p>No traces linked to this item.</p>
+          <div class="icon" aria-hidden="true">&#128270;</div>
+          <div><strong>No traces</strong></div>
+          <div>Proxy traces will appear here once runs are recorded.</div>
         </div>
       {% endif %}
     </div>
