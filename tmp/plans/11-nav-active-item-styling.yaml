@@ -17,8 +17,14 @@ sections:
   - id: '1.1'
     name: Validate and refine nav active state CSS
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/11-nav-active-item-styling.md'
     last_attempt: '2026-03-27T14:07:22.575876'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:09:07.006560'
+    result_message: Validated nav active state. Removed the box-shadow ring (ambiguous,
+      looked like error/focus state) and upgraded to pure white text (#ffffff) with
+      blue-tinted pill background rgba(126,184,247,0.2). Clean professional pattern
+      matching modern dark navbars. The existing border-radius:4px on nav a already
+      creates the pill shape.
