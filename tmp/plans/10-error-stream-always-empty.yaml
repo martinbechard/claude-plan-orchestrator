@@ -19,5 +19,8 @@ sections:
   - id: '1.1'
     name: Fix handler level filter and validate error stream end-to-end
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/10-error-stream-always-empty.md'
+    last_attempt: '2026-03-27T01:40:11.747097'
+    attempts: 1
+    model_used: sonnet

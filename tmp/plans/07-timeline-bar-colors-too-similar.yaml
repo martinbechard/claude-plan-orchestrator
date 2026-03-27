@@ -28,3 +28,8 @@ sections:
     result_message: 'All acceptance criteria already met: bar_color() uses #7c3aed
       (LLM), #0891b2 (tool), #f59e0b (other); text_color() uses matching contrast
       colors; legend rects updated. No changes needed.'
+    validation_attempts: 1
+    validation_findings: 'All acceptance criteria met. bar_color() uses #7c3aed (LLM),
+      #0891b2 (tool), #f59e0b (other). text_color() uses matching contrast colors.
+      Legend rects updated. 1303 tests pass. Build command references non-existent
+      scripts/plan-orchestrator.py but auto-pipeline.py compiles clean.'
