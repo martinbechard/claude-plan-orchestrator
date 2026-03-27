@@ -1,0 +1,21 @@
+meta:
+  source_item: tmp/plans/.claimed/17-trace-expand-chevron-duplicate-and-inline.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Validate and fix chevron and inline details
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Review and fix trace expand chevron and inline subrun details
+    agent: frontend-coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/17-trace-expand-chevron-duplicate-and-inline.md'
