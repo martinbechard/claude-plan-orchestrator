@@ -54,6 +54,7 @@ decision---splitting the "what to do" (YAML) from the "do it" (Claude) from the 
 | [16-failure-awareness.md](16-failure-awareness.md) | Sandbox two-axis permission fix, plan-level deadlock detection, cross-instance keyword misclassification, root cause in Slack notifications, cross-project reporting docs, single-command onboarding |
 | [17-seventeen-thousand-defects.md](17-seventeen-thousand-defects.md) | Slack notification feedback loop producing 17k recursive defects, four-layer loop prevention, ChromaDB RAG deduplication, the defect that predicted itself |
 | [18-the-great-rewrite.md](18-the-great-rewrite.md) | LangGraph migration: modular package replacing monoliths, drop-in compatibility, first live run wiring fixes, LangSmith tool call tracing, agent model enforcement |
+| [tracing-proxy.md](tracing-proxy.md) | Why the local TracingProxy was built, which LangSmith SDK calls it intercepts, and where trace IDs come from |
 
 ## Timeline at a Glance
 
