@@ -1,7 +1,0 @@
-=== planner for 25-migrate-tests-off-legacy-plan-orchestrator ===
-Exit code: 0
-
-=== STDOUT ===
-{"type":"result","subtype":"success","is_error":false,"duration_ms":96653,"duration_api_ms":92006,"num_turns":24,"result":"Done. Created:\n\n1. **Design doc**: `docs/plans/2026-03-27-25-migrate-tests-off-legacy-plan-orchestrator-design.md`\n2. **YAML plan**: `tmp/plans/25-migrate-tests-off-legacy-plan-orchestrator.yaml`\n\nNote: This defect is already fully resolved - the test file already imports from the new modular architecture, all 64 tests pass, and `scripts/plan-orchestrator.py` is already deleted. The plan has a single verification task for the coder agent to confirm this.","stop_reason":"end_turn","session_id":"88e52bd2-2bd7-436d-9b9c-9fe23f9a6bdf","total_cost_usd":0.4797209999999999,"usage":{"input_tokens":80,"cache_creation_input_tokens":21740,"cache_read_input_tokens":521542,"output_tokens":3307,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":21740,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":80,"outputTokens":3307,"cacheReadInputTokens":521542,"cacheCreationInputTokens":21740,"webSearchRequests":0,"costUSD":0.4797209999999999,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"8927ee7c-869a-4fcf-b081-f16ddca46ad3"}
-
-=== STDERR ===
