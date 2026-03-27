@@ -17,13 +17,15 @@ sections:
   - id: '1.1'
     name: Implement two-pass inclusive cost query in proxy.py
     agent: coder
-    status: pending
-    description: >-
-      Implement the work item: tmp/plans/.claimed/12-inclusive-cost-precomputation.md
+    status: in_progress
+    description: 'Implement the work item: tmp/plans/.claimed/12-inclusive-cost-precomputation.md
       -- Refactor list_cost_runs() in langgraph_pipeline/web/proxy.py to use a two-pass
       query strategy: (1) pre-filter pass that retrieves page run_ids without the
       recursive CTE, (2) enrichment pass that computes inclusive_cost_usd via a single
-      multi-anchor recursive CTE for only the page run_ids, (3) re-sort in Python when
-      sort=inclusive_desc. Add a _compute_inclusive_costs() helper method. Keep the
-      CostRun dataclass and template contract unchanged. Add unit tests for the new
-      helper and the refactored list_cost_runs() method.
+      multi-anchor recursive CTE for only the page run_ids, (3) re-sort in Python
+      when sort=inclusive_desc. Add a _compute_inclusive_costs() helper method. Keep
+      the CostRun dataclass and template contract unchanged. Add unit tests for the
+      new helper and the refactored list_cost_runs() method.'
+    last_attempt: '2026-03-27T15:04:13.001187'
+    attempts: 1
+    model_used: sonnet

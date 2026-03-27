@@ -92,3 +92,28 @@ without calling Claude at all (e.g. no more tasks to execute).
   "plan_complete", etc.)
 
 ## LangSmith Trace: 6170e0f7-cdd2-4b0e-9447-4b40013ac115
+
+
+## 5 Whys Analysis
+
+Title: Why does the pipeline silently misfile incomplete items?
+Clarity: 4
+5 Whys:
+1. Why was item 21 marked complete with only 1/3 tasks finished?
+   → Because the pipeline hit max retry/warning cycles on runs 2-5 (NULL cost, NULL tool_calls) and archived it as abandoned work rather than continuing to investigate.
+
+2. Why did max retries trigger an archive instead of escalation or investigation?
+   → Because the pipeline couldn't diagnose whether the NULLs meant "Claude failed" (retry) vs "this node should be skipped" (continue) vs "something is broken upstream" (escalate).
+
+3. Why can't the pipeline distinguish these failure modes?
+   → The traces record only high-level outputs (cost, tool_calls) but omit process-level evidence: subprocess exit codes, stderr, validator findings, and node logic (was Claude called or not?).
+
+4. Why does the trace system lack this diagnostic metadata?
+   → It was designed to capture what Claude/tools output for observability, not the machinery around execution — the pipeline glue, decision points, and failure signals that infrastructure needs.
+
+5. Why is this machinery-level visibility needed now?
+   → Because incomplete-item misfiling looks identical to legitimate completion in the current traces; without post-mortem diagnosis capability, systemic bugs (like "validator returns FAIL but pipeline archives anyway") are invisible and unfixable.
+
+Root Need: Post-mortem diagnosability of silent infrastructure failures from trace data alone, so that systemic pipeline bugs can be identified and fixed without re-running items.
+
+Summary: The pipeline needs process-level and decision-level trace metadata to distinguish real completion from misfiling and to enable root-cause analysis of infrastructure failures after they occur.
