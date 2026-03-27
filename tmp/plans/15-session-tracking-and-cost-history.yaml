@@ -94,6 +94,10 @@ sections:
       cost, items). Follows existing patterns: table-wrap divs, aria-labelledby sections,
       scope=col th attributes, <time> elements with local-time class, JS-computed
       duration column from start/end timestamps, and icon-based empty states.'
+    validation_attempts: 1
+    validation_findings: Template sessions.html correctly implements both required
+      sections (Pipeline Sessions and Daily Totals) following established patterns.
+      All 1394 tests pass.
 - id: '3'
   name: Dashboard frontend - show session start time and history link
   status: pending
@@ -101,9 +105,16 @@ sections:
   - id: '3.1'
     name: Update dashboard to show session start time and history link
     agent: frontend-coder
-    status: pending
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
       -- Focus on the Dashboard display requirements. Update dashboard.html and dashboard.js
       to show session start time next to session cost (e.g. "Session Cost: $4.23 (started
       10:30 AM)") using session_start_time_iso from snapshot. Add a "Session History"
       navigation link pointing to /sessions.'
+    last_attempt: '2026-03-27T15:33:10.348420'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-27T15:34:36.756554'
+    result_message: Updated dashboard.js to show session start time next to session
+      cost (e.g. '$4.23 (started 10:30 AM)') using session_start_time_iso from snapshot.
+      Added Session History navigation link to base.html pointing to /sessions.
