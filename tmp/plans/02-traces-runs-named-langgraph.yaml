@@ -1,0 +1,31 @@
+meta:
+  title: Traces runs named LangGraph
+  source_item: tmp/plans/.claimed/02-traces-runs-named-langgraph.md
+  type: defect
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Validate and fix trace naming
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Validate acceptance criteria and fix any failures
+    agent: coder
+    status: completed
+    description: 'Implement the work item: tmp/plans/.claimed/02-traces-runs-named-langgraph.md'
+    last_attempt: '2026-03-27T01:27:10.808890'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-27T01:32:10.872000'
+    result_message: 'Validated all three acceptance criteria. Implementation is correct:
+      run_name=item_slug is set in worker.py thread_config (line 252), execute_plan.py
+      executor config (line 75), create_root_run and finalize_root_run both use item_slug
+      as run name. All 1303 tests pass. No code changes needed.'
