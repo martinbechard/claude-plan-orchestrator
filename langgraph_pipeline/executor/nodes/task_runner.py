@@ -625,8 +625,10 @@ def execute_task(state: TaskState) -> dict:
             "node_name": "execute_task",
             "graph_level": "executor",
             "task_id": task_id,
-            "claude_invoked": False,
-            "skip_reason": "quota_exhausted",
+            "claude_invoked": True,
+            "failure_reason": "quota_exhausted",
+            "subprocess_exit_code": returncode,
+            "subprocess_error": _stderr[:500],
             "quota_exhausted": True,
         })
         return {"quota_exhausted": True, "plan_data": plan_data}

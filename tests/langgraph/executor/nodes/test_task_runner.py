@@ -792,3 +792,177 @@ def test_post_cost_posts_to_orchestrator_web_url(monkeypatch):
     assert captured["body"]["task_id"] == "1.1"
     assert captured["body"]["agent_type"] == "coder"
     assert captured["body"]["item_slug"] == "01-some-feature"
+
+
+# ─── Tests: trace metadata (Gaps 1 and 5) ────────────────────────────────────
+
+
+class TestExecuteTaskTraceMetadata:
+    """Trace metadata fields: subprocess_exit_code, subprocess_error,
+    failure_reason (Gap 1) and claude_invoked, skip_reason (Gap 5)."""
+
+    def test_no_task_id_records_claude_not_invoked_with_skip_reason(self, tmp_path):
+        """When current_task_id is None, claude_invoked=False and skip_reason is set."""
+        plan = _make_plan(_make_task("1.1"))
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file), plan_data=plan, current_task_id=None)
+
+        with patch("langgraph_pipeline.executor.nodes.task_runner.add_trace_metadata") as mock_meta:
+            execute_task(state)
+
+        mock_meta.assert_called_once()
+        metadata = mock_meta.call_args[0][0]
+        assert metadata["claude_invoked"] is False
+        assert "skip_reason" in metadata
+        assert metadata["skip_reason"]
+
+    def test_task_not_found_records_claude_not_invoked_with_skip_reason(self, tmp_path):
+        """When task is absent from plan, claude_invoked=False and skip_reason is set."""
+        plan = _make_plan(_make_task("1.1"))
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        plan_data = yaml.safe_load(plan_file.read_text())
+        state = _make_state(
+            plan_path=str(plan_file),
+            plan_data=plan_data,
+            current_task_id="9.9",  # does not exist
+        )
+
+        with patch("langgraph_pipeline.executor.nodes.task_runner.add_trace_metadata") as mock_meta:
+            execute_task(state)
+
+        mock_meta.assert_called_once()
+        metadata = mock_meta.call_args[0][0]
+        assert metadata["claude_invoked"] is False
+        assert "skip_reason" in metadata
+        assert metadata["skip_reason"]
+
+    def test_quota_exhaustion_records_claude_invoked_true(self, tmp_path):
+        """When quota is exhausted after Claude runs, claude_invoked=True and failure_reason is set."""
+        plan = _make_plan(_make_task("1.1"))
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        plan_data = yaml.safe_load(plan_file.read_text())
+        state = _make_state(
+            plan_path=str(plan_file),
+            plan_data=plan_data,
+            current_task_id="1.1",
+        )
+
+        with (
+            patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
+                  return_value=(False, 1, {}, "", "quota exhausted stderr", [])),
+            patch("langgraph_pipeline.executor.nodes.task_runner.detect_quota_exhaustion",
+                  return_value=True),
+            patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
+                  return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
+            patch("langgraph_pipeline.executor.nodes.task_runner.add_trace_metadata") as mock_meta,
+        ):
+            execute_task(state)
+
+        mock_meta.assert_called_once()
+        metadata = mock_meta.call_args[0][0]
+        assert metadata["claude_invoked"] is True
+        assert metadata["failure_reason"] == "quota_exhausted"
+        assert metadata["subprocess_exit_code"] == 1
+        assert "skip_reason" not in metadata
+
+    def test_success_records_subprocess_exit_code_zero_and_ok(self, tmp_path):
+        """Successful run records subprocess_exit_code=0 and failure_reason='ok'."""
+        plan = _make_plan(_make_task("1.1"))
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+
+        status_file = tmp_path / "task-status.json"
+        status_file.write_text(json.dumps({"status": "completed", "message": "done"}))
+
+        with (
+            patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(status_file)),
+            patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
+                  return_value=(True, 0, {"total_cost_usd": 0.01, "usage": {}}, "", "", [])),
+            patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files"),
+            patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
+                  return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
+            patch("langgraph_pipeline.executor.nodes.task_runner.emit_tool_call_traces"),
+            patch("langgraph_pipeline.executor.nodes.task_runner.add_trace_metadata") as mock_meta,
+        ):
+            plan_data = yaml.safe_load(plan_file.read_text())
+            state = _make_state(
+                plan_path=str(plan_file),
+                plan_data=plan_data,
+                current_task_id="1.1",
+            )
+            execute_task(state)
+
+        mock_meta.assert_called_once()
+        metadata = mock_meta.call_args[0][0]
+        assert metadata["claude_invoked"] is True
+        assert metadata["subprocess_exit_code"] == 0
+        assert metadata["failure_reason"] == "ok"
+        assert metadata["subprocess_error"] == ""
+
+    def test_timeout_records_failure_reason_timeout(self, tmp_path):
+        """When Claude times out (returncode=-1), failure_reason is 'timeout'."""
+        plan = _make_plan(_make_task("1.1"))
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+
+        absent_status = tmp_path / "no_status.json"
+
+        with (
+            patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(absent_status)),
+            patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
+                  return_value=(False, -1, {}, "", "Timed out", [])),
+            patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files"),
+            patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
+                  return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
+            patch("langgraph_pipeline.executor.nodes.task_runner.emit_tool_call_traces"),
+            patch("langgraph_pipeline.executor.nodes.task_runner.add_trace_metadata") as mock_meta,
+        ):
+            plan_data = yaml.safe_load(plan_file.read_text())
+            state = _make_state(
+                plan_path=str(plan_file),
+                plan_data=plan_data,
+                current_task_id="1.1",
+            )
+            execute_task(state)
+
+        mock_meta.assert_called_once()
+        metadata = mock_meta.call_args[0][0]
+        assert metadata["claude_invoked"] is True
+        assert metadata["subprocess_exit_code"] == -1
+        assert metadata["failure_reason"] == "timeout"
+
+    def test_nonzero_exit_records_exit_code_failure_reason(self, tmp_path):
+        """Non-zero exit (not timeout/quota) records failure_reason as 'exit_code_N'."""
+        plan = _make_plan(_make_task("1.1"))
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+
+        absent_status = tmp_path / "no_status.json"
+
+        with (
+            patch("langgraph_pipeline.executor.nodes.task_runner.STATUS_FILE_PATH", str(absent_status)),
+            patch("langgraph_pipeline.executor.nodes.task_runner._run_claude",
+                  return_value=(False, 2, {}, "", "some error", [])),
+            patch("langgraph_pipeline.executor.nodes.task_runner.git_commit_files"),
+            patch("langgraph_pipeline.executor.nodes.task_runner.load_orchestrator_config",
+                  return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
+            patch("langgraph_pipeline.executor.nodes.task_runner.emit_tool_call_traces"),
+            patch("langgraph_pipeline.executor.nodes.task_runner.add_trace_metadata") as mock_meta,
+        ):
+            plan_data = yaml.safe_load(plan_file.read_text())
+            state = _make_state(
+                plan_path=str(plan_file),
+                plan_data=plan_data,
+                current_task_id="1.1",
+            )
+            execute_task(state)
+
+        mock_meta.assert_called_once()
+        metadata = mock_meta.call_args[0][0]
+        assert metadata["claude_invoked"] is True
+        assert metadata["subprocess_exit_code"] == 2
+        assert metadata["failure_reason"] == "exit_code_2"
+        assert "some error" in metadata["subprocess_error"]
