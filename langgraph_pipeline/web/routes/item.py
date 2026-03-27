@@ -1,12 +1,14 @@
 # langgraph_pipeline/web/routes/item.py
 # FastAPI router for the GET /item/{slug} work-item detail page.
 # Design: docs/plans/2026-03-26-35-work-item-page-missing-requirements-from-backlog-file-design.md
+# Design: docs/plans/2026-03-26-43-capture-raw-worker-output-per-item-design.md
 
 """FastAPI router that serves the work-item detail page.
 
 Endpoints:
-    GET /item/{slug}  — Renders item.html with requirements, plan tasks,
-                        completion history, and linked root traces.
+    GET /item/{slug}               — Renders item.html with requirements, plan tasks,
+                                     completion history, and linked root traces.
+    GET /item/{slug}/output/{filename} — Returns a worker log file as text/plain.
 """
 
 import time
@@ -14,12 +16,17 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
-from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
-from langgraph_pipeline.shared.paths import BACKLOG_DIRS, CLAIMED_DIR, COMPLETED_DIRS
+from langgraph_pipeline.shared.paths import (
+    BACKLOG_DIRS,
+    CLAIMED_DIR,
+    COMPLETED_DIRS,
+    WORKER_OUTPUT_DIR,
+)
 from langgraph_pipeline.web.proxy import get_proxy
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -73,6 +80,7 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
     pipeline_stage = _derive_pipeline_stage(slug, completions)
     active_worker = _get_active_worker(slug)
     total_cost_usd = sum(c.get("cost_usd", 0.0) for c in completions)
+    output_files = _list_output_files(slug)
 
     return templates.TemplateResponse(
         request,
@@ -88,8 +96,49 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
             "plan_tasks": plan_tasks,
             "completions": completions,
             "traces": traces,
+            "output_files": output_files,
         },
     )
+
+
+@router.get("/item/{slug}/output/{filename}", response_class=PlainTextResponse)
+def item_output_file(slug: str, filename: str) -> PlainTextResponse:
+    """Return a raw worker log file as text/plain.
+
+    Serves files from docs/reports/worker-output/<slug>/<filename>.
+    Rejects any filename containing path separators to prevent traversal.
+
+    Args:
+        slug: Work item slug (e.g. "43-capture-raw-worker-output").
+        filename: Log filename (e.g. "task-1.1-20260326-143022.log").
+
+    Returns:
+        Plain-text content of the log file.
+
+    Raises:
+        HTTPException 400: If the filename contains path traversal characters.
+        HTTPException 404: If the log file does not exist.
+    """
+    if "/" in filename or "\\" in filename or filename.startswith("."):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    output_dir = WORKER_OUTPUT_DIR / slug
+    log_path = output_dir / filename
+
+    # Resolve to catch any remaining traversal attempts (e.g. encoded separators)
+    try:
+        resolved = log_path.resolve()
+        expected_parent = output_dir.resolve()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    if not str(resolved).startswith(str(expected_parent) + "/"):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    if not resolved.exists():
+        raise HTTPException(status_code=404, detail="Log file not found")
+
+    return PlainTextResponse(content=resolved.read_text(encoding="utf-8", errors="replace"))
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -389,6 +438,25 @@ def _derive_pipeline_stage(slug: str, completions: list[dict]) -> str:
 
     # 9. Otherwise → unknown
     return _STAGE_UNKNOWN
+
+
+def _list_output_files(slug: str) -> list[str]:
+    """List log filenames in the worker-output directory for the given slug.
+
+    Args:
+        slug: Work item slug.
+
+    Returns:
+        Sorted list of ``.log`` filenames, newest first (by name, which encodes
+        the timestamp). Empty list if the directory does not exist.
+    """
+    output_dir = WORKER_OUTPUT_DIR / slug
+    if not output_dir.is_dir():
+        return []
+    return sorted(
+        (p.name for p in output_dir.iterdir() if p.suffix == ".log"),
+        reverse=True,
+    )
 
 
 def _get_active_worker(slug: str) -> Optional[dict]:
