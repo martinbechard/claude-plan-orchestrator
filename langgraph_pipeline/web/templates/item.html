@@ -87,6 +87,14 @@
     font-size: 20px;
     font-weight: 700;
     color: #1a1a2e;
+    white-space: nowrap;
+}
+
+.item-stat-unit {
+    font-size: 11px;
+    font-weight: 500;
+    color: #9090b0;
+    margin-left: 2px;
     line-height: 1.2;
     font-variant-numeric: tabular-nums;
 }
@@ -691,9 +699,9 @@
       <span class="item-cost-label">Velocity</span>
       <span class="item-cost-value">
         {%- if avg_velocity is not none and avg_velocity is number and avg_velocity >= 1000 -%}
-          {{ "%.1fk"|format(avg_velocity / 1000) }} tok/min
+          {{ "%.1fk"|format(avg_velocity / 1000) }}<span class="item-stat-unit">tok/min</span>
         {%- elif avg_velocity is not none and avg_velocity is number and avg_velocity > 0 -%}
-          {{ avg_velocity|int }} tok/min
+          {{ avg_velocity|int }}<span class="item-stat-unit">tok/min</span>
         {%- else -%}
           &mdash;
         {%- endif -%}

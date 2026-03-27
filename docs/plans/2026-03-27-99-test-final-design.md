@@ -17,3 +17,11 @@ Velocity) updating in the UI during execution.
   whose live stats can be observed in the dashboard UI
 - Acceptance is manual: the operator watches the item page during execution and
   confirms Cost/Tokens update in real time and Velocity shows a numeric value
+
+
+## Acceptance Criteria
+
+- Does the item page show updating Cost and Tokens while running?
+  YES = pass, NO = fail
+- Does Velocity show a value (not --) during execution?
+  YES = pass, NO = fail

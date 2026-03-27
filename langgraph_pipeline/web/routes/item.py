@@ -81,7 +81,7 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
     active_worker = _get_active_worker(slug)
     total_cost_usd = sum(c.get("cost_usd", 0.0) for c in completions)
     total_duration_s = sum(c.get("duration_s", 0.0) for c in completions)
-    total_tokens = _compute_total_tokens(slug)
+    total_tokens = _compute_total_tokens(completions)
     output_files = _list_output_files(slug)
     avg_velocity = _compute_avg_velocity(completions)
 
@@ -477,23 +477,15 @@ def _list_output_files(slug: str) -> list[str]:
     )
 
 
-def _compute_total_tokens(slug: str) -> int:
-    """Sum input_tokens + output_tokens from all traces for this slug."""
-    try:
-        from langgraph_pipeline.web.proxy import get_proxy
-        proxy = get_proxy()
-        if proxy is None:
-            return 0
-        with proxy._connect() as conn:
-            row = conn.execute(
-                "SELECT COALESCE(SUM(json_extract(metadata_json, '$.input_tokens')), 0) + "
-                "COALESCE(SUM(json_extract(metadata_json, '$.output_tokens')), 0) as total "
-                "FROM traces WHERE json_extract(metadata_json, '$.item_slug') = ?",
-                [slug],
-            ).fetchone()
-            return int(row[0]) if row else 0
-    except Exception:
-        return 0
+def _compute_total_tokens(completions: list[dict]) -> int:
+    """Estimate total tokens from completions using velocity * duration."""
+    total = 0
+    for c in completions:
+        tpm = c.get("tokens_per_minute", 0) or 0
+        dur = c.get("duration_s", 0) or 0
+        if tpm > 0 and dur > 0:
+            total += int(tpm * dur / 60.0)
+    return total
 
 
 def _compute_avg_velocity(completions: list[dict]) -> Optional[float]:
