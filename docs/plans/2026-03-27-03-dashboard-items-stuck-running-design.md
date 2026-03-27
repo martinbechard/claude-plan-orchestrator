@@ -1,60 +1,51 @@
-# Design: Dashboard Items Stuck in Running State
+# Design: Dashboard Items Stuck in "Running" State
 
-## Work Item
+## Problem
 
-tmp/plans/.claimed/03-dashboard-items-stuck-running.md
+`DashboardState.active_workers` is an in-memory dict with no dead-PID cleanup.
+Two failure paths leave entries stuck permanently:
 
-## Status: Review Required
+1. Worker crashes or is killed before `remove_active_worker()` is called — the PID
+   is never reaped by the supervisor's `ChildProcessError` path, which pops the
+   supervisor-side dict but never calls `dashboard_state.remove_active_worker()`.
+2. Pipeline restart — new supervisor instance has empty `active_workers` so there
+   is nothing to reap, but if the old server process was still alive the stale
+   entries were in its `DashboardState`.
 
-This defect was previously implemented. The fix needs verification and any
-gaps need to be addressed.
+## Current State
 
-## Architecture Overview
+The core fix is already implemented:
 
-The dashboard tracks active workers via an in-memory dict in
-DashboardState.active_workers (keyed by PID). Workers that crash or whose
-processes disappear without calling remove_active_worker() leave stale
-entries.
+- `sweep_dead_workers()` in `dashboard_state.py` (lines 222-245) uses `os.kill(pid, 0)`
+  to detect dead PIDs and reap them as failures with elapsed time from `start_time`.
+- Called from `snapshot()` (line 260) so every dashboard read auto-clears stale entries.
+- `ChildProcessError` handling in `supervisor.py` (lines 485-491) calls
+  `remove_active_worker(pid, "fail", 0.0, elapsed_s)` when `os.waitpid` fails.
 
-The existing fix adds sweep_dead_workers() which probes each PID with
-os.kill(pid, 0) and reaps dead entries as failures. This is called at the
-top of snapshot() so every dashboard refresh cleans up zombies.
+## Remaining Work
+
+Validate acceptance criteria from the work item. The implementation exists but needs
+verification that all paths work correctly and tests cover the key scenarios:
+
+- Dead PID sweep removes stale entries from snapshot
+- ChildProcessError path in supervisor properly cleans dashboard state
+- Test coverage for `sweep_dead_workers` directly (not just mocked out)
 
 ## Key Files
 
-### Already Modified (verify)
-
-- langgraph_pipeline/web/dashboard_state.py
-  - sweep_dead_workers() method (lines 222-245)
-  - Called from snapshot() at line 260
-  - Probes PIDs with os.kill(pid, 0), reaps dead ones as "fail"
-
-- langgraph_pipeline/supervisor.py
-  - _reap_finished_workers() handles ChildProcessError (lines 485-491)
-  - _reap_one_worker() calls remove_active_worker on crash path (line 361)
-
-### Test Coverage Gap
-
-- tests/langgraph/web/test_dashboard_state.py
-  - Missing: dedicated tests for sweep_dead_workers()
-  - Missing: test that snapshot() calls sweep before returning
-  - Missing: test for already-reaped PID in supervisor path
+| File | Change |
+|------|--------|
+| `langgraph_pipeline/web/dashboard_state.py` | Has `sweep_dead_workers()` — verify correctness |
+| `langgraph_pipeline/supervisor.py` | Has `ChildProcessError` fix — verify correctness |
+| `tests/langgraph/web/test_dashboard_state.py` | Verify/add test coverage for sweep logic |
 
 ## Design Decisions
 
-1. The sweep approach (os.kill probe) is correct for this architecture
-   since workers are OS child processes with known PIDs.
-
-2. Calling sweep from snapshot() ensures the dashboard never shows stale
-   entries regardless of how the worker died.
-
-3. The supervisor ChildProcessError handler is a belt-and-suspenders
-   guard for the case where waitpid fails because the child was already
-   reaped by another thread.
-
-## Verification Focus
-
-- Confirm sweep_dead_workers reaps entries for dead PIDs
-- Confirm snapshot() calls sweep_dead_workers before building the response
-- Confirm supervisor handles ChildProcessError and removes dashboard entry
-- Add unit tests for sweep_dead_workers edge cases
+- `os.kill(pid, 0)` is the POSIX portable way to test PID liveness without
+  sending a signal; `OSError` means the process is gone or not ours.
+- Sweeping in `snapshot()` keeps the fix in one place and requires no new
+  threading or background tasks.
+- Duration for dead-PID entries is computed from `start_time` stored in
+  `WorkerInfo` so the completion record has accurate elapsed time.
+- Outcome for swept entries is `"fail"` — consistent with the crash path in
+  `_reap_one_worker`.
