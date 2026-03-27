@@ -83,7 +83,7 @@ sections:
   - id: '2.2'
     name: Add plan YAML state snapshots to execute_plan traces
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/13-trace-observability-gaps.md
       -- Focus on Gap 4. In execute_plan() in pipeline/nodes/execute_plan.py, add
       plan task status snapshots at start and end via add_trace_metadata(). Include
@@ -92,3 +92,9 @@ sections:
     last_attempt: '2026-03-27T15:34:15.597789'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T15:37:09.221153'
+    result_message: Added _plan_task_snapshot() helper to execute_plan.py that reads
+      the YAML plan on disk and returns plan_tasks (list of {task_id, status}), completed_count,
+      and total_count. execute_plan() now emits add_trace_metadata() at start and
+      end checkpoints. Added 15 new unit tests covering the helper and trace metadata
+      calls. All 1409 tests pass.
