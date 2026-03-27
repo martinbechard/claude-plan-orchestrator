@@ -17,8 +17,13 @@ sections:
   - id: '1.1'
     name: Validate existing fix and address any remaining issues
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/09-completions-finished-invalid-date.md'
     last_attempt: '2026-03-27T10:10:14.368426'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T10:11:13.593973'
+    result_message: 'Validated existing fix: finishedAtToMs() helper in dashboard.js
+      correctly handles both Unix timestamps (number * 1000) and ISO 8601 strings
+      (direct Date parse). Fix is applied in fmtFinished() and both timeline rendering
+      callsites (lines 495, 498). No remaining issues.'
