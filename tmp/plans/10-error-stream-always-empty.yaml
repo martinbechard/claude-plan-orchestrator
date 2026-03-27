@@ -27,3 +27,8 @@ sections:
       Tool=#0891b2 (cyan/teal), Other=#f59e0b (amber). Text contrast colors and legend
       rects also correct. Old colors (#16a34a, #2563eb) fully removed. Build OK, 1314
       tests passed.'
+    validation_attempts: 1
+    validation_findings: Implementation satisfies all error stream requirements (DashboardErrorHandler
+      exists, installed in cli.py, tests pass 1314/1314), but the coder result message
+      is completely wrong — it describes bar colors from a different task. Build command
+      also references non-existent scripts/plan-orchestrator.py.
