@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "item_path": ".claude/plans/.claimed/99-test-validation-pipeline.md",
+  "cost_usd": 0.0,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "duration_s": 247.25526941602584,
+  "message": "Item processed successfully"
+}
