@@ -17,5 +17,8 @@ sections:
   - id: '1.1'
     name: Validate existing implementation and fix any issues
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/05-traces-trace-id-column-and-filter.md'
+    last_attempt: '2026-03-27T09:57:51.946993'
+    attempts: 1
+    model_used: sonnet

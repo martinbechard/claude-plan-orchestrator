@@ -17,5 +17,8 @@ sections:
   - id: '1.1'
     name: Validate existing implementation and fix any gaps
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/03-dashboard-items-stuck-running.md'
+    last_attempt: '2026-03-27T09:57:03.838969'
+    attempts: 1
+    model_used: sonnet
