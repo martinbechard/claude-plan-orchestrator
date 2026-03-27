@@ -20,19 +20,21 @@ The drill-down feature connects three existing subsystems:
 
 | File | Role |
 |------|------|
-| langgraph_pipeline/web/dashboard_state.py | WorkerInfo with run_id field |
+| langgraph_pipeline/web/dashboard_state.py | WorkerInfo and CompletionRecord with run_id field |
 | langgraph_pipeline/supervisor.py | Worker dispatch, run_id assignment, completion recording |
 | langgraph_pipeline/web/templates/dashboard.html | UI rendering of trace links |
-| langgraph_pipeline/web/proxy.py | Completions DB schema (run_id column) |
+| langgraph_pipeline/web/proxy.py | Completions DB schema (run_id column), record_completion() |
 | langgraph_pipeline/web/routes/dashboard.py | SSE /api/stream endpoint |
 | langgraph_pipeline/web/routes/proxy.py | /proxy endpoint with trace_id filter |
 
 ## What Already Exists
 
 - WorkerInfo.run_id: Optional[str] field
+- CompletionRecord.run_id: Optional[str] field
 - Completions table: run_id TEXT column
 - Dashboard HTML: Trace column in completions table, trace link in worker cards
 - /proxy?trace_id= filter support
+- Supervisor refreshes run_ids for workers that start without one
 
 ## Validation Scope
 
