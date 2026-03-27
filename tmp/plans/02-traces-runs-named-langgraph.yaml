@@ -17,5 +17,8 @@ sections:
   - id: '1.1'
     name: Validate trace naming and fix any remaining issues
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/02-traces-runs-named-langgraph.md'
+    last_attempt: '2026-03-27T13:56:01.955812'
+    attempts: 1
+    model_used: sonnet
