@@ -28,3 +28,9 @@ sections:
       blue-tinted pill background rgba(126,184,247,0.2). Clean professional pattern
       matching modern dark navbars. The existing border-radius:4px on nav a already
       creates the pill shape.
+    validation_attempts: 1
+    validation_findings: Nav active state CSS updated correctly. Removed box-shadow
+      ring, added pure white text (#ffffff), blue-tinted pill background rgba(126,184,247,0.2),
+      font-weight 600. All 1314 tests pass. Server live at :7070 with .active class
+      rendered. Build command references deleted file (pre-existing, unrelated to
+      this task).
