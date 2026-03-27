@@ -77,6 +77,7 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
     item_type = _detect_item_type(slug)
     plan_tasks = _load_plan_tasks(slug)
     completions = _load_completions(slug)
+    _parse_verification_notes(completions)
     traces = _load_root_traces(slug)
     pipeline_stage = _derive_pipeline_stage(slug, completions)
     active_worker = _get_active_worker(slug)
@@ -531,6 +532,27 @@ def _compute_avg_velocity(completions: list[dict]) -> Optional[float]:
     if not values:
         return None
     return round(sum(values) / len(values))
+
+
+def _parse_verification_notes(completions: list[dict]) -> None:
+    """Parse verification_notes JSON strings into structured dicts in-place.
+
+    Each completion dict gains a ``verification_data`` key containing the parsed
+    JSON (with keys verdict, findings, evidence), or None if the field is absent
+    or unparseable.
+
+    Args:
+        completions: List of completion dicts (modified in-place).
+    """
+    for c in completions:
+        raw = c.get("verification_notes")
+        if raw and isinstance(raw, str):
+            try:
+                c["verification_data"] = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                c["verification_data"] = None
+        else:
+            c["verification_data"] = None
 
 
 def _get_active_worker(slug: str) -> Optional[dict]:
