@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 import langgraph_pipeline.web.proxy as proxy_module
 from langgraph_pipeline.web.proxy import TracingProxy, get_proxy, init_proxy
+from langgraph_pipeline.web.routes.proxy import _compute_elapsed, _parse_iso
 from langgraph_pipeline.web.server import create_app
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -961,3 +962,95 @@ def test_proxy_forward_failure_does_not_raise(tmp_path):
     row = p.get_run(SAMPLE_RUN_ID)
     assert row is not None
     assert row["name"] == SAMPLE_RUN_NAME
+
+
+# ─── Sub-Second Precision Tests ───────────────────────────────────────────────
+
+SUB_SECOND_ROOT_TIME = "2026-03-27T05:11:52.000000"
+SUB_SECOND_CHILD_A_START = "2026-03-27T05:11:53.016586"
+SUB_SECOND_CHILD_A_END = "2026-03-27T05:11:53.017000"
+SUB_SECOND_CHILD_B_START = "2026-03-27T05:11:53.018000"
+SUB_SECOND_CHILD_B_END = "2026-03-27T05:11:53.020070"
+
+
+def test_compute_elapsed_preserves_microsecond_precision():
+    """_compute_elapsed produces sub-second float offsets from microsecond timestamps.
+
+    Children within the same clock second must have distinct elapsed_start_s
+    values so the Gantt chart renders them at different x positions.
+    """
+    root_start = _parse_iso(SUB_SECOND_ROOT_TIME)
+    assert root_start is not None
+
+    child_a = {
+        "start_time": SUB_SECOND_CHILD_A_START,
+        "end_time": SUB_SECOND_CHILD_A_END,
+    }
+    child_b = {
+        "start_time": SUB_SECOND_CHILD_B_START,
+        "end_time": SUB_SECOND_CHILD_B_END,
+    }
+
+    result_a = _compute_elapsed(child_a, root_start)
+    result_b = _compute_elapsed(child_b, root_start)
+
+    # Both offsets must be positive floats with sub-second resolution
+    assert result_a["elapsed_start_s"] > 0.0
+    assert result_b["elapsed_start_s"] > result_a["elapsed_start_s"]
+
+    # The difference must reflect millisecond-level separation (~1.4 ms)
+    diff = result_b["elapsed_start_s"] - result_a["elapsed_start_s"]
+    assert 0.001 < diff < 0.005
+
+
+def test_proxy_detail_sub_second_children_render_without_error(enabled_client):
+    """GET /proxy/{run_id} renders cleanly when all children complete within 1 second.
+
+    Reproduces the bug scenario: 10 children with start_times varying by only 4 ms.
+    The SVG must render (no template error / division-by-zero) and the chart area
+    must be present.
+    """
+    proxy_instance = get_proxy()
+    assert proxy_instance is not None
+
+    sub_root_id = "sub-second-root"
+    proxy_instance.record_run(
+        run_id=sub_root_id,
+        parent_run_id=None,
+        name="fast-pipeline",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SUB_SECOND_ROOT_TIME,
+        end_time=SUB_SECOND_CHILD_B_END,
+    )
+    # Two children separated by ~1.4 ms (mirrors the 4 ms real-world case)
+    proxy_instance.record_run(
+        run_id="sub-child-a",
+        parent_run_id=sub_root_id,
+        name="step-a",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SUB_SECOND_CHILD_A_START,
+        end_time=SUB_SECOND_CHILD_A_END,
+    )
+    proxy_instance.record_run(
+        run_id="sub-child-b",
+        parent_run_id=sub_root_id,
+        name="step-b",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time=SUB_SECOND_CHILD_B_START,
+        end_time=SUB_SECOND_CHILD_B_END,
+    )
+
+    response = enabled_client.get(f"/proxy/{sub_root_id}")
+    assert response.status_code == 200
+    assert "<svg" in response.text
+    # Axis ticks must use ms labels for sub-second spans
+    assert "ms" in response.text
