@@ -28,3 +28,8 @@ sections:
       Read, Glob, Grep, Skill, MultiEdit, NotebookEdit) and lowercase-substring LLM
       matching (claude, llm, model, chatanthropic, langgraph, assistant) covering
       assistant_text and LangGraph runs. No code changes required.'
+    validation_attempts: 1
+    validation_findings: 'bar_color/text_color macros in proxy_trace.html:130-159
+      correctly implement all acceptance criteria: exact-match tool names, lowercase-substring
+      LLM matching, and amber fallback for graph nodes. All 1314 tests pass. No code
+      changes were needed as the fix was already in place.'
