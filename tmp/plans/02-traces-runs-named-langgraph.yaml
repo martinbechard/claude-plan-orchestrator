@@ -27,3 +27,9 @@ sections:
       as RunTree name (not hardcoded ''LangGraph''), proxy stores name in DB, list_runs
       filters on name column, and proxy_list.html displays run.name. All 111 relevant
       tests pass.'
+    validation_attempts: 1
+    validation_findings: Validation-only task correctly confirmed existing implementation.
+      create_root_run() uses item_slug as RunTree name (langsmith.py:298,302), proxy
+      stores name in DB (proxy.py:40), list_runs filters on name column (proxy.py:782),
+      and proxy_list.html displays run.name (line 137). All 1314 tests pass. No code
+      changes were needed; only the YAML plan status was updated.
