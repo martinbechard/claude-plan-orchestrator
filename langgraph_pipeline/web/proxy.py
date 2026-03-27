@@ -70,6 +70,10 @@ _ALTER_ADD_COMPLETIONS_TOKENS_PER_MINUTE_SQL = (
     "ALTER TABLE completions ADD COLUMN tokens_per_minute REAL NOT NULL DEFAULT 0.0"
 )
 
+_ALTER_ADD_COMPLETIONS_VERIFICATION_NOTES_SQL = (
+    "ALTER TABLE completions ADD COLUMN verification_notes TEXT"
+)
+
 _CREATE_COST_TASKS_SQL = """
 CREATE TABLE IF NOT EXISTS cost_tasks (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -261,6 +265,10 @@ class TracingProxy:
                 conn.execute(_ALTER_ADD_COMPLETIONS_TOKENS_PER_MINUTE_SQL)
             except sqlite3.OperationalError:
                 pass  # Column already exists in an existing database
+            try:
+                conn.execute(_ALTER_ADD_COMPLETIONS_VERIFICATION_NOTES_SQL)
+            except sqlite3.OperationalError:
+                pass  # Column already exists in an existing database
             conn.execute(_DEDUPLICATE_RUN_IDS_SQL)
             conn.execute(_CREATE_UNIQUE_INDEX_RUN_ID_SQL)
             for index_sql in _CREATE_INDEXES_SQL:
@@ -440,6 +448,7 @@ class TracingProxy:
         duration_s: float,
         run_id: Optional[str] = None,
         tokens_per_minute: float = 0.0,
+        verification_notes: Optional[str] = None,
     ) -> None:
         """Persist a worker completion record to the completions table.
 
@@ -451,6 +460,7 @@ class TracingProxy:
             duration_s: Wall-clock seconds the worker ran.
             run_id: LangSmith trace UUID, if available.
             tokens_per_minute: Final token throughput velocity at reap time.
+            verification_notes: JSON string with verdict, findings[], and evidence from the validator.
         """
         finished_at = datetime.now(timezone.utc).isoformat()
         try:
@@ -458,10 +468,12 @@ class TracingProxy:
                 conn.execute(
                     """
                     INSERT INTO completions
-                        (slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        (slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id,
+                         tokens_per_minute, verification_notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    [slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute],
+                    [slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id,
+                     tokens_per_minute, verification_notes],
                 )
         except Exception:
             logger.debug("TracingProxy: failed to record completion for %s", slug, exc_info=True)
@@ -490,14 +502,15 @@ class TracingProxy:
             date_to: ISO date string upper bound for finished_at (inclusive).
 
         Returns:
-            List of dicts with keys: slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute.
+            List of dicts with keys: slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute, verification_notes.
         """
         conditions, params = self._completions_filter(slug, outcome, date_from, date_to)
         where = " AND ".join(conditions) if conditions else "1"
         offset = (page - 1) * page_size
         params.extend([page_size, offset])
         sql = f"""
-            SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute
+            SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id,
+                   tokens_per_minute, verification_notes
             FROM completions
             WHERE {where}
             ORDER BY finished_at DESC
@@ -594,10 +607,11 @@ class TracingProxy:
             slug: Work item slug to filter by.
 
         Returns:
-            List of dicts with keys: slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute.
+            List of dicts with keys: slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute, verification_notes.
         """
         sql = """
-            SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute
+            SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id,
+                   tokens_per_minute, verification_notes
             FROM completions
             WHERE slug = ?
             ORDER BY finished_at DESC
@@ -1278,6 +1292,57 @@ class TracingProxy:
             conditions.append("created_at <= ?")
             params.append(date_to)
         return conditions, params
+
+    def get_slug_cost_runs(self) -> dict[str, list["CostRun"]]:
+        """Return all cost-bearing runs with an item_slug, grouped by slug.
+
+        Used to populate expandable row detail in the Cost by Work Item table.
+        Inclusive cost is not computed here — exclusive cost only.
+
+        Returns:
+            Dict mapping item_slug to a list of CostRun ordered by exclusive
+            cost descending.
+        """
+        sql = """
+            SELECT
+                run_id,
+                name,
+                COALESCE(model, json_extract(metadata_json, '$.model'), '') AS model,
+                COALESCE(json_extract(metadata_json, '$.item_slug'), '') AS item_slug,
+                COALESCE(json_extract(metadata_json, '$.item_type'), '') AS item_type,
+                COALESCE(json_extract(metadata_json, '$.total_cost_usd'), 0.0) AS exclusive_cost_usd,
+                COALESCE(json_extract(metadata_json, '$.input_tokens'), 0) AS input_tokens,
+                COALESCE(json_extract(metadata_json, '$.output_tokens'), 0) AS output_tokens,
+                COALESCE(json_extract(metadata_json, '$.duration_ms'), 0) AS duration_ms,
+                created_at
+            FROM traces
+            WHERE json_extract(metadata_json, '$.item_slug') IS NOT NULL
+              AND json_extract(metadata_json, '$.total_cost_usd') IS NOT NULL
+            ORDER BY item_slug, exclusive_cost_usd DESC
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql).fetchall()
+
+        result: dict[str, list[CostRun]] = {}
+        for row in rows:
+            slug = row["item_slug"]
+            run = CostRun(
+                run_id=row["run_id"],
+                name=row["name"],
+                model=row["model"] or "",
+                item_slug=slug,
+                item_type=row["item_type"] or "",
+                exclusive_cost_usd=float(row["exclusive_cost_usd"]),
+                inclusive_cost_usd=0.0,
+                input_tokens=int(row["input_tokens"]),
+                output_tokens=int(row["output_tokens"]),
+                duration_ms=int(row["duration_ms"]),
+                created_at=row["created_at"],
+            )
+            if slug not in result:
+                result[slug] = []
+            result[slug].append(run)
+        return result
 
     def _cost_run_order_by(self, sort: str) -> str:
         """Map a sort constant to a SQL ORDER BY clause for list_cost_runs.

@@ -25,6 +25,7 @@
        .total_cost_usd   float
        .task_count       int
        .avg_cost_usd     float
+     slug_runs          dict[str, list[CostRun]] — per-slug run lists for expandable rows
      node_costs         list[NodeCost]
        .node_name        str
        .task_count       int
@@ -91,7 +92,19 @@
     background: #f0f4ff; border: 1px solid #c5d0e6; border-radius: 4px;
     padding: 0.6rem 1rem; font-size: 13px; color: #3a4a70; margin-bottom: 1.5rem;
   }
+  .expand-btn {
+    background: none; border: none; cursor: pointer;
+    padding: 0 4px; font-size: 13px; color: #3b6fcf;
+  }
+  .expand-btn:hover { color: #2d5ab8; }
+  .task-detail-row { display: none; background: #f8fafc; }
+  .task-detail-row.expanded { display: table-row; }
+  .task-detail-table {
+    width: 100%; font-size: 12px; border-collapse: collapse;
+  }
+  .task-detail-table td { padding: 4px 8px; border-bottom: 1px solid #f0f0f0; }
 </style>
+<script src="/static/analysis.js" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -301,19 +314,30 @@
 
   {% if slug_costs %}
   <div class="table-wrap" role="region" aria-label="Cost by work item table">
-    <table>
+    <table id="item-cost-table">
       <thead>
         <tr>
-          <th scope="col">Slug</th>
+          <th scope="col"></th>
+          <th scope="col" data-sortable="item_slug">Slug</th>
           <th scope="col">Type</th>
-          <th scope="col" style="text-align:right">Total $</th>
-          <th scope="col" style="text-align:right">Tasks</th>
+          <th scope="col" data-sortable="total_cost_usd" style="text-align:right">Total $</th>
+          <th scope="col" data-sortable="task_count" style="text-align:right">Tasks</th>
           <th scope="col" style="text-align:right">Avg $</th>
         </tr>
       </thead>
       <tbody>
         {% for sc in slug_costs %}
-        <tr>
+        {% set detail_id = "detail-" ~ loop.index %}
+        <tr class="item-row"
+            data-item-slug="{{ sc.item_slug | e }}"
+            data-total-cost-usd="{{ sc.total_cost_usd }}"
+            data-task-count="{{ sc.task_count }}">
+          <td>
+            <button class="expand-btn"
+                    aria-expanded="false"
+                    aria-controls="{{ detail_id }}"
+                    title="Show task breakdown">&#9654;</button>
+          </td>
           <td>
             <a href="/item/{{ sc.item_slug | e }}"
                aria-label="View work item {{ sc.item_slug | e }}">{{ sc.item_slug | e }}</a>
@@ -328,6 +352,39 @@
           <td style="text-align:right">${{ "%.4f" | format(sc.total_cost_usd) }}</td>
           <td style="text-align:right">{{ sc.task_count }}</td>
           <td style="text-align:right">${{ "%.4f" | format(sc.avg_cost_usd) }}</td>
+        </tr>
+        <tr id="{{ detail_id }}" class="task-detail-row">
+          <td colspan="6" style="padding:0.5rem 1rem;">
+            {% set item_runs = slug_runs.get(sc.item_slug, []) %}
+            {% if item_runs %}
+            <table class="task-detail-table">
+              <thead>
+                <tr>
+                  <th>Node</th>
+                  <th>Model</th>
+                  <th style="text-align:right">Cost $</th>
+                  <th style="text-align:right">Tokens In</th>
+                  <th style="text-align:right">Tokens Out</th>
+                  <th>Timestamp</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for run in item_runs %}
+                <tr>
+                  <td>{{ run.name | e }}</td>
+                  <td>{{ run.model | e }}</td>
+                  <td style="text-align:right">${{ "%.4f" | format(run.exclusive_cost_usd) }}</td>
+                  <td style="text-align:right">{{ "{:,}".format(run.input_tokens) }}</td>
+                  <td style="text-align:right">{{ "{:,}".format(run.output_tokens) }}</td>
+                  <td>{{ run.created_at[:10] | e if run.created_at else "&mdash;" | safe }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+            <span style="color:#888;font-size:12px;">No individual run data available.</span>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>
