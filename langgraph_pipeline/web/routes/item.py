@@ -11,6 +11,7 @@ Endpoints:
     GET /item/{slug}/output/{filename} — Returns a worker log file as text/plain.
 """
 
+import json
 import time
 from pathlib import Path
 from typing import Optional
