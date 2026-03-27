@@ -17,8 +17,15 @@ sections:
   - id: '1.1'
     name: Validate and fix tool call display in traces
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/16-tool-calls-missing-from-traces.md'
     last_attempt: '2026-03-27T14:13:20.582405'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:15:42.143000'
+    result_message: 'Validated tool call display in traces. Implementation was already
+      in place: proxy_trace route fetches grandchildren via get_children_batch, computes
+      span_s across all items, passes grandchildren_by_parent to template. Template
+      renders grandchild bars in SVG Gantt (indented, smaller height, colour-coded)
+      and shows expandable tool call details section. All 27 proxy tests pass, full
+      suite 1314/1314 passing.'
