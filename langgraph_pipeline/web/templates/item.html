@@ -621,6 +621,10 @@
   <span>PID {{ active_worker.pid }}</span>
   <span class="active-worker-sep" aria-hidden="true">|</span>
   <span>Running for {{ active_worker.elapsed_s }}</span>
+  {% if active_worker.current_task %}
+    <span class="active-worker-sep" aria-hidden="true">|</span>
+    <span class="active-worker-task">{{ active_worker.current_task }}</span>
+  {% endif %}
   {% if active_worker.run_id %}
     <span class="active-worker-sep" aria-hidden="true">|</span>
     <a class="active-worker-trace"

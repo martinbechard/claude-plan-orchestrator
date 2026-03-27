@@ -237,7 +237,7 @@ class TestCheckRagDedup:
 
 
 class TestVerifyDefectSymptoms:
-    def test_calls_invoke_claude_with_item_path(self, tmp_path):
+    def test_calls_invoke_claude_with_item_content(self, tmp_path):
         item = tmp_path / "01-bug.md"
         item.write_text("## Defect\nSome symptom.\n")
         with patch(
@@ -247,7 +247,7 @@ class TestVerifyDefectSymptoms:
             result = _verify_defect_symptoms(str(item))
         assert mock_call.called
         prompt_arg = mock_call.call_args[0][0]
-        assert str(item) in prompt_arg
+        assert "Some symptom" in prompt_arg
 
     def test_parses_reproducible_yes(self, tmp_path):
         item = tmp_path / "01-bug.md"
@@ -284,9 +284,9 @@ class TestVerifyDefectSymptoms:
 
 
 class TestRunFiveWhysAnalysis:
-    def test_calls_invoke_claude_with_item_path(self, tmp_path):
+    def test_calls_invoke_claude_with_item_content(self, tmp_path):
         item = tmp_path / "01-analysis.md"
-        item.write_text("")
+        item.write_text("## Analysis\nSome analysis request.\n")
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
             return_value=("Title: X\nClarity: 4\n5 Whys:\n1.a\n2.b\n3.c\n4.d\n5.e", 0.01),
@@ -294,7 +294,7 @@ class TestRunFiveWhysAnalysis:
             _run_five_whys_analysis(str(item))
         assert mock_call.called
         prompt_arg = mock_call.call_args[0][0]
-        assert str(item) in prompt_arg
+        assert "Some analysis request" in prompt_arg
 
     def test_parses_clarity_score(self, tmp_path):
         item = tmp_path / "01-analysis.md"

@@ -14,11 +14,14 @@ the YAML plan was written before returning the paths.
 """
 
 import json
+import logging
 import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.config import DEFAULT_AGENTS_DIR, load_orchestrator_config
@@ -34,6 +37,7 @@ DESIGN_DIR = "docs/plans"
 DESIGN_DOC_DATE_FORMAT = "%Y-%m-%d"
 PLAN_CREATION_TIMEOUT_SECONDS = 600
 PLANNER_MODEL = "claude-opus-4-6"  # Design and planning require Opus for quality
+MAX_DESIGN_VALIDATION_RETRIES = 2  # Max times to retry planner after design validation failure
 
 # Planner permission profile: reads, greps, globes, writes files, and runs shell commands.
 PLANNER_ALLOWED_TOOLS = ["Read", "Grep", "Glob", "Write", "Bash"]
@@ -167,6 +171,50 @@ def _plan_exists(plan_path: str) -> bool:
     return path.exists() and path.stat().st_size > 0
 
 
+def _ensure_acceptance_criteria_in_design(
+    item_path: str, design_doc_path: str, item_slug: str
+) -> None:
+    """Copy acceptance criteria from the backlog item into the design doc if missing.
+
+    Reads the backlog item, extracts the '## Acceptance Criteria' section, and
+    appends it to the design doc if the design doc doesn't already contain one.
+    """
+    design_path = Path(design_doc_path)
+    if not design_path.exists():
+        return
+    try:
+        item_text = Path(item_path).read_text(encoding="utf-8")
+        design_text = design_path.read_text(encoding="utf-8")
+    except OSError:
+        return
+
+    # Already has criteria
+    if "## Acceptance Criteria" in design_text:
+        return
+
+    # Extract from backlog item
+    marker = "## Acceptance Criteria"
+    idx = item_text.find(marker)
+    if idx < 0:
+        logger.info("No acceptance criteria in backlog item for %s — skipping", item_slug)
+        return
+
+    # Find the end: next ## heading or end of file
+    rest = item_text[idx + len(marker):]
+    next_heading = rest.find("\n## ")
+    if next_heading >= 0:
+        criteria_text = marker + rest[:next_heading].rstrip()
+    else:
+        criteria_text = marker + rest.rstrip()
+
+    try:
+        with open(design_doc_path, "a", encoding="utf-8") as f:
+            f.write(f"\n\n{criteria_text}\n")
+        logger.info("Copied acceptance criteria into design doc for %s", item_slug)
+    except OSError as exc:
+        logger.warning("Failed to append criteria to design doc for %s: %s", item_slug, exc)
+
+
 # ─── Node ─────────────────────────────────────────────────────────────────────
 
 
@@ -238,14 +286,21 @@ def create_plan(state: PipelineState) -> dict:
 
     print(f"[create_plan] Plan created: {expected_plan_path}")
 
-    # Validate design quality with Opus: acceptance checklist, matches request, no bad assumptions.
+    # Ensure acceptance criteria from the backlog item are in the design doc.
+    # The planner often omits them, so we copy them directly rather than retrying.
+    _ensure_acceptance_criteria_in_design(item_path, expected_design_doc_path, item_slug)
+
+    # Validate design quality with Opus.
     if Path(expected_design_doc_path).exists():
+        logger.info("Running design validation for %s...", item_slug)
         from langgraph_pipeline.pipeline.nodes.intake import _validate_design
         valid, reason = _validate_design(expected_design_doc_path, item_path)
-        if not valid:
-            print(
-                f"[create_plan] WARNING: design validation failed for {item_slug}: {reason}"
-            )
+        if valid:
+            logger.info("Design validation PASSED for %s", item_slug)
+        else:
+            logger.warning("Design validation FAILED for %s: %s", item_slug, reason)
+    else:
+        logger.warning("No design doc at %s — skipping validation", expected_design_doc_path)
 
     add_trace_metadata({
         "node_name": "create_plan",

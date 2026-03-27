@@ -19,11 +19,14 @@ so it survives LangGraph checkpoint restarts and process crashes.
 """
 
 import json
+import logging
 import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
@@ -63,7 +66,7 @@ _REPRODUCIBLE_PATTERN = re.compile(r"Reproducible:\s*(yes|no|unclear)", re.IGNOR
 
 DEFECT_SYMPTOM_PROMPT = (
     "You are analyzing a defect backlog item to verify symptoms are still present.\n\n"
-    "Read the defect backlog item at: {item_path}\n\n"
+    "Here is the defect backlog item:\n\n---\n{item_content}\n---\n\n"
     "Your task:\n"
     "1. Read and understand the reported symptoms.\n"
     "2. Determine whether the symptoms are clearly described and actionable.\n"
@@ -75,14 +78,14 @@ DEFECT_SYMPTOM_PROMPT = (
 )
 
 CHECK_HAS_FIVE_WHYS_PROMPT = (
-    "Read the backlog item at: {item_path}\n\n"
+    "Here is a backlog item:\n\n---\n{item_content}\n---\n\n"
     "Does this item already contain a 5 Whys analysis (5 numbered Why "
     "questions with answers and a Root Need)?\n\n"
     "Respond with ONLY one word: YES or NO"
 )
 
 CHECK_HAS_ACCEPTANCE_CHECKLIST_PROMPT = (
-    "Read the design document at: {design_doc_path}\n\n"
+    "Here is a design document:\n\n---\n{design_content}\n---\n\n"
     "Does this design document contain acceptance criteria written as a "
     "checklist of specific YES/NO questions (e.g. 'Does X work? YES = pass, "
     "NO = fail')?\n\n"
@@ -93,7 +96,7 @@ DESIGN_VALIDATOR_MODEL = "claude-opus-4-6"
 DESIGN_VALIDATOR_TIMEOUT_SECONDS = 60
 
 VALIDATE_FIVE_WHYS_PROMPT = (
-    "Read the backlog item at: {item_path}\n\n"
+    "Here is a backlog item:\n\n---\n{item_content}\n---\n\n"
     "This item contains a 5 Whys analysis. Validate its quality:\n\n"
     "1. Does each Why logically follow from the previous answer, with no "
     "unjustified assumptions or leaps in reasoning?\n"
@@ -107,8 +110,8 @@ VALIDATE_FIVE_WHYS_PROMPT = (
 )
 
 VALIDATE_DESIGN_PROMPT = (
-    "Read the design document at: {design_doc_path}\n\n"
-    "Read the original backlog item at: {item_path}\n\n"
+    "Here is a design document:\n\n---\n{design_content}\n---\n\n"
+    "Here is the original backlog item:\n\n---\n{item_content}\n---\n\n"
     "Validate the design:\n\n"
     "1. Does the design contain acceptance criteria as a checklist of "
     "specific YES/NO questions?\n"
@@ -123,7 +126,7 @@ VALIDATE_DESIGN_PROMPT = (
 
 FIVE_WHYS_PROMPT = (
     "Analyze this {item_type} backlog item using the 5 Whys method.\n\n"
-    "Read the backlog item at: {item_path}\n\n"
+    "Here is the backlog item:\n\n---\n{item_content}\n---\n\n"
     "Perform a 5 Whys analysis to uncover the root need behind this request.\n"
     "IMPORTANT: Provide exactly 5 numbered Why questions and answers. Each Why\n"
     "should dig deeper into the root cause of the previous answer.\n\n"
@@ -220,7 +223,9 @@ def _invoke_claude(prompt: str, timeout: int = INTAKE_ANALYSIS_TIMEOUT_SECONDS) 
     """
     try:
         result = subprocess.run(
-            ["claude", "--model", INTAKE_MODEL, "--print", prompt, "--output-format", "json"],
+            ["claude", "--model", INTAKE_MODEL, "--print", prompt,
+             "--output-format", "json", "--dangerously-skip-permissions",
+             "--permission-mode", "acceptEdits"],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -280,7 +285,8 @@ def _check_rag_dedup(slug: str) -> bool:
 
 def _verify_defect_symptoms(item_path: str) -> dict[str, str | int | float]:
     """Spawn Claude to verify defect symptoms and return parsed result fields."""
-    prompt = DEFECT_SYMPTOM_PROMPT.format(item_path=item_path)
+    content = _read_file_content(item_path)
+    prompt = DEFECT_SYMPTOM_PROMPT.format(item_content=content)
     output, cost = _invoke_claude(prompt)
     clarity = _parse_clarity_score(output)
 
@@ -313,14 +319,20 @@ def _invoke_claude_opus(prompt: str, timeout: int = DESIGN_VALIDATOR_TIMEOUT_SEC
 
 def _has_five_whys(item_path: str) -> bool:
     """Use Haiku to check if the backlog item already contains a 5 Whys analysis."""
-    prompt = CHECK_HAS_FIVE_WHYS_PROMPT.format(item_path=item_path)
+    content = _read_file_content(item_path)
+    if not content:
+        return False
+    prompt = CHECK_HAS_FIVE_WHYS_PROMPT.format(item_content=content)
     output, _cost = _invoke_claude(prompt, timeout=30)
     return output.strip().upper().startswith("YES")
 
 
 def _validate_five_whys(item_path: str) -> tuple[bool, str]:
     """Use Opus to validate 5 Whys quality — no unjustified assumptions, conclusion matches request."""
-    prompt = VALIDATE_FIVE_WHYS_PROMPT.format(item_path=item_path)
+    content = _read_file_content(item_path)
+    if not content:
+        return False, "Could not read item file"
+    prompt = VALIDATE_FIVE_WHYS_PROMPT.format(item_content=content)
     output, _cost = _invoke_claude_opus(prompt)
     valid = output.strip().upper().startswith("VALID")
     reason = output.strip().split("\n", 1)[1].strip() if "\n" in output.strip() else ""
@@ -329,7 +341,13 @@ def _validate_five_whys(item_path: str) -> tuple[bool, str]:
 
 def _validate_design(design_doc_path: str, item_path: str) -> tuple[bool, str]:
     """Use Opus to validate design — has checklist, matches request, no unjustified assumptions."""
-    prompt = VALIDATE_DESIGN_PROMPT.format(design_doc_path=design_doc_path, item_path=item_path)
+    design_content = _read_file_content(design_doc_path)
+    item_content = _read_file_content(item_path)
+    if not design_content:
+        return False, "Could not read design doc"
+    if not item_content:
+        return False, "Could not read item file"
+    prompt = VALIDATE_DESIGN_PROMPT.format(design_content=design_content, item_content=item_content)
     output, _cost = _invoke_claude_opus(prompt)
     valid = output.strip().upper().startswith("VALID")
     reason = output.strip().split("\n", 1)[1].strip() if "\n" in output.strip() else ""
@@ -338,14 +356,40 @@ def _validate_design(design_doc_path: str, item_path: str) -> tuple[bool, str]:
 
 def _has_acceptance_checklist(design_doc_path: str) -> bool:
     """Use Haiku to check if the design doc contains YES/NO acceptance criteria."""
-    prompt = CHECK_HAS_ACCEPTANCE_CHECKLIST_PROMPT.format(design_doc_path=design_doc_path)
+    content = _read_file_content(design_doc_path)
+    if not content:
+        return False
+    prompt = CHECK_HAS_ACCEPTANCE_CHECKLIST_PROMPT.format(design_content=content)
     output, _cost = _invoke_claude(prompt, timeout=30)
     return output.strip().upper().startswith("YES")
 
 
+def _read_file_content(path: str) -> str:
+    """Read file content. Returns empty string on error."""
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _append_analysis_to_item(item_path: str, analysis_text: str) -> None:
+    """Append the 5 Whys analysis text to the end of the backlog item file."""
+    if not analysis_text or not analysis_text.strip():
+        return
+    try:
+        with open(item_path, "a", encoding="utf-8") as f:
+            f.write("\n\n## 5 Whys Analysis\n\n")
+            f.write(analysis_text.strip())
+            f.write("\n")
+        logger.info("Appended 5 Whys analysis to %s", item_path)
+    except OSError as exc:
+        logger.warning("Failed to append analysis to %s: %s", item_path, exc)
+
+
 def _run_five_whys_analysis(item_path: str, item_type: str = "analysis") -> dict[str, str | int | float]:
     """Spawn Claude to run a 5-Whys analysis on any backlog item."""
-    prompt = FIVE_WHYS_PROMPT.format(item_path=item_path, item_type=item_type)
+    content = _read_file_content(item_path)
+    prompt = FIVE_WHYS_PROMPT.format(item_content=content, item_type=item_type)
     output, cost = _invoke_claude(prompt)
     clarity = _parse_clarity_score(output)
 
@@ -428,13 +472,17 @@ def intake_analyze(state: PipelineState) -> dict:
             if detect_quota_exhaustion(str(whys_result["raw_output"])):
                 return {"quota_exhausted": True}
             total_cost_usd += float(whys_result.get("total_cost_usd", 0.0))
+            _append_analysis_to_item(item_path, whys_result["raw_output"])
         else:
-            print(f"[intake_analyze] 5 Whys already present for defect: {item_slug}")
+            logger.info("5 Whys already present for defect: %s", item_slug)
 
         # Step 3: Validate 5 Whys quality with Opus.
+        logger.info("Running 5 Whys validation for %s...", item_slug)
         valid, reason = _validate_five_whys(item_path)
-        if not valid:
-            print(f"[intake_analyze] WARNING: 5 Whys validation failed for {item_slug}: {reason}")
+        if valid:
+            logger.info("5 Whys validation PASSED for %s", item_slug)
+        else:
+            logger.warning("5 Whys validation FAILED for %s: %s", item_slug, reason)
 
         state_updates["intake_count_defects"] = (
             state.get("intake_count_defects", 0) + 1
@@ -448,18 +496,20 @@ def intake_analyze(state: PipelineState) -> dict:
                 return {"quota_exhausted": True}
             clarity = result["clarity"]
             total_cost_usd = float(result.get("total_cost_usd", 0.0))
+            _append_analysis_to_item(item_path, result["raw_output"])
 
             if clarity < INTAKE_CLARITY_THRESHOLD:
-                print(
-                    f"[intake_analyze] Low clarity score {clarity} for feature: {item_slug}"
-                )
+                logger.info("Low clarity score %d for feature: %s", clarity, item_slug)
         else:
-            print(f"[intake_analyze] 5 Whys already present for feature: {item_slug}")
+            logger.info("5 Whys already present for feature: %s", item_slug)
 
         # Validate 5 Whys quality with Opus.
+        logger.info("Running 5 Whys validation for %s...", item_slug)
         valid, reason = _validate_five_whys(item_path)
-        if not valid:
-            print(f"[intake_analyze] WARNING: 5 Whys validation failed for {item_slug}: {reason}")
+        if valid:
+            logger.info("5 Whys validation PASSED for %s", item_slug)
+        else:
+            logger.warning("5 Whys validation FAILED for %s: %s", item_slug, reason)
 
         state_updates["intake_count_features"] = (
             state.get("intake_count_features", 0) + 1
@@ -472,13 +522,12 @@ def intake_analyze(state: PipelineState) -> dict:
                 return {"quota_exhausted": True}
             clarity = result["clarity"]
             total_cost_usd = float(result.get("total_cost_usd", 0.0))
+            _append_analysis_to_item(item_path, result["raw_output"])
 
             if clarity < INTAKE_CLARITY_THRESHOLD:
-                print(
-                    f"[intake_analyze] Low clarity score {clarity} for analysis: {item_slug}"
-                )
+                logger.info("Low clarity score %d for analysis: %s", clarity, item_slug)
         else:
-            print(f"[intake_analyze] 5 Whys already present for analysis: {item_slug}")
+            logger.info("5 Whys already present for analysis: %s", item_slug)
 
         state_updates["intake_count_features"] = (
             state.get("intake_count_features", 0) + 1

@@ -480,10 +480,19 @@ def _get_active_worker(slug: str) -> Optional[dict]:
                 elapsed_total = now - worker.start_time
                 minutes = int(elapsed_total // 60)
                 seconds = int(elapsed_total % 60)
+                # Find the current task from the plan YAML
+                current_task = None
+                plan_tasks = _load_plan_tasks(slug)
+                if plan_tasks:
+                    for t in plan_tasks:
+                        if t["status"] == "in_progress":
+                            current_task = f"#{t['id']} {t['name']}"
+                            break
                 return {
                     "pid": worker.pid,
                     "elapsed_s": f"{minutes}m {seconds}s",
                     "run_id": worker.run_id,
+                    "current_task": current_task,
                 }
     except Exception:
         pass
