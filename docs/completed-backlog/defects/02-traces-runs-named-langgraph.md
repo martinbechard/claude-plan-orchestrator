@@ -20,6 +20,13 @@ This item was previously implemented and marked complete. Validate the
 acceptance criteria below. If any criterion fails, fix it. Do not
 rewrite from scratch — check what exists first.
 
+
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
 ## Summary
 
 Every root trace in the LangSmith proxy is named "LangGraph" and the slug
