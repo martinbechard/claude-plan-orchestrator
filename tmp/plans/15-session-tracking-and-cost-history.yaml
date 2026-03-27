@@ -31,16 +31,23 @@ sections:
       (with orphan recovery), close_session(), list_sessions(), and list_daily_totals()
       helpers. Added Session and DailyTotal dataclasses. Added 8 unit tests; all 1355
       tests pass.
+    validation_attempts: 1
+    validation_findings: All persistence requirements met. Sessions table added to
+      init_db, all 4 helpers implemented with proper orphan recovery, dataclasses
+      defined, 8 unit tests added. All 1364 tests pass.
   - id: '1.2'
     name: Wire session lifecycle into cli.py and DashboardState
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
       -- Focus on Session lifecycle requirements. Create session on pipeline startup
       in cli.py after web server starts. Close session on shutdown in finally block
       reading cost and items from DashboardState. Add session_start_time (datetime)
       and session_id fields to DashboardState, include session_start_time_iso in snapshot().
       Add unit tests.'
+    last_attempt: '2026-03-27T15:18:53.744869'
+    attempts: 1
+    model_used: sonnet
 - id: '2'
   name: Sessions API route and history page
   status: pending
