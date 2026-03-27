@@ -1,0 +1,20 @@
+meta:
+  source_item: "tmp/plans/.claimed/99-test-v7.md"
+  validation:
+    enabled: true
+    run_after:
+      - coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+
+sections:
+  - id: '1'
+    name: Add test comment to paths.py
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: Add tmp plans test comment
+        agent: coder
+        status: pending
+        description: "Implement the work item: tmp/plans/.claimed/99-test-v7.md"
