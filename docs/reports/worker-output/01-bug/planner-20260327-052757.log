@@ -1,0 +1,6 @@
+=== planner for 01-bug ===
+Exit code: 0
+
+=== STDOUT ===
+{"result": "The check_rate_limit function matches You've hit your limit"}
+=== STDERR ===

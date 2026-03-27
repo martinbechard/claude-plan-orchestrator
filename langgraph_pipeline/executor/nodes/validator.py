@@ -307,6 +307,32 @@ def _post_cost_to_api(
 # ─── Status File ──────────────────────────────────────────────────────────────
 
 
+def _save_validation_result(plan_data: dict, task_id: str, verdict: str, status_dict: Optional[dict]) -> None:
+    """Save validation verdict and findings to the per-item worker output directory."""
+    try:
+        from langgraph_pipeline.shared.paths import WORKER_OUTPUT_DIR
+        source_item = plan_data.get("meta", {}).get("source_item", "")
+        slug = Path(source_item).stem if source_item else ""
+        if not slug:
+            return
+        output_dir = WORKER_OUTPUT_DIR / slug
+        output_dir.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        result = {
+            "task_id": task_id,
+            "verdict": verdict,
+            "message": status_dict.get("message", "") if status_dict else "No status file",
+            "requirements_checked": status_dict.get("requirements_checked") if status_dict else None,
+            "requirements_met": status_dict.get("requirements_met") if status_dict else None,
+            "timestamp": ts,
+        }
+        result_path = output_dir / f"validation-{task_id.replace('.', '-')}-{ts}.json"
+        with open(result_path, "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2)
+    except Exception:
+        pass  # Non-fatal
+
+
 def _clear_status_file() -> None:
     """Remove the status file so stale task_runner output cannot pollute verdict parsing."""
     try:
@@ -464,6 +490,9 @@ def validate_task(state: TaskState) -> dict:
         task["validation_findings"] = (
             f"Validator {validator_agent!r} failed to execute: No status file written by Claude"
         )
+
+    # Save validation results to per-item output for the work item page
+    _save_validation_result(plan_data, task_id, verdict, status_dict)
 
     new_task_attempt = task_attempt + 1 if verdict == "FAIL" else task_attempt
     _save_plan_yaml(plan_path, plan_data)

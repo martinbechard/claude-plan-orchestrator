@@ -51,7 +51,7 @@ langsmith:
 # max_parallel_items controls how many backlog items are processed concurrently.
 # Set to 1 for strictly sequential processing.
 pipeline:
-  max_parallel_items: 4
+  max_parallel_items: 6
 
 # Per-task validation configuration.
 # When enabled, the orchestrator spawns a validator agent after each

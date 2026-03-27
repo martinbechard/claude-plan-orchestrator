@@ -215,8 +215,12 @@ def _parse_timestamp(ts: str) -> float:
 
 def _call_llm(prompt: str, model: str = INTAKE_MODEL,
               timeout: int = INTAKE_ANALYSIS_TIMEOUT_SECONDS,
-              slug: str = "", phase: str = "intake") -> tuple[str, float]:
-    """Call Claude via shared call_claude. Saves output and returns (text, cost).
+              slug: str = "", phase: str = "intake") -> tuple[str, float, str]:
+    """Call Claude via shared call_claude. Returns (text, cost, failure_reason).
+
+    failure_reason is an empty string on success. On failure, text is empty
+    and failure_reason contains a description of what went wrong. Callers must
+    check failure_reason before treating text as valid analysis output.
 
     Uses the shared call_claude which handles permissions, JSON parsing, and
     error handling consistently. Saves raw stdout to per-item output dir.
@@ -228,8 +232,8 @@ def _call_llm(prompt: str, model: str = INTAKE_MODEL,
                                 result.failure_reason or "", 0 if not result.failure_reason else 1)
     # Token/cost reporting is handled by call_claude via POST /api/worker-stats
     if result.failure_reason:
-        return result.failure_reason, 0.0
-    return result.text, result.total_cost_usd
+        return "", 0.0, result.failure_reason
+    return result.text, result.total_cost_usd, ""
 
 
 # ─── Analysis helpers ─────────────────────────────────────────────────────────
@@ -272,28 +276,45 @@ def _check_rag_dedup(slug: str) -> bool:
     return False
 
 
-def _verify_defect_symptoms(item_path: str) -> dict[str, str | int | float]:
-    """Spawn Claude to verify defect symptoms and return parsed result fields."""
+def _verify_defect_symptoms(item_path: str) -> dict[str, str | int | float | bool]:
+    """Spawn Claude to verify defect symptoms and return parsed result fields.
+
+    Returns a dict with a "failed" key (bool). When failed=True, raw_output is
+    empty and failure_reason contains the error description. Callers must check
+    "failed" before treating raw_output as valid analysis.
+    """
     content = _read_file_content(item_path)
     prompt = DEFECT_SYMPTOM_PROMPT.format(item_content=content)
-    output, cost = _call_llm(prompt)
+    output, cost, failure_reason = _call_llm(prompt)
+    if failure_reason:
+        return {
+            "failed": True,
+            "failure_reason": failure_reason,
+            "reproducible": "unclear",
+            "clarity": INTAKE_CLARITY_THRESHOLD,
+            "raw_output": "",
+            "total_cost_usd": 0.0,
+        }
     clarity = _parse_clarity_score(output)
-
     reproducible_match = _REPRODUCIBLE_PATTERN.search(output)
     reproducible = reproducible_match.group(1).lower() if reproducible_match else "unclear"
-
-    return {"reproducible": reproducible, "clarity": clarity, "raw_output": output, "total_cost_usd": cost}
+    return {"failed": False, "reproducible": reproducible, "clarity": clarity, "raw_output": output, "total_cost_usd": cost}
 
 
 
 
 def _has_five_whys(item_path: str) -> bool:
-    """Use Haiku to check if the backlog item already contains a 5 Whys analysis."""
+    """Use Haiku to check if the backlog item already contains a 5 Whys analysis.
+
+    Returns False on LLM failure (safe default: assume 5 Whys not yet present).
+    """
     content = _read_file_content(item_path)
     if not content:
         return False
     prompt = CHECK_HAS_FIVE_WHYS_PROMPT.format(item_content=content)
-    output, _cost = _call_llm(prompt, timeout=30)
+    output, _cost, failure_reason = _call_llm(prompt, timeout=30)
+    if failure_reason:
+        return False
     return output.strip().upper().startswith("YES")
 
 

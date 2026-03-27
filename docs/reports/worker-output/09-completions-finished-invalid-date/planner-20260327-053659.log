@@ -1,0 +1,7 @@
+=== planner for 09-completions-finished-invalid-date ===
+Exit code: 0
+
+=== STDOUT ===
+{"type":"result","subtype":"success","is_error":false,"duration_ms":54230,"duration_api_ms":51638,"num_turns":12,"result":"Done. Created:\n\n1. **Design doc**: `docs/plans/2026-03-27-09-completions-finished-invalid-date-design.md` - describes the dual-format timestamp issue and the typeof-based fix approach\n2. **YAML plan**: `tmp/plans/09-completions-finished-invalid-date.yaml` - single task assigned to `frontend-coder` to update `fmtFinished()` to handle both ISO 8601 strings and Unix timestamps\n\nThe plan has one focused task since the fix is straightforward: add a typeof check in `fmtFinished()` to branch between numeric and string timestamp parsing.","stop_reason":"end_turn","session_id":"5d5ee0ad-52be-4b67-a04e-3c712c3ed159","total_cost_usd":0.25473275,"usage":{"input_tokens":10,"cache_creation_input_tokens":14993,"cache_read_input_tokens":234303,"output_tokens":1753,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":14993,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":10,"outputTokens":1753,"cacheReadInputTokens":234303,"cacheCreationInputTokens":14993,"webSearchRequests":0,"costUSD":0.25473275,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"b0b09107-d0d5-4122-a86a-90c3d2ff06c9"}
+
+=== STDERR ===

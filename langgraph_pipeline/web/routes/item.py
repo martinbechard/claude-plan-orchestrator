@@ -83,6 +83,7 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
     total_duration_s = sum(c.get("duration_s", 0.0) for c in completions)
     total_tokens = _compute_total_tokens(completions)
     output_files = _list_output_files(slug)
+    validation_results = _load_validation_results(slug)
     avg_velocity = _compute_avg_velocity(completions)
 
     # When a worker is active, use its live stats instead of completions
@@ -113,6 +114,7 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
             "completions": completions,
             "traces": traces,
             "output_files": output_files,
+            "validation_results": validation_results,
             "avg_velocity": avg_velocity,
             "last_trace": last_trace,
         },
@@ -475,6 +477,21 @@ def _list_output_files(slug: str) -> list[str]:
         (p.name for p in output_dir.iterdir() if p.suffix == ".log"),
         reverse=True,
     )
+
+
+def _load_validation_results(slug: str) -> list[dict]:
+    """Load validation result JSON files from the per-item worker output directory."""
+    output_dir = WORKER_OUTPUT_DIR / slug
+    results = []
+    if not output_dir.exists():
+        return results
+    for f in sorted(output_dir.glob("validation-*.json"), reverse=True):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            results.append(data)
+        except (json.JSONDecodeError, OSError):
+            continue
+    return results
 
 
 def _compute_total_tokens(completions: list[dict]) -> int:

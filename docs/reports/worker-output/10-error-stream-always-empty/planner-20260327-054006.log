@@ -1,0 +1,7 @@
+=== planner for 10-error-stream-always-empty ===
+Exit code: 0
+
+=== STDOUT ===
+{"type":"result","subtype":"success","is_error":false,"duration_ms":186827,"duration_api_ms":181557,"num_turns":34,"result":"Done. Created:\n\n- **Design doc**: `docs/plans/2026-03-27-10-error-stream-always-empty-design.md` - documents the existing implementation (handler class + installation in cli.py) and identifies a gap: the handler lacks `setLevel(logging.WARNING)`, so DEBUG/INFO messages leak to the error stream when `--verbose` is used.\n- **YAML plan**: `tmp/plans/10-error-stream-always-empty.yaml` - single task for the coder to validate and fix the handler's level filtering.","stop_reason":"end_turn","session_id":"c1b33463-b7f0-46e7-b32c-194872ddfa65","total_cost_usd":0.7287339999999999,"usage":{"input_tokens":22,"cache_creation_input_tokens":33454,"cache_read_input_tokens":805323,"output_tokens":4675,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":33454,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":22,"outputTokens":4675,"cacheReadInputTokens":805323,"cacheCreationInputTokens":33454,"webSearchRequests":0,"costUSD":0.7287339999999999,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"c12dc7d0-63c4-4aae-b6f2-28d23ea9a9b1"}
+
+=== STDERR ===
