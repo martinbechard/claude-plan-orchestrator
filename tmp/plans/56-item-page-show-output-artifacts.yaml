@@ -1,0 +1,50 @@
+meta:
+  name: "56-item-page-show-output-artifacts"
+  source_item: "tmp/plans/.claimed/56-item-page-show-output-artifacts.md"
+  plan_doc: "docs/plans/2026-03-27-56-item-page-show-output-artifacts-design.md"
+  validation:
+    enabled: true
+    run_after:
+      - coder
+      - frontend-coder
+      - e2e-test-agent
+    validators:
+      - validator
+    max_validation_attempts: 2
+
+sections:
+  - id: '1'
+    name: "Backend: collect output artifacts"
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: "Add _collect_output_artifacts helper and wire into item_detail endpoint"
+        agent: coder
+        status: pending
+        description: >
+          Implement the work item: tmp/plans/.claimed/56-item-page-show-output-artifacts.md
+
+          Add a _collect_output_artifacts(slug) function to langgraph_pipeline/web/routes/item.py
+          that gathers files from git commits (git log --all --grep=slug --name-only),
+          design docs, and docs/reports/ matching the slug. Deduplicate by path and return
+          a list of dicts with keys: path, source, display_name. Pass output_artifacts
+          to the template in item_detail().
+          See design: docs/plans/2026-03-27-56-item-page-show-output-artifacts-design.md
+
+  - id: '2'
+    name: "Frontend: render output artifacts section"
+    status: pending
+    tasks:
+      - id: '2.1'
+        name: "Add Output Artifacts section to item.html template"
+        agent: frontend-coder
+        status: pending
+        description: >
+          Implement the work item: tmp/plans/.claimed/56-item-page-show-output-artifacts.md
+
+          Add a collapsible "Output Artifacts" section to langgraph_pipeline/web/templates/item.html,
+          placed between the Plan Tasks and Completions sections. Show each artifact as a file
+          path with a source badge (git/design/report). Use the same collapsed-by-default
+          pattern as the Console Output section. The template receives output_artifacts
+          (list of dicts with path, source, display_name).
+          See design: docs/plans/2026-03-27-56-item-page-show-output-artifacts-design.md
