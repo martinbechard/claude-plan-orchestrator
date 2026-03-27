@@ -80,3 +80,5 @@ Clarity: 4
 Root Need: Users need timestamps displayed in local timezone to rapidly and accurately map trace events to real-world incidents during debugging without requiring timezone conversion.
 
 Summary: The real issue isn't technical correctness—UTC storage is right—but enabling fast cognitive mapping during time-sensitive debugging.
+
+## LangSmith Trace: 968971ff-3b6c-47f7-88a0-52a211f15209
