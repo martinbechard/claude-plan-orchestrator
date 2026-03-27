@@ -17,8 +17,13 @@ sections:
   - id: '1.1'
     name: Validate elapsed time labels and grandchild expansion
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/04-timeline-duplicate-labels-and-elapsed-time.md'
     last_attempt: '2026-03-27T09:58:40.765144'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T10:00:04.164067'
+    result_message: 'Both implementations verified: sweep_dead_workers() in dashboard_state.py
+      correctly probes each PID with os.kill(pid, 0) and reaps dead workers as failures;
+      ChildProcessError handling in supervisor.py correctly removes stale PIDs. All
+      23 dashboard_state tests pass, full suite (1314 tests) passes.'
