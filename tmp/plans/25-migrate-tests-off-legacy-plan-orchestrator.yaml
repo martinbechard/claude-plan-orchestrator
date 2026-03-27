@@ -1,0 +1,21 @@
+meta:
+  source_item: tmp/plans/.claimed/25-migrate-tests-off-legacy-plan-orchestrator.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Verify and complete test migration
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Verify test migration and clean up any remaining legacy references
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/25-migrate-tests-off-legacy-plan-orchestrator.md'
