@@ -188,4 +188,92 @@ Documents classified as UPDATE require the following corrections:
 
 ---
 
-*Batch 3 and 4 will be appended by subsequent audit tasks.*
+## Batch 3: 2026-03-23 through 2026-03-25 (33 docs)
+
+### Additional Facts Verified for Batch 3
+
+- `scripts/plan-orchestrator.py` — **DELETED** (all March 2026 references to it are dead)
+- `langgraph_pipeline/shared/quota.py` — EXISTS (quota exhaustion detection)
+- `langgraph_pipeline/shared/hot_reload.py` — EXISTS (hot reload implemented)
+- `langgraph_pipeline/shared/cost_log.py` — **DOES NOT EXIST** (cost log not yet ported to langgraph)
+- `langgraph_pipeline/shared/progress.py` — **DOES NOT EXIST** (progress reporter not implemented)
+- `langgraph_pipeline/worker.py` — EXISTS (parallel worker entry point)
+- `langgraph_pipeline/supervisor.py` — EXISTS (supervisor module)
+- `langgraph_pipeline/web/server.py` — EXISTS (embedded web server)
+- `langgraph_pipeline/web/proxy.py` — EXISTS (LangSmith tracing proxy)
+- `langgraph_pipeline/web/dashboard_state.py` — EXISTS (dashboard state)
+- `langgraph_pipeline/web/routes/dashboard.py` — EXISTS (dashboard routes)
+- `langgraph_pipeline/web/cost_log_reader.py` — EXISTS (cost log reader for UI)
+- `langgraph_pipeline/web/routes/analysis.py` — EXISTS (analysis UI route)
+- `langgraph_pipeline/pipeline/nodes/idea_classifier.py` — EXISTS (ideas intake)
+- `langgraph_pipeline/slack/poller.py` — EXISTS with `_bot_user_id` (identity filter implemented)
+- `scripts/setup-project.py` — EXISTS (project setup script)
+- `emit_tool_call_traces`, `ToolCallRecord` — EXISTS in claude_cli.py and langsmith.py
+- `create_root_run`, `finalize_root_run`, `langsmith_root_run_id` — EXISTS in langsmith.py and state files
+- `after_intake`, `after_create_plan` — EXISTS in pipeline/edges.py (quota routing)
+- `_post_pending_suspension_questions`, `_reinstate_answered_suspensions` — EXISTS in cli.py
+- `find_free_port`, `write_port_to_config` — EXISTS in web/server.py and cli.py
+- `CompletionTracker`, `ProgressReporter` — **DO NOT EXIST** in codebase
+- `docs/completed-backlog/features/06-parallel-item-processing-supervisor-worker-model.md` — EXISTS (parallel processing completed)
+
+| # | File | Class | Issues |
+|---|------|-------|--------|
+| 1 | 2026-03-23-01-intake-single-digit-prefix-design.md | DELETE | Instructs fixing `_create_backlog_item()` in deleted plan-orchestrator.py (line 4523); LangGraph path (poller.py) already correct; misleading directive to modify non-existent file |
+| 2 | 2026-03-23-01-langsmith-tool-call-tracing-design.md | KEEP | Accurately describes current LangSmith tool call tracing architecture (ToolCallRecord, emit_tool_call_traces in claude_cli.py, langsmith.py, task_runner.py); no stale refs |
+| 3 | 2026-03-24-01-detect-when-were-out-of-quota-in-claude-code-and-dont-process-any-further-ite-design.md | ARCHIVE | Initial quota exhaustion design; quota.py, state fields, cli.py probe loop all implemented |
+| 4 | 2026-03-24-01-calculate-tool-call-duration-from-timestamps-instead-of-relying-on-reported-duration-design.md | ARCHIVE | Duration tracking via tool_use_id pairing implemented in ToolCallRecord (claude_cli.py); superseded by doc 03 which confirms completion |
+| 5 | 2026-03-24-02-detect-claude-code-quota-exhaustion-and-pause-pipeline-processing-design.md | ARCHIVE | Remaining quota gaps resolved; after_intake and after_create_plan exist in pipeline/edges.py; circuit_check and task_selector guards implemented |
+| 6 | 2026-03-24-01-in-the-mpact-project-i-submitted-a-feature-request-and-the-orchestrator-respons-design.md | ARCHIVE | Bot user ID self-skip filter implemented in langgraph_pipeline/slack/poller.py (_bot_user_id present); plan-orchestrator.py refs are moot (script deleted) |
+| 7 | 2026-03-24-03-track-tool-call-durations-in-langsmith-traces-design.md | ARCHIVE | Explicitly states "Status: Implementation Already Complete"; all described fields (duration_s, tool_use_id, start_time) present in ToolCallRecord |
+| 8 | 2026-03-24-06-parallel-item-processing-supervisor-worker-model-design.md | ARCHIVE | Parallel processing fully implemented; worker.py, supervisor.py exist; item in docs/completed-backlog/features/ |
+| 9 | 2026-03-24-01-quota-exhaustion-not-detected-in-create-plan-causes-false-archival-design.md | ARCHIVE | Quota detection extended to intake_analyze and create_plan; after_intake and after_create_plan exist in pipeline/edges.py and graph.py |
+| 10 | 2026-03-24-02-worktree-copy-back-restores-files-deleted-in-main-since-worktree-creation-design.md | ARCHIVE | Defect fix for langgraph_pipeline/shared/git.py (_file_exists_in_ref guard); git.py exists; fix implemented |
+| 11 | 2026-03-24-07-hot-reload-on-code-change-detection-design.md | ARCHIVE | Hot reload implemented; langgraph_pipeline/shared/hot_reload.py exists with CodeChangeMonitor and _perform_restart |
+| 12 | 2026-03-24-08-periodic-progress-report-while-work-is-queued-design.md | KEEP | Feature NOT yet implemented; langgraph_pipeline/shared/progress.py does not exist; CompletionTracker and ProgressReporter not in codebase; valid specification for future work; no stale refs |
+| 13 | 2026-03-24-09-langsmith-per-item-root-trace-aggregation-design.md | ARCHIVE | Per-item root trace aggregation implemented; langsmith_root_run_id exists in pipeline/state.py and executor/state.py; create_root_run, finalize_root_run in langsmith.py; scan.py and archival.py wired |
+| 14 | 2026-03-24-10-ux-designer-opus-sonnet-loop-with-slack-suspension-design.md | ARCHIVE | Both parts implemented; _post_pending_suspension_questions and _reinstate_answered_suspensions exist in cli.py; suspension infrastructure complete |
+| 15 | 2026-03-24-03-backlog-slug-pattern-too-strict-silently-ignores-items-design.md | ARCHIVE | Defect fix for BACKLOG_SLUG_PATTERN in scan.py; fix implemented |
+| 16 | 2026-03-24-11-spec-aware-validator-with-e2e-logging-design.md | UPDATE | Spec-aware validation concept valid for langgraph pipeline; "Already implemented" section points to plan-orchestrator.py (deleted) for SPEC_DIR/build_validation_prompt/parse_verification_blocks — remove dead refs; validator.md step and E2E log pattern remain accurate |
+| 17 | 2026-03-24-12-structured-execution-cost-log-and-analysis-design.md | ARCHIVE | Original cost log design for plan-orchestrator.py (deleted); superseded by 2026-03-24-04 which describes porting to langgraph_pipeline/shared/cost_log.py |
+| 18 | 2026-03-24-ideas-intake-pipeline-design.md | ARCHIVE | Ideas intake pipeline fully implemented; idea_classifier.py, paths constants (IDEAS_DIR, IDEAS_PROCESSED_DIR), cli.py scan-loop integration all exist |
+| 19 | 2026-03-24--cost-analysis-design.md | UPDATE | Cost analysis task design valid; but instructs importing SlackNotifier from deleted plan-orchestrator.py — update to use langgraph_pipeline.slack.notifier instead |
+| 20 | 2026-03-24-spec-aware-validator-with-e2e-logging-design.md | UPDATE | Completion design; "Already implemented" section references plan-orchestrator.py lines 15, 19, etc. (script deleted) — remove dead refs; validator.md spec-aware step and test fix logic remain accurate |
+| 21 | 2026-03-24-04-planner-targets-legacy-script-instead-of-langgraph-pipeline-design.md | KEEP | cost_log.py NOT yet created in langgraph_pipeline/shared/; accurate diagnosis that Feature 12 was implemented in deleted plan-orchestrator.py and needs porting; no stale refs |
+| 22 | 2026-03-24-05-max-validation-attempts-silently-passes-instead-of-warning-design.md | ARCHIVE | Fix applied; validator.py returns WARN at max attempts; patch version bump completed |
+| 23 | 2026-03-25-13-embedded-web-server-infrastructure-design.md | ARCHIVE | Web server fully implemented; langgraph_pipeline/web/server.py, web/__init__.py, templates/base.html all exist |
+| 24 | 2026-03-25-14-langsmith-tracing-proxy-design.md | ARCHIVE | Tracing proxy fully implemented; web/proxy.py, web/routes/proxy.py, templates/proxy_list.html all exist |
+| 25 | 2026-03-25-05-max-validation-attempts-silently-passes-instead-of-warning-design.md | ARCHIVE | Duplicate of 2026-03-24-05; fix already applied; patch version bump completed |
+| 26 | 2026-03-25-06-supervisor-spawns-duplicate-workers-for-same-item-design.md | ARCHIVE | Defect fix for supervisor.py and scan.py claim_item; same-path guard, scan filter, and sidecar fixes implemented |
+| 27 | 2026-03-25-15-pipeline-activity-dashboard-design.md | ARCHIVE | Dashboard fully implemented; web/dashboard_state.py, web/routes/dashboard.py, templates/dashboard.html exist |
+| 28 | 2026-03-25-16-tool-call-timing-and-cost-analysis-ui-design.md | UPDATE | UI correctly implemented (cost_log_reader.py, routes/analysis.py exist); schema section states "Files are written by write_execution_cost_log() in scripts/plan-orchestrator.py" — script is deleted; update to reference langgraph_pipeline/shared/cost_log.py (pending creation per doc #21) |
+| 29 | 2026-03-25-ideas-intake-pipeline-design.md | ARCHIVE | Supervisor integration complete; supervisor.py calls process_ideas(); no gap remains |
+| 30 | 2026-03-25-spec-aware-validator-with-e2e-logging-design.md | UPDATE | Spec-aware validator design valid for langgraph; "Already Implemented" section cites plan-orchestrator.py lines 62-63, 377-378, 412, 1765 (script deleted) and references CompletionTracker removed from auto_pipeline.py — remove all deleted-file refs; SPEC_DIR config needs to be ported to langgraph_pipeline/ |
+| 31 | 2026-03-25-17-project-setup-script-design.md | ARCHIVE | Setup script implemented; scripts/setup-project.py exists |
+| 32 | 2026-03-25-22-dynamic-web-server-port-allocation-design.md | ARCHIVE | Dynamic port allocation implemented; find_free_port in web/server.py and write_port_to_config in cli.py exist |
+| 33 | 2026-03-25-00-trace-smoke-test-design.md | ARCHIVE | One-shot smoke test task to verify end-to-end tracing; no architectural value; no code changes required |
+
+### Batch 3 Summary
+
+| Classification | Count |
+|---------------|-------|
+| KEEP | 3 |
+| UPDATE | 5 |
+| ARCHIVE | 24 |
+| DELETE | 1 |
+| **Total** | **33** |
+
+### Batch 3 UPDATE Details
+
+Documents classified as UPDATE require the following corrections:
+
+| Doc | Required Updates |
+|-----|-----------------|
+| 2026-03-24-11-spec-aware-validator-with-e2e-logging | Remove "Already implemented" refs to plan-orchestrator.py (SPEC_DIR, build_validation_prompt, parse_verification_blocks); update to describe porting to langgraph_pipeline/ config; keep validator.md E2E step description |
+| 2026-03-24--cost-analysis-design | Replace `from scripts/plan-orchestrator.py import SlackNotifier` with `from langgraph_pipeline.slack.notifier import SlackNotifier` |
+| 2026-03-24-spec-aware-validator-with-e2e-logging | Remove "Already Implemented" plan-orchestrator.py line references (62-63, 377-378, 412, 1765); update to describe langgraph_pipeline/ equivalent; keep validator.md spec-aware step and test fix logic |
+| 2026-03-25-16-tool-call-timing-and-cost-analysis-ui | Update schema section: change "Files are written by write_execution_cost_log() in scripts/plan-orchestrator.py" to reference langgraph_pipeline/shared/cost_log.py (pending creation) |
+| 2026-03-25-spec-aware-validator-with-e2e-logging | Remove plan-orchestrator.py line refs in "Already Implemented"; remove CompletionTracker/auto_pipeline.py test refs; port SPEC_DIR/E2E_COMMAND to langgraph_pipeline/ config approach |
+
+---
+
+*Batch 4 will be appended by subsequent audit task.*
