@@ -13,10 +13,11 @@ Endpoints:
 """
 
 import json
+import re
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import yaml
 from fastapi import APIRouter, HTTPException
@@ -591,6 +592,31 @@ def _parse_verification_notes(completions: list[dict]) -> None:
             c["verification_data"] = None
 
 
+_REPORT_PATH_PATTERN = re.compile(r"docs/reports/[\w./-]+\.(?:md|json|csv|txt|html)")
+
+
+def _add_report_refs_from_file(
+    doc_path: Path, add_fn: "Callable[[str, str], None]"
+) -> None:
+    """Scan a document for docs/reports/ path references and add existing ones.
+
+    Parses the text content of *doc_path* for paths matching docs/reports/*.
+    Each path that exists on disk is added via *add_fn* with source "report".
+
+    Args:
+        doc_path: Path to the document to scan (typically a design doc).
+        add_fn: Callback that accepts (raw_path, source) to register an artifact.
+    """
+    try:
+        text = doc_path.read_text(encoding="utf-8")
+    except Exception:
+        return
+    for match in _REPORT_PATH_PATTERN.findall(text):
+        candidate = Path(match)
+        if candidate.exists():
+            add_fn(str(candidate), _SOURCE_REPORT)
+
+
 def _collect_output_artifacts(slug: str) -> list[dict]:
     """Gather output artifacts for a work item from git, design docs, and reports.
 
@@ -656,6 +682,11 @@ def _collect_output_artifacts(slug: str) -> list[dict]:
         for candidate in _REPORTS_DIR.iterdir():
             if candidate.is_file() and slug in candidate.name:
                 _add(str(candidate), _SOURCE_REPORT)
+
+    # 3b. Reports referenced inside the design doc (covers outputs like
+    #     docs/reports/design-doc-audit.md that don't contain the slug in name)
+    if design_doc is not None:
+        _add_report_refs_from_file(design_doc, _add)
 
     # 4. Worker-output non-log artifacts
     worker_output_slug_dir = WORKER_OUTPUT_DIR / slug
