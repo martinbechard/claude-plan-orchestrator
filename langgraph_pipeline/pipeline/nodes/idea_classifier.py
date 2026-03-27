@@ -11,11 +11,13 @@ Public API:
   process_ideas()   -> int        — process all pending ideas; return count
 """
 
+import json
 import logging
 import os
 import subprocess
 from pathlib import Path
 
+from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.paths import (
     DEFECT_DIR,
     FEATURE_DIR,
@@ -112,7 +114,13 @@ def classify_idea(idea_path: str, dry_run: bool = False) -> bool:
 
     try:
         result = subprocess.run(
-            ["claude", "--dangerously-skip-permissions", "--permission-mode", "acceptEdits", "--print", prompt],
+            [
+                "claude",
+                "--dangerously-skip-permissions",
+                "--permission-mode", "acceptEdits",
+                "--output-format", "json",
+                "--print", prompt,
+            ],
             capture_output=True,
             text=True,
             timeout=IDEA_INTAKE_TIMEOUT_SECONDS,
@@ -127,6 +135,19 @@ def classify_idea(idea_path: str, dry_run: bool = False) -> bool:
     except (subprocess.TimeoutExpired, OSError, subprocess.SubprocessError) as exc:
         logger.warning("[idea_classifier] subprocess error for %s: %s", idea_path, exc)
         return False
+
+    cost_usd = 0.0
+    try:
+        data = json.loads(result.stdout)
+        cost_usd = float(data.get("total_cost_usd", 0.0))
+    except (json.JSONDecodeError, ValueError, TypeError):
+        pass
+
+    add_trace_metadata({
+        "node_name": "classify_idea",
+        "idea_path": idea_path,
+        "total_cost_usd": cost_usd,
+    })
 
     # Verify that the original file was moved to the processed directory.
     basename = Path(idea_path).name
