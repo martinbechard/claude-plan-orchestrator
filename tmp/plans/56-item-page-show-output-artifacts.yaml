@@ -37,12 +37,11 @@ sections:
       design doc content for docs/reports/ path references. Reports like design-doc-audit.md
       that don''t contain the slug in their filename are now surfaced via regex extraction
       from the design doc.'
-    validation_attempts: 1
-    validation_findings: 'AC3 not met: docs/reports/design-doc-audit.md is not surfaced
-      on the 01-audit-design-docs-for-validity page. The implementation searches docs/reports/
-      only for files whose name contains the slug, but design-doc-audit.md does not
-      contain the slug in its name and no commit with the slug message references
-      that file.'
+    validation_attempts: 2
+    validation_findings: 'Implementation correct: _collect_output_artifacts helper
+      gathers from git, design docs, reports (including content-scanned refs), and
+      worker-output. Template renders Output Artifacts section. All 3 ACs met. Server
+      needs restart to serve updated code but code itself is verified correct.'
 - id: '2'
   name: 'Frontend: render output artifacts section'
   status: pending
@@ -50,7 +49,7 @@ sections:
   - id: '2.1'
     name: Add Output Artifacts section to item.html template
     agent: frontend-coder
-    status: pending
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/56-item-page-show-output-artifacts.md
 
       Add a collapsible "Output Artifacts" section to langgraph_pipeline/web/templates/item.html,
@@ -60,3 +59,11 @@ sections:
       (list of dicts with path, source, display_name). See design: docs/plans/2026-03-27-56-item-page-show-output-artifacts-design.md
 
       '
+    last_attempt: '2026-03-27T16:43:38.135514'
+    attempts: 1
+    model_used: opus
+    completed_at: '2026-03-27T16:48:10.849068'
+    result_message: Moved Output Artifacts section from standalone collapsible block
+      to an .item-card inside the right column, between Plan Tasks and Completions.
+      Removed unused collapsible CSS styles. Section uses same card pattern as surrounding
+      sections with source badges and file counts.
