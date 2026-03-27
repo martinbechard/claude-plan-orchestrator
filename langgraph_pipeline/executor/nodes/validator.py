@@ -558,7 +558,7 @@ def validate_task(state: TaskState) -> dict:
         "subprocess_exit_code": returncode,
         "subprocess_error": stderr_text[:500] if not cli_success else "",
         "failure_reason": failure_reason,
-        "findings": task.get("validation_findings", ""),
+        "findings": (status_dict.get("findings") or []) if status_dict else [],
         "requirements_checked": status_dict.get("requirements_checked") if status_dict else None,
         "requirements_met": status_dict.get("requirements_met") if status_dict else None,
     })

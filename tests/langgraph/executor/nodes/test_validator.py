@@ -688,3 +688,158 @@ def test_post_cost_posts_to_orchestrator_web_url(monkeypatch):
     assert captured["body"]["task_id"] == "1.1"
     assert captured["body"]["agent_type"] == "validator"
     assert captured["body"]["item_slug"] == "01-some-feature"
+
+
+# ─── Tests: trace metadata (Gap 2) ───────────────────────────────────────────
+
+
+class TestValidateTaskTraceMetadata:
+    """Trace metadata fields: verdict, findings (list), requirements_checked,
+    requirements_met (Gap 2)."""
+
+    def _make_plan_file(self, tmp_path, plan: dict) -> str:
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        return str(plan_file)
+
+    def _write_status(self, tmp_path, content: dict) -> str:
+        status_file = tmp_path / "task-status.json"
+        status_file.write_text(json.dumps(content))
+        return str(status_file)
+
+    def _run_with_status(self, tmp_path, status_content: dict):
+        """Run validate_task with a given status dict; return captured trace metadata."""
+        plan = _make_plan_with_validation(_make_task("1.1"))
+        plan_path = self._make_plan_file(tmp_path, plan)
+        status_file = self._write_status(tmp_path, status_content)
+        captured = {}
+        with (
+            patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(status_file)),
+            patch("langgraph_pipeline.executor.nodes.validator._run_claude",
+                  return_value=(True, 0, {}, "", [])),
+            patch("langgraph_pipeline.executor.nodes.validator._clear_status_file"),
+            patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
+                  return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
+            patch("langgraph_pipeline.executor.nodes.validator.add_trace_metadata",
+                  side_effect=lambda m: captured.update(m)),
+        ):
+            state = _make_state(
+                plan_path=plan_path, plan_data=plan, current_task_id="1.1"
+            )
+            validate_task(state)
+        return captured
+
+    def test_verdict_recorded_in_trace_metadata(self, tmp_path):
+        """verdict field in trace metadata matches the parsed verdict."""
+        metadata = self._run_with_status(
+            tmp_path, {"verdict": "PASS", "status": "completed", "message": "ok"}
+        )
+        assert metadata["verdict"] == "PASS"
+
+    def test_warn_verdict_recorded_in_trace_metadata(self, tmp_path):
+        """WARN verdict is captured in trace metadata."""
+        metadata = self._run_with_status(
+            tmp_path, {"verdict": "WARN", "status": "completed", "message": "minor issues"}
+        )
+        assert metadata["verdict"] == "WARN"
+
+    def test_fail_verdict_recorded_in_trace_metadata(self, tmp_path):
+        """FAIL verdict is captured in trace metadata."""
+        metadata = self._run_with_status(
+            tmp_path, {"verdict": "FAIL", "status": "completed", "message": "tests missing"}
+        )
+        assert metadata["verdict"] == "FAIL"
+
+    def test_findings_list_recorded_in_trace_metadata(self, tmp_path):
+        """findings in trace metadata is the list from the status file, not the message string."""
+        finding_list = ["[PASS] Build succeeded", "[FAIL] Tests missing"]
+        metadata = self._run_with_status(
+            tmp_path,
+            {
+                "verdict": "FAIL",
+                "status": "completed",
+                "message": "Tests missing",
+                "findings": finding_list,
+            },
+        )
+        assert metadata["findings"] == finding_list
+
+    def test_findings_is_empty_list_when_not_in_status(self, tmp_path):
+        """findings defaults to [] when the status file omits the findings field."""
+        metadata = self._run_with_status(
+            tmp_path, {"verdict": "PASS", "status": "completed", "message": "ok"}
+        )
+        assert metadata["findings"] == []
+
+    def test_requirements_checked_recorded_in_trace_metadata(self, tmp_path):
+        """requirements_checked from status file appears in trace metadata."""
+        metadata = self._run_with_status(
+            tmp_path,
+            {
+                "verdict": "PASS",
+                "status": "completed",
+                "message": "ok",
+                "requirements_checked": 5,
+                "requirements_met": 5,
+            },
+        )
+        assert metadata["requirements_checked"] == 5
+
+    def test_requirements_met_recorded_in_trace_metadata(self, tmp_path):
+        """requirements_met from status file appears in trace metadata."""
+        metadata = self._run_with_status(
+            tmp_path,
+            {
+                "verdict": "PASS",
+                "status": "completed",
+                "message": "ok",
+                "requirements_checked": 5,
+                "requirements_met": 4,
+            },
+        )
+        assert metadata["requirements_met"] == 4
+
+    def test_findings_is_empty_list_when_status_file_missing(self, tmp_path):
+        """When Claude writes no status file, findings is [] in trace metadata."""
+        plan = _make_plan_with_validation(_make_task("1.1"))
+        plan_path = self._make_plan_file(tmp_path, plan)
+        absent_path = tmp_path / "no_status.json"
+        captured = {}
+        with (
+            patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(absent_path)),
+            patch("langgraph_pipeline.executor.nodes.validator._run_claude",
+                  return_value=(False, -1, {}, "Timed out", [])),
+            patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
+                  return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
+            patch("langgraph_pipeline.executor.nodes.validator.add_trace_metadata",
+                  side_effect=lambda m: captured.update(m)),
+        ):
+            state = _make_state(
+                plan_path=plan_path, plan_data=plan, current_task_id="1.1"
+            )
+            validate_task(state)
+        assert captured["findings"] == []
+        assert captured["requirements_checked"] is None
+        assert captured["requirements_met"] is None
+
+    def test_requirements_are_none_when_status_file_missing(self, tmp_path):
+        """requirements_checked and requirements_met are None when no status file was written."""
+        plan = _make_plan_with_validation(_make_task("1.1"))
+        plan_path = self._make_plan_file(tmp_path, plan)
+        absent_path = tmp_path / "no_status.json"
+        captured = {}
+        with (
+            patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(absent_path)),
+            patch("langgraph_pipeline.executor.nodes.validator._run_claude",
+                  return_value=(False, -1, {}, "Timed out", [])),
+            patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
+                  return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
+            patch("langgraph_pipeline.executor.nodes.validator.add_trace_metadata",
+                  side_effect=lambda m: captured.update(m)),
+        ):
+            state = _make_state(
+                plan_path=plan_path, plan_data=plan, current_task_id="1.1"
+            )
+            validate_task(state)
+        assert captured["requirements_checked"] is None
+        assert captured["requirements_met"] is None
