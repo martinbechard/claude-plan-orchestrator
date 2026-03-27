@@ -29,3 +29,8 @@ sections:
       (lines 151-180). Exact set membership for 9 Claude Code tool names and substring
       fallback for 6 LLM indicators are already correctly implemented. Legend colors
       match macro output: LLM=#7c3aed, Tool=#0891b2, Other=#f59e0b. No changes required.'
+    validation_attempts: 1
+    validation_findings: 'Requirements fully satisfied. bar_color()/text_color() macros
+      correctly implemented with 9 exact tool names and 6 LLM substrings; legend colors
+      match. WARN: build command references scripts/plan-orchestrator.py which does
+      not exist (pre-existing issue, not caused by this task). 1305 tests pass.'
