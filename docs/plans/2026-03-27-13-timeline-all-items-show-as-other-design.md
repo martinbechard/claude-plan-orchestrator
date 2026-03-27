@@ -11,7 +11,7 @@ substring matching against keywords that never appeared in actual trace data.
 ## Prior Implementation
 
 The fix has already been applied to
-langgraph_pipeline/web/templates/proxy_trace.html (lines 148-180).
+langgraph_pipeline/web/templates/proxy_trace.html (lines 130-159).
 
 The macros were rewritten to use:
 
@@ -44,4 +44,4 @@ The macros were rewritten to use:
 
 Since this was previously implemented, the plan focuses on verifying that the
 existing implementation correctly addresses all acceptance criteria from the
-work item.
+work item. If any criteria fail, the coder task will fix the issues in place.
