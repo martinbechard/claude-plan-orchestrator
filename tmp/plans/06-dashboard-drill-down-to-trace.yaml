@@ -1,5 +1,5 @@
 meta:
-  source_item: "tmp/plans/.claimed/06-dashboard-drill-down-to-trace.md"
+  source_item: tmp/plans/.claimed/06-dashboard-drill-down-to-trace.md
   validation:
     enabled: true
     run_after:
@@ -17,5 +17,8 @@ sections:
   - id: '1.1'
     name: Validate existing implementation and fix any gaps
     agent: coder
-    status: pending
-    description: "Implement the work item: tmp/plans/.claimed/06-dashboard-drill-down-to-trace.md"
+    status: in_progress
+    description: 'Implement the work item: tmp/plans/.claimed/06-dashboard-drill-down-to-trace.md'
+    last_attempt: '2026-03-27T09:59:11.340316'
+    attempts: 1
+    model_used: sonnet
