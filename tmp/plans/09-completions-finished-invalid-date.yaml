@@ -27,3 +27,8 @@ sections:
       correctly handles both Unix timestamps (number * 1000) and ISO 8601 strings
       (direct Date parse). Fix is applied in fmtFinished() and both timeline rendering
       callsites (lines 495, 498). No remaining issues.'
+    validation_attempts: 1
+    validation_findings: 'Fix verified: finishedAtToMs() helper (dashboard.js:47-51)
+      correctly handles both Unix timestamps (number*1000) and ISO 8601 strings (direct
+      Date parse). Used in fmtFinished() at line 54 and timeline rendering at lines
+      495, 498. Build passes, 1314 tests pass. No placeholders found.'
