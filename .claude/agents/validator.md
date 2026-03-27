@@ -55,11 +55,21 @@ available, placeholder, dummy, fake, FIXME, lorem ipsum.
 Any hit = WARN. If the hit maps to an unmet acceptance criterion = FAIL.
 
 **5b. End-to-end gate**
-For acceptance criteria that say "displays X", "shows Y", or "after at least one
-worker completes": if the validator cannot confirm the behavior against a running
-server, it MUST report WARN with the note:
-"cannot verify at validation time - requires runtime confirmation"
-Do NOT silently pass criteria that require runtime behavior.
+For acceptance criteria that involve the web UI ("displays X", "shows Y",
+"page contains Z"), the web server is running at http://localhost:7070.
+You MUST verify by running:
+
+    curl -s http://localhost:7070/<path> | grep "<expected text>"
+
+For example:
+- "Does /analysis show cost?" → curl -s http://localhost:7070/analysis | grep '$'
+- "Does the item page show validation results?" → curl -s http://localhost:7070/item/<slug> | grep "Validation Results"
+
+If curl fails or the expected text is not found = FAIL.
+If curl succeeds and the text is found = PASS.
+
+Only report WARN for criteria that genuinely require user interaction
+(clicking buttons, filling forms) that curl cannot test.
 
 **5c. Test-data leak check**
 Grep all modified source files, DB migrations, AND production databases for

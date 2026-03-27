@@ -70,6 +70,7 @@ class PipelineState(TypedDict):
     session_cost_usd: float
     session_input_tokens: int
     session_output_tokens: int
+    last_validation_verdict: Optional[str]
 
     # ── In-graph intake counters (separate from disk-persisted throttle) ──────
     intake_count_defects: int

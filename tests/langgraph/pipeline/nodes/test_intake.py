@@ -39,10 +39,10 @@ def _mock_llm_calls():
     """Prevent all LLM subprocess calls during unit tests."""
     with patch(
         "langgraph_pipeline.pipeline.nodes.intake._validate_five_whys",
-        return_value=(True, ""),
+        return_value=(True, "", 0.0),
     ), patch(
         "langgraph_pipeline.pipeline.nodes.intake._validate_design",
-        return_value=(True, ""),
+        return_value=(True, "", 0.0),
     ), patch(
         "langgraph_pipeline.pipeline.nodes.intake._call_llm",
         return_value=("Mocked response", 0.01, ""),

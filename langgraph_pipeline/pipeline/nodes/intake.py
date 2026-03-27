@@ -318,35 +318,35 @@ def _has_five_whys(item_path: str) -> bool:
     return output.strip().upper().startswith("YES")
 
 
-def _validate_five_whys(item_path: str) -> tuple[bool, str]:
+def _validate_five_whys(item_path: str) -> tuple[bool, str, float]:
     """Use Opus to validate 5 Whys quality — no unjustified assumptions, conclusion matches request."""
     content = _read_file_content(item_path)
     if not content:
-        return False, "Could not read item file"
+        return False, "Could not read item file", 0.0
     prompt = VALIDATE_FIVE_WHYS_PROMPT.format(item_content=content)
-    output, _cost, failure_reason = _call_llm(prompt, model=DESIGN_VALIDATOR_MODEL, timeout=DESIGN_VALIDATOR_TIMEOUT_SECONDS)
+    output, cost, failure_reason = _call_llm(prompt, model=DESIGN_VALIDATOR_MODEL, timeout=DESIGN_VALIDATOR_TIMEOUT_SECONDS)
     if failure_reason:
-        return False, failure_reason
+        return False, failure_reason, cost
     valid = output.strip().upper().startswith("VALID")
     reason = output.strip().split("\n", 1)[1].strip() if "\n" in output.strip() else ""
-    return valid, reason
+    return valid, reason, cost
 
 
-def _validate_design(design_doc_path: str, item_path: str) -> tuple[bool, str]:
+def _validate_design(design_doc_path: str, item_path: str) -> tuple[bool, str, float]:
     """Use Opus to validate design — has checklist, matches request, no unjustified assumptions."""
     design_content = _read_file_content(design_doc_path)
     item_content = _read_file_content(item_path)
     if not design_content:
-        return False, "Could not read design doc"
+        return False, "Could not read design doc", 0.0
     if not item_content:
-        return False, "Could not read item file"
+        return False, "Could not read item file", 0.0
     prompt = VALIDATE_DESIGN_PROMPT.format(design_content=design_content, item_content=item_content)
-    output, _cost, failure_reason = _call_llm(prompt, model=DESIGN_VALIDATOR_MODEL, timeout=DESIGN_VALIDATOR_TIMEOUT_SECONDS)
+    output, cost, failure_reason = _call_llm(prompt, model=DESIGN_VALIDATOR_MODEL, timeout=DESIGN_VALIDATOR_TIMEOUT_SECONDS)
     if failure_reason:
-        return False, failure_reason
+        return False, failure_reason, cost
     valid = output.strip().upper().startswith("VALID")
     reason = output.strip().split("\n", 1)[1].strip() if "\n" in output.strip() else ""
-    return valid, reason
+    return valid, reason, cost
 
 
 def _has_acceptance_checklist(design_doc_path: str) -> bool:
@@ -526,7 +526,8 @@ def intake_analyze(state: PipelineState) -> dict:
 
         # Step 3: Validate 5 Whys quality with Opus.
         logger.info("Running 5 Whys validation for %s...", item_slug)
-        valid, reason = _validate_five_whys(item_path)
+        valid, reason, validation_cost = _validate_five_whys(item_path)
+        total_cost_usd += validation_cost
         if valid:
             logger.info("5 Whys validation PASSED for %s", item_slug)
         else:
@@ -559,7 +560,8 @@ def intake_analyze(state: PipelineState) -> dict:
 
         # Validate 5 Whys quality with Opus.
         logger.info("Running 5 Whys validation for %s...", item_slug)
-        valid, reason = _validate_five_whys(item_path)
+        valid, reason, validation_cost = _validate_five_whys(item_path)
+        total_cost_usd += validation_cost
         if valid:
             logger.info("5 Whys validation PASSED for %s", item_slug)
         else:

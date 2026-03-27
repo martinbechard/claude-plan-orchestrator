@@ -1,0 +1,8 @@
+{
+  "task_id": "1.1",
+  "verdict": "PASS",
+  "message": "Fixed duplicate chevron bug in .grandchild-toggle: added summary::marker { display: none } to suppress native Firefox disclosure widget, and added .grandchild-toggle[open] > summary::before rule with higher specificity to correctly show \u25bc when expanded. Inline subrun details were already implemented in proxy_trace.html (name, duration, elapsed, inputs/outputs JSON, error). No template or route changes needed.",
+  "requirements_checked": null,
+  "requirements_met": null,
+  "timestamp": "20260327-093321"
+}

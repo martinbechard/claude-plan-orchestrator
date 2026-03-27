@@ -91,7 +91,7 @@ def execute_plan(state: PipelineState) -> dict:
         "item_slug": item_slug,
         "item_type": item_type,
         "task_count": task_count,
-        "cost_usd": cost_usd,
+        "total_cost_usd": cost_usd,
         "tags": [item_slug, item_type],
     })
 
@@ -100,4 +100,5 @@ def execute_plan(state: PipelineState) -> dict:
         "session_input_tokens": input_tokens,
         "session_output_tokens": output_tokens,
         "quota_exhausted": bool(final_task_state.get("quota_exhausted")),
+        "last_validation_verdict": final_task_state.get("last_validation_verdict"),
     }

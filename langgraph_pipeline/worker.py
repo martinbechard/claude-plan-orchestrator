@@ -282,15 +282,27 @@ def main() -> int:
             duration_s,
         )
 
+        # Check validation verdict from executor
+        verdict = final_state.get("last_validation_verdict")
+        if verdict == "FAIL":
+            outcome_success = False
+            outcome_message = "Completed with validation FAIL"
+        elif verdict == "WARN":
+            outcome_success = False
+            outcome_message = "Completed with validation WARN"
+        else:
+            outcome_success = True
+            outcome_message = _DEFAULT_SUCCESS_MESSAGE
+
         _write_result(
             result_file,
-            success=True,
+            success=outcome_success,
             item_path=item_path,
             cost_usd=cost_usd,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             duration_s=duration_s,
-            message=_DEFAULT_SUCCESS_MESSAGE,
+            message=outcome_message,
         )
 
         _cleanup_worker_db(db_path)

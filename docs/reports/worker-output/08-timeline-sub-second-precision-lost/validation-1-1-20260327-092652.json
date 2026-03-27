@@ -1,0 +1,8 @@
+{
+  "task_id": "1.1",
+  "verdict": "PASS",
+  "message": "secs() and fmt_duration() macros removed from proxy_trace.html. Route pre-computes elapsed_start_s/elapsed_end_s with microsecond precision and display_duration via _enrich_run(). Template now uses run.display_duration directly. All 1305 tests pass. No placeholder content found.",
+  "requirements_checked": 3,
+  "requirements_met": 3,
+  "timestamp": "20260327-092652"
+}

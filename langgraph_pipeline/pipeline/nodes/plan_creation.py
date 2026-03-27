@@ -329,7 +329,8 @@ def create_plan(state: PipelineState) -> dict:
     if Path(expected_design_doc_path).exists():
         logger.info("Running design validation for %s...", item_slug)
         from langgraph_pipeline.pipeline.nodes.intake import _validate_design
-        valid, reason = _validate_design(expected_design_doc_path, item_path)
+        valid, reason, design_validation_cost = _validate_design(expected_design_doc_path, item_path)
+        total_cost_usd += design_validation_cost
         if valid:
             logger.info("Design validation PASSED for %s", item_slug)
         else:
