@@ -51,3 +51,5 @@ Then a small JS snippet on page load:
 fmtFinished() already uses toLocaleTimeString() which shows local time, so
 the dashboard is fine. But verify all other timestamp displays also use
 toLocaleString or equivalent.
+
+## LangSmith Trace: d3406e99-bf5e-449a-8551-2633d52a839b
