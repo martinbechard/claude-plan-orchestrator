@@ -43,7 +43,7 @@ nav a {
 }
 
 nav a:hover { color: #e8e8f0; text-decoration: none; background: rgba(255, 255, 255, 0.07); }
-nav a.active { color: #e8e8f0; background: rgba(126, 184, 247, 0.22); box-shadow: 0 0 0 1px rgba(126, 184, 247, 0.3); font-weight: 500; }
+nav a.active { color: #ffffff; background: rgba(126, 184, 247, 0.2); font-weight: 600; }
 
 /* ── Layout ─────────────────────────────────────────────────────────────── */
 main {
