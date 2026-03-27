@@ -26,3 +26,8 @@ sections:
     result_message: 'Fix already implemented: finishedAtToMs() helper handles both
       Unix timestamp (number * 1000) and ISO 8601 string (new Date(str)) formats.
       fmtFinished() uses it correctly. No changes needed.'
+    validation_attempts: 1
+    validation_findings: 'Fix already in place: finishedAtToMs() helper at dashboard.js:48-51
+      handles both Unix timestamp (number*1000) and ISO 8601 string (new Date(str).getTime())
+      formats. fmtFinished() uses it correctly at line 53-56. Build passes, all 1314
+      tests pass, no placeholders found.'
