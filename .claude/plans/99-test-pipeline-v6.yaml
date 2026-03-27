@@ -25,3 +25,7 @@ sections:
     completed_at: '2026-03-27T00:33:25.173680'
     result_message: Added '# yaml rescue test' comment to langgraph_pipeline/shared/paths.py
       header
+    validation_attempts: 1
+    validation_findings: Comment added and verified at paths.py:6. Build and 1298
+      tests pass. AC2 (rescue log) and AC3 (non-zero cost) require runtime pipeline
+      execution and cannot be verified at validation time.
