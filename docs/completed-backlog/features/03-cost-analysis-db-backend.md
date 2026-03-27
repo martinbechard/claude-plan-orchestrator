@@ -1,5 +1,12 @@
 # Cost Analysis DB Backend
 
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
+
 ## Status: Open
 
 ## RETURNED FROM COMPLETED — Previous Implementation Was Incomplete
@@ -91,3 +98,33 @@ Replace the JSON file glob with a DB query:
 - `/analysis` displays real data after at least one worker completes
 - Existing JSON file fallback still works when web server is not running
 - All existing tests pass
+
+
+
+
+## 5 Whys Analysis
+
+Title: Migrate cost logging to database-backed API for pipeline observability
+
+Clarity: 4
+
+5 Whys:
+
+1. Why is the cost analysis page showing empty/fake data a problem?
+   Because users can't see the actual costs incurred by running pipeline tasks, leaving them blind to resource consumption and cost drivers.
+
+2. Why do users need visibility into actual pipeline costs?
+   Because without cost data, they can't make informed decisions about cost optimization, model selection, or infrastructure efficiency.
+
+3. Why should decisions about cost optimization be informed by real data?
+   Because guessing about which parts of the pipeline are expensive leads to misdirected optimization efforts; cost awareness drives better architectural choices.
+
+4. Why does the organization care about tracking pipeline costs?
+   Because the new LangGraph pipeline represents a significant rewrite, and stakeholders need confidence that it meets cost and performance targets relative to the old system.
+
+5. Why is cost visibility critical for this particular architecture change?
+   Because without it, there's no accountability for the investment in the new pipeline—we can't prove it's more efficient or cost-effective, and we can't optimize future decisions.
+
+Root Need: Establish cost accountability and observability for the new pipeline architecture to justify the investment and guide ongoing optimization decisions.
+
+Summary: The feature enables data-driven cost awareness for pipeline operations, turning cost tracking from a missing observability tool into a strategic decision-making asset.
