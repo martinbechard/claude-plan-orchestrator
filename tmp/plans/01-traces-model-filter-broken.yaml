@@ -1,0 +1,24 @@
+meta:
+  title: "Traces model filter broken and model column missing"
+  source_item: "tmp/plans/.claimed/01-traces-model-filter-broken.md"
+  status: pending
+  validation:
+    enabled: true
+    run_after:
+      - coder
+      - e2e-test-agent
+      - frontend-coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+
+sections:
+  - id: '1'
+    name: "Fix model filter and model column"
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: "Validate and fix model filter and column"
+        agent: coder
+        status: pending
+        description: "Implement the work item: tmp/plans/.claimed/01-traces-model-filter-broken.md"

@@ -1,22 +1,24 @@
 meta:
-  source_item: "tmp/plans/.claimed/03-dashboard-items-stuck-running.md"
+  source_item: tmp/plans/.claimed/03-dashboard-items-stuck-running.md
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
-
 sections:
-  - id: '1'
-    name: Verify and fix dashboard stuck-running defect
-    status: pending
-    tasks:
-      - id: '1.1'
-        name: Verify existing fix and add missing test coverage
-        agent: coder
-        description: "Implement the work item: tmp/plans/.claimed/03-dashboard-items-stuck-running.md"
-        status: pending
+- id: '1'
+  name: Verify and fix dashboard stuck-running defect
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Verify existing fix and add missing test coverage
+    agent: coder
+    description: 'Implement the work item: tmp/plans/.claimed/03-dashboard-items-stuck-running.md'
+    status: in_progress
+    last_attempt: '2026-03-27T01:26:45.387408'
+    attempts: 1
+    model_used: sonnet
