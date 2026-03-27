@@ -27,3 +27,10 @@ sections:
       create_root_run() sets name=item_slug, server.py extracts name from LangSmith
       payloads, record_run() persists it, list_runs() filters on name column, proxy_list.html
       displays run.name. All 1314 tests pass.
+    validation_attempts: 1
+    validation_findings: Sub-second precision implementation already in place and
+      verified. proxy.py uses datetime.fromisoformat() for microsecond precision in
+      _compute_elapsed(). Template uses float elapsed_start_s/elapsed_end_s with safe_span
+      minimum of 0.001s. Tests test_compute_elapsed_preserves_microsecond_precision
+      and test_proxy_detail_sub_second_children_render_without_error both pass. Full
+      suite 1314/1314 passed.
