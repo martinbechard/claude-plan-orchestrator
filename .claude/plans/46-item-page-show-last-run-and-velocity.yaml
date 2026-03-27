@@ -24,9 +24,17 @@ sections:
     name: Add velocity computation and last-trace extraction to route handler, update
       template
     agent: coder
-    status: pending
+    status: completed
     description: 'Implement the work item: .claude/plans/.claimed/46-item-page-show-last-run-and-velocity.md
       -- Compute avg_velocity from completions tokens_per_minute, extract last_trace
       from traces list, pass to template. Update item.html to show last-trace link
       and velocity badge in the header near the pipeline stage badge. See design doc:
       docs/plans/2026-03-26-46-item-page-show-last-run-and-velocity-design.md'
+    last_attempt: '2026-03-26T22:54:55.333352'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-26T22:56:46.826201'
+    result_message: Added _compute_avg_velocity helper to item.py, extracted last_trace
+      from traces list, passed both to template. Updated item.html to show velocity
+      badge (Xk tok/min or X tok/min) and last-trace link in the header badges row
+      next to the pipeline stage badge.
