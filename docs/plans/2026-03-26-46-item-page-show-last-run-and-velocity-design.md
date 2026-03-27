@@ -41,3 +41,14 @@ Add two missing pieces of information to the /item/{slug} detail page:
   completions table on this page.
 - **Graceful empty state**: When no traces exist or no velocity data, simply omit the
   badge/link rather than showing "N/A".
+
+
+## Acceptance Criteria
+
+- Does the item detail page show a link to the most recent trace near
+  the top (not just in the traces table at the bottom)?
+  YES = pass, NO = fail
+- Does the item detail page show average tokens/min as a tag next to
+  the pipeline stage badge? YES = pass, NO = fail
+- Is the velocity value consistent with what the dashboard timeline
+  shows for the same item? YES = pass, NO = fail

@@ -632,7 +632,7 @@
       {% endif %}
       <span class="badge status-{{ pipeline_stage }}"
             aria-label="Pipeline stage: {{ pipeline_stage }}">{{ pipeline_stage }}</span>
-      {% if avg_velocity is not none %}
+      {% if avg_velocity is not none and avg_velocity is number and avg_velocity > 0 %}
         {% if avg_velocity >= 1000 %}
           {% set vel_label = "%.1fk tok/min"|format(avg_velocity / 1000) %}
         {% else %}
