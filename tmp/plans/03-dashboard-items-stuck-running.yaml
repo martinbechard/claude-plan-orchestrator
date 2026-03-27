@@ -27,3 +27,9 @@ sections:
       handling already in place). Added 5 missing unit tests: dead PID reap, alive
       PID keep, empty state no-op, TOCTOU race guard, and snapshot() calls sweep.
       All 1303 tests pass.'
+    validation_attempts: 1
+    validation_findings: Build passes. All 1303 tests pass (23/23 in test_dashboard_state.py).
+      The 5 new sweep_dead_workers tests are present and passing. sweep_dead_workers()
+      in dashboard_state.py and ChildProcessError handling with remove_active_worker()
+      in supervisor.py are both confirmed in production code. No placeholders, test
+      data leaks, or code quality issues found.
