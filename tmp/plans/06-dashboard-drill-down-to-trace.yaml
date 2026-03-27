@@ -19,8 +19,13 @@ sections:
   - id: '1.1'
     name: Validate acceptance criteria and fix any failures
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/06-dashboard-drill-down-to-trace.md'
     last_attempt: '2026-03-27T01:38:39.953214'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T01:40:05.295471'
+    result_message: 'All acceptance criteria validated: run_id stored in WorkerInfo
+      and CompletionRecord, exposed in SSE snapshot, supervisor passes and refreshes
+      run_id, dashboard.js renders trace links to /proxy?trace_id=<run_id> for workers
+      and completions, /proxy endpoint accepts trace_id filter. All 48 tests pass.'
