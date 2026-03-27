@@ -1,0 +1,21 @@
+meta:
+  source_item: tmp/plans/.claimed/05-queue-page.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Validate and fix queue page implementation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Validate queue page against acceptance criteria
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/05-queue-page.md'
