@@ -56,6 +56,11 @@ function finishedAtToMs(finishedAt) {
   return new Date(finishedAt).getTime();
 }
 
+function fmtSessionStart(isoStr) {
+  if (!isoStr) return null;
+  return new Date(isoStr).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
 function fmtFinished(finishedAt) {
   const d = new Date(finishedAtToMs(finishedAt));
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -266,7 +271,10 @@ function renderSessionSummary(data) {
   document.getElementById("stat-active").textContent = data.active_count ?? "—";
   document.getElementById("stat-queue").textContent = data.queue_count ?? "—";
   document.getElementById("stat-processed").textContent = data.total_processed ?? "—";
-  document.getElementById("stat-cost").textContent = fmtCost(data.session_cost_usd);
+  var costText = fmtCost(data.session_cost_usd);
+  var startTime = fmtSessionStart(data.session_start_time_iso);
+  if (startTime) costText += " (started " + startTime + ")";
+  document.getElementById("stat-cost").textContent = costText;
   document.getElementById("stat-uptime").textContent = fmtElapsed(data.session_elapsed_s ?? 0);
 }
 
