@@ -18,7 +18,7 @@ The intake analysis flow involves these layers:
 
 ## Current Implementation State
 
-Based on code inspection, all four fixes from the defect spec are already in place:
+Based on code inspection, all four fixes from the defect spec are in place:
 
 - **Fix 1 (call_claude error propagation):** ClaudeResult namedtuple returns
   failure_reason with full stderr on non-zero exit, timeout details, JSON decode
