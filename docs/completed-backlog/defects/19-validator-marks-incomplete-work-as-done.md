@@ -1,5 +1,12 @@
 # Validator agent marks incomplete work as completed
 
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
+
 ## Status: Open
 
 ## Priority: High
@@ -59,3 +66,33 @@ The validator should:
 
 2. Consider adding a two-stage validation: code review (can be done offline)
    and runtime verification (requires running server + real data flow).
+
+
+
+
+## 5 Whys Analysis
+
+**Title:** Validator accepts incomplete features because it can only verify code, not runtime functionality
+
+**Clarity:** 4
+
+**5 Whys:**
+
+1. Why was incomplete work marked as completed?
+   The validator checked that code compiled, tests passed, and code style was correct, but did not verify that acceptance criteria were actually satisfied when the system ran with real data.
+
+2. Why didn't the validator verify acceptance criteria with real data?
+   Because the validator uses static code analysis and offline tests to avoid requiring a running system, but the acceptance criteria (e.g., "/analysis displays real data") inherently require observing the system at runtime with actual data flowing through it.
+
+3. Why was the validator designed to work without a running system when some acceptance criteria require runtime observation?
+   Because the work item definitions did not distinguish between "code must exist and compile" criteria (verifiable offline) versus "feature must work end-to-end" criteria (requiring runtime), so the validator couldn't tell which type each criterion was.
+
+4. Why wasn't there an explicit distinction between offline and runtime criteria in work item definitions?
+   Because the validation framework was designed to be fully automated and scale without human judgment or external system access, making it impossible for the validator to know when to escalate uncertainty back to a human.
+
+5. Why was automation without escalation paths built into the validation process?
+   To enable fast, consistent validation that could run independently on every completed item without requiring a developer to manually test or system access to verify, but this prevented the validator from handling criteria that genuinely require runtime verification.
+
+**Root Need:** Establish a clear protocol in work item definitions that distinguishes offline-verifiable criteria (code correctness, unit tests) from runtime-verifiable criteria (data flow, UI state), and empower the validator to fail or warn when acceptance criteria require runtime verification that cannot be performed offline.
+
+**Summary:** The validator marks work complete based on offline checks (code/tests) without realizing some acceptance criteria require runtime verification against a live system with real data.
