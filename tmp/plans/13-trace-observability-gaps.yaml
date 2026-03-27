@@ -57,6 +57,8 @@ sections:
       message string). Added 9 unit tests covering verdict, findings list, requirements_checked,
       requirements_met, and None/empty fallbacks when status file is absent. All 1364
       tests pass.'
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
 - id: '2'
   name: Implement pipeline decision and plan state traces (Gaps 3, 4)
   status: pending
@@ -64,12 +66,15 @@ sections:
   - id: '2.1'
     name: Add pipeline decision rationale trace metadata
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/13-trace-observability-gaps.md
       -- Focus on Gap 3. Add add_trace_metadata() calls to pipeline decision points:
       verify_result() in pipeline/edges.py (archive/retry decisions), retry_check()
       in executor/edges.py (pass/fail/retry decisions), and escalation in executor/escalation.py.
       Record decision, reason, cycle_number, and tasks_completed. Add unit tests.'
+    last_attempt: '2026-03-27T15:20:14.147154'
+    attempts: 1
+    model_used: sonnet
   - id: '2.2'
     name: Add plan YAML state snapshots to execute_plan traces
     agent: coder
