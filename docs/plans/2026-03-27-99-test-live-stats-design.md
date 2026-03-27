@@ -20,3 +20,11 @@
 **Steps:**
 1. Add comment "# live stats test" to the file header area
 2. Verify syntax with build command
+
+
+## Acceptance Criteria
+
+- Does the item page show non-zero Cost and Tokens WHILE the item is
+  still running (before completion)? YES = pass, NO = fail
+- Does the velocity badge appear during execution?
+  YES = pass, NO = fail

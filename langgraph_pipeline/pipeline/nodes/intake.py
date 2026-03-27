@@ -226,15 +226,7 @@ def _call_llm(prompt: str, model: str = INTAKE_MODEL,
     if slug and result.raw_stdout:
         _save_subprocess_output(slug, phase, result.raw_stdout,
                                 result.failure_reason or "", 0 if not result.failure_reason else 1)
-    # Write tokens to trace metadata so supervisor token polling picks them up
-    if result.input_tokens > 0 or result.output_tokens > 0:
-        add_trace_metadata({
-            "input_tokens": result.input_tokens,
-            "output_tokens": result.output_tokens,
-            "total_cost_usd": result.total_cost_usd,
-            "item_slug": slug,
-            "phase": phase,
-        })
+    # Token/cost reporting is handled by call_claude via POST /api/worker-stats
     if result.failure_reason:
         return result.failure_reason, 0.0
     return result.text, result.total_cost_usd

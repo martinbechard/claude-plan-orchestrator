@@ -1,0 +1,7 @@
+=== planner for 99-test-live-stats ===
+Exit code: 0
+
+=== STDOUT ===
+{"type":"result","subtype":"success","is_error":false,"duration_ms":87405,"duration_api_ms":82474,"num_turns":30,"result":"Done. Created:\n\n- **Design doc**: `docs/plans/2026-03-27-99-test-live-stats-design.md`\n- **YAML plan**: `tmp/plans/99-test-live-stats.yaml` with one task (1.1) assigned to the `coder` agent to add the \"# live stats test\" comment to `langgraph_pipeline/shared/paths.py`\n\nThe plan has validation enabled with `max_validation_attempts: 2`, running after coder/e2e-test-agent/frontend-coder tasks. The acceptance criteria (live Cost/Tokens display, velocity badge during execution) are in the source work item for manual verification.","stop_reason":"end_turn","session_id":"9b02ff4a-285f-4c2b-a82e-45735945a41a","total_cost_usd":0.678318,"usage":{"input_tokens":154,"cache_creation_input_tokens":38968,"cache_read_input_tokens":689746,"output_tokens":3565,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":38968,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":154,"outputTokens":3565,"cacheReadInputTokens":689746,"cacheCreationInputTokens":38968,"webSearchRequests":0,"costUSD":0.678318,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"1446b932-4c6e-440a-b08f-092f962894d0"}
+
+=== STDERR ===

@@ -257,22 +257,16 @@ def create_plan(state: PipelineState) -> dict:
     exit_code, stdout, stderr = _run_subprocess(cmd)
     total_cost_usd = _extract_cost_from_json_output(stdout)
 
-    # Save planner output and write tokens to trace metadata
+    # Save planner output and report tokens to dashboard
     from langgraph_pipeline.pipeline.nodes.intake import _save_subprocess_output
+    from langgraph_pipeline.shared.claude_cli import _report_worker_stats
     _save_subprocess_output(item_slug, "planner", stdout, stderr, exit_code)
     try:
         planner_json = json.loads(stdout)
         usage = planner_json.get("usage", {})
         planner_in = int(usage.get("input_tokens", 0))
         planner_out = int(usage.get("output_tokens", 0))
-        if planner_in > 0 or planner_out > 0:
-            add_trace_metadata({
-                "input_tokens": planner_in,
-                "output_tokens": planner_out,
-                "total_cost_usd": total_cost_usd,
-                "item_slug": item_slug,
-                "phase": "planner",
-            })
+        _report_worker_stats(planner_in, planner_out, total_cost_usd)
     except (json.JSONDecodeError, TypeError):
         pass
 

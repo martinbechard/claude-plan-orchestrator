@@ -695,9 +695,8 @@ def run_supervisor_loop(
             if active_workers:
                 _refresh_worker_run_ids(active_workers)
 
-            # Step 1c: Refresh token counts for workers with a known run_id.
-            if active_workers:
-                _refresh_worker_token_counts(active_workers)
+            # Token counts are now updated by workers via POST /api/worker-stats.
+            # No need for supervisor-side DB polling.
 
             # Step 2: Dispatch new workers while slots are available.
             if not budget_exceeded and not shutdown_event.is_set():
