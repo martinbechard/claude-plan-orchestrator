@@ -1,22 +1,26 @@
 meta:
-  source_item: "tmp/plans/.claimed/99-test-val-v2.md"
+  source_item: tmp/plans/.claimed/99-test-val-v2.md
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
-
 sections:
-  - id: '1'
-    name: Add test comment marker
-    status: pending
-    tasks:
-      - id: '1.1'
-        name: Add val json test comment to paths.py
-        agent: coder
-        status: pending
-        description: "Implement the work item: tmp/plans/.claimed/99-test-val-v2.md"
+- id: '1'
+  name: Add test comment marker
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add val json test comment to paths.py
+    agent: coder
+    status: completed
+    description: 'Implement the work item: tmp/plans/.claimed/99-test-val-v2.md'
+    last_attempt: '2026-03-27T08:56:23.765564'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-27T08:57:00.972027'
+    result_message: Added '# val json test' comment to langgraph_pipeline/shared/paths.py
