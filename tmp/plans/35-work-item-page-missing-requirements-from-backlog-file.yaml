@@ -17,8 +17,13 @@ sections:
   - id: '1.1'
     name: Validate existing implementation against acceptance criteria and fix gaps
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/35-work-item-page-missing-requirements-from-backlog-file.md'
     last_attempt: '2026-03-27T14:36:33.899524'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:39:31.568032'
+    result_message: '_find_original_request_file now checks COMPLETED_DIRS so the
+      Original request disclosure shows for archived items. AC #2 (design doc priority)
+      and AC #3 (empty state) were already passing. AC #1 now passes: /item/34-remove-tilde-cost-prefix-third-attempt
+      shows original backlog acceptance criteria via the Original request disclosure.'
