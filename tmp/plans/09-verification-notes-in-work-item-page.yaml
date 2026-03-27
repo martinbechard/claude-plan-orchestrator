@@ -15,16 +15,20 @@ sections:
   status: pending
   tasks:
   - id: '1.1'
-    name: Thread verification notes from validator through pipeline to completions table
+    name: Thread verification notes from validator through pipeline to completions
+      table
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/09-verification-notes-in-work-item-page.md
-      -- Backend changes: add verification_notes TEXT column to completions table in
-      proxy.py, add plan_verification_notes to TaskState and verification_notes to
-      PipelineState, update validator node to emit structured findings, thread through
-      execute_plan, worker, and supervisor to record_completion(). Update validator
-      agent prompt to require findings[] and evidence in status JSON. See design doc:
-      docs/plans/2026-03-27-09-verification-notes-in-work-item-page-design.md'
+      -- Backend changes: add verification_notes TEXT column to completions table
+      in proxy.py, add plan_verification_notes to TaskState and verification_notes
+      to PipelineState, update validator node to emit structured findings, thread
+      through execute_plan, worker, and supervisor to record_completion(). Update
+      validator agent prompt to require findings[] and evidence in status JSON. See
+      design doc: docs/plans/2026-03-27-09-verification-notes-in-work-item-page-design.md'
+    last_attempt: '2026-03-27T15:01:25.560803'
+    attempts: 1
+    model_used: sonnet
 - id: '2'
   name: Frontend display of verification notes
   status: pending
@@ -38,5 +42,4 @@ sections:
       completion records and pass to template. Update item.html to show a Verification
       Notes section per completion with verdict badge (PASS/WARN/FAIL), findings list
       with severity coloring, and collapsible evidence blocks. Handle graceful degradation
-      for completions without verification data. See design doc:
-      docs/plans/2026-03-27-09-verification-notes-in-work-item-page-design.md'
+      for completions without verification data. See design doc: docs/plans/2026-03-27-09-verification-notes-in-work-item-page-design.md'
