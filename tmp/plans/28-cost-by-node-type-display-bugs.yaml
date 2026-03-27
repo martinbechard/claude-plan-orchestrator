@@ -17,8 +17,14 @@ sections:
   - id: '1.1'
     name: Verify existing fix and address any remaining issues
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/28-cost-by-node-type-display-bugs.md'
     last_attempt: '2026-03-27T09:38:21.277444'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T09:40:06.805191'
+    result_message: 'Verified existing fix is correct: SVG_VALUE_LABEL_PADDING=80
+      reserves sufficient viewport space, value_formatter defaults to $X.XX formatting.
+      Added clipping edge case test asserting max-value label stays within SVG viewport
+      and raw float values (55.605...) are formatted as dollar amounts ($55.61). All
+      15 tests pass.'
