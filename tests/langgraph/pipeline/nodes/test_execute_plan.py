@@ -113,7 +113,7 @@ class TestExecutePlanSubgraphInvocation:
 
         captured_state = {}
         mock_compiled = MagicMock()
-        mock_compiled.invoke.side_effect = lambda s: (
+        mock_compiled.invoke.side_effect = lambda s, config=None: (
             captured_state.update(s)
             or {
                 "plan_cost_usd": 0.0,

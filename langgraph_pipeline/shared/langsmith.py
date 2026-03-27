@@ -311,7 +311,9 @@ def create_root_run(item_slug: str, item_path: str) -> tuple[Any, Optional[str]]
         return None, None
 
 
-def finalize_root_run(root_run_id: Optional[str], outputs: dict[str, Any]) -> None:
+def finalize_root_run(
+    root_run_id: Optional[str], outputs: dict[str, Any], item_slug: str = ""
+) -> None:
     """End and post the shared root RunTree for a completed work item.
 
     Reconstructs the RunTree by UUID, calls end() with the supplied outputs,
@@ -323,13 +325,16 @@ def finalize_root_run(root_run_id: Optional[str], outputs: dict[str, Any]) -> No
     Args:
         root_run_id: UUID string returned by create_root_run, or None.
         outputs: Final outputs to attach (e.g. {"item_slug": slug, "outcome": "PASS"}).
+        item_slug: Work item slug used as the RunTree name for readability in LangSmith.
+            Falls back to "root" when empty so old traces remain unambiguous.
     """
     if not _tracing_active or not root_run_id:
         return
     try:
         from langsmith import RunTree  # type: ignore[import]
 
-        root_run = RunTree(id=root_run_id, name="root", run_type="chain")
+        run_name = item_slug if item_slug else "root"
+        root_run = RunTree(id=root_run_id, name=run_name, run_type="chain")
         root_run.end(outputs=outputs)
         root_run.post()  # routes to LANGCHAIN_ENDPOINT (local proxy when web is running)
 

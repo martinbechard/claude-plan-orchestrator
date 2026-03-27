@@ -757,3 +757,30 @@ class TestFinalizeRootRun:
         self._set_tracing_active(monkeypatch)
         with patch("langsmith.RunTree", side_effect=RuntimeError("LangSmith error")):
             finalize_root_run("test-uuid-456", {"outcome": "PASS"})  # Should not raise
+
+    def test_uses_item_slug_as_run_name(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        mock_run = MagicMock()
+
+        with patch("langsmith.RunTree", return_value=mock_run) as mock_cls:
+            finalize_root_run("test-uuid-456", {"outcome": "PASS"}, item_slug="my-feature-42")
+
+        assert mock_cls.call_args.kwargs["name"] == "my-feature-42"
+
+    def test_falls_back_to_root_when_slug_empty(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        mock_run = MagicMock()
+
+        with patch("langsmith.RunTree", return_value=mock_run) as mock_cls:
+            finalize_root_run("test-uuid-456", {"outcome": "PASS"}, item_slug="")
+
+        assert mock_cls.call_args.kwargs["name"] == "root"
+
+    def test_falls_back_to_root_when_slug_not_provided(self, monkeypatch):
+        self._set_tracing_active(monkeypatch)
+        mock_run = MagicMock()
+
+        with patch("langsmith.RunTree", return_value=mock_run) as mock_cls:
+            finalize_root_run("test-uuid-456", {"outcome": "PASS"})
+
+        assert mock_cls.call_args.kwargs["name"] == "root"

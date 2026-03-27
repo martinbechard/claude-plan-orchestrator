@@ -28,6 +28,7 @@ import os
 import signal
 import sys
 import threading
+from pathlib import Path
 import time
 from typing import Optional
 
@@ -435,7 +436,10 @@ def _run_single_item(
 
     try:
         initial_state = _build_initial_state(budget_cap_usd, item_path=item_path)
-        thread_config = {"configurable": {"thread_id": PIPELINE_THREAD_ID}}
+        item_slug = Path(item_path).stem
+        thread_config: dict = {"configurable": {"thread_id": PIPELINE_THREAD_ID}}
+        if item_slug:
+            thread_config["run_name"] = item_slug
 
         with pipeline_graph() as graph:
             final_state: PipelineState = graph.invoke(initial_state, config=thread_config)
@@ -502,7 +506,10 @@ def _run_once(
             pre_scanned.get("item_slug"),
         )
 
-        thread_config = {"configurable": {"thread_id": PIPELINE_THREAD_ID}}
+        once_slug = pre_scanned.get("item_slug", "")
+        thread_config: dict = {"configurable": {"thread_id": PIPELINE_THREAD_ID}}
+        if once_slug:
+            thread_config["run_name"] = once_slug
         with pipeline_graph() as graph:
             final_state: PipelineState = graph.invoke(pre_scanned, config=thread_config)
 
@@ -730,14 +737,19 @@ def _run_scan_loop(
                         continue
 
                     # Item found — invoke the full graph (with tracing).
+                    loop_slug = pre_scanned.get("item_slug", "")
                     logger.info(
                         "Processing [%s] %s",
                         pre_scanned.get("item_type"),
-                        pre_scanned.get("item_slug"),
+                        loop_slug,
                     )
 
+                    invoke_config: dict = dict(thread_config)
+                    if loop_slug:
+                        invoke_config["run_name"] = loop_slug
+
                     final_state: PipelineState = graph.invoke(
-                        pre_scanned, config=thread_config
+                        pre_scanned, config=invoke_config
                     )
 
                     if final_state.get("quota_exhausted"):

@@ -209,7 +209,7 @@ def archive(state: PipelineState) -> dict:
     print(f"[archive] Archiving {item_slug} as {outcome}")
 
     # Step 1: Finalize the root LangSmith trace and strip the trace ID line.
-    finalize_root_run(langsmith_root_run_id, {"item_slug": item_slug, "outcome": outcome})
+    finalize_root_run(langsmith_root_run_id, {"item_slug": item_slug, "outcome": outcome}, item_slug=item_slug)
     if item_path:
         _strip_trace_id_line(item_path)
 

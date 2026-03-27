@@ -370,6 +370,7 @@ class TestArchiveTraceFinalization:
         mock_finalize.assert_called_once_with(
             trace_id,
             {"item_slug": "01-bug", "outcome": ARCHIVE_OUTCOME_SUCCESS},
+            item_slug="01-bug",
         )
 
     def test_calls_finalize_root_run_with_none_when_no_run_id(self, tmp_path):

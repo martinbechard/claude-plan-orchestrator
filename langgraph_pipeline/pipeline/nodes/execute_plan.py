@@ -72,7 +72,8 @@ def execute_plan(state: PipelineState) -> dict:
     }
 
     executor = build_executor_graph().compile()
-    final_task_state = executor.invoke(initial_task_state)
+    executor_config: dict | None = {"run_name": item_slug} if item_slug else None
+    final_task_state = executor.invoke(initial_task_state, config=executor_config)
 
     cost_usd = float(final_task_state.get("plan_cost_usd") or _INITIAL_COST)
     input_tokens = int(final_task_state.get("plan_input_tokens") or _INITIAL_TOKENS)
