@@ -33,27 +33,6 @@
   {% set badge_label = "Running" %}
 {% endif %}
 
-{# ── Duration helper macro (seconds precision from HH:MM:SS substrings) ── #}
-{# Returns (end_secs - start_secs) for ISO timestamps on the same calendar day #}
-{% macro secs(ts) -%}
-  {%- if ts and ts | length >= 19 -%}
-    {{- (ts[11:13] | int) * 3600 + (ts[14:16] | int) * 60 + (ts[17:19] | int) -}}
-  {%- else -%}
-    0
-  {%- endif -%}
-{%- endmacro %}
-
-{% macro fmt_duration(start_ts, end_ts) -%}
-  {%- if start_ts and end_ts -%}
-    {%- set dur = (secs(end_ts) | int) - (secs(start_ts) | int) -%}
-    {%- if dur < 0 -%}—
-    {%- elif dur >= 3600 -%}{{- (dur // 3600) }}h {{ (dur % 3600) // 60 }}m {{ dur % 60 }}s
-    {%- elif dur >= 60 -%}{{- (dur // 60) }}m {{ dur % 60 }}s
-    {%- else -%}{{- dur }}s
-    {%- endif -%}
-  {%- else -%}—{%- endif -%}
-{%- endmacro %}
-
 {# ── Elapsed offset label macro ───────────────────────────────────────── #}
 {% macro fmt_elapsed(offset_s) -%}
   {%- if offset_s < 1.0 -%}
@@ -87,7 +66,7 @@
 
   <div class="detail-meta">
     Duration
-    <span>{{ run.display_duration if run.display_duration else fmt_duration(run.start_time, run.end_time) }}</span>
+    <span>{{ run.display_duration }}</span>
   </div>
 
   {% if run.display_model %}
