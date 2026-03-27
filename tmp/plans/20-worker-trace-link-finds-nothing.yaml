@@ -28,3 +28,8 @@ sections:
       and update DashboardState via update_worker_run_id(). (2) list_runs() uses (run_id
       = ? OR parent_run_id = ?) so child traces are visible while worker is running.
       All 1313 tests pass.'
+    validation_attempts: 1
+    validation_findings: 'Both claimed fixes verified in code. All 1313 tests pass.
+      One warning: build command references scripts/plan-orchestrator.py which does
+      not exist (pre-existing condition, not caused by this task). Runtime trace link
+      behavior cannot be verified without a running server.'

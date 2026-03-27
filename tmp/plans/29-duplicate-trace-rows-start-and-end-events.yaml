@@ -1,5 +1,5 @@
 meta:
-  source_item: "tmp/plans/.claimed/29-duplicate-trace-rows-start-and-end-events.md"
+  source_item: tmp/plans/.claimed/29-duplicate-trace-rows-start-and-end-events.md
   validation:
     enabled: true
     run_after:
@@ -17,5 +17,8 @@ sections:
   - id: '1.1'
     name: Validate upsert fix and address any remaining issues
     agent: coder
-    status: pending
-    description: "Implement the work item: tmp/plans/.claimed/29-duplicate-trace-rows-start-and-end-events.md"
+    status: in_progress
+    description: 'Implement the work item: tmp/plans/.claimed/29-duplicate-trace-rows-start-and-end-events.md'
+    last_attempt: '2026-03-27T09:40:45.818465'
+    attempts: 1
+    model_used: sonnet
