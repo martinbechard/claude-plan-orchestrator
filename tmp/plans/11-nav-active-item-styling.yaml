@@ -1,0 +1,41 @@
+meta:
+  title: Nav active item styling looks amateurish
+  source_item: tmp/plans/.claimed/11-nav-active-item-styling.md
+  type: defect
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Redesign nav active item styling
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Validate and fix nav active item styling
+    agent: frontend-coder
+    status: completed
+    description: 'Implement the work item: tmp/plans/.claimed/11-nav-active-item-styling.md'
+    last_attempt: '2026-03-27T01:43:31.638220'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-27T01:45:57.253262'
+    result_message: 'Redesigned nav active state: normalized padding for all links
+      (prevents layout shift), replaced 12% opacity background with 22% opacity +
+      1px box-shadow ring, changed active text to #e8e8f0 for better contrast, added
+      font-weight: 500, hover background, and CSS transitions. Updated ui-style-guide.md
+      with new design tokens.'
+    validation_attempts: 1
+    validation_findings: 'Build passes (auto-pipeline.py), all 1305 tests pass. CSS
+      redesign removes cheap border-bottom underline and replaces with professional
+      pill indicator: normalized padding on all nav links prevents layout shift, active
+      state uses rgba(126,184,247,0.22) background + box-shadow ring + font-weight
+      500 + #e8e8f0 text. Hover state and CSS transitions added. ui-style-guide.md
+      updated with new design tokens. Note: plan-orchestrator.py referenced in build
+      command does not exist (pre-existing condition, unrelated to this CSS task).
+      Runtime visual confirmation requires running server.'
