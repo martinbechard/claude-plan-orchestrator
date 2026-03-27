@@ -17,5 +17,13 @@ sections:
   - id: '1.1'
     name: Validate existing implementation and fix any gaps
     agent: coder
-    status: pending
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/38-tool-call-attribution-table-missing-attribution-column.md'
+    last_attempt: '2026-03-27T14:40:01.704384'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-27T14:40:58.982002'
+    result_message: Validated existing implementation - all acceptance criteria pass.
+      Est. $ column present in analysis.html, proportional cost attribution implemented
+      in proxy.py get_tool_call_attribution(), analysis route passes tool_attribution
+      to template. All 8 cost endpoint tests pass.
