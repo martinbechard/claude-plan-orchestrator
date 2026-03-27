@@ -760,7 +760,7 @@ class TracingProxy:
             page: 1-based page number.
             page_size: Number of rows per page.
             slug: Filter on name containing this substring (case-insensitive).
-            model: Filter on metadata_json containing this model string.
+            model: Filter on model column containing this model string (case-insensitive).
             date_from: ISO date string lower bound for created_at (inclusive).
             date_to: ISO date string upper bound for created_at (inclusive).
             trace_id: Exact trace UUID. When provided, returns the root run and
