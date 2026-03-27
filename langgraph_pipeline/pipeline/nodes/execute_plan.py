@@ -17,6 +17,8 @@ State flows between parent pipeline and child subgraph via explicit mapping:
 
 from typing import Optional
 
+import yaml
+
 from langgraph_pipeline.executor.escalation import DEFAULT_STARTING_MODEL
 from langgraph_pipeline.executor.graph import build_executor_graph
 from langgraph_pipeline.pipeline.state import PipelineState
@@ -29,6 +31,44 @@ _INITIAL_TASK_ATTEMPT = 1
 _INITIAL_COST = 0.0
 _INITIAL_TOKENS = 0
 _INITIAL_FAILURES = 0
+
+# Task statuses that count as terminal/completed for snapshot counts.
+_TERMINAL_STATUSES = frozenset({"completed", "failed", "skipped"})
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _plan_task_snapshot(plan_path: str) -> dict:
+    """Return a snapshot of task statuses from the YAML plan file on disk.
+
+    Reads the plan YAML and extracts task_id and status for every task across
+    all sections.  Used to record plan state at execute_plan start and end.
+
+    Returns:
+        Dict with plan_tasks (list of {task_id, status}), completed_count, and
+        total_count.  Returns empty snapshot on any read or parse error.
+    """
+    try:
+        with open(plan_path, "r") as f:
+            plan_data = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        return {"plan_tasks": [], "completed_count": 0, "total_count": 0}
+
+    tasks: list[dict] = []
+    for section in plan_data.get("sections", []):
+        for task in section.get("tasks", []):
+            tasks.append({
+                "task_id": task.get("id", ""),
+                "status": task.get("status", "pending"),
+            })
+
+    completed_count = sum(1 for t in tasks if t["status"] in _TERMINAL_STATUSES)
+    return {
+        "plan_tasks": tasks,
+        "completed_count": completed_count,
+        "total_count": len(tasks),
+    }
 
 
 # ─── Node ─────────────────────────────────────────────────────────────────────
@@ -55,6 +95,16 @@ def execute_plan(state: PipelineState) -> dict:
         return {}
 
     print(f"[execute_plan] Invoking executor subgraph for plan: {plan_path}")
+
+    start_snapshot = _plan_task_snapshot(plan_path)
+    add_trace_metadata({
+        "node_name": "execute_plan",
+        "graph_level": "pipeline",
+        "checkpoint": "start",
+        "item_slug": item_slug,
+        "item_type": item_type,
+        **start_snapshot,
+    })
 
     initial_task_state: dict = {
         "plan_path": plan_path,
@@ -86,14 +136,17 @@ def execute_plan(state: PipelineState) -> dict:
         f"{task_count} task(s), ${cost_usd:.4f}"
     )
 
+    end_snapshot = _plan_task_snapshot(plan_path)
     add_trace_metadata({
         "node_name": "execute_plan",
         "graph_level": "pipeline",
+        "checkpoint": "end",
         "item_slug": item_slug,
         "item_type": item_type,
         "task_count": task_count,
         "total_cost_usd": cost_usd,
         "tags": [item_slug, item_type],
+        **end_snapshot,
     })
 
     return {

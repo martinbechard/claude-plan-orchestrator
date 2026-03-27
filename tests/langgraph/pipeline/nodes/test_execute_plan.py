@@ -9,7 +9,8 @@ These tests verify state mapping, the no-plan-path guard, and that cost
 and token totals are passed through from the subgraph's final state.
 """
 
-from unittest.mock import MagicMock, patch
+import textwrap
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -18,6 +19,7 @@ from langgraph_pipeline.pipeline.nodes.execute_plan import (
     _INITIAL_FAILURES,
     _INITIAL_TASK_ATTEMPT,
     _INITIAL_TOKENS,
+    _plan_task_snapshot,
     execute_plan,
 )
 
@@ -193,3 +195,158 @@ class TestExecutePlanCostMapping:
         assert "session_cost_usd" in result
         assert "session_input_tokens" in result
         assert "session_output_tokens" in result
+
+
+# ─── Tests: _plan_task_snapshot helper ────────────────────────────────────────
+
+
+_SAMPLE_PLAN_YAML = textwrap.dedent("""\
+    sections:
+    - id: '1'
+      name: Section One
+      tasks:
+      - id: '1.1'
+        name: Task A
+        status: completed
+      - id: '1.2'
+        name: Task B
+        status: pending
+    - id: '2'
+      name: Section Two
+      tasks:
+      - id: '2.1'
+        name: Task C
+        status: skipped
+      - id: '2.2'
+        name: Task D
+        status: failed
+""")
+
+
+class TestPlanTaskSnapshot:
+    def test_extracts_all_tasks_from_all_sections(self, tmp_path):
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(_SAMPLE_PLAN_YAML)
+        result = _plan_task_snapshot(str(plan_file))
+        assert result["total_count"] == 4
+        ids = [t["task_id"] for t in result["plan_tasks"]]
+        assert ids == ["1.1", "1.2", "2.1", "2.2"]
+
+    def test_extracts_statuses_correctly(self, tmp_path):
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(_SAMPLE_PLAN_YAML)
+        result = _plan_task_snapshot(str(plan_file))
+        statuses = {t["task_id"]: t["status"] for t in result["plan_tasks"]}
+        assert statuses["1.1"] == "completed"
+        assert statuses["1.2"] == "pending"
+        assert statuses["2.1"] == "skipped"
+        assert statuses["2.2"] == "failed"
+
+    def test_counts_terminal_statuses_as_completed(self, tmp_path):
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(_SAMPLE_PLAN_YAML)
+        result = _plan_task_snapshot(str(plan_file))
+        # completed, skipped, failed are all terminal → 3 terminal out of 4
+        assert result["completed_count"] == 3
+        assert result["total_count"] == 4
+
+    def test_returns_empty_snapshot_on_missing_file(self):
+        result = _plan_task_snapshot("/nonexistent/path/plan.yaml")
+        assert result == {"plan_tasks": [], "completed_count": 0, "total_count": 0}
+
+    def test_returns_empty_snapshot_on_invalid_yaml(self, tmp_path):
+        plan_file = tmp_path / "bad.yaml"
+        plan_file.write_text(":: invalid: yaml: [unclosed")
+        result = _plan_task_snapshot(str(plan_file))
+        assert result == {"plan_tasks": [], "completed_count": 0, "total_count": 0}
+
+    def test_returns_empty_snapshot_for_plan_with_no_sections(self, tmp_path):
+        plan_file = tmp_path / "empty.yaml"
+        plan_file.write_text("meta:\n  source_item: foo.md\n")
+        result = _plan_task_snapshot(str(plan_file))
+        assert result == {"plan_tasks": [], "completed_count": 0, "total_count": 0}
+
+
+# ─── Tests: plan task snapshot trace metadata ──────────────────────────────────
+
+
+class TestExecutePlanTaskSnapshot:
+    def _run_with_plan(self, tmp_path, plan_yaml: str):
+        """Write a plan YAML, run execute_plan, return captured add_trace_metadata calls."""
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(plan_yaml)
+        state = _make_state(plan_path=str(plan_file))
+
+        mock_compiled = _make_mock_subgraph()
+        captured_calls: list[dict] = []
+
+        def fake_add_trace(metadata: dict) -> None:
+            captured_calls.append(metadata)
+
+        with (
+            patch(
+                "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
+            ) as mock_build,
+            patch(
+                "langgraph_pipeline.pipeline.nodes.execute_plan.add_trace_metadata",
+                side_effect=fake_add_trace,
+            ),
+        ):
+            mock_build.return_value.compile.return_value = mock_compiled
+            execute_plan(state)
+
+        return captured_calls
+
+    def test_emits_start_checkpoint_trace(self, tmp_path):
+        calls = self._run_with_plan(tmp_path, _SAMPLE_PLAN_YAML)
+        start_calls = [c for c in calls if c.get("checkpoint") == "start"]
+        assert len(start_calls) == 1
+
+    def test_emits_end_checkpoint_trace(self, tmp_path):
+        calls = self._run_with_plan(tmp_path, _SAMPLE_PLAN_YAML)
+        end_calls = [c for c in calls if c.get("checkpoint") == "end"]
+        assert len(end_calls) == 1
+
+    def test_start_trace_contains_plan_tasks(self, tmp_path):
+        calls = self._run_with_plan(tmp_path, _SAMPLE_PLAN_YAML)
+        start = next(c for c in calls if c.get("checkpoint") == "start")
+        assert "plan_tasks" in start
+        assert len(start["plan_tasks"]) == 4
+
+    def test_start_trace_contains_counts(self, tmp_path):
+        calls = self._run_with_plan(tmp_path, _SAMPLE_PLAN_YAML)
+        start = next(c for c in calls if c.get("checkpoint") == "start")
+        assert start["total_count"] == 4
+        assert start["completed_count"] == 3
+
+    def test_end_trace_contains_plan_tasks(self, tmp_path):
+        calls = self._run_with_plan(tmp_path, _SAMPLE_PLAN_YAML)
+        end = next(c for c in calls if c.get("checkpoint") == "end")
+        assert "plan_tasks" in end
+        assert len(end["plan_tasks"]) == 4
+
+    def test_end_trace_contains_counts(self, tmp_path):
+        calls = self._run_with_plan(tmp_path, _SAMPLE_PLAN_YAML)
+        end = next(c for c in calls if c.get("checkpoint") == "end")
+        assert end["total_count"] == 4
+        assert end["completed_count"] == 3
+
+    def test_plan_tasks_have_task_id_and_status_fields(self, tmp_path):
+        calls = self._run_with_plan(tmp_path, _SAMPLE_PLAN_YAML)
+        start = next(c for c in calls if c.get("checkpoint") == "start")
+        for task in start["plan_tasks"]:
+            assert "task_id" in task
+            assert "status" in task
+
+    def test_start_trace_emitted_before_end_trace(self, tmp_path):
+        calls = self._run_with_plan(tmp_path, _SAMPLE_PLAN_YAML)
+        checkpoints = [c.get("checkpoint") for c in calls if c.get("checkpoint")]
+        assert checkpoints.index("start") < checkpoints.index("end")
+
+    def test_no_trace_emitted_when_no_plan_path(self):
+        state = _make_state(plan_path=None)
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.execute_plan.add_trace_metadata"
+        ) as mock_trace:
+            execute_plan(state)
+        mock_trace.assert_not_called()
