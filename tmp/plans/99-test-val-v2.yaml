@@ -1,0 +1,22 @@
+meta:
+  source_item: "tmp/plans/.claimed/99-test-val-v2.md"
+  validation:
+    enabled: true
+    run_after:
+      - coder
+      - e2e-test-agent
+      - frontend-coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+
+sections:
+  - id: '1'
+    name: Add test comment marker
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: Add val json test comment to paths.py
+        agent: coder
+        status: pending
+        description: "Implement the work item: tmp/plans/.claimed/99-test-val-v2.md"
