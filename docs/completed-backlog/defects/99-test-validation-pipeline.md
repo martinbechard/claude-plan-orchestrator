@@ -22,7 +22,7 @@ langgraph_pipeline/shared/paths.py (after the existing header comment).
 - Do the pipeline logs show "Design validation PASSED" or "Design validation
   FAILED" with a retry? YES = pass, NO = fail
 
-## LangSmith Trace: 43b43697-a027-4724-bc0a-6c6ee13d0c2b
+
 
 
 ## 5 Whys Analysis
