@@ -17,8 +17,15 @@ sections:
   - id: '1.1'
     name: Validate existing implementation and fix any gaps
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/06-dashboard-drill-down-to-trace.md'
     last_attempt: '2026-03-27T09:59:11.340316'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T10:01:32.030326'
+    result_message: 'Validated model filter implementation end-to-end. All acceptance
+      criteria met: model column in traces table with ALTER TABLE migration, propagate_model_to_root()
+      walks parent chain, server.py extracts model from invocation_params/metadata,
+      list_runs/count_runs filter on dedicated model column, UI renders Model column
+      and dropdown. All 6 model-specific tests pass; full 1314-test suite passes.
+      Fixed two stale docstring comments that incorrectly referenced metadata_json.'
