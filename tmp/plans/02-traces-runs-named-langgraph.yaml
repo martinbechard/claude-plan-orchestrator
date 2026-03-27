@@ -17,8 +17,13 @@ sections:
   - id: '1.1'
     name: Validate existing implementation and fix any gaps
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/02-traces-runs-named-langgraph.md'
     last_attempt: '2026-03-27T10:00:11.781255'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T10:02:35.335963'
+    result_message: Validated existing implementation — all acceptance criteria met.
+      create_root_run() sets name=item_slug, server.py extracts name from LangSmith
+      payloads, record_run() persists it, list_runs() filters on name column, proxy_list.html
+      displays run.name. All 1314 tests pass.
