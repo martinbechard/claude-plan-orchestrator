@@ -1,47 +1,49 @@
-# Design: Dashboard Drill-Down to Trace (06) - Validation Pass
+# Design: Dashboard Drill Down from Active Workers / Recent Completions to Trace Page
 
-## Source
-Defect: tmp/plans/.claimed/06-dashboard-drill-down-to-trace.md
+## Status: Review Required
 
-## Implementation Status
-This feature was previously implemented. The backlog item is flagged "Review Required"
-meaning the acceptance criteria must be validated against the current codebase and any
-gaps fixed.
+This feature was previously implemented. This plan validates the existing implementation
+against the acceptance criteria and fixes any gaps.
 
 ## Architecture Overview
 
-Each work item stores its LangSmith trace UUID in the claimed item markdown
-file as a LangSmith Trace header. The worker creates this marker on first
-run and re-uses the same UUID across restarts.
+The drill-down feature connects three existing subsystems:
 
-The implementation threads that UUID through:
-1. WorkerInfo (in-memory active workers) - run_id field
-2. CompletionRecord and the completions SQLite table - run_id column
-3. The SSE snapshot payload and list_completions() return value
-4. Dashboard HTML/JS rendering (anchor tag per row linking to /proxy?trace_id=<run_id>)
+1. **Supervisor** (langgraph_pipeline/supervisor.py) - Dispatches workers, stores run_id
+   in WorkerInfo and completions DB row
+2. **Dashboard State** (langgraph_pipeline/web/dashboard_state.py) - WorkerInfo already
+   has run_id field; SSE snapshot exposes it to the frontend
+3. **Dashboard UI** (langgraph_pipeline/web/templates/dashboard.html) - Renders trace
+   links in Active Workers cards and Recent Completions table rows
 
-## Key Files to Validate
+## Key Files
 
-### Backend
-| File | Expected State |
-|------|----------------|
-| langgraph_pipeline/web/dashboard_state.py | WorkerInfo and CompletionRecord have run_id field; snapshot() includes it |
-| langgraph_pipeline/web/proxy.py | completions table has run_id column; record_completion and list_completions handle it |
-| langgraph_pipeline/supervisor.py | Reads trace_id from claimed file at dispatch and reap; passes run_id to dashboard state and completion record |
+| File | Role |
+|------|------|
+| langgraph_pipeline/web/dashboard_state.py | WorkerInfo with run_id field |
+| langgraph_pipeline/supervisor.py | Worker dispatch, run_id assignment, completion recording |
+| langgraph_pipeline/web/templates/dashboard.html | UI rendering of trace links |
+| langgraph_pipeline/web/proxy.py | Completions DB schema (run_id column) |
+| langgraph_pipeline/web/routes/dashboard.py | SSE /api/stream endpoint |
+| langgraph_pipeline/web/routes/proxy.py | /proxy endpoint with trace_id filter |
 
-### Frontend
-| File | Expected State |
-|------|----------------|
-| langgraph_pipeline/web/templates/dashboard.html | Worker cards and completion rows render trace links when run_id is present |
+## What Already Exists
 
-## Acceptance Criteria (from backlog item)
-1. Each active worker row has a link that opens /proxy?trace_id=<run_id>
-2. Each recent completion row has the same link
-3. If trace does not exist yet (worker still running), the link goes to filtered list (may be empty)
+- WorkerInfo.run_id: Optional[str] field
+- Completions table: run_id TEXT column
+- Dashboard HTML: Trace column in completions table, trace link in worker cards
+- /proxy?trace_id= filter support
 
-## Design Decisions (unchanged from prior implementation)
-- Trace ID read at dispatch time from claimed file (may be None for first run)
-- Trace ID re-read at reap time (guaranteed to be written by then)
-- DB migration via ALTER TABLE guard for nullable run_id column
-- Graceful degradation: no link rendered when run_id is None/empty
-- URL format: /proxy?trace_id=<uuid> (depends on defect-05 trace_id filter)
+## Validation Scope
+
+1. Verify Active Workers rows render a clickable link to /proxy?trace_id=<run_id>
+2. Verify Recent Completions rows render a clickable link to /proxy?trace_id=<run_id>
+3. Verify run_id is populated when supervisor dispatches a worker
+4. Verify run_id persists to completions DB when worker finishes
+5. Verify links degrade gracefully when run_id is null (worker still starting)
+
+## Design Decisions
+
+- No new DB migrations needed - run_id column already exists
+- No new API endpoints needed - SSE payload already includes run_id
+- Focus is on validation and fixing any rendering or data-flow gaps
