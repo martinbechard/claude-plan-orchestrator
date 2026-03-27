@@ -27,3 +27,8 @@ sections:
       The route already computes elapsed_start_s/elapsed_end_s with microsecond precision
       and display_duration is always pre-computed by _enrich_run(), so both macros
       were unused dead code. Duration display now uses run.display_duration directly.
+    validation_attempts: 1
+    validation_findings: secs() and fmt_duration() macros removed from proxy_trace.html.
+      Route pre-computes elapsed_start_s/elapsed_end_s with microsecond precision
+      and display_duration via _enrich_run(). Template now uses run.display_duration
+      directly. All 1305 tests pass. No placeholder content found.

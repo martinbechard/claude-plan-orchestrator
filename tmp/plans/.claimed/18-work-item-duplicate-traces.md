@@ -50,3 +50,5 @@ Once investigated, either:
 - Add parent_run_id IS NULL to the trace query on the item detail page.
 - Deduplicate by run_id in the route before passing to the template.
 - If a genuine double-dispatch, file a separate supervisor defect.
+
+## LangSmith Trace: 5ac5eef7-581a-4748-8919-ad1b69995bfc
