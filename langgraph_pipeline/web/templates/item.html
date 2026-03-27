@@ -687,18 +687,18 @@
         {%- endif -%}
       </span>
     </div>
-    {% if avg_velocity is not none and avg_velocity is number and avg_velocity > 0 %}
     <div class="item-stat" aria-label="Average velocity">
       <span class="item-cost-label">Velocity</span>
       <span class="item-cost-value">
-        {%- if avg_velocity >= 1000 -%}
+        {%- if avg_velocity is not none and avg_velocity is number and avg_velocity >= 1000 -%}
           {{ "%.1fk"|format(avg_velocity / 1000) }} tok/min
-        {%- else -%}
+        {%- elif avg_velocity is not none and avg_velocity is number and avg_velocity > 0 -%}
           {{ avg_velocity|int }} tok/min
+        {%- else -%}
+          &mdash;
         {%- endif -%}
       </span>
     </div>
-    {% endif %}
   </div>
 </div>
 
@@ -709,8 +709,6 @@
   <span class="active-worker-label">Currently running</span>
   <span class="active-worker-sep" aria-hidden="true">|</span>
   <span>PID {{ active_worker.pid }}</span>
-  <span class="active-worker-sep" aria-hidden="true">|</span>
-  <span>Running for {{ active_worker.elapsed_s }}</span>
   {% if active_worker.current_task %}
     <span class="active-worker-sep" aria-hidden="true">|</span>
     <span class="active-worker-task">{{ active_worker.current_task }}</span>
