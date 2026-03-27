@@ -17,8 +17,13 @@ sections:
   - id: '1.1'
     name: Remove secs() and fmt_duration() macros and fix duration fallback
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/08-timeline-sub-second-precision-lost.md'
     last_attempt: '2026-03-27T09:23:45.823403'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T09:25:05.175197'
+    result_message: Removed secs() and fmt_duration() Jinja2 macros from proxy_trace.html.
+      The route already computes elapsed_start_s/elapsed_end_s with microsecond precision
+      and display_duration is always pre-computed by _enrich_run(), so both macros
+      were unused dead code. Duration display now uses run.display_duration directly.
