@@ -1,0 +1,23 @@
+meta:
+  name: "Test: live stats final verification"
+  source_item: "tmp/plans/.claimed/99-test-final.md"
+  validation:
+    enabled: true
+    run_after:
+      - coder
+      - e2e-test-agent
+      - frontend-coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+
+sections:
+  - id: '1'
+    name: Add comment marker to paths.py
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: Add final stats test comment to paths.py
+        agent: coder
+        status: pending
+        description: "Implement the work item: tmp/plans/.claimed/99-test-final.md"
