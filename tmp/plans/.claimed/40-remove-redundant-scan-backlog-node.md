@@ -58,3 +58,26 @@ without pre-scanning.
   YES = pass, NO = fail
 
 ## LangSmith Trace: 3febf02c-209a-45c1-86d7-c0cdce7e6213
+
+
+## 5 Whys Analysis
+
+Title: Remove redundant scan_backlog node that always short-circuits in production
+
+Clarity: 4
+
+5 Whys:
+
+1. **Why is scan_backlog considered redundant?** Because the CLI (sequential loop and supervisor) always pre-scans the next item and passes `item_path` as initial state, so `scan_backlog` immediately returns `{}` without executing its actual scanning logic in production.
+
+2. **Why does the CLI pre-scan instead of letting the graph scan?** Because the orchestrator needs to determine what item to work on next before invoking the graph, requiring the scan to happen at the loop level so a valid `item_path` can be passed as initial state.
+
+3. **Why was scan_backlog designed as a graph node if it never runs in production?** To maintain scanning logic within the graph for reusability and testability—allowing tests to invoke the graph without pre-scanning while letting production callers short-circuit via pre-scan, rather than having two separate code paths.
+
+4. **Why remove this inefficiency now rather than accept the extra node?** Because every graph invocation pays tracing overhead (serialization, state setup, logging), and multiplying that cost across hundreds of pipeline orchestration cycles wastes measurable resources while adding no value.
+
+5. **Why does this architectural misalignment matter if it still works?** Because a node that never executes in production confuses the graph's contract (is the entry point `scan_backlog` or `intake_analyze`?), creates maintenance burden, and obscures what actually needs to be tested and optimized in traces.
+
+Root Need: **Align the graph's documented architecture with its actual runtime behavior by removing the production-unused entry point, reducing per-invocation overhead, and clarifying the true entry point for future maintainers and performance analysis.**
+
+Summary: Remove scan_backlog from the graph because CLI pre-scanning makes it a permanent no-op that wastes invocation overhead and contradicts the actual system design.
