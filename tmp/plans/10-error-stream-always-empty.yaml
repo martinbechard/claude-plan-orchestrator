@@ -1,0 +1,23 @@
+meta:
+  title: 'Dashboard: Error Stream panel is always empty'
+  source_item: tmp/plans/.claimed/10-error-stream-always-empty.md
+  type: defect
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Validate and fix DashboardErrorHandler level filtering
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Fix handler level filter and validate error stream end-to-end
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/10-error-stream-always-empty.md'
