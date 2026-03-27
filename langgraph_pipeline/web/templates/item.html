@@ -1,11 +1,13 @@
 {# langgraph_pipeline/web/templates/item.html
-   Work-item detail page: requirements, plan tasks, completions, traces.
+   Work-item detail page: requirements, plan tasks, completions, traces, console output.
    Context: slug, item_type, pipeline_stage, active_worker, total_cost_usd, requirements_html,
             original_request_html (optional), plan_tasks [{id, name, status}],
-            completions, traces [{run_id, name, created_at}]
+            completions, traces [{run_id, name, created_at}],
+            output_files [filenames sorted newest-first]
    Design: docs/plans/2026-03-26-06-work-item-detail-page-design.md
            docs/plans/2026-03-26-17-work-item-status-clarity-design.md
-           docs/plans/2026-03-26-35-work-item-page-missing-requirements-from-backlog-file-design.md #}
+           docs/plans/2026-03-26-35-work-item-page-missing-requirements-from-backlog-file-design.md
+           docs/plans/2026-03-26-43-capture-raw-worker-output-per-item-design.md #}
 {% extends "base.html" %}
 
 {% block title %}{{ slug }} — Plan Orchestrator{% endblock %}
@@ -443,6 +445,143 @@
 }
 
 .nowrap { white-space: nowrap; }
+
+/* ── Console Output section ───────────────────────────────────────────── */
+.console-output-section {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-top: 1.5rem;
+    overflow: hidden;
+}
+
+.console-output-summary {
+    padding: 0.625rem 1.25rem;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    list-style: none;
+    font-size: 11px;
+    font-weight: 700;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    user-select: none;
+}
+
+.console-output-summary::-webkit-details-marker { display: none; }
+
+.console-output-summary::before {
+    content: '▶';
+    font-size: 9px;
+    transition: transform 0.15s ease;
+    color: #374151;
+    font-weight: 700;
+}
+
+.console-output-section[open] > .console-output-summary::before {
+    transform: rotate(90deg);
+}
+
+.console-output-count {
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    margin-left: auto;
+}
+
+.output-file-list {
+    padding: 0.5rem 0;
+}
+
+.output-file-entry {
+    padding: 0.5rem 1.25rem;
+    border-bottom: 1px solid #f0f4f8;
+}
+
+.output-file-entry:last-child { border-bottom: none; }
+
+.output-file-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 12px;
+}
+
+.output-task-id {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: #374151;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 3px;
+    padding: 1px 6px;
+}
+
+.output-timestamp {
+    font-size: 11px;
+    color: #6b7280;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+}
+
+.output-raw-link {
+    font-size: 11px;
+    color: #3b6fcf;
+    text-decoration: none;
+    margin-left: auto;
+}
+
+.output-raw-link:hover { text-decoration: underline; }
+
+.output-preview-details {
+    margin-top: 0.4rem;
+}
+
+.output-preview-summary {
+    font-size: 11px;
+    color: #3b6fcf;
+    cursor: pointer;
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    user-select: none;
+}
+
+.output-preview-summary::-webkit-details-marker { display: none; }
+
+.output-preview-summary::before {
+    content: '▶';
+    font-size: 8px;
+    transition: transform 0.15s ease;
+}
+
+.output-preview-details[open] > .output-preview-summary::before {
+    transform: rotate(90deg);
+}
+
+.output-preview-summary:hover { color: #1d4ed8; }
+
+.output-preview-pre {
+    margin: 0.5rem 0 0;
+    background: #1a1a2e;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    font-size: 11px;
+    color: #e2e8f0;
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre;
+    line-height: 1.5;
+}
 </style>
 {% endblock %}
 
@@ -654,4 +793,56 @@
   </div>{# /.item-right #}
 
 </div>{# /.item-layout #}
+
+{# ── Console Output ───────────────────────────────────────────────────────── #}
+{% if output_files %}
+<details class="console-output-section" aria-label="Console output files">
+  <summary class="console-output-summary">
+    Console Output
+    <span class="console-output-count">
+      {{ output_files | length }} file{{ 's' if output_files | length != 1 else '' }}
+    </span>
+  </summary>
+  <div class="output-file-list">
+    {% for filename in output_files %}
+    {# Filename format: task-<task_id>-YYYYMMDD-HHMMSS.log (20 chars suffix) #}
+    {% set ts = filename[-19:-4] %}
+    {% set task_label = filename[5:-20] %}
+    <div class="output-file-entry">
+      <div class="output-file-meta">
+        <span class="output-task-id" aria-label="Task ID">{{ task_label }}</span>
+        <span class="output-timestamp" aria-label="Captured at">
+          {{ ts[:4] }}-{{ ts[4:6] }}-{{ ts[6:8] }}&nbsp;{{ ts[9:11] }}:{{ ts[11:13] }}:{{ ts[13:15] }}
+        </span>
+        <a class="output-raw-link"
+           href="/item/{{ slug }}/output/{{ filename }}"
+           target="_blank"
+           aria-label="View raw log for {{ filename }}">raw &nearr;</a>
+      </div>
+      <details class="output-preview-details"
+               data-url="/item/{{ slug }}/output/{{ filename }}">
+        <summary class="output-preview-summary">Preview</summary>
+        <pre class="output-preview-pre" aria-label="Log preview">Loading&hellip;</pre>
+      </details>
+    </div>
+    {% endfor %}
+  </div>
+</details>
+{% endif %}
+
+<script>
+document.querySelectorAll('.output-preview-details').forEach(function (el) {
+    el.addEventListener('toggle', function () {
+        if (!el.open) { return; }
+        var pre = el.querySelector('pre');
+        if (pre.dataset.loaded) { return; }
+        pre.dataset.loaded = '1';
+        pre.textContent = 'Loading\u2026';
+        fetch(el.dataset.url)
+            .then(function (r) { return r.text(); })
+            .then(function (t) { pre.textContent = t; })
+            .catch(function () { pre.textContent = 'Failed to load log content.'; });
+    });
+});
+</script>
 {% endblock %}
