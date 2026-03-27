@@ -109,4 +109,83 @@ Documents classified as UPDATE require the following corrections:
 
 ---
 
-*Batches 2, 3, and 4 will be appended by subsequent audit tasks.*
+*Batches 3 and 4 will be appended by subsequent audit tasks.*
+
+---
+
+## Batch 2: 2026-02-19 through 2026-02-26 (29 docs)
+
+### Additional Facts Verified for Batch 2
+
+- `langgraph_pipeline/` — EXISTS with pipeline/, executor/, slack/, shared/ subpackages
+- `langgraph_pipeline/slack/` — EXISTS with identity.py, notifier.py, poller.py, suspension.py
+- `langgraph_pipeline/executor/` — EXISTS with state.py, edges.py, escalation.py, circuit_breaker.py, nodes/
+- `langgraph_pipeline/shared/` — EXISTS with paths.py, config.py, rate_limit.py, claude_cli.py, git.py, budget.py, langsmith.py
+- `scripts/run-pipeline.py` — EXISTS (thin wrapper calling langgraph_pipeline.cli.main())
+- `langgraph_pipeline/cli.py` — EXISTS (full pipeline CLI logic)
+- `langgraph_pipeline/__main__.py` — EXISTS
+- `INTAKE_CLARITY_THRESHOLD` in slack/suspension.py — EXISTS (intake quality gate implemented)
+- `MINIMUM_INTAKE_MESSAGE_LENGTH` in slack/poller.py — EXISTS
+- Deadlock detection in executor/nodes/task_selector.py — EXISTS
+- `execute_plan.py` uses executor subgraph (not subprocess bridge to plan-orchestrator.py)
+- `ProgressReporter` / `CompletionTracker` — NOT in auto-pipeline.py (feature never implemented)
+- `step_notifications` / `STEP_NOTIFICATION_THRESHOLD` — NOT in auto-pipeline.py (feature never implemented)
+- `sweep_uncommitted_archival_artifacts` — NOT in codebase (feature never implemented)
+- `_extract_completion_summary` — NOT in auto-pipeline.py (feature never implemented)
+- `infer_agent_for_task` / `REVIEWER_KEYWORDS` — NOT in langgraph_pipeline/ (plan-orchestrator.py deleted)
+
+| # | File | Class | Issues |
+|---|------|-------|--------|
+| 1 | 2026-02-19-18-periodic-progress-reporter-design.md | ARCHIVE | Feature designed for auto-pipeline.py; ProgressReporter never implemented; superseded by langgraph migration |
+| 2 | 2026-02-19-17-read-only-analysis-task-workflow-design.md | ARCHIVE | Completed feature (analysis-backlog exists); references deleted plan-orchestrator.py for Slack channel config |
+| 3 | 2026-02-19-19-optional-step-by-step-notifications-design.md | ARCHIVE | References plan-orchestrator.py with line numbers (5311-5317, 5156-5161); step_notifications not in auto-pipeline.py; superseded by langgraph |
+| 4 | 2026-02-19-8-spec-dir-dead-code-wastes-agent-effort-design.md | ARCHIVE | Cleanup task for plan-orchestrator.py (deleted lines 54, 293); moot as whole file is gone |
+| 5 | 2026-02-19-9-auto-stash-creates-merge-conflicts-on-plan-yamls-design.md | ARCHIVE | Fix for git_stash_working_changes/git_stash_pop in deleted plan-orchestrator.py (lines 1790, 1831); langgraph uses different approach |
+| 6 | 2026-02-19-1-cpo-pipeline-feature-request-improve-verbose-mode-logging-for-inbound-slack-me-design.md | ARCHIVE | Verbose logging for deleted plan-orchestrator.py (lines 4826-4843); ported to langgraph/slack/ |
+| 7 | 2026-02-20-1-theres-something-odd---i-see-the-cheapoville-pipeline-agent-complaining-that-th-design.md | ARCHIVE | Fix for infer_agent_for_task() in deleted plan-orchestrator.py; agent selection now uses explicit YAML agent: field |
+| 8 | 2026-02-21-1-include-root-cause-and-fix-summary-in-defect-completion-slack-notifications-design.md | ARCHIVE | Feature designed for auto-pipeline.py; _extract_completion_summary not implemented; superseded by langgraph |
+| 9 | 2026-02-21-1-bulb-feature-request-improve-readme-docs-on-cross-project-slack-defect-repor-design.md | ARCHIVE | Documentation-only task (README.md, docs/setup-guide.md); likely completed; no code refs |
+| 10 | 2026-02-21-1-bug-defect-infinite-loop-when-failed-task-blocks-dependents-deadlock-not-de-design.md | ARCHIVE | Deadlock detection implemented in langgraph executor/nodes/task_selector.py; plan-orchestrator.py refs dead |
+| 11 | 2026-02-21-2-document-single-command-onboarding-path-for-adding-orchestrator-to-existing-slack-workspaces-design.md | ARCHIVE | Documentation-only task (README.md, docs/setup-guide.md, scripts/setup-slack.py); likely completed |
+| 12 | 2026-02-24-1-bug-defect-sandbox-mode-missing---permission-mode-flag-causing-headless-ses-design.md | ARCHIVE | Fix for build_permission_flags() in deleted plan-orchestrator.py (line 725); langgraph uses different permission model |
+| 13 | 2026-02-24-1-update-narrative-and-readme-to-document-post-v170-improvements-feb-20-24-design.md | ARCHIVE | Documentation narrative task; references stale line counts for now-deleted plan-orchestrator.py (~5809 lines) |
+| 14 | 2026-02-24-1-pipeline-lacks-startup-sweep-for-uncommitted-archival-artifacts-design.md | ARCHIVE | Feature designed for auto-pipeline.py; sweep_uncommitted_archival_artifacts never implemented; superseded by langgraph |
+| 15 | 2026-02-24-1-there-is-a-self-skip-check-that-is-based-on-the-name-of-the-channel-this-is-not-design.md | ARCHIVE | bot_id self-skip approach (iteration #2) implemented in deleted plan-orchestrator.py; superseded by dedup+loop detection then langgraph/slack/ |
+| 16 | 2026-02-24-01-self-skip-filter-drops-legitimate-messages-design.md | ARCHIVE | Dedup+loop detection (iteration #3) implemented in deleted plan-orchestrator.py; now in langgraph/slack/poller.py |
+| 17 | 2026-02-25-01-langgraph-project-scaffold-design.md | KEEP | Accurately describes current langgraph_pipeline/ package structure (pipeline/, executor/, slack/, shared/); no stale refs |
+| 18 | 2026-02-25-02-extract-shared-modules-design.md | ARCHIVE | Shared modules exist in langgraph_pipeline/shared/; migration from plan-orchestrator.py is complete (script deleted) |
+| 19 | 2026-02-25-1-there-is-a-self-skip-check-that-was-based-on-the-name-of-the-channel--the-idea-design.md | ARCHIVE | Dead code cleanup for plan-orchestrator.py (AGENT_SIGNATURE_PATTERN, is_own_signature); script is deleted entirely |
+| 20 | 2026-02-25-2-insufficient-context--try-again-is-not-an-actionable-defect-request-design.md | ARCHIVE | Feature implemented in langgraph/slack/ (INTAKE_CLARITY_THRESHOLD in suspension.py, MINIMUM_INTAKE_MESSAGE_LENGTH in poller.py); plan-orchestrator.py refs dead |
+| 21 | 2026-02-26-3-there-is-a-self-skip-check-that-was-based-on-the-name-of-the-channel-the-idea-w-design.md | ARCHIVE | Final self-skip simplification for deleted plan-orchestrator.py; superseded by langgraph/slack/poller.py |
+| 22 | 2026-02-26-03-extract-slack-modules-design.md | UPDATE | Module architecture (identity.py, notifier.py, poller.py, suspension.py) is accurate and current; migration steps referencing plan-orchestrator.py line numbers are dead — remove migration section |
+| 23 | 2026-02-26-04-pipeline-graph-nodes-design.md | UPDATE | Graph topology accurate but execute_plan.py now uses executor subgraph (not subprocess bridge to plan-orchestrator.py as doc states) — update execute_plan description |
+| 24 | 2026-02-26-1-cpo-pipeline-feature-request-improve-verbose-mode-logging-for-inbound-slack-me-design.md | ARCHIVE | Second version of verbose logging design for deleted plan-orchestrator.py; superseded by langgraph/slack/ migration |
+| 25 | 2026-02-26-05-task-execution-subgraph-design.md | KEEP | Accurately describes current langgraph_pipeline/executor/ subgraph (state.py, edges.py, escalation.py, circuit_breaker.py, nodes/); plan-orchestrator.py ref is historical context only |
+| 26 | 2026-02-26-06-langsmith-observability-design.md | KEEP | Accurately describes current LangSmith integration in langgraph_pipeline/shared/langsmith.py; no stale refs |
+| 27 | 2026-02-26-17-read-only-analysis-task-workflow-design.md | ARCHIVE | Third version of analysis workflow design; feature implemented; plan-orchestrator.py refs dead (SLACK_CHANNEL_ROLE_SUFFIXES) |
+| 28 | 2026-02-26-20-unified-langgraph-runner-design.md | UPDATE | run-pipeline.py and cli.py architecture accurate; "Unchanged Files" section lists plan-orchestrator.py as unchanged but it is deleted — remove that ref |
+| 29 | 2026-02-26-21-main-module-entry-point-design.md | KEEP | Accurately describes current langgraph_pipeline/__main__.py and cli.py entry point structure; no stale refs |
+
+### Batch 2 Summary
+
+| Classification | Count |
+|---------------|-------|
+| KEEP | 4 |
+| UPDATE | 3 |
+| ARCHIVE | 22 |
+| DELETE | 0 |
+| **Total** | **29** |
+
+### Batch 2 UPDATE Details
+
+Documents classified as UPDATE require the following corrections:
+
+| Doc | Required Updates |
+|-----|-----------------|
+| 2026-02-26-03-extract-slack-modules | Remove migration steps referencing plan-orchestrator.py line numbers (lines 3623-5655, 1559, etc.); the module architecture section is current and accurate |
+| 2026-02-26-04-pipeline-graph-nodes | Update execute_plan.py description from "Subprocess bridge to plan-orchestrator.py" to "Invokes executor subgraph in-process"; remove plan-orchestrator.py subprocess bridge references |
+| 2026-02-26-20-unified-langgraph-runner | Remove plan-orchestrator.py from "Unchanged Files" section (script is deleted); update comment to reflect plan-orchestrator.py is fully replaced by langgraph pipeline |
+
+---
+
+*Batch 3 and 4 will be appended by subsequent audit tasks.*
