@@ -194,7 +194,9 @@ details[open] > summary::before { content: "▼"; }
     cursor: pointer;
 }
 .grandchild-toggle summary::-webkit-details-marker { display: none; }
+.grandchild-toggle summary::marker { display: none; }
 .grandchild-toggle summary::before { content: "▶ "; font-size: 9px; color: #aaa; }
+.grandchild-toggle[open] > summary::before { content: "▼ "; }
 
 .row-details pre {
     margin: 8px 0 0;
