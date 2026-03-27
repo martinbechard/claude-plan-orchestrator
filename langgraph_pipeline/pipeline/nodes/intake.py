@@ -341,7 +341,9 @@ def _validate_design(design_doc_path: str, item_path: str) -> tuple[bool, str]:
     if not item_content:
         return False, "Could not read item file"
     prompt = VALIDATE_DESIGN_PROMPT.format(design_content=design_content, item_content=item_content)
-    output, _cost, _ = _call_llm(prompt, model=DESIGN_VALIDATOR_MODEL, timeout=DESIGN_VALIDATOR_TIMEOUT_SECONDS)
+    output, _cost, failure_reason = _call_llm(prompt, model=DESIGN_VALIDATOR_MODEL, timeout=DESIGN_VALIDATOR_TIMEOUT_SECONDS)
+    if failure_reason:
+        return False, failure_reason
     valid = output.strip().upper().startswith("VALID")
     reason = output.strip().split("\n", 1)[1].strip() if "\n" in output.strip() else ""
     return valid, reason
@@ -353,8 +355,19 @@ def _has_acceptance_checklist(design_doc_path: str) -> bool:
     if not content:
         return False
     prompt = CHECK_HAS_ACCEPTANCE_CHECKLIST_PROMPT.format(design_content=content)
-    output, _cost, _ = _call_llm(prompt, timeout=30)
+    output, _cost, failure_reason = _call_llm(prompt, timeout=30)
+    if failure_reason:
+        return False  # Safe default: assume checklist not present
     return output.strip().upper().startswith("YES")
+
+
+def _report_intake_error(msg: str) -> None:
+    """Report an intake error to the dashboard error stream if available."""
+    try:
+        from langgraph_pipeline.web.dashboard_state import get_dashboard_state
+        get_dashboard_state().add_error(msg)
+    except Exception:
+        pass
 
 
 def _save_subprocess_output(slug: str, phase: str, stdout: str, stderr: str, exit_code: int) -> None:
@@ -398,14 +411,26 @@ def _append_analysis_to_item(item_path: str, analysis_text: str) -> None:
         logger.warning("Failed to append analysis to %s: %s", item_path, exc)
 
 
-def _run_five_whys_analysis(item_path: str, item_type: str = "analysis") -> dict[str, str | int | float]:
-    """Spawn Claude to run a 5-Whys analysis on any backlog item."""
+def _run_five_whys_analysis(item_path: str, item_type: str = "analysis") -> dict[str, str | int | float | bool]:
+    """Spawn Claude to run a 5-Whys analysis on any backlog item.
+
+    Returns a dict with a "failed" key (bool). When failed=True, raw_output is
+    empty and failure_reason contains the error description. Callers must check
+    "failed" before treating raw_output as valid analysis.
+    """
     content = _read_file_content(item_path)
     prompt = FIVE_WHYS_PROMPT.format(item_content=content, item_type=item_type)
-    output, cost, _ = _call_llm(prompt)
+    output, cost, failure_reason = _call_llm(prompt)
+    if failure_reason:
+        return {
+            "failed": True,
+            "failure_reason": failure_reason,
+            "clarity": INTAKE_CLARITY_THRESHOLD,
+            "raw_output": "",
+            "total_cost_usd": 0.0,
+        }
     clarity = _parse_clarity_score(output)
-
-    return {"clarity": clarity, "raw_output": output, "total_cost_usd": cost}
+    return {"failed": False, "failure_reason": "", "clarity": clarity, "raw_output": output, "total_cost_usd": cost}
 
 
 # ─── Node ─────────────────────────────────────────────────────────────────────
@@ -462,8 +487,13 @@ def intake_analyze(state: PipelineState) -> dict:
     if item_type == "defect" and item_path:
         # Step 1: Verify symptoms are still reproducible.
         result = _verify_defect_symptoms(item_path)
-        if detect_quota_exhaustion(str(result["raw_output"])):
+        symptom_check = str(result["raw_output"]) or str(result.get("failure_reason", ""))
+        if detect_quota_exhaustion(symptom_check):
             return {"quota_exhausted": True}
+        if result.get("failed"):
+            _report_intake_error(
+                f"[INTAKE] defect symptom check failed for {item_slug}: {result.get('failure_reason', '')}"
+            )
         clarity = result["clarity"]
         reproducible = result["reproducible"]
         total_cost_usd = float(result.get("total_cost_usd", 0.0))
@@ -481,10 +511,16 @@ def intake_analyze(state: PipelineState) -> dict:
         # Step 2: 5 Whys to understand root cause before planning (skip if already present).
         if not _has_five_whys(item_path):
             whys_result = _run_five_whys_analysis(item_path, item_type="defect")
-            if detect_quota_exhaustion(str(whys_result["raw_output"])):
+            whys_check = str(whys_result["raw_output"]) or str(whys_result.get("failure_reason", ""))
+            if detect_quota_exhaustion(whys_check):
                 return {"quota_exhausted": True}
-            total_cost_usd += float(whys_result.get("total_cost_usd", 0.0))
-            _append_analysis_to_item(item_path, whys_result["raw_output"])
+            if whys_result.get("failed"):
+                _report_intake_error(
+                    f"[INTAKE] 5 Whys analysis failed for {item_slug}: {whys_result.get('failure_reason', '')}"
+                )
+            else:
+                total_cost_usd += float(whys_result.get("total_cost_usd", 0.0))
+                _append_analysis_to_item(item_path, whys_result["raw_output"])
         else:
             logger.info("5 Whys already present for defect: %s", item_slug)
 
@@ -504,14 +540,20 @@ def intake_analyze(state: PipelineState) -> dict:
         # 5 Whys to understand the root need (skip if already present).
         if not _has_five_whys(item_path):
             result = _run_five_whys_analysis(item_path, item_type="feature")
-            if detect_quota_exhaustion(str(result["raw_output"])):
+            whys_check = str(result["raw_output"]) or str(result.get("failure_reason", ""))
+            if detect_quota_exhaustion(whys_check):
                 return {"quota_exhausted": True}
-            clarity = result["clarity"]
-            total_cost_usd = float(result.get("total_cost_usd", 0.0))
-            _append_analysis_to_item(item_path, result["raw_output"])
+            if result.get("failed"):
+                _report_intake_error(
+                    f"[INTAKE] 5 Whys analysis failed for {item_slug}: {result.get('failure_reason', '')}"
+                )
+            else:
+                clarity = result["clarity"]
+                total_cost_usd = float(result.get("total_cost_usd", 0.0))
+                _append_analysis_to_item(item_path, result["raw_output"])
 
-            if clarity < INTAKE_CLARITY_THRESHOLD:
-                logger.info("Low clarity score %d for feature: %s", clarity, item_slug)
+                if clarity < INTAKE_CLARITY_THRESHOLD:
+                    logger.info("Low clarity score %d for feature: %s", clarity, item_slug)
         else:
             logger.info("5 Whys already present for feature: %s", item_slug)
 
@@ -530,14 +572,20 @@ def intake_analyze(state: PipelineState) -> dict:
     elif item_type == "analysis" and item_path:
         if not _has_five_whys(item_path):
             result = _run_five_whys_analysis(item_path, item_type="analysis")
-            if detect_quota_exhaustion(str(result["raw_output"])):
+            whys_check = str(result["raw_output"]) or str(result.get("failure_reason", ""))
+            if detect_quota_exhaustion(whys_check):
                 return {"quota_exhausted": True}
-            clarity = result["clarity"]
-            total_cost_usd = float(result.get("total_cost_usd", 0.0))
-            _append_analysis_to_item(item_path, result["raw_output"])
+            if result.get("failed"):
+                _report_intake_error(
+                    f"[INTAKE] 5 Whys analysis failed for {item_slug}: {result.get('failure_reason', '')}"
+                )
+            else:
+                clarity = result["clarity"]
+                total_cost_usd = float(result.get("total_cost_usd", 0.0))
+                _append_analysis_to_item(item_path, result["raw_output"])
 
-            if clarity < INTAKE_CLARITY_THRESHOLD:
-                logger.info("Low clarity score %d for analysis: %s", clarity, item_slug)
+                if clarity < INTAKE_CLARITY_THRESHOLD:
+                    logger.info("Low clarity score %d for analysis: %s", clarity, item_slug)
         else:
             logger.info("5 Whys already present for analysis: %s", item_slug)
 

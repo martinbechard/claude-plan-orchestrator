@@ -23,6 +23,7 @@ from langgraph_pipeline.pipeline.nodes.intake import (
     _parse_timestamp,
     _read_throttle,
     _record_intake,
+    _report_intake_error,
     _run_five_whys_analysis,
     _verify_defect_symptoms,
     _write_throttle,
@@ -306,6 +307,50 @@ class TestRunFiveWhysAnalysis:
             result = _run_five_whys_analysis(str(item))
         assert result["clarity"] == 2
 
+    def test_returns_failed_true_on_llm_failure(self, tmp_path):
+        item = tmp_path / "01-analysis.md"
+        item.write_text("")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
+            return_value=("", 0.0, "claude timed out after 120s"),
+        ):
+            result = _run_five_whys_analysis(str(item))
+        assert result["failed"] is True
+        assert "timed out" in result["failure_reason"]
+        assert result["raw_output"] == ""
+
+    def test_returns_failed_false_on_success(self, tmp_path):
+        item = tmp_path / "01-analysis.md"
+        item.write_text("")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
+            return_value=("Title: X\nClarity: 4", 0.01, ""),
+        ):
+            result = _run_five_whys_analysis(str(item))
+        assert result["failed"] is False
+        assert result["failure_reason"] == ""
+
+
+# ─── _report_intake_error ────────────────────────────────────────────────────
+
+
+class TestReportIntakeError:
+    def test_calls_add_error_when_dashboard_available(self):
+        mock_state = MagicMock()
+        with patch(
+            "langgraph_pipeline.web.dashboard_state.get_dashboard_state",
+            return_value=mock_state,
+        ):
+            _report_intake_error("test error message")
+        mock_state.add_error.assert_called_once_with("test error message")
+
+    def test_does_not_raise_when_dashboard_unavailable(self):
+        with patch(
+            "langgraph_pipeline.web.dashboard_state.get_dashboard_state",
+            side_effect=RuntimeError("dashboard unavailable"),
+        ):
+            _report_intake_error("test error")  # Must not raise
+
 
 # ─── intake_analyze (node) ────────────────────────────────────────────────────
 
@@ -409,6 +454,107 @@ class TestIntakeAnalyzeNode:
         data = json.loads(path.read_text())
         assert "feature" in data
         assert len(data["feature"]) == 1
+
+
+# ─── intake_analyze: LLM failure → add_error ─────────────────────────────────
+
+
+class TestIntakeAnalyzeLlmFailure:
+    def test_defect_symptom_failure_calls_add_error(self, tmp_path, monkeypatch):
+        """When _verify_defect_symptoms fails, add_error is called with the failure reason."""
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+        item = tmp_path / "01-bug.md"
+        item.write_text("## Defect\nSome symptom.\n")
+        state = _make_state(item_path=str(item), item_type="defect", item_slug="01-bug")
+        mock_state = MagicMock()
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._verify_defect_symptoms",
+            return_value={"failed": True, "failure_reason": "timed out", "reproducible": "unclear", "clarity": INTAKE_CLARITY_THRESHOLD, "raw_output": "", "total_cost_usd": 0.0},
+        ), patch(
+            "langgraph_pipeline.web.dashboard_state.get_dashboard_state",
+            return_value=mock_state,
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake.detect_quota_exhaustion",
+            return_value=False,
+        ):
+            intake_analyze(state)
+        mock_state.add_error.assert_called()
+        # Find the call with the symptom check error message
+        all_error_msgs = [call[0][0] for call in mock_state.add_error.call_args_list]
+        assert any("defect symptom check failed" in msg and "01-bug" in msg for msg in all_error_msgs)
+
+    def test_five_whys_failure_calls_add_error_for_feature(self, tmp_path, monkeypatch):
+        """When 5 Whys analysis fails for a feature, add_error is called."""
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+        item = tmp_path / "01-feature.md"
+        item.write_text("Some feature request")
+        state = _make_state(item_path=str(item), item_type="feature", item_slug="01-feature")
+        mock_state = MagicMock()
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
+            return_value=("NO", 0.0, ""),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
+            return_value={"failed": True, "failure_reason": "timed out", "raw_output": "", "clarity": INTAKE_CLARITY_THRESHOLD, "total_cost_usd": 0.0},
+        ), patch(
+            "langgraph_pipeline.web.dashboard_state.get_dashboard_state",
+            return_value=mock_state,
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake.detect_quota_exhaustion",
+            return_value=False,
+        ):
+            intake_analyze(state)
+        mock_state.add_error.assert_called()
+        error_msg = mock_state.add_error.call_args[0][0]
+        assert "5 Whys analysis failed" in error_msg
+
+    def test_five_whys_failure_does_not_append_to_item(self, tmp_path, monkeypatch):
+        """When 5 Whys fails, nothing is appended to the backlog item."""
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+        item = tmp_path / "01-feature.md"
+        item.write_text("Some feature request")
+        original_content = item.read_text()
+        state = _make_state(item_path=str(item), item_type="feature")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
+            return_value=("NO", 0.0, ""),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
+            return_value={"failed": True, "failure_reason": "timed out", "raw_output": "", "clarity": INTAKE_CLARITY_THRESHOLD, "total_cost_usd": 0.0},
+        ), patch(
+            "langgraph_pipeline.web.dashboard_state.get_dashboard_state",
+            return_value=MagicMock(),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake.detect_quota_exhaustion",
+            return_value=False,
+        ):
+            intake_analyze(state)
+        # Item file must not be modified when analysis failed
+        assert item.read_text() == original_content
+
+    def test_quota_detection_uses_failure_reason_when_output_empty(self, tmp_path, monkeypatch):
+        """Quota exhaustion in failure_reason triggers quota_exhausted state."""
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+        item = tmp_path / "01-feature.md"
+        item.write_text("Some feature request")
+        state = _make_state(item_path=str(item), item_type="feature")
+        quota_text = "You've hit your limit"
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
+            return_value=("NO", 0.0, ""),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
+            return_value={"failed": True, "failure_reason": quota_text, "raw_output": "", "clarity": INTAKE_CLARITY_THRESHOLD, "total_cost_usd": 0.0},
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake.detect_quota_exhaustion",
+            side_effect=lambda text: quota_text in text,
+        ):
+            result = intake_analyze(state)
+        assert result == {"quota_exhausted": True}
 
 
 # ─── intake_analyze quota detection ──────────────────────────────────────────
