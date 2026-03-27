@@ -6,6 +6,7 @@
 # yaml rescue test
 # tmp plans test
 # live stats test
+# final stats test
 
 """Centralized path constants for the pipeline and orchestrator scripts."""
 
