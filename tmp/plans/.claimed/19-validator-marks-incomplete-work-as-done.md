@@ -66,3 +66,5 @@ The validator should:
 
 2. Consider adding a two-stage validation: code review (can be done offline)
    and runtime verification (requires running server + real data flow).
+
+## LangSmith Trace: 5d56b733-e056-4df5-b175-c8907c11972d
