@@ -1,5 +1,5 @@
 meta:
-  source_item: "tmp/plans/.claimed/03-dashboard-items-stuck-running.md"
+  source_item: tmp/plans/.claimed/03-dashboard-items-stuck-running.md
   validation:
     enabled: true
     run_after:
@@ -17,5 +17,8 @@ sections:
   - id: '1.1'
     name: Validate existing fix and address any gaps
     agent: coder
-    status: pending
-    description: "Implement the work item: tmp/plans/.claimed/03-dashboard-items-stuck-running.md"
+    status: in_progress
+    description: 'Implement the work item: tmp/plans/.claimed/03-dashboard-items-stuck-running.md'
+    last_attempt: '2026-03-27T13:53:42.652326'
+    attempts: 1
+    model_used: sonnet

@@ -1,21 +1,24 @@
 meta:
-  source_item: "tmp/plans/.claimed/05-traces-trace-id-column-and-filter.md"
+  source_item: tmp/plans/.claimed/05-traces-trace-id-column-and-filter.md
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
 sections:
-  - id: '1'
-    name: Validate and fix trace_id column and filter
-    status: pending
-    tasks:
-      - id: '1.1'
-        name: Validate existing trace_id implementation and fix any gaps
-        agent: coder
-        status: pending
-        description: "Implement the work item: tmp/plans/.claimed/05-traces-trace-id-column-and-filter.md"
+- id: '1'
+  name: Validate and fix trace_id column and filter
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Validate existing trace_id implementation and fix any gaps
+    agent: coder
+    status: in_progress
+    description: 'Implement the work item: tmp/plans/.claimed/05-traces-trace-id-column-and-filter.md'
+    last_attempt: '2026-03-27T13:53:58.101353'
+    attempts: 1
+    model_used: sonnet
