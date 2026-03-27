@@ -71,6 +71,7 @@ class PipelineState(TypedDict):
     session_input_tokens: int
     session_output_tokens: int
     last_validation_verdict: Optional[str]
+    verification_notes: Optional[str]  # compact JSON {verdict, findings[], evidence} from last validation
 
     # ── In-graph intake counters (separate from disk-persisted throttle) ──────
     intake_count_defects: int

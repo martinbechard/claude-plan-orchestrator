@@ -378,6 +378,7 @@ def _reap_one_worker(
     success: bool = result.get("success", False)
     message: str = result.get("message", "")
     item_path: str = result.get("item_path", claimed_path)
+    verification_notes: Optional[str] = result.get("verification_notes")
 
     cumulative_cost_usd[0] += cost_usd
 
@@ -397,6 +398,7 @@ def _reap_one_worker(
             proxy.record_completion(
                 item_slug, item_type, "success", cost_usd, duration_s,
                 run_id=run_id, tokens_per_minute=final_velocity,
+                verification_notes=verification_notes,
             )
         # Reset warn counter on success.
         if warn_counts is not None:
@@ -422,6 +424,7 @@ def _reap_one_worker(
             proxy.record_completion(
                 item_slug, item_type, "warn", cost_usd, duration_s,
                 run_id=run_id, tokens_per_minute=final_velocity,
+                verification_notes=verification_notes,
             )
 
         if current_warns >= MAX_WARN_RETRIES_PER_ITEM:

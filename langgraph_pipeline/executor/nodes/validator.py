@@ -41,6 +41,7 @@ DEFAULT_BUILD_COMMAND = "pnpm run build"
 DEFAULT_TEST_COMMAND = "pnpm test"
 STRIPPED_ENV_VAR = "CLAUDECODE"       # removed so Claude can spawn from Claude Code
 COST_API_TIMEOUT_S = 10               # timeout for POST /api/cost
+EVIDENCE_MAX_CHARS = 4000             # truncation limit for evidence stored in completions
 
 # Maps ModelTier literals to full Claude CLI model identifiers
 MODEL_TIER_TO_CLI_NAME: dict[str, str] = {
@@ -131,10 +132,19 @@ def _build_validator_prompt(
         '  "verdict": "PASS",\n'
         '  "status": "completed",\n'
         '  "message": "Brief summary of findings",\n'
+        '  "findings": [\n'
+        '    "[PASS] Build succeeded",\n'
+        '    "[PASS] Tests: 42 passed",\n'
+        '    "[WARN] Missing type annotation at foo.py:42"\n'
+        '  ],\n'
+        '  "evidence": "$ pnpm build\\n> exit 0\\n...",\n'
         '  "requirements_checked": 5,\n'
         '  "requirements_met": 5\n'
         "}\n"
         "```\n\n"
+        "The `findings` array MUST be included: one entry per check, prefixed with "
+        "[PASS], [WARN], or [FAIL]. "
+        "The `evidence` field MUST be included: key command output or code references. "
         "The `requirements_checked` and `requirements_met` fields are optional but "
         "recommended when you can count discrete acceptance criteria.\n\n"
         "IMPORTANT: You MUST write the status file before finishing.\n"
@@ -387,6 +397,25 @@ def _parse_verdict(status_dict: Optional[dict], cli_success: bool) -> Validation
     return "FAIL"
 
 
+# ─── Verification Notes ───────────────────────────────────────────────────────
+
+
+def _build_verification_notes(verdict: str, status_dict: Optional[dict]) -> Optional[str]:
+    """Build a compact JSON string with verdict, findings, and evidence for DB storage.
+
+    Returns None when status_dict is absent (validator failed to write a status file).
+    Evidence is truncated to EVIDENCE_MAX_CHARS to keep the DB lean.
+    """
+    if status_dict is None:
+        return None
+    findings = status_dict.get("findings") or []
+    evidence = str(status_dict.get("evidence") or "")
+    if len(evidence) > EVIDENCE_MAX_CHARS:
+        evidence = evidence[:EVIDENCE_MAX_CHARS]
+    notes: dict = {"verdict": verdict, "findings": findings, "evidence": evidence}
+    return json.dumps(notes, separators=(",", ":"))
+
+
 # ─── Node ─────────────────────────────────────────────────────────────────────
 
 
@@ -495,6 +524,7 @@ def validate_task(state: TaskState) -> dict:
     # Save validation results to per-item output for the work item page
     _save_validation_result(plan_data, task_id, verdict, status_dict)
 
+    verification_notes = _build_verification_notes(verdict, status_dict)
     new_task_attempt = task_attempt + 1 if verdict == "FAIL" else task_attempt
     _save_plan_yaml(plan_path, plan_data)
 
@@ -535,6 +565,7 @@ def validate_task(state: TaskState) -> dict:
 
     return {
         "last_validation_verdict": verdict,
+        "plan_verification_notes": verification_notes,
         "plan_data": plan_data,
         "task_attempt": new_task_attempt,
         "plan_cost_usd": (state.get("plan_cost_usd") or 0.0) + cost_usd,

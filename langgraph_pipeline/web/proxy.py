@@ -131,23 +131,6 @@ SELECT
 FROM traces t JOIN subtree s ON t.run_id = s.run_id
 """
 
-# Recursive CTE fragment: computes inclusive cost (run + all descendants) for a given run_id.
-# Bind parameter :anchor_id must be set to the run_id of the row being computed.
-_INCLUSIVE_COST_CTE = """
-    WITH RECURSIVE subtree(run_id, total_cost_usd) AS (
-        SELECT run_id,
-               COALESCE(json_extract(metadata_json, '$.total_cost_usd'), 0.0)
-        FROM traces
-        WHERE run_id = :anchor_id
-        UNION ALL
-        SELECT t.run_id,
-               COALESCE(json_extract(t.metadata_json, '$.total_cost_usd'), 0.0)
-        FROM traces t
-        JOIN subtree s ON t.parent_run_id = s.run_id
-    )
-    SELECT COALESCE(SUM(total_cost_usd), 0.0) FROM subtree
-"""
-
 
 # ─── Cost Data Types ──────────────────────────────────────────────────────────
 
@@ -1035,8 +1018,13 @@ class TracingProxy:
     ) -> tuple[list[CostRun], int]:
         """Return a paginated list of cost-bearing trace runs with inclusive cost.
 
-        Inclusive cost is computed via a correlated sub-query containing a recursive
-        CTE that sums total_cost_usd across the run and all its descendants.
+        Uses a two-pass strategy to avoid N correlated recursive CTEs:
+        1. Pre-filter pass: retrieves page rows without any recursive CTE, ordering
+           by exclusive_cost_usd (or created_at).  For inclusive_desc the pre-filter
+           uses exclusive cost as a proxy; the page is re-sorted in Python after
+           enrichment.
+        2. Enrichment pass: computes inclusive_cost_usd for the page run_ids via a
+           single multi-anchor recursive CTE (_compute_inclusive_costs).
 
         Args:
             page: 1-based page number.
@@ -1052,10 +1040,18 @@ class TracingProxy:
         """
         conditions, params = self._cost_run_filters(slug, item_type, date_from, date_to)
         where = " AND ".join(conditions) if conditions else "1"
-        order_by = self._cost_run_order_by(sort)
         offset = (page - 1) * page_size
 
-        sql = f"""
+        # For inclusive_desc the pre-filter approximates with exclusive cost;
+        # the page is re-sorted by inclusive cost after enrichment.
+        pre_filter_order_map = {
+            COST_SORT_INCLUSIVE_DESC: "exclusive_cost_usd DESC",
+            COST_SORT_EXCLUSIVE_DESC: "exclusive_cost_usd DESC",
+            COST_SORT_DATE_DESC: "created_at DESC",
+        }
+        pre_filter_order = pre_filter_order_map.get(sort, "exclusive_cost_usd DESC")
+
+        pre_filter_sql = f"""
             SELECT
                 run_id,
                 name,
@@ -1063,40 +1059,31 @@ class TracingProxy:
                 COALESCE(json_extract(metadata_json, '$.item_slug'), '') AS item_slug,
                 COALESCE(json_extract(metadata_json, '$.item_type'), '') AS item_type,
                 COALESCE(json_extract(metadata_json, '$.total_cost_usd'), 0.0) AS exclusive_cost_usd,
-                (
-                    WITH RECURSIVE subtree(rid, cost) AS (
-                        SELECT run_id,
-                               COALESCE(json_extract(metadata_json, '$.total_cost_usd'), 0.0)
-                        FROM traces AS inner_t
-                        WHERE inner_t.run_id = traces.run_id
-                        UNION ALL
-                        SELECT t2.run_id,
-                               COALESCE(json_extract(t2.metadata_json, '$.total_cost_usd'), 0.0)
-                        FROM traces AS t2
-                        JOIN subtree ON t2.parent_run_id = subtree.rid
-                    )
-                    SELECT COALESCE(SUM(cost), 0.0) FROM subtree
-                ) AS inclusive_cost_usd,
                 COALESCE(json_extract(metadata_json, '$.input_tokens'), 0) AS input_tokens,
                 COALESCE(json_extract(metadata_json, '$.output_tokens'), 0) AS output_tokens,
                 COALESCE(json_extract(metadata_json, '$.duration_ms'), 0) AS duration_ms,
                 created_at
             FROM traces
             WHERE {where}
-            ORDER BY {order_by}
+            ORDER BY {pre_filter_order}
             LIMIT ? OFFSET ?
         """
 
-        count_sql = f"""
-            SELECT COUNT(*) FROM traces WHERE {where}
-        """
+        count_sql = f"SELECT COUNT(*) FROM traces WHERE {where}"
 
         count_params = list(params)
-        params.extend([page_size, offset])
+        pre_filter_params = list(params) + [page_size, offset]
 
         with self._connect() as conn:
-            rows = conn.execute(sql, params).fetchall()
+            rows = conn.execute(pre_filter_sql, pre_filter_params).fetchall()
             total = conn.execute(count_sql, count_params).fetchone()[0]
+
+        if not rows:
+            return [], total
+
+        # Pass 2: enrich the page with inclusive costs via a single multi-anchor CTE.
+        run_ids = [row["run_id"] for row in rows]
+        inclusive_costs = self._compute_inclusive_costs(run_ids)
 
         cost_runs = [
             CostRun(
@@ -1106,7 +1093,7 @@ class TracingProxy:
                 item_slug=row["item_slug"] or "",
                 item_type=row["item_type"] or "",
                 exclusive_cost_usd=float(row["exclusive_cost_usd"]),
-                inclusive_cost_usd=float(row["inclusive_cost_usd"]),
+                inclusive_cost_usd=inclusive_costs.get(row["run_id"], 0.0),
                 input_tokens=int(row["input_tokens"]),
                 output_tokens=int(row["output_tokens"]),
                 duration_ms=int(row["duration_ms"]),
@@ -1114,7 +1101,48 @@ class TracingProxy:
             )
             for row in rows
         ]
+
+        # Re-sort the page by inclusive cost when that ordering was requested.
+        if sort == COST_SORT_INCLUSIVE_DESC:
+            cost_runs.sort(key=lambda r: r.inclusive_cost_usd, reverse=True)
+
         return cost_runs, total
+
+    def _compute_inclusive_costs(self, run_ids: list[str]) -> dict[str, float]:
+        """Compute inclusive cost (run + all descendants) for a set of run_ids.
+
+        Uses a single multi-anchor recursive CTE so all run_ids are processed
+        in one query rather than one CTE per row.
+
+        Args:
+            run_ids: The run_ids to compute inclusive costs for.
+
+        Returns:
+            Dict mapping run_id to inclusive_cost_usd.  Missing entries default to 0.0.
+        """
+        if not run_ids:
+            return {}
+
+        placeholders = ",".join("?" * len(run_ids))
+        sql = f"""
+            WITH RECURSIVE subtree(root_id, run_id, cost) AS (
+                SELECT run_id, run_id,
+                       COALESCE(json_extract(metadata_json, '$.total_cost_usd'), 0.0)
+                FROM traces
+                WHERE run_id IN ({placeholders})
+                UNION ALL
+                SELECT s.root_id, t.run_id,
+                       COALESCE(json_extract(t.metadata_json, '$.total_cost_usd'), 0.0)
+                FROM traces t
+                JOIN subtree s ON t.parent_run_id = s.run_id
+            )
+            SELECT root_id, COALESCE(SUM(cost), 0.0) AS inclusive_cost_usd
+            FROM subtree
+            GROUP BY root_id
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql, run_ids).fetchall()
+        return {row["root_id"]: float(row["inclusive_cost_usd"]) for row in rows}
 
     def get_cost_by_slug(self) -> list[SlugCost]:
         """Return cost aggregated by work-item slug, ordered by total cost descending.
@@ -1343,22 +1371,6 @@ class TracingProxy:
                 result[slug] = []
             result[slug].append(run)
         return result
-
-    def _cost_run_order_by(self, sort: str) -> str:
-        """Map a sort constant to a SQL ORDER BY clause for list_cost_runs.
-
-        Args:
-            sort: One of the COST_SORT_* constants.
-
-        Returns:
-            SQL ORDER BY fragment (without the ORDER BY keyword).
-        """
-        order_map = {
-            COST_SORT_INCLUSIVE_DESC: "inclusive_cost_usd DESC",
-            COST_SORT_EXCLUSIVE_DESC: "exclusive_cost_usd DESC",
-            COST_SORT_DATE_DESC: "created_at DESC",
-        }
-        return order_map.get(sort, "inclusive_cost_usd DESC")
 
 
 # ─── Module-Level Singleton ────────────────────────────────────────────────────

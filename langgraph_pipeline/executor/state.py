@@ -71,6 +71,7 @@ class TaskState(TypedDict):
 
     # ── Validation tracking ───────────────────────────────────────────────────
     last_validation_verdict: Optional[ValidationVerdict]  # set by validate_task node
+    plan_verification_notes: Optional[str]  # compact JSON {verdict, findings[], evidence} from validator
 
     # ── Quota exhaustion flag ─────────────────────────────────────────────────
     quota_exhausted: bool  # True when Claude reports exhaustion with no reset time

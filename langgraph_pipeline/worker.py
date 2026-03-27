@@ -157,6 +157,7 @@ def _write_result(
     output_tokens: int,
     duration_s: float,
     message: str,
+    verification_notes: Optional[str] = None,
 ) -> None:
     """Write the JSON result file read by the supervisor after waitpid().
 
@@ -172,6 +173,7 @@ def _write_result(
         output_tokens: Total output tokens produced.
         duration_s: Wall-clock seconds from start to finish.
         message: Human-readable summary of the outcome.
+        verification_notes: JSON string with verdict, findings[], and evidence from the validator.
     """
     result = {
         "success": success,
@@ -181,6 +183,7 @@ def _write_result(
         "output_tokens": output_tokens,
         "duration_s": duration_s,
         "message": message,
+        "verification_notes": verification_notes,
     }
     try:
         with open(result_file, "w") as f:
@@ -304,6 +307,7 @@ def main() -> int:
             output_tokens=output_tokens,
             duration_s=duration_s,
             message=outcome_message,
+            verification_notes=final_state.get("verification_notes"),
         )
 
         _cleanup_worker_db(db_path)

@@ -65,6 +65,7 @@ def execute_plan(state: PipelineState) -> dict:
         "effective_model": DEFAULT_STARTING_MODEL,
         "consecutive_failures": _INITIAL_FAILURES,
         "last_validation_verdict": None,
+        "plan_verification_notes": None,
         "plan_cost_usd": _INITIAL_COST,
         "plan_input_tokens": _INITIAL_TOKENS,
         "plan_output_tokens": _INITIAL_TOKENS,
@@ -101,4 +102,5 @@ def execute_plan(state: PipelineState) -> dict:
         "session_output_tokens": output_tokens,
         "quota_exhausted": bool(final_task_state.get("quota_exhausted")),
         "last_validation_verdict": final_task_state.get("last_validation_verdict"),
+        "verification_notes": final_task_state.get("plan_verification_notes"),
     }
