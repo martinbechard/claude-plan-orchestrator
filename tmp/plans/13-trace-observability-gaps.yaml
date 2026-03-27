@@ -17,20 +17,23 @@ sections:
   - id: '1.1'
     name: Verify and fix subprocess error and claude_invoked trace metadata
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/13-trace-observability-gaps.md
       -- Focus on Gaps 1 and 5. Verify that execute_task in task_runner.py records
       subprocess_exit_code, subprocess_error, failure_reason, claude_invoked, and
       skip_reason as specified. Fix any discrepancies with the spec. Ensure skip_reason
       is populated when claude_invoked is false. Add or update unit tests.'
+    last_attempt: '2026-03-27T15:07:38.124451'
+    attempts: 1
+    model_used: sonnet
   - id: '1.2'
     name: Verify and fix validator verdict trace metadata
     agent: coder
     status: pending
     description: 'Implement the work item: tmp/plans/.claimed/13-trace-observability-gaps.md
       -- Focus on Gap 2. Verify that validate_task in validator.py records verdict,
-      findings, requirements_checked, and requirements_met as specified. Fix any
-      discrepancies with the spec. Add or update unit tests.'
+      findings, requirements_checked, and requirements_met as specified. Fix any discrepancies
+      with the spec. Add or update unit tests.'
 - id: '2'
   name: Implement pipeline decision and plan state traces (Gaps 3, 4)
   status: pending
@@ -41,10 +44,9 @@ sections:
     status: pending
     description: 'Implement the work item: tmp/plans/.claimed/13-trace-observability-gaps.md
       -- Focus on Gap 3. Add add_trace_metadata() calls to pipeline decision points:
-      verify_result() in pipeline/edges.py (archive/retry decisions),
-      retry_check() in executor/edges.py (pass/fail/retry decisions),
-      and escalation in executor/escalation.py. Record decision, reason,
-      cycle_number, and tasks_completed. Add unit tests.'
+      verify_result() in pipeline/edges.py (archive/retry decisions), retry_check()
+      in executor/edges.py (pass/fail/retry decisions), and escalation in executor/escalation.py.
+      Record decision, reason, cycle_number, and tasks_completed. Add unit tests.'
   - id: '2.2'
     name: Add plan YAML state snapshots to execute_plan traces
     agent: coder
