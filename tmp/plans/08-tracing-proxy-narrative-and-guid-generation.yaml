@@ -1,0 +1,26 @@
+meta:
+  source_item: tmp/plans/.claimed/08-tracing-proxy-narrative-and-guid-generation.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Narrative documentation and SDK investigation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Write narrative document and investigate LangSmith SDK calls
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/08-tracing-proxy-narrative-and-guid-generation.md
+      -- This was previously implemented but the narrative doc is missing. Create
+      docs/narrative/tracing-proxy.md with the content specified in Part 1. Then
+      investigate Part 2: review proxy route registrations to determine which
+      LangSmith SDK calls are intercepted vs. leak to the network, and document
+      findings and GUID recommendation in the narrative doc.'
