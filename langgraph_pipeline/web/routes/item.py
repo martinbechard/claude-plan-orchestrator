@@ -80,6 +80,8 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
     pipeline_stage = _derive_pipeline_stage(slug, completions)
     active_worker = _get_active_worker(slug)
     total_cost_usd = sum(c.get("cost_usd", 0.0) for c in completions)
+    total_duration_s = sum(c.get("duration_s", 0.0) for c in completions)
+    total_tokens = _compute_total_tokens(slug)
     output_files = _list_output_files(slug)
     avg_velocity = _compute_avg_velocity(completions)
     if active_worker and active_worker.get("current_velocity", 0) > 0:
@@ -95,6 +97,8 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
             "pipeline_stage": pipeline_stage,
             "active_worker": active_worker,
             "total_cost_usd": total_cost_usd,
+            "total_duration_s": total_duration_s,
+            "total_tokens": total_tokens,
             "requirements_html": requirements_html,
             "original_request_html": original_request_html,
             "plan_tasks": plan_tasks,
@@ -463,6 +467,25 @@ def _list_output_files(slug: str) -> list[str]:
         (p.name for p in output_dir.iterdir() if p.suffix == ".log"),
         reverse=True,
     )
+
+
+def _compute_total_tokens(slug: str) -> int:
+    """Sum input_tokens + output_tokens from all traces for this slug."""
+    try:
+        from langgraph_pipeline.web.proxy import get_proxy
+        proxy = get_proxy()
+        if proxy is None:
+            return 0
+        with proxy._connect() as conn:
+            row = conn.execute(
+                "SELECT COALESCE(SUM(json_extract(metadata_json, '$.input_tokens')), 0) + "
+                "COALESCE(SUM(json_extract(metadata_json, '$.output_tokens')), 0) as total "
+                "FROM traces WHERE json_extract(metadata_json, '$.item_slug') = ?",
+                [slug],
+            ).fetchone()
+            return int(row[0]) if row else 0
+    except Exception:
+        return 0
 
 
 def _compute_avg_velocity(completions: list[dict]) -> Optional[float]:

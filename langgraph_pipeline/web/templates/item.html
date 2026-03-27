@@ -15,7 +15,7 @@
 {% block title %}{{ slug }} — Plan Orchestrator{% endblock %}
 
 {% block extra_head %}
-{% if active_worker %}
+{% if pipeline_stage != "completed" and pipeline_stage != "unknown" %}
 <meta http-equiv="refresh" content="10">
 {% endif %}
 <style>
@@ -61,12 +61,18 @@
     align-items: center;
 }
 
-.item-header-cost {
+.item-header-stats {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+}
+
+.item-stat {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
     align-items: flex-end;
-    min-width: 110px;
+    min-width: 80px;
 }
 
 .item-cost-label {
@@ -660,9 +666,39 @@
       {% endif %}
     </div>
   </div>
-  <div class="item-header-cost" aria-label="Total API cost">
-    <span class="item-cost-label">Total Cost</span>
-    <span class="item-cost-value">${{ "%.4f"|format(total_cost_usd) }}</span>
+  <div class="item-header-stats">
+    <div class="item-stat" aria-label="Total API cost">
+      <span class="item-cost-label">Cost</span>
+      <span class="item-cost-value">${{ "%.4f"|format(total_cost_usd) }}</span>
+    </div>
+    <div class="item-stat" aria-label="Total tokens">
+      <span class="item-cost-label">Tokens</span>
+      <span class="item-cost-value">{{ "{:,}".format(total_tokens) }}</span>
+    </div>
+    <div class="item-stat" aria-label="Total duration">
+      <span class="item-cost-label">Duration</span>
+      <span class="item-cost-value">
+        {%- if total_duration_s >= 3600 -%}
+          {{ (total_duration_s // 3600)|int }}h {{ ((total_duration_s % 3600) // 60)|int }}m
+        {%- elif total_duration_s >= 60 -%}
+          {{ (total_duration_s // 60)|int }}m {{ (total_duration_s % 60)|int }}s
+        {%- else -%}
+          {{ total_duration_s|int }}s
+        {%- endif -%}
+      </span>
+    </div>
+    {% if avg_velocity is not none and avg_velocity is number and avg_velocity > 0 %}
+    <div class="item-stat" aria-label="Average velocity">
+      <span class="item-cost-label">Velocity</span>
+      <span class="item-cost-value">
+        {%- if avg_velocity >= 1000 -%}
+          {{ "%.1fk"|format(avg_velocity / 1000) }} tok/min
+        {%- else -%}
+          {{ avg_velocity|int }} tok/min
+        {%- endif -%}
+      </span>
+    </div>
+    {% endif %}
   </div>
 </div>
 
