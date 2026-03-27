@@ -118,13 +118,11 @@ def _build_planner_command(prompt: str) -> list[str]:
         os.environ.get("ORCHESTRATOR_SANDBOX_ENABLED", "true").lower() != "false"
     )
     cmd = [CLAUDE_BINARY]
+    cmd += ["--dangerously-skip-permissions"]
+    cmd += ["--permission-mode", "acceptEdits"]
     if sandbox_enabled:
         cmd += ["--allowedTools"] + PLANNER_ALLOWED_TOOLS
         cmd += ["--add-dir", os.getcwd()]
-        cmd += ["--permission-mode", "acceptEdits"]
-    else:
-        cmd += ["--dangerously-skip-permissions"]
-        cmd += ["--permission-mode", "acceptEdits"]
     cmd += ["--model", PLANNER_MODEL]
     cmd += ["--output-format", "json"]
     cmd += ["--print", prompt]
@@ -264,27 +262,38 @@ def create_plan(state: PipelineState) -> dict:
     if exit_code != 0:
         is_rate_limited, reset_time = check_rate_limit(stderr)
         if is_rate_limited and reset_time is not None:
-            print(f"[create_plan] Rate limited during plan creation for {item_slug}")
+            logger.warning("Rate limited during plan creation for %s", item_slug)
             return {
                 "rate_limited": True,
                 "rate_limit_reset": reset_time.isoformat(),
             }
 
         if detect_quota_exhaustion(stderr):
-            print(f"[create_plan] Quota exhausted during plan creation for {item_slug}")
+            logger.warning("Quota exhausted during plan creation for %s", item_slug)
             return {"quota_exhausted": True}
 
-        print(
-            f"[create_plan] Plan creation failed for {item_slug} "
-            f"(exit {exit_code}): {stderr[:200]}"
+        logger.warning(
+            "Plan creation failed for %s (exit %d): stderr=%s",
+            item_slug, exit_code, stderr[:500],
         )
         return {}
 
     if not _plan_exists(expected_plan_path):
-        print(f"[create_plan] Plan file not created at: {expected_plan_path}")
+        # Log what the planner DID produce to help diagnose
+        logger.warning(
+            "Plan YAML not created at %s. exit_code=%d cost=$%.4f stdout_len=%d stderr_len=%d",
+            expected_plan_path, exit_code, total_cost_usd, len(stdout), len(stderr),
+        )
+        if stderr:
+            logger.warning("Planner stderr: %s", stderr[:500])
+        # Check if planner wrote it to a different path
+        plan_dir = Path(PLANS_DIR)
+        yamls = list(plan_dir.glob(f"*{item_slug}*.yaml"))
+        if yamls:
+            logger.warning("Found YAML at unexpected path: %s", yamls)
         return {}
 
-    print(f"[create_plan] Plan created: {expected_plan_path}")
+    logger.info("Plan created: %s", expected_plan_path)
 
     # Ensure acceptance criteria from the backlog item are in the design doc.
     # The planner often omits them, so we copy them directly rather than retrying.
