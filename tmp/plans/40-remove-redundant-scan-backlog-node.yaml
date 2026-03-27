@@ -17,5 +17,8 @@ sections:
   - id: '1.1'
     name: Remove scan_backlog from graph and update entry point to intake_analyze
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/40-remove-redundant-scan-backlog-node.md'
+    last_attempt: '2026-03-27T14:42:06.812119'
+    attempts: 1
+    model_used: sonnet
