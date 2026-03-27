@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "item_path": "tmp/plans/.claimed/03-cost-analysis-db-backend.md",
+  "cost_usd": 1.6871404500000002,
+  "input_tokens": 310,
+  "output_tokens": 18753,
+  "duration_s": 702.0739421250182,
+  "message": "Item processed successfully"
+}
