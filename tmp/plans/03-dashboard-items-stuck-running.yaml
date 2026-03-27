@@ -24,6 +24,5 @@ sections:
     model_used: opus
     completed_at: '2026-03-27T10:01:25.026251'
     result_message: 'PASS: All good'
-    validation_attempts: 1
-    validation_findings: 'Validator ''validator'' failed to execute: No status file
-      written by Claude'
+    validation_attempts: 2
+    validation_findings: 'PASS: All good'
