@@ -133,8 +133,9 @@
 .status-claimed   { background: #fef9c3; color: #854d0e; }
 .status-designing { background: #ede9fe; color: #5b21b6; }
 .status-planning  { background: #dbeafe; color: #1d4ed8; }
-.status-executing { background: #ffedd5; color: #c2410c; }
-.status-stuck     { background: #fee2e2; color: #b91c1c; }
+.status-executing  { background: #ffedd5; color: #c2410c; }
+.status-validating { background: #ccfbf1; color: #0f766e; }
+.status-stuck      { background: #fee2e2; color: #b91c1c; }
 
 /* ── Active-worker banner ─────────────────────────────────────────────── */
 .active-worker-banner {
@@ -780,9 +781,9 @@
       {% endif %}
       {% if active_worker %}
         {% if active_worker.current_task %}
-          <span class="badge status-executing"
-                aria-label="Currently executing">{{ active_worker.current_task }}</span>
-        {% elif pipeline_stage == "executing" %}
+          <span class="badge status-{{ pipeline_stage }}"
+                aria-label="Currently {{ pipeline_stage }}">{{ active_worker.current_task }}</span>
+        {% elif pipeline_stage == "executing" or pipeline_stage == "validating" %}
           <span class="badge status-planning"
                 aria-label="Pipeline phase">intake / planning</span>
         {% else %}
@@ -845,7 +846,7 @@
 {% if active_worker %}
 <div class="active-worker-banner" role="status" aria-live="polite"
      aria-label="Active worker running this item">
-  <span class="active-worker-label">Currently running</span>
+  <span class="active-worker-label">{% if pipeline_stage == "validating" %}Validating{% else %}Currently running{% endif %}</span>
   <span class="active-worker-sep" aria-hidden="true">|</span>
   <span>PID {{ active_worker.pid }}</span>
   {% if active_worker.current_task %}

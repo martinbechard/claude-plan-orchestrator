@@ -38,6 +38,7 @@ _CLAIMED_PATH = Path(CLAIMED_DIR)
 _DESIGN_DOCS_DIR = Path("docs/plans")
 
 _STAGE_EXECUTING = "executing"
+_STAGE_VALIDATING = "validating"
 _STAGE_COMPLETED = "completed"
 _STAGE_PLANNING = "planning"
 _STAGE_CLAIMED = "claimed"
@@ -339,6 +340,7 @@ def _load_plan_tasks(slug: str) -> Optional[list[dict]]:
                     "id": task.get("id", ""),
                     "name": task.get("name", ""),
                     "status": task.get("status", "pending"),
+                    "agent": task.get("agent", ""),
                 }
             )
     return tasks if tasks else None
@@ -407,6 +409,28 @@ def _find_design_doc(slug: str) -> Optional[Path]:
     return matches[0] if matches else None
 
 
+def _is_active_task_validation(slug: str) -> bool:
+    """Return True if the current in_progress plan task is a validation task.
+
+    Checks whether the in_progress task's agent is "validator" or the task
+    name contains "validat" (case-insensitive).
+
+    Args:
+        slug: Work item slug.
+
+    Returns:
+        True when the active task is validation, False otherwise.
+    """
+    plan_tasks = _load_plan_tasks(slug)
+    if not plan_tasks:
+        return False
+    for task in plan_tasks:
+        if task.get("status") == "in_progress":
+            if task.get("agent") == "validator" or "validat" in task.get("name", "").lower():
+                return True
+    return False
+
+
 def _derive_pipeline_stage(slug: str, completions: list[dict]) -> str:
     """Derive the current pipeline stage of a work item.
 
@@ -422,12 +446,14 @@ def _derive_pipeline_stage(slug: str, completions: list[dict]) -> str:
         One of "executing", "completed", "planning", "claimed", "designing",
         "queued", "stuck", or "unknown".
     """
-    # 1. Active worker → executing
+    # 1. Active worker → validating or executing
     try:
         from langgraph_pipeline.web.dashboard_state import get_dashboard_state
         state = get_dashboard_state()
         for worker in state.active_workers.values():
             if worker.slug == slug:
+                if _is_active_task_validation(slug):
+                    return _STAGE_VALIDATING
                 return _STAGE_EXECUTING
     except Exception:
         pass

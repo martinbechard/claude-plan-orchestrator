@@ -52,3 +52,29 @@ information is scattered across code comments and tribal knowledge.
   without asking questions? YES = pass, NO = fail
 
 ## LangSmith Trace: 2ff02f69-2cd2-4917-b321-d5142b8ba540
+
+
+## 5 Whys Analysis
+
+Title: New projects lack clear setup documentation for the orchestrator
+Clarity: 4
+
+5 Whys:
+1. Why is there no clear documentation for setting up the orchestrator in new projects?
+   - Because setup information is scattered across code comments and tribal knowledge rather than consolidated in one place.
+
+2. Why is the setup information scattered across the codebase rather than documented?
+   - Because the orchestrator was developed iteratively for the current project, with configuration requirements accumulating in code as needed rather than being systematized upfront.
+
+3. Why wasn't it systematized upfront during development?
+   - Because the orchestrator was built to solve this specific project's needs, and adoption by other projects wasn't an anticipated use case at the start.
+
+4. Why wasn't adoption by other projects considered a priority early on?
+   - Because the project was a greenfield build focused on delivering orchestration capability for one team, not on creating a reusable, documented framework for distribution.
+
+5. Why is documentation now needed to unlock adoption?
+   - Because the orchestrator has proven valuable and other projects want to use it, but they cannot onboard without clear guidance on environment setup, directory structure, and configuration requirements.
+
+Root Need: Enable reliable onboarding of new projects to the orchestrator by consolidating scattered setup knowledge into a single reference guide that eliminates ambiguity and reduces friction during initial configuration.
+
+Summary: The orchestrator lacks adoption documentation because it was built for a single project first; now that other projects want to use it, consolidated setup guidance is needed to unblock their onboarding.
