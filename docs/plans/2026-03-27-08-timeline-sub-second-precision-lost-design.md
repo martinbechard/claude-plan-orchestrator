@@ -4,9 +4,10 @@ Work item: tmp/plans/.claimed/08-timeline-sub-second-precision-lost.md
 
 ## Status
 
-Previous implementation exists and passed validation (2026-03-27). The Python-side
-elapsed time computation and template rendering are in place. The legacy secs() and
-fmt_duration() Jinja2 macros have been removed.
+Previous implementation exists (marked "Review Required"). The Python-side elapsed
+time computation and template rendering are in place. The legacy secs() and
+fmt_duration() Jinja2 macros have been removed. This plan validates the existing
+implementation and fixes any remaining issues.
 
 ## Architecture
 
