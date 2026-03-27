@@ -256,6 +256,10 @@ def create_plan(state: PipelineState) -> dict:
     exit_code, stdout, stderr = _run_subprocess(cmd)
     total_cost_usd = _extract_cost_from_json_output(stdout)
 
+    # Save planner output for post-mortem review
+    from langgraph_pipeline.pipeline.nodes.intake import _save_subprocess_output
+    _save_subprocess_output(item_slug, "planner", stdout, stderr, exit_code)
+
     # Only check stderr for rate limit / quota signals — stdout contains
     # Claude's response which may include those keywords literally (e.g.
     # when the work item discusses rate limit handling).
@@ -286,6 +290,17 @@ def create_plan(state: PipelineState) -> dict:
         )
         if stderr:
             logger.warning("Planner stderr: %s", stderr[:500])
+        # Log permission denials from the JSON output
+        try:
+            result_json = json.loads(stdout)
+            denials = result_json.get("permission_denials", [])
+            if denials:
+                logger.warning("Planner permission denials: %s", json.dumps(denials, indent=2)[:1000])
+            result_text = result_json.get("result", "")
+            if result_text:
+                logger.warning("Planner result text (last 500 chars): %s", result_text[-500:])
+        except (json.JSONDecodeError, TypeError):
+            pass
         # Check if planner wrote it to a different path
         plan_dir = Path(PLANS_DIR)
         yamls = list(plan_dir.glob(f"*{item_slug}*.yaml"))

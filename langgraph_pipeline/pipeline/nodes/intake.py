@@ -213,13 +213,13 @@ def _parse_timestamp(ts: str) -> float:
 # ─── Claude invocation ────────────────────────────────────────────────────────
 
 
-def _invoke_claude(prompt: str, timeout: int = INTAKE_ANALYSIS_TIMEOUT_SECONDS) -> tuple[str, float]:
+def _invoke_claude(prompt: str, timeout: int = INTAKE_ANALYSIS_TIMEOUT_SECONDS,
+                   slug: str = "", phase: str = "intake") -> tuple[str, float]:
     """Invoke Claude CLI with --print and return (text, total_cost_usd).
 
     Uses --output-format json so cost data is available in the response.
-    Returns ("", 0.0) on failure. On non-zero exit code, returns stderr
-    (not stdout) so that quota/rate-limit detection does not false-positive
-    on keywords that appear in Claude's response text.
+    Returns ("", 0.0) on failure. Saves stdout/stderr to the per-item output
+    directory when slug is provided.
     """
     try:
         result = subprocess.run(
@@ -230,14 +230,13 @@ def _invoke_claude(prompt: str, timeout: int = INTAKE_ANALYSIS_TIMEOUT_SECONDS) 
             text=True,
             timeout=timeout,
         )
+        if slug:
+            _save_subprocess_output(slug, phase, result.stdout or "", result.stderr or "", result.returncode)
         if result.returncode == 0 and result.stdout:
             data = json.loads(result.stdout)
             text = data.get("result", "").strip()
             cost = float(data.get("total_cost_usd", 0.0))
             return text, cost
-        # Return stderr on failure — callers check this for quota/rate-limit
-        # signals. Returning stdout here caused false positives when Claude's
-        # response text contained limit-related keywords.
         return result.stderr or "", 0.0
     except (subprocess.TimeoutExpired, OSError, subprocess.SubprocessError, json.JSONDecodeError):
         return "", 0.0
@@ -296,7 +295,8 @@ def _verify_defect_symptoms(item_path: str) -> dict[str, str | int | float]:
     return {"reproducible": reproducible, "clarity": clarity, "raw_output": output, "total_cost_usd": cost}
 
 
-def _invoke_claude_opus(prompt: str, timeout: int = DESIGN_VALIDATOR_TIMEOUT_SECONDS) -> tuple[str, float]:
+def _invoke_claude_opus(prompt: str, timeout: int = DESIGN_VALIDATOR_TIMEOUT_SECONDS,
+                        slug: str = "", phase: str = "opus-validate") -> tuple[str, float]:
     """Invoke Claude CLI with Opus model for quality validation checks."""
     try:
         result = subprocess.run(
@@ -307,6 +307,8 @@ def _invoke_claude_opus(prompt: str, timeout: int = DESIGN_VALIDATOR_TIMEOUT_SEC
             text=True,
             timeout=timeout,
         )
+        if slug:
+            _save_subprocess_output(slug, phase, result.stdout or "", result.stderr or "", result.returncode)
         if result.returncode == 0 and result.stdout:
             data = json.loads(result.stdout)
             text = data.get("result", "").strip()
@@ -362,6 +364,25 @@ def _has_acceptance_checklist(design_doc_path: str) -> bool:
     prompt = CHECK_HAS_ACCEPTANCE_CHECKLIST_PROMPT.format(design_content=content)
     output, _cost = _invoke_claude(prompt, timeout=30)
     return output.strip().upper().startswith("YES")
+
+
+def _save_subprocess_output(slug: str, phase: str, stdout: str, stderr: str, exit_code: int) -> None:
+    """Save subprocess stdout/stderr to the per-item output directory."""
+    try:
+        from langgraph_pipeline.shared.paths import WORKER_OUTPUT_DIR
+        output_dir = WORKER_OUTPUT_DIR / slug
+        output_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
+        log_path = output_dir / f"{phase}-{ts}.log"
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write(f"=== {phase} for {slug} ===\n")
+            f.write(f"Exit code: {exit_code}\n\n")
+            f.write("=== STDOUT ===\n")
+            f.write(stdout or "")
+            f.write("\n=== STDERR ===\n")
+            f.write(stderr or "")
+    except Exception:
+        pass  # Non-fatal
 
 
 def _read_file_content(path: str) -> str:
