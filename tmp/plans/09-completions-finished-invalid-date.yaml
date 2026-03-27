@@ -19,5 +19,12 @@ sections:
   - id: '1.1'
     name: Update fmtFinished to handle ISO 8601 and Unix timestamps
     agent: frontend-coder
-    status: pending
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/09-completions-finished-invalid-date.md'
+    last_attempt: '2026-03-27T01:37:03.316318'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-27T01:37:50.535461'
+    result_message: Fix already implemented in dashboard.js. fmtFinished() uses finishedAtToMs()
+      helper that handles both number (Unix timestamp * 1000) and string (ISO 8601
+      via new Date()) inputs. Acceptance criteria met.
