@@ -100,3 +100,5 @@ actually failed.
 **Root Need:** The system needs structured error propagation with classification — failures must surface through the call stack with enough context for each layer (subprocess → Python → handler → user) to make appropriate decisions and communicate meaningfully with users about why operations failed and what to do next.
 
 **Summary:** Users can't diagnose or respond to analysis failures because error information is lost at multiple boundaries in the system, leaving them with a meaningless fallback message instead of actionable diagnostic feedback.
+
+## LangSmith Trace: 628c070f-26f5-4a5a-973c-9cdaec26209b
