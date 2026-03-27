@@ -1,0 +1,39 @@
+meta:
+  source_item: "tmp/plans/.claimed/54-validator-should-run-e2e-tests-for-ui-criteria.md"
+  validation:
+    enabled: true
+    run_after:
+      - coder
+      - e2e-test-agent
+      - frontend-coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+sections:
+  - id: '1'
+    name: Set up Playwright infrastructure
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: Install Playwright and create configuration
+        agent: coder
+        status: pending
+        description: "Implement the work item: tmp/plans/.claimed/54-validator-should-run-e2e-tests-for-ui-criteria.md -- Section 1: Install Playwright dependencies, create playwright.config.ts pointing at http://localhost:7070, set up tests/e2e/ directory, configure JSON reporter to output to logs/e2e/, and add test:e2e npm scripts."
+  - id: '2'
+    name: Create e2e-test-agent
+    status: pending
+    tasks:
+      - id: '2.1'
+        name: Create the e2e-test-agent definition
+        agent: coder
+        status: pending
+        description: "Implement the work item: tmp/plans/.claimed/54-validator-should-run-e2e-tests-for-ui-criteria.md -- Section 2: Create .claude/agents/e2e-test-agent.md that can write targeted Playwright .spec.ts tests for specific UI acceptance criteria, run them, and report results. Follow existing agent format (YAML frontmatter with name/description/tools/model, markdown body)."
+  - id: '3'
+    name: Update validator to delegate UI criteria to e2e tests
+    status: pending
+    tasks:
+      - id: '3.1'
+        name: Update validator agent to use e2e testing for UI criteria
+        agent: coder
+        status: pending
+        description: "Implement the work item: tmp/plans/.claimed/54-validator-should-run-e2e-tests-for-ui-criteria.md -- Section 3: Update .claude/agents/validator.md Step 3 and Step 5b to detect UI acceptance criteria and create/run Playwright tests instead of just using curl. When a criterion involves user-visible behavior, the validator should write a targeted .spec.ts test, run it via the e2e command, and report PASS/FAIL based on results."
