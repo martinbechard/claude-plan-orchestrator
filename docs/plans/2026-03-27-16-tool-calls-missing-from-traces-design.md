@@ -1,61 +1,55 @@
-# Design: Tool Calls Missing from Traces (#16)
+# Design: Defect 16 - Tool Calls Missing from Traces
 
-## Status: Review Required
+## Status
 
-This defect was previously implemented. The design below documents the
-architecture for verification and any remaining fixes.
+Previously implemented. This plan validates the existing implementation and fixes
+any remaining gaps.
 
 ## Architecture Overview
 
-Tool calls (Read, Edit, Bash, etc.) are stored in the traces DB as children of
-graph node runs (execute_plan, create_plan), making them grandchildren of the
-root run. The trace detail page must fetch and display these grandchildren.
+Tool calls (Read, Edit, Bash, Glob, Grep, Skill, Write) are stored in the traces
+DB as children of graph node runs (execute_plan, create_plan, etc.), making them
+grandchildren of the root run. The original defect was that only direct children
+were fetched, hiding tool calls from the UI.
 
-### Current Implementation
+## Current Implementation
 
-The following components already exist:
+The fix has already been applied across three layers:
 
-1. **Grandchild fetching** (proxy.py route, lines ~213-272):
-   - `count_children_batch(child_ids)` counts grandchildren per child
-   - `get_children_batch(run_ids)` fetches all grandchildren in one query
-   - `grandchildren_by_parent` dict passed to template
+### Backend (proxy.py route)
 
-2. **Timeline SVG rendering** (proxy_trace.html):
-   - Grandchild bars rendered indented under parent nodes (GC_INDENT = 16px)
-   - Connector lines between parent and grandchild bars
-   - Color classification: Tool (cyan), LLM (purple), Other (amber)
-   - Tool name set: Bash, Edit, Write, Read, Glob, Grep, Skill, MultiEdit, NotebookEdit
+- proxy_trace route fetches grandchildren via get_children_batch()
+- Builds grandchildren_by_parent dict mapping parent run_id to enriched tool calls
+- Passes grandchildren_by_parent and grandchild_counts to the template
 
-3. **Expandable detail sections** (proxy_trace.html lines ~319-360):
-   - Details/summary toggles per child showing nested tool calls
-   - Inputs/outputs JSON blocks for each tool call
+### Timeline SVG (proxy_trace.html)
 
-4. **Batch query** (proxy.py TracingProxy):
-   - `get_children_batch()` uses IN clause to avoid N+1 queries
-   - `count_children_batch()` returns count map for UI decisions
+- Total row count includes grandchildren for correct SVG sizing
+- Grandchild bars rendered indented under parent graph nodes
+- Distinct colour coding: Tool (cyan #0891b2), LLM (purple #7c3aed), Other (amber #f59e0b)
+- Connector lines visually link grandchildren to parents
+
+### Detail Section (proxy_trace.html)
+
+- Expandable details/summary sections per parent with tool call count
+- Each tool call shows: name, duration, elapsed offset, error (if any)
+- Collapsible inputs/outputs JSON blocks
 
 ## Key Files
 
-| File | Role |
-|------|------|
-| langgraph_pipeline/web/routes/proxy.py | Route fetching root, children, grandchildren |
-| langgraph_pipeline/web/proxy.py | TracingProxy DB methods (get_children, get_children_batch) |
-| langgraph_pipeline/web/templates/proxy_trace.html | Timeline SVG + expandable detail rendering |
-| tests/langgraph/web/test_proxy.py | Tests for proxy routes and DB methods |
+- langgraph_pipeline/web/routes/proxy.py (proxy_trace route, lines 213-272)
+- langgraph_pipeline/web/proxy.py (get_children, get_children_batch methods)
+- langgraph_pipeline/web/templates/proxy_trace.html (SVG + detail rendering)
 
-## Verification Focus
+## Acceptance Criteria
 
-Since this was previously implemented, the task is to verify:
+Per the backlog item:
 
-1. Grandchildren are actually fetched and passed to the template
-2. Timeline SVG renders tool call bars correctly under parent nodes
-3. Expandable sections show tool call details
-4. Color classification works for all tool types
-5. Edge cases: runs with no grandchildren, runs with many grandchildren
-6. Tests cover grandchild fetching and display
+1. Trace detail page shows tool calls nested under parent graph nodes
+2. Timeline displays tool calls as bars within parent node time span
+3. Tool calls are visually distinguishable (colour coding)
 
-## Design Decisions
+## Validation Approach
 
-- Reuse existing implementation rather than rewrite
-- Fix any gaps found during verification
-- Ensure test coverage for grandchild fetching path
+The coder task will validate the existing implementation against the acceptance
+criteria, run the test suite to confirm no regressions, and fix any issues found.
