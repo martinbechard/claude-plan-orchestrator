@@ -54,13 +54,17 @@ sections:
       params and write per-item output logs via _write_task_log(). Also derives slug
       from plan_path in execute_parallel_task() and passes it through. All 1290 tests
       pass.
+    validation_attempts: 1
+    validation_findings: parallel.py correctly extended to write per-item output files
+      via _write_task_log(). Slug derived from plan_path, task_id passed through.
+      All 1290 tests pass. No placeholders, no test data leaks.
 - id: s2
   name: 'Web UI: expose console output on item detail page'
   tasks:
   - id: '2.1'
     name: Add output file discovery and raw content endpoint to item route
     agent: coder
-    status: pending
+    status: in_progress
     dependencies:
     - '1.1'
     description: 'Implement the work item: docs/feature-backlog/43-capture-raw-worker-output-per-item.md
@@ -72,6 +76,9 @@ sections:
       parameter. See design: docs/plans/2026-03-26-43-capture-raw-worker-output-per-item-design.md
 
       '
+    last_attempt: '2026-03-26T20:04:35.210928'
+    attempts: 1
+    model_used: sonnet
   - id: '2.2'
     name: Add console output section to item.html template
     agent: frontend-coder
