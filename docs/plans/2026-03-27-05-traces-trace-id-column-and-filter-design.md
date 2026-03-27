@@ -23,6 +23,7 @@ The trace_id feature spans three layers:
 - langgraph_pipeline/web/templates/proxy_list.html
 - langgraph_pipeline/web/routes/proxy.py
 - langgraph_pipeline/web/proxy.py
+- tests/langgraph/web/test_proxy.py
 
 ## Design Decisions
 
