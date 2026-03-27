@@ -66,7 +66,7 @@ sections:
   - id: '2.1'
     name: Add pipeline decision rationale trace metadata
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/13-trace-observability-gaps.md
       -- Focus on Gap 3. Add add_trace_metadata() calls to pipeline decision points:
       verify_result() in pipeline/edges.py (archive/retry decisions), retry_check()
@@ -75,6 +75,8 @@ sections:
     last_attempt: '2026-03-27T15:20:14.147154'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T15:31:06.763179'
+    result_message: 'PASS: All good'
   - id: '2.2'
     name: Add plan YAML state snapshots to execute_plan traces
     agent: coder
