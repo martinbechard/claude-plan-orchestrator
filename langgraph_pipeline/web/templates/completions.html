@@ -93,6 +93,7 @@
     <thead>
       <tr>
         <th scope="col">Slug</th>
+        <th scope="col">Trace</th>
         <th scope="col">Type</th>
         <th scope="col">Outcome</th>
         <th scope="col" style="text-align:right">Cost</th>
@@ -120,6 +121,15 @@
           {% if row.slug %}
             <a href="/item/{{ row.slug | e }}"
                aria-label="View work item {{ row.slug | e }}">{{ row.slug | e }}</a>
+          {% else %}
+            &mdash;
+          {% endif %}
+        </td>
+
+        <td>
+          {% if row.run_id %}
+            <a href="/proxy?trace_id={{ row.run_id | e }}" target="_blank" rel="noopener"
+               aria-label="View trace for {{ row.slug | e }}">Trace</a>
           {% else %}
             &mdash;
           {% endif %}
