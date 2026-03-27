@@ -631,11 +631,13 @@ def execute_task(state: TaskState) -> dict:
         })
         return {"quota_exhausted": True, "plan_data": plan_data}
 
-    # Parse usage data
+    # Parse usage data and report to dashboard
     cost_usd = float(result_capture.get("total_cost_usd", 0.0))
     usage = result_capture.get("usage", {})
     input_tokens = int(usage.get("input_tokens", 0))
     output_tokens = int(usage.get("output_tokens", 0))
+    from langgraph_pipeline.shared.claude_cli import _report_worker_stats
+    _report_worker_stats(input_tokens, output_tokens, cost_usd)
 
     # Post cost record to the web API (fire-and-forget)
     _post_cost_to_api(

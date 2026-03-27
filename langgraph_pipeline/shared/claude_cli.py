@@ -24,6 +24,41 @@ TOOL_CMD_PREVIEW_MAX_CHARS = 80  # Max chars of Bash command shown inline
 STRIPPED_ENV_VAR = "CLAUDECODE"  # Removed so child Claude can spawn from Claude Code
 DEFAULT_CALL_TIMEOUT_SECONDS = 120
 
+# ─── Running totals for worker stats reporting ────────────────────────────────
+
+_cumulative_tokens_in: int = 0
+_cumulative_tokens_out: int = 0
+_cumulative_cost_usd: float = 0.0
+
+
+def _report_worker_stats(tokens_in: int, tokens_out: int, cost_usd: float) -> None:
+    """Fire-and-forget POST to /api/worker-stats to update the dashboard."""
+    global _cumulative_tokens_in, _cumulative_tokens_out, _cumulative_cost_usd
+    _cumulative_tokens_in += tokens_in
+    _cumulative_tokens_out += tokens_out
+    _cumulative_cost_usd += cost_usd
+
+    web_url = os.environ.get("ORCHESTRATOR_WEB_URL", "")
+    if not web_url:
+        return
+    try:
+        import urllib.request
+        payload = json.dumps({
+            "pid": os.getpid(),
+            "tokens_in": _cumulative_tokens_in,
+            "tokens_out": _cumulative_tokens_out,
+            "cost_usd": _cumulative_cost_usd,
+        }).encode()
+        req = urllib.request.Request(
+            f"{web_url}/api/worker-stats",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=2)
+    except Exception:
+        pass  # Non-fatal
+
 
 # ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -129,12 +164,15 @@ def call_claude(
             data = json.loads(proc.stdout)
             cost = float(data.get("total_cost_usd", 0.0))
             usage = data.get("usage", {})
+            tok_in = int(usage.get("input_tokens", 0))
+            tok_out = int(usage.get("output_tokens", 0))
+            _report_worker_stats(tok_in, tok_out, cost)
             return ClaudeResult(
                 text=data.get("result", "").strip(),
                 failure_reason=None,
                 total_cost_usd=cost,
-                input_tokens=int(usage.get("input_tokens", 0)),
-                output_tokens=int(usage.get("output_tokens", 0)),
+                input_tokens=tok_in,
+                output_tokens=tok_out,
                 raw_stdout=proc.stdout or "",
             )
         reason = f"claude --print returned code {proc.returncode}: {proc.stderr}"

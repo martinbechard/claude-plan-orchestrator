@@ -84,8 +84,16 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
     total_tokens = _compute_total_tokens(slug)
     output_files = _list_output_files(slug)
     avg_velocity = _compute_avg_velocity(completions)
-    if active_worker and active_worker.get("current_velocity", 0) > 0:
-        avg_velocity = active_worker["current_velocity"]
+
+    # When a worker is active, use its live stats instead of completions
+    if active_worker:
+        if active_worker.get("tokens_in", 0) + active_worker.get("tokens_out", 0) > 0:
+            total_tokens = active_worker["tokens_in"] + active_worker["tokens_out"]
+        if active_worker.get("cost_usd", 0) > 0:
+            total_cost_usd = active_worker["cost_usd"]
+        total_duration_s = active_worker.get("elapsed_raw_s", 0)
+        if active_worker.get("current_velocity", 0) > 0:
+            avg_velocity = active_worker["current_velocity"]
     last_trace = traces[0] if traces else None
 
     return templates.TemplateResponse(
@@ -541,9 +549,13 @@ def _get_active_worker(slug: str) -> Optional[dict]:
                 return {
                     "pid": worker.pid,
                     "elapsed_s": f"{minutes}m {seconds}s",
+                    "elapsed_raw_s": elapsed_total,
                     "run_id": worker.run_id,
                     "current_task": current_task,
                     "current_velocity": round(worker.current_velocity()),
+                    "tokens_in": worker.tokens_in,
+                    "tokens_out": worker.tokens_out,
+                    "cost_usd": worker.estimated_cost_usd,
                 }
     except Exception:
         pass

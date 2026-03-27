@@ -346,6 +346,28 @@ def create_app(config: Optional[dict] = None):
                 logger.debug("runs_update: failed to update run %s: %s", run_id, exc)
         return JSONResponse({}, status_code=200)
 
+    @app.post("/api/worker-stats")
+    async def worker_stats(request: Request):
+        """Accept token/cost updates from a running worker and update DashboardState."""
+        try:
+            body = await request.json()
+            pid = int(body.get("pid", 0))
+            tokens_in = int(body.get("tokens_in", 0))
+            tokens_out = int(body.get("tokens_out", 0))
+            cost_usd = float(body.get("cost_usd", 0.0))
+            if pid > 0:
+                from langgraph_pipeline.web.dashboard_state import get_dashboard_state
+                dashboard = get_dashboard_state()
+                dashboard.update_worker_tokens(pid, tokens_in, tokens_out)
+                with dashboard._lock:
+                    worker = dashboard.active_workers.get(pid)
+                    if worker is not None:
+                        worker.estimated_cost_usd = cost_usd
+                        worker.record_token_sample()
+        except Exception as exc:
+            logger.debug("worker_stats: %s", exc)
+        return JSONResponse({"ok": True}, status_code=202)
+
     return app
 
 

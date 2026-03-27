@@ -1,0 +1,7 @@
+=== planner for 99-test-v7 ===
+Exit code: 0
+
+=== STDOUT ===
+{"type":"result","subtype":"success","is_error":false,"duration_ms":141371,"duration_api_ms":137586,"num_turns":24,"result":"Done. Created and committed:\n\n- **Design doc**: `docs/plans/2026-03-27-99-test-v7-design.md` - describes the regression test for tmp/plans refactoring and token tracking\n- **YAML plan**: `tmp/plans/99-test-v7.yaml` - single task (coder agent) to add `# tmp plans test` comment to `langgraph_pipeline/shared/paths.py`, with validation enabled\n\nNote: The `python scripts/plan-orchestrator.py --plan ... --dry-run` validation command from the instructions refers to a script that no longer exists (replaced by `langgraph_pipeline` module). I validated the YAML structure directly instead.","stop_reason":"end_turn","session_id":"04b7a4da-7157-4b25-bf48-1864859b9c9a","total_cost_usd":0.438754,"usage":{"input_tokens":16,"cache_creation_input_tokens":21274,"cache_read_input_tokens":449273,"output_tokens":3243,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":21274,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":16,"outputTokens":3243,"cacheReadInputTokens":449273,"cacheCreationInputTokens":21274,"webSearchRequests":0,"costUSD":0.438754,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"2754f3b9-dfed-426c-aeb8-908febb7c4a5"}
+
+=== STDERR ===
