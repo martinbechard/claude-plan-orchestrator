@@ -1,0 +1,31 @@
+meta:
+  name: 'Velocity badge on item page: show live worker velocity'
+  description: Show active worker's live velocity in the item page badge instead
+    of only the historical completions average
+  plan_doc: docs/plans/2026-03-26-47-velocity-badge-on-item-page-design.md
+  source_item: .claude/plans/.claimed/47-velocity-badge-on-item-page.md
+  created: '2026-03-26'
+  status: pending
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: phase-1
+  name: Add live worker velocity to item page badge
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Wire active worker current_velocity into item page velocity badge
+    agent: coder
+    status: pending
+    description: 'Implement the work item: .claude/plans/.claimed/47-velocity-badge-on-item-page.md
+      -- In _get_active_worker() add current_velocity to the returned dict. In
+      item_detail(), override avg_velocity with the live value when an active worker
+      is present and has non-zero velocity. See design doc:
+      docs/plans/2026-03-26-47-velocity-badge-on-item-page-design.md'
