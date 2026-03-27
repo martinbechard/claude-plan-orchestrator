@@ -27,3 +27,5 @@ sections:
       correctly probes each PID with os.kill(pid, 0) and reaps dead workers as failures;
       ChildProcessError handling in supervisor.py correctly removes stale PIDs. All
       23 dashboard_state tests pass, full suite (1314 tests) passes.'
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
