@@ -19,8 +19,15 @@ sections:
   - id: '1.1'
     name: Validate and fix model filter and column
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/01-traces-model-filter-broken.md'
     last_attempt: '2026-03-27T01:29:02.978926'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T01:30:52.436974'
+    result_message: 'Validated all acceptance criteria: model column exists in DB
+      schema with ALTER TABLE migration, propagate_model_to_root() correctly walks
+      parent chain (first-write-wins), list_runs/count_runs filter on LOWER(model)
+      LIKE LOWER(?), _enrich_run() populates display_model, template renders Model
+      column and filter dropdown. All 6 model-specific tests and full 1303-test suite
+      pass.'
