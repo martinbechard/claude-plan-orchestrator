@@ -16,6 +16,7 @@ import subprocess
 import threading
 import time
 import urllib.request
+from pathlib import Path
 from typing import Optional
 
 import yaml
@@ -329,8 +330,8 @@ def _save_validation_result(plan_data: dict, task_id: str, verdict: str, status_
         result_path = output_dir / f"validation-{task_id.replace('.', '-')}-{ts}.json"
         with open(result_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2)
-    except Exception:
-        pass  # Non-fatal
+    except Exception as exc:
+        _logger.warning("Failed to save validation result: %s", exc)
 
 
 def _clear_status_file() -> None:

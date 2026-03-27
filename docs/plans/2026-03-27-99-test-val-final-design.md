@@ -31,3 +31,11 @@ acceptance criteria trigger.
 After the fix, the item page should:
 - Show a "Validation Results" section when validation-*.json files exist
 - Display the verdict (PASS/WARN/FAIL) and message for each result
+
+
+## Acceptance Criteria
+
+- After completion, does the item page show a Validation Results section?
+  YES = pass, NO = fail
+- Does it show the verdict (PASS/WARN/FAIL) and message?
+  YES = pass, NO = fail
