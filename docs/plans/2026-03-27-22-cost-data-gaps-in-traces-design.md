@@ -1,40 +1,44 @@
----
-title: Cost Data Gaps in Traces — Design (Review Pass)
-date: 2026-03-27
-defect: 22
----
-
-# Cost Data Gaps in Traces — Design (Review Pass)
+# Cost Data Gaps in Traces — Design (#22)
 
 ## Problem
 
-This item was previously implemented and marked complete. The original defect
-reported that only execute_task and validate_task nodes recorded total_cost_usd,
-and that many execute_task rows showed 0.01 (suspected placeholder).
+Only execute_task and validate_task nodes recorded total_cost_usd in trace
+metadata. Other Claude-invoking nodes had no cost metadata, and many
+execute_task rows showed 0.01 (suspected placeholder).
 
-A codebase audit shows cost tracking has been added to all Claude-invoking nodes:
-- execute_task (task_runner.py) — extracts from result_capture
-- validate_task (validator.py) — extracts from result_capture
-- create_plan (plan_creation.py) — uses _extract_cost_from_json_output()
-- intake_analyze (intake.py) — accumulates cost from multiple call_claude() calls
-- verify_fix (verification.py) — _invoke_claude() returns (text, cost) tuple
-- suspension.py — answer_question, intake_analysis, dedup_check all record cost
+## Current State (Audit)
 
-ClaudeResult in claude_cli.py includes total_cost_usd extracted from JSON output.
-Default fallback values are 0.0 (not 0.01).
+A codebase audit shows cost tracking has been added to most Claude-invoking nodes:
 
-## Scope of Review
+| Node | File | Cost Tracked | Notes |
+|------|------|-------------|-------|
+| execute_task | executor/nodes/task_runner.py | Yes | Extracts from result_capture |
+| execute_parallel_task | executor/nodes/parallel.py | Yes | Extracts from result_capture |
+| validate_task | executor/nodes/validator.py | Yes | Extracts from subprocess JSON |
+| create_plan | pipeline/nodes/plan_creation.py | Yes | Uses _extract_cost_from_json_output() |
+| intake_analyze | pipeline/nodes/intake.py | Yes | Accumulates from call_claude() |
+| verify_fix | pipeline/nodes/verification.py | Yes | _invoke_claude() returns (text, cost) |
+| Slack call_claude | slack/suspension.py | Yes | Records cost at 3 call sites |
+| classify_idea | pipeline/nodes/idea_classifier.py | **No** | No JSON output, no trace metadata |
 
-Since the implementation appears complete, the task is to:
+ClaudeResult in claude_cli.py defaults to 0.0 (not 0.01). The 0.01 values in
+the database are likely real minimum-charge API costs.
 
-1. Verify all cost recording paths work end-to-end by reading the code
-2. Confirm no remaining 0.01 hardcoded defaults exist in production code
-3. Check that add_trace_metadata calls include total_cost_usd in all nodes
-4. Validate that call_claude() in claude_cli.py correctly parses cost from JSON
-5. Fix any gaps found during verification
+## Remaining Gap
+
+### idea_classifier.py
+
+The classify_idea function invokes Claude without --output-format json, so cost
+data cannot be extracted. Changes needed:
+
+- Add --output-format json to the subprocess call
+- Parse JSON response to extract total_cost_usd
+- Call add_trace_metadata with node_name "classify_idea" and cost
+- Handle JSON parse failures gracefully (default to 0.0)
 
 ## Key Files
 
+- langgraph_pipeline/pipeline/nodes/idea_classifier.py — add JSON output and cost tracking
 - langgraph_pipeline/shared/claude_cli.py — ClaudeResult and call_claude()
 - langgraph_pipeline/pipeline/nodes/intake.py — intake_analyze cost accumulation
 - langgraph_pipeline/pipeline/nodes/verification.py — verify_fix cost extraction
@@ -45,8 +49,9 @@ Since the implementation appears complete, the task is to:
 
 ## Design Decisions
 
-- This is a verification pass, not a rewrite. The coder should read existing code
-  and confirm correctness before making changes.
-- Any 0.01 values in the database are likely real minimum-charge API costs, not
-  hardcoded defaults (production code uses 0.0 as fallback).
-- If gaps are found, fix them inline rather than introducing new abstractions.
+- Fix the remaining gap (idea_classifier) and verify all other nodes
+- Any 0.01 values in the database are real minimum-charge API costs, not
+  hardcoded defaults (production code uses 0.0 as fallback)
+- Fix gaps inline rather than introducing new abstractions
+- Keep the existing pattern: extract cost from Claude JSON output, pass to
+  add_trace_metadata
