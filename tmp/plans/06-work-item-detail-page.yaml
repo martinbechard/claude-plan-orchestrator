@@ -17,7 +17,7 @@ sections:
   - id: '1.1'
     name: Add drill-down links to dashboard and queue templates
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/06-work-item-detail-page.md
       — Focus on the Navigation section: wrap slug text in anchor tags linking to
       /item/<slug> in dashboard.html (active worker cards and recent completion rows)
@@ -25,6 +25,11 @@ sections:
     last_attempt: '2026-03-27T14:51:33.952872'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:52:50.310772'
+    result_message: Added drill-down links to queue.html slug column. Dashboard slug
+      links were already implemented in dashboard.js for both worker cards and completion
+      rows. Queue.html updated to wrap slug text in an anchor tag linking to /item/<slug>
+      with stopPropagation to preserve row-toggle behavior.
 - id: '2'
   name: Polish work item detail page UI
   status: pending
