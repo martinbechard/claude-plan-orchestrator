@@ -1,5 +1,12 @@
 # Dashboard: "View Traces" link from active worker never finds any traces
 
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
+
 ## Status: Open
 
 ## Priority: High
@@ -51,3 +58,34 @@ with that worker, either by matching on run_id, thread_id, or item slug.
 - Defect 05: trace_id filter on /proxy endpoint
 - Defect 02: root runs named "LangGraph" with no slug association
 - Defect 06: drill-down from dashboard to traces
+
+
+
+
+## 5 Whys Analysis
+
+**Title:** Dashboard trace link from running workers navigates to empty filtered trace list
+
+**Clarity:** 4/5
+The request is well-documented with hypothesis and investigation steps, but doesn't directly state the fundamental user need—only the symptom.
+
+**5 Whys:**
+
+1. **Why is the trace list always empty?**
+   Because the run_id passed in the query parameter doesn't match any run_id in the traces database.
+
+2. **Why doesn't the run_id match?**
+   Because WorkerInfo stores a run_id that's either PID-based or fabricated by the supervisor, while LangGraph SDK generates its own independent UUID run_ids when it creates traces.
+
+3. **Why are there two separate ID spaces for the same logical trace?**
+   Because the supervisor has no way to capture or access the actual LangGraph-generated run_id when the worker starts execution—they're isolated systems.
+
+4. **Why can't the supervisor get the LangGraph run_id?**
+   Because there's no communication mechanism for the worker to report its trace context (run_id, thread_id, or other identifiers) back to the supervisor when tracing begins.
+
+5. **Why wasn't this communication mechanism built?**
+   Because the worker orchestration system (supervisor/dashboard) and the tracing system (LangSmith integration) were implemented independently without defining a contract for sharing trace identifiers.
+
+**Root Need:** Workers need a way to communicate their LangGraph trace identifiers to the supervisor so the dashboard can establish and maintain a reliable link between running worker cards and their corresponding trace records.
+
+**Summary:** The supervisor and workers lack a coordinated mechanism to share trace IDs, preventing users from accessing traces of running workers through the dashboard.

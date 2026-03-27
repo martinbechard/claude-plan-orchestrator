@@ -28,3 +28,9 @@ sections:
       unique index on run_id is created with deduplication of pre-existing rows in
       _init_db(). Tests cover: single-row upsert, start+completion event merge, null
       end_time preservation, and pre-existing duplicate cleanup. All 1317 tests pass.'
+    validation_attempts: 1
+    validation_findings: 'Upsert fix fully implemented and tested. ON CONFLICT(run_id)
+      DO UPDATE SET with COALESCE in proxy.py:327-330. Unique index created in _init_db
+      at proxy.py:100-101. Deduplication SQL runs on startup at proxy.py:264. Three
+      targeted tests cover: start+completion merge, null end_time preservation, and
+      pre-existing duplicate cleanup. All 1317 tests pass.'

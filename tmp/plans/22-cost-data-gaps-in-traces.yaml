@@ -24,3 +24,8 @@ sections:
     model_used: sonnet
     completed_at: '2026-03-27T14:33:14.951754'
     result_message: 'PASS: All good'
+    validation_attempts: 1
+    validation_findings: Cost tracking added to idea_classifier. All 1317 tests pass.
+      All Claude-invoking nodes verified to record cost. No hardcoded 0.01 default
+      in production code. Build command references non-existent scripts/plan-orchestrator.py
+      (pre-existing issue unrelated to this task); auto-pipeline.py compiles fine.
