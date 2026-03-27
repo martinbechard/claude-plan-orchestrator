@@ -1,5 +1,12 @@
 # Trace detail: expand chevron duplicates and subruns not shown inline
 
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
+
 ## Status: Open
 
 ## Priority: Medium
@@ -54,3 +61,28 @@ rather than an inline detail panel.
 ## Dependencies
 
 - Defect 16: tool calls / grandchildren not fetched (same data pipeline)
+
+
+
+
+## 5 Whys Analysis
+
+**Title:** Seamless nested trace inspection requires smooth expand controls and inline details
+
+**Clarity:** 4
+
+**5 Whys:**
+
+1. Why does clicking the expand chevron not reveal the full subrun details? Because the UI has two problems: a duplicate chevron that creates visual confusion, and expanded content that shows only a navigation link instead of inline details.
+
+2. Why would a user want to see subrun details inline instead of navigating to another page? Because they're actively investigating the parent trace and need to understand how the subrun relates to it — its inputs, outputs, duration, and any errors.
+
+3. Why is understanding a subrun in the context of its parent trace important? Because subruns don't exist in isolation; their behavior and performance are meaningful only in relation to the parent run's execution flow and inputs.
+
+4. Why does navigating away from the trace to view subrun details create friction? Because it breaks the developer's mental model of execution flow, requires scrolling back to where they were, and forces them to hold context in memory rather than seeing relationships visually.
+
+5. Why is uninterrupted, context-preserving investigation the root need? Because efficient debugging depends on rapid iteration through traces without cognitive overhead — every context-switch costs time and increases error risk in diagnosis.
+
+**Root Need:** Developers must explore nested call hierarchies efficiently without breaking their investigation flow or losing the relational context between parent and child executions.
+
+**Summary:** Users need expand-in-place UI patterns that reveal nested trace details inline, preserving context and allowing rapid exploration of execution flow.
