@@ -41,3 +41,31 @@ from the pipeline execution data.
   fake test data.
 
 ## LangSmith Trace: df450b06-c72f-45fe-a72e-6ba2e7221a28
+
+
+## 5 Whys Analysis
+
+Title: Tool call cost attribution displays dummy data instead of real pipeline costs
+
+Clarity: 4 (well-defined problem and scope, though acceptance criteria for "complete" could be more explicit)
+
+5 Whys:
+
+1. Why is dummy data displayed instead of real tool call costs?
+   — Because the feature implementation stops at the UI layer; the backend pipeline logic to extract and store actual tool call costs from LLM execution traces hasn't been integrated with the display component.
+
+2. Why hasn't the backend cost extraction pipeline been integrated?
+   — Because the feature was marked complete based on the frontend component being functional, without verifying that real data was flowing through the entire system end-to-end.
+
+3. Why was the feature marked complete without end-to-end data validation?
+   — Because the completion criteria focused on "UI can display cost data" rather than "UI displays real cost data sourced from production pipeline," treating them as equivalent.
+
+4. Why weren't real-data requirements part of the acceptance criteria?
+   — Because the feature had upstream data dependencies (trace cost metadata, cost_tasks table population) that were listed as related but not treated as hard blocking requirements for completion.
+
+5. Why aren't upstream dependencies enforced as completion blockers?
+   — Because there's no gating mechanism preventing a consumer feature from being marked done until its data source dependencies are implemented, tested, and verified working.
+
+Root Need: Establish a feature completion workflow that enforces upstream dependency validation and requires end-to-end data flow verification before marking features done.
+
+Summary: Tool call costs show dummy data because features were marked complete at the UI layer without waiting for backend data pipelines and upstream dependencies to be ready.

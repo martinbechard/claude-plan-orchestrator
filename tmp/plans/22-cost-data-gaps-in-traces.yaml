@@ -1,0 +1,21 @@
+meta:
+  source_item: tmp/plans/.claimed/22-cost-data-gaps-in-traces.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Verify and fix cost data gaps in traces
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Verify cost tracking implementation and fix remaining gaps
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/22-cost-data-gaps-in-traces.md'

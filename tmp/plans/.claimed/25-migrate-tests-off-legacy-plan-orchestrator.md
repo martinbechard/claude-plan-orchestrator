@@ -42,3 +42,31 @@ _handle_polled_messages on poller, bot_user_id on poller).
 4. Also delete the stale pyc cache at tests/__pycache__/test_auto_pipeline*.
 
 ## LangSmith Trace: 3a000cc6-333e-40e1-967f-ef627f5278f6
+
+
+## 5 Whys Analysis
+
+**Title:** Delete legacy plan-orchestrator.py by migrating its test suite to new modular architecture
+
+**Clarity:** 4/5
+
+**5 Whys:**
+
+1. **Why** does test_agent_identity.py need to be rewritten?
+   - Because it imports directly from scripts/plan-orchestrator.py, making that 6820-line legacy script impossible to delete
+
+2. **Why** is the legacy script still preventing its deletion instead of being gone?
+   - Because test_agent_identity.py (64 tests) is the last remaining code that depends on it, and removing the import would break all tests
+
+3. **Why** does test_agent_identity.py still import from the old location instead of the new modular structure?
+   - Because when SlackNotifier was refactored into distributed modules (identity, notifier, poller), the test file wasn't updated to map test calls to the correct new sub-module that owns each method
+
+4. **Why** wasn't this test migration completed during the original refactoring?
+   - Because the migration required understanding the new distributed interface (27 tests call methods that moved to different modules), making it a non-trivial mapping task that was deferred
+
+5. **Why** was the monolithic design split into separate modules if it complicates testing?
+   - Because separating concerns (identity management, message sending, polling, notification handling) reduces coupling, improves module-level testability, and creates a maintainable structure where each module has a single responsibility
+
+**Root Need:** Remove technical debt (6820-line legacy script) by completing the architectural refactoring that splits monolithic concerns into testable, maintainable modules.
+
+**Summary:** Complete the migration of test_agent_identity.py to use the refactored modular Slack architecture so the legacy plan-orchestrator.py can be deleted.

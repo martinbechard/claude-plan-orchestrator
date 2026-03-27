@@ -28,3 +28,8 @@ sections:
       > summary::before rule with higher specificity to correctly show ▼ when expanded.
       Inline subrun details were already implemented in proxy_trace.html (name, duration,
       elapsed, inputs/outputs JSON, error). No template or route changes needed.'
+    validation_attempts: 1
+    validation_findings: 'Fix is correct and all 1313 tests pass. Two WARNs: (1) build
+      command references scripts/plan-orchestrator.py which no longer exists (stale
+      plan command, not a regression - file was removed in prior refactor); (2) ''nested
+      sub-subruns recursive expand'' cannot be verified without a running server.'
