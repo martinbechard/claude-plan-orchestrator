@@ -36,3 +36,5 @@ files?", "what model was used?", "was the frontend skill invoked?", or
   YES = pass, NO = fail
 - Does the output cover all phases (plan creation, task execution,
   validation) not just one task? YES = pass, NO = fail
+
+## LangSmith Trace: 9ff1ec4c-dd8a-4176-89cf-1a68a721fc24
