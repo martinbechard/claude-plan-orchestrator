@@ -17,8 +17,12 @@ sections:
   - id: '1.1'
     name: Review and fix validator agent prompt for incomplete-work detection
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/19-validator-marks-incomplete-work-as-done.md'
     last_attempt: '2026-03-27T09:30:22.822043'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T09:31:20.120185'
+    result_message: 'Validator agent already has all required fixes: placeholder scan
+      (5a), end-to-end gate (5b), and test-data leak check (5c) were implemented in
+      commits d53984d4 and be33160f. No additional changes needed.'
