@@ -1,5 +1,12 @@
 # Cost by node type: bar labels clipped and numbers have unlimited precision
 
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
+
 ## Status: Open
 
 ## Priority: Medium
@@ -26,3 +33,35 @@ analysis page:
    passing them to the chart (e.g. "$55.61" not "55.605055300000004").
 3. Increase SVG_VALUE_LABEL_PADDING or adjust the bar_area_width
    calculation to reserve more space for labels.
+
+
+
+
+## 5 Whys Analysis
+
+Title: Bar labels clipped and cost values unformatted in cost analysis visualization
+
+Clarity: 3/5
+
+The defect clearly describes the symptoms and specific code areas, but doesn't expose the design decisions that led to these problems.
+
+5 Whys:
+
+1. **Why are the bar labels clipped?**
+   → The SVG bar width fills most of the chart area without reserving space for the label that appears beside it.
+
+2. **Why doesn't the bar width calculation reserve space for the label?**
+   → The bar-drawing logic treats the bar as the primary element and doesn't account for the label's spatial requirements as part of the overall layout.
+
+3. **Why isn't label space considered when designing the bar layout?**
+   → The `svg_bar_chart()` function was built to render bars without an explicit specification defining how space should be allocated between data visualization and supplementary elements like labels.
+
+4. **Why does this specification gap exist?**
+   → Cost visualization components were developed incrementally to solve immediate display problems without establishing a reusable design pattern for composite visualizations.
+
+5. **Why wasn't a design pattern established upfront?**
+   → There's no enforced standard for how visualization components should handle layout composition, value formatting, and element spacing — these decisions are made ad-hoc per component.
+
+Root Need: Establish a visualization component design standard that requires space allocation be defined for all elements (bars, labels, padding) before implementation, and enforce consistent value formatting at the data-to-display layer.
+
+Summary: The defect reveals missing design discipline in visualization components — layout and formatting decisions were made independently rather than as part of a composed whole.
