@@ -64,7 +64,7 @@ sections:
   - id: '2.1'
     name: Add output file discovery and raw content endpoint to item route
     agent: coder
-    status: in_progress
+    status: completed
     dependencies:
     - '1.1'
     description: 'Implement the work item: docs/feature-backlog/43-capture-raw-worker-output-per-item.md
@@ -79,6 +79,10 @@ sections:
     last_attempt: '2026-03-26T20:04:35.210928'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T20:07:04.855198'
+    result_message: Added _list_output_files() helper, output_files template context,
+      and GET /item/{slug}/output/{filename} endpoint with path traversal protection
+      to item.py
   - id: '2.2'
     name: Add console output section to item.html template
     agent: frontend-coder
