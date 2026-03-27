@@ -1,39 +1,42 @@
-# Design: Traces trace_id column and filter
+# Design: Traces list trace_id column and filter
 
-## Overview
+## Status: Review Required
 
-This is a validation/fix task for previously-implemented functionality. The traces
-list page should display a trace_id column (truncated, copyable, monospace) and
-provide a filter input to narrow results by trace_id or prefix.
+This feature was previously implemented and needs verification against the
+acceptance criteria in the work item.
 
-## Current State
+## Architecture Overview
 
-Based on codebase exploration, the feature appears to already be implemented:
+The trace_id feature spans three layers:
 
-- proxy_list.html has a Trace ID column showing first 8 chars with copy button
-- GET /proxy endpoint accepts a trace_id query parameter
-- TracingProxy.list_runs() and count_runs() support trace_id filtering
-- The filter form includes a trace_id text input
+1. **Template** (proxy_list.html) - Trace ID column with truncated display,
+   monospace styling, copy-to-clipboard button, and a filter input in the
+   filter bar.
+2. **Route** (routes/proxy.py) - GET /proxy endpoint accepts trace_id query
+   parameter and passes it through to the proxy methods.
+3. **Data layer** (proxy.py) - TracingProxy.list_runs() and count_runs()
+   accept a trace_id parameter and apply SQL filtering (exact match on
+   run_id or parent_run_id).
 
 ## Key Files
 
-- langgraph_pipeline/web/templates/proxy_list.html - traces list template
-- langgraph_pipeline/web/routes/proxy.py - GET /proxy endpoint handler
-- langgraph_pipeline/web/proxy.py - TracingProxy.list_runs() and count_runs()
-
-## Task
-
-Validate all acceptance criteria from the work item. If any criterion fails,
-fix it in place. The validator agent will verify after implementation.
-
-## Acceptance Criteria (from work item)
-
-1. Truncated/copyable trace_id column in traces table
-2. Filter input accepts trace_id (or prefix) to narrow the list
-3. Optional: visual grouping of runs sharing the same thread_id
+- langgraph_pipeline/web/templates/proxy_list.html
+- langgraph_pipeline/web/routes/proxy.py
+- langgraph_pipeline/web/proxy.py
 
 ## Design Decisions
 
-- Since the feature was previously implemented, the task is validation-first
-- Do not rewrite from scratch; check what exists and fix gaps
-- The coder agent will read the work item directly for full requirements
+- Trace ID is truncated to first 8 characters in the table column for
+  readability; the full ID is available via hover (title attribute) and
+  copy button.
+- The filter matches exact trace UUID, returning both the root run and its
+  direct children when a trace_id is specified.
+- No separate grouping by thread_id is implemented (listed as optional in
+  the work item).
+
+## Verification Scope
+
+The validator should confirm:
+1. Trace ID column renders with monospace truncated ID and copy button.
+2. Filter input accepts a trace_id and narrows the list.
+3. Backend list_runs/count_runs correctly filter by trace_id parameter.
