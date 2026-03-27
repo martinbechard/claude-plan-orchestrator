@@ -23,9 +23,14 @@ const MS_PER_HOUR = 60 * MS_PER_MINUTE;
 const HALF_WINDOW_DIVISOR = 2;
 const ZOOM_FACTOR = 2;
 const FLASH_DURATION_MS = 1500;
-const VEL_IDLE_THRESHOLD = 250;
-const VEL_LOW_THRESHOLD = 1000;
-const VEL_HIGH_THRESHOLD = 2000;
+const VEL_LOW_THRESHOLD = 500;
+const VEL_MED_THRESHOLD = 2000;
+const VEL_HIGH_THRESHOLD = 5000;
+const VEL_COLOR_NONE   = [144, 144, 176]; // grey #9090b0
+const VEL_COLOR_LOW    = [ 37,  99, 235]; // blue #2563eb
+const VEL_COLOR_MED    = [ 22, 163,  74]; // green #16a34a
+const VEL_COLOR_HIGH   = [234, 179,   8]; // yellow #eab308
+const VEL_COLOR_MAX    = [220,  38,  38]; // red #dc2626
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -76,6 +81,41 @@ function fmtVelocity(tpm) {
   if (!tpm || tpm === 0) return "\u2014";
   if (tpm >= 1000) return (tpm / 1000).toFixed(1) + "k tok/min";
   return Math.round(tpm) + " tok/min";
+}
+
+function fmtVelocityCompact(tpm) {
+  if (!tpm || tpm === 0) return "\u2014";
+  if (tpm >= 1000) return (tpm / 1000).toFixed(1) + "k/m";
+  return Math.round(tpm) + "/m";
+}
+
+function lerpColor(c1, c2, t) {
+  return [
+    Math.round(c1[0] + (c2[0] - c1[0]) * t),
+    Math.round(c1[1] + (c2[1] - c1[1]) * t),
+    Math.round(c1[2] + (c2[2] - c1[2]) * t)
+  ];
+}
+
+function velocityColor(tpm) {
+  if (!tpm || tpm <= 0) {
+    return "rgb(" + VEL_COLOR_NONE.join(",") + ")";
+  }
+  var rgb;
+  if (tpm < VEL_LOW_THRESHOLD) {
+    var t = tpm / VEL_LOW_THRESHOLD;
+    rgb = lerpColor(VEL_COLOR_NONE, VEL_COLOR_LOW, t);
+  } else if (tpm < VEL_MED_THRESHOLD) {
+    var t = (tpm - VEL_LOW_THRESHOLD) / (VEL_MED_THRESHOLD - VEL_LOW_THRESHOLD);
+    rgb = lerpColor(VEL_COLOR_LOW, VEL_COLOR_MED, t);
+  } else if (tpm < VEL_HIGH_THRESHOLD) {
+    var t = (tpm - VEL_MED_THRESHOLD) / (VEL_HIGH_THRESHOLD - VEL_MED_THRESHOLD);
+    rgb = lerpColor(VEL_COLOR_MED, VEL_COLOR_HIGH, t);
+  } else {
+    var t = Math.min(1, (tpm - VEL_HIGH_THRESHOLD) / VEL_HIGH_THRESHOLD);
+    rgb = lerpColor(VEL_COLOR_HIGH, VEL_COLOR_MAX, t);
+  }
+  return "rgb(" + rgb.join(",") + ")";
 }
 
 function itemTypeBadgeClass(itemType) {
@@ -205,13 +245,6 @@ function outcomeBarBorderClass(outcome) {
   }
 }
 
-function velocityBarClass(tpm) {
-  if (!tpm || tpm === 0) return "timeline-bar--vel-none";
-  if (tpm < VEL_IDLE_THRESHOLD) return "timeline-bar--vel-none";
-  if (tpm < VEL_LOW_THRESHOLD) return "timeline-bar--vel-low";
-  if (tpm < VEL_HIGH_THRESHOLD) return "timeline-bar--vel-medium";
-  return "timeline-bar--vel-high";
-}
 
 function updateColorModeButton() {
   var btn = document.getElementById("tl-btn-color-mode");
@@ -427,7 +460,7 @@ function buildTimelineRow(barEntry) {
   bar.style.width = pos.widthPct + "%";
 
   if (colorMode === COLOR_MODE_VELOCITY) {
-    bar.classList.add(velocityBarClass(barEntry.tokensPerMinute || 0));
+    bar.style.backgroundColor = velocityColor(barEntry.tokensPerMinute || 0);
   } else {
     bar.classList.add(timelineBarClass(barEntry.itemType));
   }
@@ -439,14 +472,14 @@ function buildTimelineRow(barEntry) {
 
   var elapsedS = Math.round((barEntry.barEndMs - barEntry.barStartMs) / 1000);
   var velStr = fmtVelocity(barEntry.tokensPerMinute || 0);
-  var barLabelText = fmtElapsed(elapsedS);
-  if (velStr !== "\u2014") barLabelText += "  " + velStr;
+  var velCompact = fmtVelocityCompact(barEntry.tokensPerMinute || 0);
+  var barLabelText = colorMode === COLOR_MODE_VELOCITY ? velCompact : fmtElapsed(elapsedS);
   var barLabel = document.createElement("span");
   barLabel.className = "timeline-bar-label";
   barLabel.textContent = barLabelText;
   bar.appendChild(barLabel);
 
-  // Full-detail tooltip for clipped text
+  // Full-detail tooltip always shows slug, elapsed, type, and velocity
   var tooltipParts = [barEntry.slug, fmtElapsed(elapsedS), barEntry.itemType];
   if (velStr !== "\u2014") tooltipParts.push(velStr);
   bar.title = tooltipParts.join(" \u2022 ");

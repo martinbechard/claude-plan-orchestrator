@@ -775,11 +775,8 @@ svg.gantt text { font-family: inherit; }
 .timeline-bar--feature  { background: #06b6d4; }
 .timeline-bar--analysis { background: #eab308; }
 
-/* Velocity colour mode — thermal gradient: blue → green → yellow → red */
-.timeline-bar--vel-none   { background: #9090b0; }
-.timeline-bar--vel-low    { background: #2563eb; }
-.timeline-bar--vel-medium { background: #16a34a; }
-.timeline-bar--vel-high   { background: #dc2626; }
+/* Velocity colour mode — inline background-color applied by JS interpolation.
+   Colour stops: grey(no data) → blue(<500) → green(500-2000) → yellow(2000-5000) → red(>5000) */
 
 /* Completion bars: semi-transparent, with outcome left border */
 .timeline-bar--completion {
