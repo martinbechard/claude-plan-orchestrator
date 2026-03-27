@@ -28,3 +28,8 @@ sections:
       fill (rgba(126,184,247,0.22)), inset ring via box-shadow, white text (#e8e8f0)
       on dark nav (#1a1a2e), font-weight 500, and aria-current=''page'' for accessibility.
       No border-bottom underline remains. No changes were needed.'
+    validation_attempts: 1
+    validation_findings: 'Nav active styling meets all acceptance criteria: pill/capsule
+      highlight with rgba(126,184,247,0.22) background, inset ring via box-shadow,
+      white text (#e8e8f0), dark nav (#1a1a2e), font-weight 500, aria-current=''page''.
+      No border-bottom on active nav. Build OK, 1314 tests pass.'
