@@ -1,44 +1,36 @@
-# Design: Nav Active Item Styling (Defect 11)
+# Design: Nav Active Item Styling Fix
 
-## Problem
+## Context
 
-The navigation active state originally used a plain blue underline that looked
-amateurish. A prior fix improved it to a pill-style background with box-shadow,
-but this item is flagged "Review Required" to validate the current styling meets
-professional standards.
+The navigation active item was originally styled with a plain blue underline
+(border-bottom: 2px solid #7eb8f7) which looked amateurish. A prior implementation
+attempt updated it to a pill/capsule style with background fill and box-shadow.
+
+The backlog item is marked "Review Required" -- the prior fix needs validation
+against acceptance criteria.
 
 ## Current State
 
-The active styling in style.css (line 46) is:
+File: langgraph_pipeline/web/static/style.css (line ~46)
 
-```
-nav a.active {
-  color: #e8e8f0;
-  background: rgba(126, 184, 247, 0.22);
-  box-shadow: 0 0 0 1px rgba(126, 184, 247, 0.3);
-  font-weight: 500;
-}
-```
+The active state currently uses:
+- Background: rgba(126, 184, 247, 0.22)
+- Box-shadow: 0 0 0 1px rgba(126, 184, 247, 0.3)
+- Text color: #e8e8f0
+- Font weight: 500
+- Border-radius: 4px (inherited from nav a)
 
-This is already a pill/capsule highlight approach against the dark (#1a1a2e) nav
-background, which aligns with the acceptance criteria. The task is to review
-whether this is polished enough or needs refinement.
+The nav background is #1a1a2e (dark).
 
 ## Key Files
 
-- langgraph_pipeline/web/static/style.css -- active styling (line 46)
-- langgraph_pipeline/web/templates/base.html -- nav template with active class logic
+- langgraph_pipeline/web/static/style.css -- nav active styling
+- langgraph_pipeline/web/templates/base.html -- nav markup with active class logic
 
 ## Design Decisions
 
-- Use the frontend-coder agent to evaluate and refine the current pill-style
-  active indicator
-- Keep the approach consistent: pill/capsule highlight against the dark nav
-  background
-- Ensure the active state is clearly distinguishable from hover state
-- Maintain accessibility (sufficient color contrast, aria-current attribute)
-
-## Scope
-
-This is a CSS-only change to a single rule in style.css. No structural HTML changes
-are expected. The task is small enough for a single frontend-coder session.
+1. Single task: validate the existing implementation against the acceptance criteria
+   in the backlog item, and fix any gaps found
+2. Use frontend-coder agent since this is a UI styling task
+3. The template markup (base.html) already has proper aria-current="page" and
+   conditional active classes -- likely no changes needed there
