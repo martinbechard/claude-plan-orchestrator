@@ -48,6 +48,12 @@ class CostPayload(BaseModel):
     tool_calls: Optional[list[ToolCallEntry]] = None
 
 
+# Known fake data pattern from prior test insertions — used to detect accidental
+# test data being posted to the real pipeline.
+_FAKE_COST_USD = 0.01
+_FAKE_INPUT_TOKENS = 100
+_FAKE_OUTPUT_TOKENS = 50
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 
@@ -64,6 +70,21 @@ def record_cost(payload: CostPayload) -> JSONResponse:
     Returns:
         JSON response {"ok": true} with HTTP 202.
     """
+    if (
+        payload.cost_usd == _FAKE_COST_USD
+        and payload.input_tokens == _FAKE_INPUT_TOKENS
+        and payload.output_tokens == _FAKE_OUTPUT_TOKENS
+    ):
+        logger.warning(
+            "POST /api/cost: suspiciously fake data received for item_slug=%r "
+            "(cost=%.2f, input_tokens=%d, output_tokens=%d) — "
+            "this matches the known test-data pattern; verify this is not test data",
+            payload.item_slug,
+            payload.cost_usd,
+            payload.input_tokens,
+            payload.output_tokens,
+        )
+
     from langgraph_pipeline.web.proxy import get_proxy
 
     proxy = get_proxy()
