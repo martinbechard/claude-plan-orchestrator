@@ -223,6 +223,7 @@ def _find_original_request_file(slug: str) -> Optional[Path]:
 
     When the highest-priority requirements source is a design doc, the original
     backlog or claimed file is surfaced as a secondary "Original request" block.
+    Searches claimed, active backlog, and completed backlog in that order.
 
     Args:
         slug: Work item slug.
@@ -238,6 +239,11 @@ def _find_original_request_file(slug: str) -> Optional[Path]:
         return claimed
 
     for dir_str in BACKLOG_DIRS.values():
+        candidate = Path(dir_str) / f"{slug}.md"
+        if candidate.exists():
+            return candidate
+
+    for dir_str in COMPLETED_DIRS.values():
         candidate = Path(dir_str) / f"{slug}.md"
         if candidate.exists():
             return candidate
