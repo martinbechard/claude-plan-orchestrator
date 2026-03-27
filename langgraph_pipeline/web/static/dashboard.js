@@ -22,6 +22,7 @@ const MS_PER_MINUTE = 60 * 1000;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
 const HALF_WINDOW_DIVISOR = 2;
 const ZOOM_FACTOR = 2;
+const FLASH_DURATION_MS = 1500;
 const VEL_IDLE_THRESHOLD = 250;
 const VEL_LOW_THRESHOLD = 1000;
 const VEL_HIGH_THRESHOLD = 2000;
@@ -106,6 +107,7 @@ var currentView = VIEW_TABLE;
 var latestWorkers = [];
 var latestCompletions = [];
 var colorMode = COLOR_MODE_TYPE;
+var prevActiveSlugSet = new Set();
 
 function getStoredView() {
   try {
@@ -449,6 +451,14 @@ function buildTimelineRow(barEntry) {
   if (velStr !== "\u2014") tooltipParts.push(velStr);
   bar.title = tooltipParts.join(" \u2022 ");
 
+  // Live elapsed clock on the right (active workers only)
+  var elapsedClock = clone.querySelector(".timeline-elapsed-clock");
+  if (elapsedClock) {
+    if (!barEntry.isCompletion) {
+      elapsedClock.textContent = fmtElapsed(elapsedS);
+    }
+  }
+
   return clone;
 }
 
@@ -461,6 +471,75 @@ function addGridlines(track) {
     line.style.left = pct + "%";
     track.appendChild(line);
   }
+}
+
+// ── Completion flash ──────────────────────────────────────────────────────────
+
+/**
+ * Compares current active workers against the previous set to detect newly-completed
+ * workers, then triggers a flash animation row for each one.
+ */
+function detectAndFlashCompletions(workers, completions) {
+  var newActiveSet = new Set((workers || []).map(function(w) { return w.slug; }));
+
+  prevActiveSlugSet.forEach(function(slug) {
+    if (!newActiveSet.has(slug)) {
+      var completion = (completions || []).find(function(c) { return c.slug === slug; });
+      if (completion) {
+        addFlashRow(slug, completion);
+      }
+    }
+  });
+
+  prevActiveSlugSet = newActiveSet;
+}
+
+/** Adds a transient flash row to the flash container for a just-completed worker. */
+function addFlashRow(slug, completion) {
+  var flashContainer = document.getElementById("timeline-flash-container");
+  if (!flashContainer) return;
+
+  // Remove existing flash row for same slug to avoid duplicates
+  flashContainer.querySelectorAll(".timeline-row").forEach(function(el) {
+    if (el.getAttribute("data-slug") === slug) el.remove();
+  });
+
+  var barEndMs = finishedAtToMs(completion.finished_at);
+  var barStartMs = barEndMs - ((completion.duration_s || 0) * 1000);
+
+  var pos = computeBarPosition(barStartMs, barEndMs);
+  if (!pos) {
+    // Worker finished outside current window — show a minimal bar at the right edge
+    var durPct = Math.min(15, ((completion.duration_s || 30) / (timelineWindowMs / 1000)) * 100);
+    pos = { leftPct: Math.max(0, 100 - durPct), widthPct: Math.max(1, durPct) };
+  }
+
+  var clone = stampTemplate("tpl-timeline-row");
+  var row = clone.querySelector(".timeline-row");
+  row.setAttribute("data-slug", slug);
+
+  clone.querySelector(".timeline-label").textContent = slug;
+
+  var bar = clone.querySelector(".timeline-bar");
+  bar.style.left = pos.leftPct + "%";
+  bar.style.width = pos.widthPct + "%";
+
+  var flashClass;
+  if (completion.outcome === "success") flashClass = "timeline-bar--flash-success";
+  else if (completion.outcome === "warn") flashClass = "timeline-bar--flash-warn";
+  else flashClass = "timeline-bar--flash-fail";
+  bar.classList.add(flashClass);
+
+  var elapsedClock = clone.querySelector(".timeline-elapsed-clock");
+  if (elapsedClock) elapsedClock.style.visibility = "hidden";
+
+  flashContainer.appendChild(clone);
+
+  setTimeout(function() {
+    flashContainer.querySelectorAll(".timeline-row").forEach(function(el) {
+      if (el.getAttribute("data-slug") === slug) el.remove();
+    });
+  }, FLASH_DURATION_MS + 200);
 }
 
 // ── Timeline view ─────────────────────────────────────────────────────────────
@@ -549,8 +628,13 @@ function applyView(view) {
 
 function renderAll(data) {
   var workers = data.active_workers || [];
+  var completions = data.recent_completions || [];
+
+  // Detect newly-completed workers before overwriting latestWorkers
+  detectAndFlashCompletions(workers, completions);
+
   latestWorkers = workers;
-  latestCompletions = data.recent_completions || [];
+  latestCompletions = completions;
 
   // Update timeline window if in live mode
   if (timelineLiveMode) {

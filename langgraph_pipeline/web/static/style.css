@@ -692,6 +692,12 @@ svg.gantt text { font-family: inherit; }
     flex-shrink: 0;
 }
 
+.timeline-axis-right-spacer {
+    width: 56px;
+    min-width: 56px;
+    flex-shrink: 0;
+}
+
 .timeline-axis {
     flex: 1;
     position: relative;
@@ -790,6 +796,42 @@ svg.gantt text { font-family: inherit; }
     font-weight: 400;
 }
 
+
+/* Live elapsed clock to the right of each active worker bar */
+.timeline-elapsed-clock {
+    width: 56px;
+    min-width: 56px;
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 500;
+    color: #374151;
+    text-align: right;
+    padding-left: 6px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.timeline-row--completion .timeline-elapsed-clock {
+    visibility: hidden;
+}
+
+/* Flash animation for workers that just completed */
+@keyframes timeline-bar-flash {
+    0%   { opacity: 1; }
+    30%  { opacity: 0.95; }
+    100% { opacity: 0; }
+}
+
+.timeline-bar--flash-success { background: #10b981; animation: timeline-bar-flash 1.5s ease-out forwards; }
+.timeline-bar--flash-warn    { background: #f59e0b; animation: timeline-bar-flash 1.5s ease-out forwards; }
+.timeline-bar--flash-fail    { background: #ef4444; animation: timeline-bar-flash 1.5s ease-out forwards; }
+
+.timeline-flash-container {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 2px;
+}
 
 /* Elapsed/velocity label overlaid on each bar */
 .timeline-bar-label {
