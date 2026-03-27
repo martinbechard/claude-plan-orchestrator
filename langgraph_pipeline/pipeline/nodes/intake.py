@@ -324,7 +324,9 @@ def _validate_five_whys(item_path: str) -> tuple[bool, str]:
     if not content:
         return False, "Could not read item file"
     prompt = VALIDATE_FIVE_WHYS_PROMPT.format(item_content=content)
-    output, _cost = _call_llm(prompt, model=DESIGN_VALIDATOR_MODEL, timeout=DESIGN_VALIDATOR_TIMEOUT_SECONDS)
+    output, _cost, failure_reason = _call_llm(prompt, model=DESIGN_VALIDATOR_MODEL, timeout=DESIGN_VALIDATOR_TIMEOUT_SECONDS)
+    if failure_reason:
+        return False, failure_reason
     valid = output.strip().upper().startswith("VALID")
     reason = output.strip().split("\n", 1)[1].strip() if "\n" in output.strip() else ""
     return valid, reason
@@ -339,7 +341,7 @@ def _validate_design(design_doc_path: str, item_path: str) -> tuple[bool, str]:
     if not item_content:
         return False, "Could not read item file"
     prompt = VALIDATE_DESIGN_PROMPT.format(design_content=design_content, item_content=item_content)
-    output, _cost = _call_llm(prompt, model=DESIGN_VALIDATOR_MODEL, timeout=DESIGN_VALIDATOR_TIMEOUT_SECONDS)
+    output, _cost, _ = _call_llm(prompt, model=DESIGN_VALIDATOR_MODEL, timeout=DESIGN_VALIDATOR_TIMEOUT_SECONDS)
     valid = output.strip().upper().startswith("VALID")
     reason = output.strip().split("\n", 1)[1].strip() if "\n" in output.strip() else ""
     return valid, reason
@@ -351,7 +353,7 @@ def _has_acceptance_checklist(design_doc_path: str) -> bool:
     if not content:
         return False
     prompt = CHECK_HAS_ACCEPTANCE_CHECKLIST_PROMPT.format(design_content=content)
-    output, _cost = _call_llm(prompt, timeout=30)
+    output, _cost, _ = _call_llm(prompt, timeout=30)
     return output.strip().upper().startswith("YES")
 
 
@@ -400,7 +402,7 @@ def _run_five_whys_analysis(item_path: str, item_type: str = "analysis") -> dict
     """Spawn Claude to run a 5-Whys analysis on any backlog item."""
     content = _read_file_content(item_path)
     prompt = FIVE_WHYS_PROMPT.format(item_content=content, item_type=item_type)
-    output, cost = _call_llm(prompt)
+    output, cost, _ = _call_llm(prompt)
     clarity = _parse_clarity_score(output)
 
     return {"clarity": clarity, "raw_output": output, "total_cost_usd": cost}

@@ -44,7 +44,7 @@ def _mock_llm_calls():
         return_value=(True, ""),
     ), patch(
         "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-        return_value=("Mocked response", 0.01),
+        return_value=("Mocked response", 0.01, ""),
     ):
         yield
 
@@ -242,7 +242,7 @@ class TestVerifyDefectSymptoms:
         item.write_text("## Defect\nSome symptom.\n")
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("Reproducible: yes\nClarity: 4\nSummary: bug confirmed", 0.01),
+            return_value=("Reproducible: yes\nClarity: 4\nSummary: bug confirmed", 0.01, ""),
         ) as mock_call:
             result = _verify_defect_symptoms(str(item))
         assert mock_call.called
@@ -254,7 +254,7 @@ class TestVerifyDefectSymptoms:
         item.write_text("")
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("Reproducible: yes\nClarity: 4", 0.01),
+            return_value=("Reproducible: yes\nClarity: 4", 0.01, ""),
         ):
             result = _verify_defect_symptoms(str(item))
         assert result["reproducible"] == "yes"
@@ -264,7 +264,7 @@ class TestVerifyDefectSymptoms:
         item.write_text("")
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("Reproducible: no\nClarity: 3", 0.01),
+            return_value=("Reproducible: no\nClarity: 3", 0.01, ""),
         ):
             result = _verify_defect_symptoms(str(item))
         assert result["reproducible"] == "no"
@@ -274,7 +274,7 @@ class TestVerifyDefectSymptoms:
         item.write_text("")
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("Clarity: 3", 0.01),
+            return_value=("Clarity: 3", 0.01, ""),
         ):
             result = _verify_defect_symptoms(str(item))
         assert result["reproducible"] == "unclear"
@@ -289,7 +289,7 @@ class TestRunFiveWhysAnalysis:
         item.write_text("## Analysis\nSome analysis request.\n")
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("Title: X\nClarity: 4\n5 Whys:\n1.a\n2.b\n3.c\n4.d\n5.e", 0.01),
+            return_value=("Title: X\nClarity: 4\n5 Whys:\n1.a\n2.b\n3.c\n4.d\n5.e", 0.01, ""),
         ) as mock_call:
             _run_five_whys_analysis(str(item))
         assert mock_call.called
@@ -301,7 +301,7 @@ class TestRunFiveWhysAnalysis:
         item.write_text("")
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("Title: X\nClarity: 2", 0.01),
+            return_value=("Title: X\nClarity: 2", 0.01, ""),
         ):
             result = _run_five_whys_analysis(str(item))
         assert result["clarity"] == 2
@@ -327,7 +327,7 @@ class TestIntakeAnalyzeNode:
         state = _make_state(item_path=str(item), item_type="defect", intake_count_defects=2)
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("Reproducible: yes\nClarity: 4", 0.01),
+            return_value=("Reproducible: yes\nClarity: 4", 0.01, ""),
         ):
             result = intake_analyze(state)
         assert result.get("intake_count_defects") == 3
@@ -342,7 +342,7 @@ class TestIntakeAnalyzeNode:
         )
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("Title: T\nClarity: 4", 0.01),
+            return_value=("Title: T\nClarity: 4", 0.01, ""),
         ):
             result = intake_analyze(state)
         assert result.get("intake_count_features") == 2
@@ -357,7 +357,7 @@ class TestIntakeAnalyzeNode:
         )
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("Title: T\nClarity: 4", 0.01),
+            return_value=("Title: T\nClarity: 4", 0.01, ""),
         ):
             result = intake_analyze(state)
         assert result.get("intake_count_features") == 1
@@ -370,7 +370,7 @@ class TestIntakeAnalyzeNode:
         state = _make_state(item_path=str(item), item_type="feature")
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("NO", 0.001),
+            return_value=("NO", 0.001, ""),
         ) as mock_check, patch(
             "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
             return_value={"clarity": 4, "raw_output": "Title: T\nClarity: 4", "total_cost_usd": 0.02},
@@ -387,7 +387,7 @@ class TestIntakeAnalyzeNode:
         state = _make_state(item_path=str(item), item_type="feature")
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("YES", 0.001),
+            return_value=("YES", 0.001, ""),
         ), patch(
             "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
         ) as mock_whys:
@@ -403,7 +403,7 @@ class TestIntakeAnalyzeNode:
         state = _make_state(item_path=str(item), item_type="feature")
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("Title: T\nClarity: 4", 0.01),
+            return_value=("Title: T\nClarity: 4", 0.01, ""),
         ):
             intake_analyze(state)
         data = json.loads(path.read_text())
@@ -429,7 +429,7 @@ class TestIntakeAnalyzeQuotaDetection:
         state = _make_state(item_path=str(item), item_type="defect")
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=(QUOTA_EXHAUSTION_OUTPUT, 0.0),
+            return_value=(QUOTA_EXHAUSTION_OUTPUT, 0.0, ""),
         ):
             result = intake_analyze(state)
         assert result == {"quota_exhausted": True}
@@ -445,7 +445,7 @@ class TestIntakeAnalyzeQuotaDetection:
         state = _make_state(item_path=str(item), item_type="analysis")
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=(QUOTA_EXHAUSTION_OUTPUT, 0.0),
+            return_value=(QUOTA_EXHAUSTION_OUTPUT, 0.0, ""),
         ):
             result = intake_analyze(state)
         assert result == {"quota_exhausted": True}
@@ -501,7 +501,7 @@ class TestBlockingThrottleWait:
         state = _make_state(item_path=str(item), item_type="feature")
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("Title: T\nClarity: 4", 0.01),
+            return_value=("Title: T\nClarity: 4", 0.01, ""),
         ):
             result = intake_analyze(state)
 
@@ -544,7 +544,7 @@ class TestBlockingThrottleWait:
         state = _make_state(item_path=str(item), item_type="feature")
         with patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("Title: T\nClarity: 4", 0.01),
+            return_value=("Title: T\nClarity: 4", 0.01, ""),
         ):
             result = intake_analyze(state)
 
