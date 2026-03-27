@@ -17,8 +17,13 @@ sections:
   - id: '1.1'
     name: Verify trace_id column, filter, and backend support
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/05-traces-trace-id-column-and-filter.md'
     last_attempt: '2026-03-27T09:20:34.767025'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T09:21:52.085432'
+    result_message: 'All acceptance criteria already implemented: trace_id column
+      with truncated display and copy button in proxy_list.html, trace_id filter input
+      in filter form, and backend list_runs()/count_runs() both support trace_id filtering
+      in proxy.py. No changes required.'
