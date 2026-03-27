@@ -1,7 +1,5 @@
 # Design: Timeline all items show as "Other"
 
-## Status: Review Required (previously implemented)
-
 ## Overview
 
 The Gantt timeline in proxy_trace.html was showing all child run bars in grey
@@ -42,6 +40,6 @@ The macros were rewritten to use:
 
 ## Validation Focus
 
-Since this was previously implemented, the plan focuses on verifying that the
+Since this was previously implemented, the plan focuses on verifying the
 existing implementation correctly addresses all acceptance criteria from the
 work item. If any criteria fail, the coder task will fix the issues in place.
