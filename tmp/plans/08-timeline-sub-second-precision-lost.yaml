@@ -1,21 +1,24 @@
 meta:
-  source_item: "tmp/plans/.claimed/08-timeline-sub-second-precision-lost.md"
+  source_item: tmp/plans/.claimed/08-timeline-sub-second-precision-lost.md
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
 sections:
-  - id: '1'
-    name: Validate and fix timeline sub-second precision
-    status: pending
-    tasks:
-      - id: '1.1'
-        name: Validate and fix sub-second precision implementation
-        agent: coder
-        status: pending
-        description: "Implement the work item: tmp/plans/.claimed/08-timeline-sub-second-precision-lost.md"
+- id: '1'
+  name: Validate and fix timeline sub-second precision
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Validate and fix sub-second precision implementation
+    agent: coder
+    status: in_progress
+    description: 'Implement the work item: tmp/plans/.claimed/08-timeline-sub-second-precision-lost.md'
+    last_attempt: '2026-03-27T10:07:45.449652'
+    attempts: 1
+    model_used: sonnet
