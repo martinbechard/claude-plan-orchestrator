@@ -4,8 +4,8 @@
 
 The Recent Completions table shows "Invalid Date" in the Finished column when
 data comes from the DB proxy. The DB proxy returns finished_at as ISO 8601
-strings, but the original fmtFinished() assumed Unix timestamp numbers and
-multiplied by 1000, producing NaN.
+strings, but fmtFinished() assumes Unix timestamp numbers and multiplies by
+1000, producing NaN.
 
 ## Architecture
 
@@ -18,25 +18,25 @@ The dashboard UI (dashboard.js) receives completion data from two backends:
 
 The fmtFinished() function must handle both formats.
 
-## Current State
-
-A prior fix added the finishedAtToMs() helper in dashboard.js that uses a
-typeof check to branch between numeric (Unix timestamp * 1000) and string
-(direct ISO 8601 parse) paths. fmtFinished() and timeline rendering both
-use this helper.
-
 ## Key Files
 
-- **langgraph_pipeline/web/static/dashboard.js** - Contains finishedAtToMs()
-  helper and fmtFinished() that uses it
+- **langgraph_pipeline/web/static/dashboard.js** - Contains fmtFinished() and
+  any timestamp conversion helpers
+
+## Fix
+
+Update fmtFinished() (or its helper) to detect the type of finished_at and
+construct Date accordingly:
+- number: new Date(value * 1000) (Unix seconds to ms)
+- string: new Date(value) (ISO 8601 natively parsed)
 
 ## Design Decision
 
-Handle both types at the UI boundary via finishedAtToMs() rather than
-normalizing at the backend. This is the simplest approach: a typeof check
-branches between numeric and string parsing.
+Handle both types at the UI boundary rather than normalizing at the backend.
+This is the simplest approach: a typeof check branches between numeric and
+string parsing.
 
-## Validation Task
+## Prior Implementation Notes
 
-Since this was previously implemented, the plan task validates that the fix
-works correctly for both backends and that no regressions exist.
+This item was previously attempted. The work item is marked "Review Required" -
+the task should validate existing code first and only fix what is broken.
