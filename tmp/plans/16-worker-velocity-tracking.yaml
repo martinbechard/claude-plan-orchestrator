@@ -18,7 +18,7 @@ sections:
     name: Update velocity thresholds, add smooth color interpolation, and fix bar
       labels
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/16-worker-velocity-tracking.md
       -- Focus on the Timeline colour mode toggle and Bar text and tooltips requirements.
       In dashboard.js: update velocity thresholds to match spec (500/2000/5000), replace
@@ -30,3 +30,5 @@ sections:
     last_attempt: '2026-03-27T15:17:29.571715'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T15:19:26.132570'
+    result_message: 'PASS: All good'
