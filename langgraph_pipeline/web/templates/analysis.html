@@ -355,7 +355,7 @@
         </tr>
         <tr id="{{ detail_id }}" class="task-detail-row">
           <td colspan="6" style="padding:0.5rem 1rem;">
-            {% set item_runs = slug_runs.get(sc.item_slug, []) %}
+            {% set item_runs = slug_runs.get(sc.item_slug, []) if slug_runs is defined else [] %}
             {% if item_runs %}
             <table class="task-detail-table">
               <thead>
