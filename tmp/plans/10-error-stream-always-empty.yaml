@@ -29,3 +29,8 @@ sections:
       to filter DEBUG/INFO records at the handler level. Updated tests to verify filtering
       works when the logger is at DEBUG level (the --verbose scenario). All 23 tests
       pass.
+    validation_attempts: 1
+    validation_findings: DashboardErrorHandler.__init__ adds setLevel(WARNING) correctly;
+      handler installed in cli.py; all 23 dashboard tests and 1305 total tests pass.
+      Build command has a stale reference to scripts/plan-orchestrator.py (file does
+      not exist) but actual modified files compile clean.

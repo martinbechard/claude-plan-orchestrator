@@ -29,3 +29,8 @@ sections:
       and CompletionRecord, exposed in SSE snapshot, supervisor passes and refreshes
       run_id, dashboard.js renders trace links to /proxy?trace_id=<run_id> for workers
       and completions, /proxy endpoint accepts trace_id filter. All 48 tests pass.'
+    validation_attempts: 1
+    validation_findings: 'All 7 requirements met and 1303 tests pass. One WARN: dashboard
+      trace link rendering (dashboard.js:271-272, :320-321) cannot be verified without
+      a running server. Build command references non-existent plan-orchestrator.py
+      but auto-pipeline.py compiles cleanly.'
