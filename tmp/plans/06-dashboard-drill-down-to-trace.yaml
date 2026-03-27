@@ -1,22 +1,24 @@
 meta:
-  source_item: "tmp/plans/.claimed/06-dashboard-drill-down-to-trace.md"
+  source_item: tmp/plans/.claimed/06-dashboard-drill-down-to-trace.md
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
-
 sections:
-  - id: '1'
-    name: Validate and fix dashboard drill-down to trace
-    status: pending
-    tasks:
-      - id: '1.1'
-        name: Review and fix drill-down links in dashboard
-        agent: frontend-coder
-        status: pending
-        description: "Implement the work item: tmp/plans/.claimed/06-dashboard-drill-down-to-trace.md"
+- id: '1'
+  name: Validate and fix dashboard drill-down to trace
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Review and fix drill-down links in dashboard
+    agent: frontend-coder
+    status: in_progress
+    description: 'Implement the work item: tmp/plans/.claimed/06-dashboard-drill-down-to-trace.md'
+    last_attempt: '2026-03-27T09:21:23.582332'
+    attempts: 1
+    model_used: sonnet
