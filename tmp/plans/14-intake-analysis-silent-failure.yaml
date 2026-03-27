@@ -28,3 +28,5 @@ sections:
       not exist; (2) 3 test failures in test_intake.py from unstaged changes to intake.py
       unrelated to this task — confirmed by stash/unstash: all 38 intake tests pass
       without the unstaged changes.'
+    validation_attempts: 1
+    validation_findings: Mock task done
