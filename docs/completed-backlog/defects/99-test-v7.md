@@ -13,7 +13,7 @@ Add a comment "# tmp plans test" to langgraph_pipeline/shared/paths.py.
 - Does the item page show non-zero Tokens after completion?
   YES = pass, NO = fail
 
-## LangSmith Trace: 761b663f-1c78-47be-a73f-97fd0a1080b6
+
 
 
 ## 5 Whys Analysis
