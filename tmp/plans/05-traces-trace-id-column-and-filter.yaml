@@ -19,8 +19,12 @@ sections:
   - id: '1.1'
     name: Validate acceptance criteria and fix any failures
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/05-traces-trace-id-column-and-filter.md'
     last_attempt: '2026-03-27T01:29:39.289919'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T01:31:43.763569'
+    result_message: 'All acceptance criteria validated: trace_id column (truncated
+      + copy button) in proxy_list.html, trace_id filter input in filter bar, backend
+      list_runs/count_runs both support trace_id filter. All 1303 tests pass.'
