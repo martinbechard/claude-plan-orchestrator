@@ -75,3 +75,5 @@ Clarity: 4
 Root Need: Establish a canonical timestamp format contract at the backend-to-frontend boundary so all data sources return the same type, preventing UI code from needing to handle multiple formats.
 
 Summary: The defect reveals a missing serialization contract between backend implementations that forces UI code to be polymorphic instead of having a single source of truth for timestamp format.
+
+## LangSmith Trace: 332c8f1c-fc87-4662-9600-86e4accd5268
