@@ -17,7 +17,7 @@ sections:
   - id: '1.1'
     name: Write narrative document and investigate LangSmith SDK calls
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/08-tracing-proxy-narrative-and-guid-generation.md
       -- This was previously implemented but the narrative doc is missing. Create
       docs/narrative/tracing-proxy.md with the content specified in Part 1. Then investigate
@@ -27,3 +27,10 @@ sections:
     last_attempt: '2026-03-27T14:57:38.565848'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:59:44.101973'
+    result_message: 'Created docs/narrative/tracing-proxy.md covering: why the proxy
+      was built (LangSmith quota exhaustion + poor metrics visibility), all four intercepted
+      SDK endpoints (GET /info, POST /runs/multipart, POST /runs, PATCH /runs/{run_id}),
+      confirmation that no calls leak to api.smith.langchain.com when proxy is active,
+      where trace IDs come from (LangSmith SDK generates UUIDv7), and UUIDv7 recommendation
+      if SDK dependency is ever removed. Updated docs/narrative/README.md index.'
