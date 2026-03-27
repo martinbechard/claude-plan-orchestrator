@@ -1,0 +1,21 @@
+meta:
+  source_item: tmp/plans/.claimed/30-cost-posting-uses-wrong-env-var-and-is-never-wired.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Validate and fix cost posting env var wiring
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Validate implementation and fix any remaining gaps
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/30-cost-posting-uses-wrong-env-var-and-is-never-wired.md'
