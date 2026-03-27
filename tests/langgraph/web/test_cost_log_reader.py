@@ -398,6 +398,37 @@ def test_svg_bar_chart_empty_data_returns_svg():
     assert result.startswith("<svg")
 
 
+def test_svg_bar_chart_max_bar_value_label_within_viewport():
+    """Max-value bar's label starts within the SVG viewport (no clipping).
+
+    With width=700, SVG_BAR_LABEL_PADDING=160, SVG_VALUE_LABEL_PADDING=80:
+    bar_area_width = 700 - 160 - 80 = 460. Max bar fills 460px.
+    Value label x = 160 + 460 + 5 = 625 < 700, leaving 75px for the text.
+    """
+    from langgraph_pipeline.web.cost_log_reader import (
+        SVG_BAR_LABEL_PADDING,
+        SVG_TEXT_OFFSET_X,
+        SVG_VALUE_LABEL_PADDING,
+    )
+
+    chart_width = 700
+    result = svg_bar_chart(
+        labels=["node/type/expensive", "node/type/cheap"],
+        values=[55.605055300000004, 1.23],
+        width=chart_width,
+        bar_height=18,
+        title="Total Cost by Node Type (USD)",
+    )
+    assert "$55.61" in result
+    assert "$1.23" in result
+
+    bar_area_width = chart_width - SVG_BAR_LABEL_PADDING - SVG_VALUE_LABEL_PADDING
+    max_label_x = SVG_BAR_LABEL_PADDING + bar_area_width + SVG_TEXT_OFFSET_X
+    assert max_label_x < chart_width, (
+        f"Value label x={max_label_x} is outside SVG width={chart_width}"
+    )
+
+
 # ─── /analysis endpoint integration tests ─────────────────────────────────────
 
 
