@@ -66,3 +66,5 @@ This overlaps with defect 04/08 (expandable items in timeline):
 
 - Defect 04/08: expandable timeline items (same infrastructure needed)
 - Defect 13: bar colour classification (tool calls need distinct colour)
+
+## LangSmith Trace: 69e284fb-f4ab-4fb5-9d7a-f97e277c3623

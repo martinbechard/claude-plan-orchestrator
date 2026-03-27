@@ -1,22 +1,24 @@
 meta:
-  source_item: "tmp/plans/.claimed/08-timeline-sub-second-precision-lost.md"
+  source_item: tmp/plans/.claimed/08-timeline-sub-second-precision-lost.md
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
-
 sections:
-  - id: '1'
-    name: Remove legacy integer-precision macros and fix fallback
-    status: pending
-    tasks:
-      - id: '1.1'
-        name: Remove secs() and fmt_duration() macros and fix duration fallback
-        agent: frontend-coder
-        status: pending
-        description: "Implement the work item: tmp/plans/.claimed/08-timeline-sub-second-precision-lost.md"
+- id: '1'
+  name: Remove legacy integer-precision macros and fix fallback
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Remove secs() and fmt_duration() macros and fix duration fallback
+    agent: frontend-coder
+    status: in_progress
+    description: 'Implement the work item: tmp/plans/.claimed/08-timeline-sub-second-precision-lost.md'
+    last_attempt: '2026-03-27T09:23:45.823403'
+    attempts: 1
+    model_used: sonnet

@@ -27,3 +27,11 @@ sections:
       with truncated display and copy button in proxy_list.html, trace_id filter input
       in filter form, and backend list_runs()/count_runs() both support trace_id filtering
       in proxy.py. No changes required.'
+    validation_attempts: 1
+    validation_findings: 'All drill-down link acceptance criteria are already implemented:
+      WorkerInfo and CompletionRecord have run_id fields, DashboardState.snapshot()
+      exposes run_id in the SSE payload, list_completions() returns run_id from the
+      DB, the completions table has a run_id column, the supervisor polls for run_ids
+      via _refresh_worker_run_ids(), dashboard.html templates include trace-link anchors,
+      dashboard.js renders the links when run_id is present pointing to /proxy?trace_id=<run_id>,
+      and the /proxy route accepts the trace_id filter. No changes were needed.'
