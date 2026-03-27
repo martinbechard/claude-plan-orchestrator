@@ -74,6 +74,18 @@ _ALTER_ADD_COMPLETIONS_VERIFICATION_NOTES_SQL = (
     "ALTER TABLE completions ADD COLUMN verification_notes TEXT"
 )
 
+_CREATE_SESSIONS_SQL = """
+CREATE TABLE IF NOT EXISTS sessions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    label           TEXT,
+    start_time      TEXT NOT NULL,
+    end_time        TEXT,
+    total_cost_usd  REAL NOT NULL DEFAULT 0.0,
+    items_processed INTEGER NOT NULL DEFAULT 0,
+    notes           TEXT
+);
+"""
+
 _CREATE_COST_TASKS_SQL = """
 CREATE TABLE IF NOT EXISTS cost_tasks (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -204,6 +216,28 @@ class ToolCallCost:
     task_id: str
 
 
+@dataclass
+class Session:
+    """One pipeline session row from the sessions table."""
+
+    id: int
+    label: Optional[str]
+    start_time: str
+    end_time: Optional[str]
+    total_cost_usd: float
+    items_processed: int
+    notes: Optional[str]
+
+
+@dataclass
+class DailyTotal:
+    """Aggregated cost and item count for a single calendar day."""
+
+    date_str: str
+    cost_usd: float
+    items_processed: int
+
+
 # ─── Module State ─────────────────────────────────────────────────────────────
 
 _proxy_instance: Optional["TracingProxy"] = None
@@ -236,6 +270,7 @@ class TracingProxy:
             conn.execute(_CREATE_TABLE_SQL)
             conn.execute(_CREATE_COMPLETIONS_SQL)
             conn.execute(_CREATE_COST_TASKS_SQL)
+            conn.execute(_CREATE_SESSIONS_SQL)
             try:
                 conn.execute(_ALTER_ADD_MODEL_SQL)
             except sqlite3.OperationalError:
@@ -1320,6 +1355,110 @@ class TracingProxy:
             conditions.append("created_at <= ?")
             params.append(date_to)
         return conditions, params
+
+    # ─── Sessions ─────────────────────────────────────────────────────────────
+
+    def create_session(self, label: Optional[str] = None) -> int:
+        """Create a new session row and return its id.
+
+        Any orphaned sessions (end_time IS NULL) are closed with the current
+        timestamp before the new row is inserted, providing crash recovery.
+
+        Args:
+            label: Optional human-readable label for the session.
+
+        Returns:
+            The id of the newly created session row.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE sessions SET end_time = ? WHERE end_time IS NULL",
+                [now],
+            )
+            cursor = conn.execute(
+                "INSERT INTO sessions (label, start_time) VALUES (?, ?)",
+                [label, now],
+            )
+            return cursor.lastrowid
+
+    def close_session(
+        self,
+        session_id: int,
+        total_cost_usd: float,
+        items_processed: int,
+    ) -> None:
+        """Close a session by setting end_time and updating cost/item totals.
+
+        Args:
+            session_id: The id of the session to close.
+            total_cost_usd: Total API cost incurred during the session.
+            items_processed: Number of work items completed during the session.
+        """
+        end_time = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE sessions
+                SET end_time = ?, total_cost_usd = ?, items_processed = ?
+                WHERE id = ?
+                """,
+                [end_time, total_cost_usd, items_processed, session_id],
+            )
+
+    def list_sessions(self) -> list[Session]:
+        """Return all sessions ordered by start_time descending.
+
+        Returns:
+            List of Session dataclass instances.
+        """
+        sql = """
+            SELECT id, label, start_time, end_time, total_cost_usd, items_processed, notes
+            FROM sessions
+            ORDER BY start_time DESC
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql).fetchall()
+        return [
+            Session(
+                id=row["id"],
+                label=row["label"],
+                start_time=row["start_time"],
+                end_time=row["end_time"],
+                total_cost_usd=float(row["total_cost_usd"]),
+                items_processed=int(row["items_processed"]),
+                notes=row["notes"],
+            )
+            for row in rows
+        ]
+
+    def list_daily_totals(self) -> list[DailyTotal]:
+        """Return daily cost and item totals from the completions table.
+
+        Groups by calendar day (UTC) and orders newest first.
+
+        Returns:
+            List of DailyTotal dataclass instances ordered by date descending.
+        """
+        sql = """
+            SELECT
+                date(finished_at) AS date_str,
+                COALESCE(SUM(cost_usd), 0.0) AS cost_usd,
+                COUNT(*) AS items_processed
+            FROM completions
+            GROUP BY date_str
+            ORDER BY date_str DESC
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql).fetchall()
+        return [
+            DailyTotal(
+                date_str=row["date_str"],
+                cost_usd=float(row["cost_usd"]),
+                items_processed=int(row["items_processed"]),
+            )
+            for row in rows
+        ]
 
     def get_slug_cost_runs(self) -> dict[str, list["CostRun"]]:
         """Return all cost-bearing runs with an item_slug, grouped by slug.

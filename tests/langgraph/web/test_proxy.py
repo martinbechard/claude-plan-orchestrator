@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import langgraph_pipeline.web.proxy as proxy_module
-from langgraph_pipeline.web.proxy import TracingProxy, get_proxy, init_proxy
+from langgraph_pipeline.web.proxy import DailyTotal, Session, TracingProxy, get_proxy, init_proxy
 from langgraph_pipeline.web.routes.proxy import _compute_elapsed, _parse_iso
 from langgraph_pipeline.web.server import create_app
 
@@ -1225,3 +1225,119 @@ def test_list_cost_runs_pagination(proxy):
     ids_p1 = {r.run_id for r in runs_p1}
     ids_p2 = {r.run_id for r in runs_p2}
     assert ids_p1.isdisjoint(ids_p2)
+
+
+# ─── Sessions Tests ───────────────────────────────────────────────────────────
+
+
+def test_create_session_returns_id(proxy):
+    """create_session() inserts a row and returns a positive integer id."""
+    session_id = proxy.create_session(label="Morning run")
+    assert isinstance(session_id, int)
+    assert session_id > 0
+
+
+def test_create_session_closes_orphans(proxy):
+    """create_session() closes any open sessions before creating a new one."""
+    first_id = proxy.create_session(label="First")
+    # First session is open (end_time IS NULL)
+    sessions = proxy.list_sessions()
+    assert len(sessions) == 1
+    assert sessions[0].end_time is None
+
+    # Creating a second session should close the first
+    second_id = proxy.create_session(label="Second")
+    sessions = proxy.list_sessions()
+    assert len(sessions) == 2
+
+    # The first session (older, so last in DESC order) must now be closed
+    first_session = next(s for s in sessions if s.id == first_id)
+    assert first_session.end_time is not None
+
+    # The second session is still open
+    second_session = next(s for s in sessions if s.id == second_id)
+    assert second_session.end_time is None
+
+
+def test_close_session_sets_end_time_and_totals(proxy):
+    """close_session() updates end_time, total_cost_usd, and items_processed."""
+    session_id = proxy.create_session()
+    proxy.close_session(session_id, total_cost_usd=1.2345, items_processed=7)
+
+    sessions = proxy.list_sessions()
+    assert len(sessions) == 1
+    s = sessions[0]
+    assert s.end_time is not None
+    assert abs(s.total_cost_usd - 1.2345) < 1e-6
+    assert s.items_processed == 7
+
+
+def test_list_sessions_ordered_newest_first(proxy):
+    """list_sessions() returns sessions newest-first."""
+    id1 = proxy.create_session(label="alpha")
+    id2 = proxy.create_session(label="beta")  # closes alpha, creates beta
+
+    sessions = proxy.list_sessions()
+    assert sessions[0].id == id2
+    assert sessions[1].id == id1
+
+
+def test_list_sessions_empty(proxy):
+    """list_sessions() returns an empty list when no sessions exist."""
+    assert proxy.list_sessions() == []
+
+
+def test_list_daily_totals_aggregates_by_day(proxy):
+    """list_daily_totals() sums cost_usd and counts rows per calendar day."""
+    # Insert two completions on 2026-03-20 and one on 2026-03-21
+    import sqlite3
+
+    with sqlite3.connect(str(proxy._db_path)) as conn:
+        conn.execute(
+            "INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, finished_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            ["slug-a", "feature", "success", 0.50, 10.0, "2026-03-20T08:00:00"],
+        )
+        conn.execute(
+            "INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, finished_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            ["slug-b", "feature", "success", 0.30, 5.0, "2026-03-20T12:00:00"],
+        )
+        conn.execute(
+            "INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, finished_at)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            ["slug-c", "defect", "success", 0.20, 3.0, "2026-03-21T09:00:00"],
+        )
+
+    totals = proxy.list_daily_totals()
+    assert len(totals) == 2
+
+    # Newest day first
+    assert totals[0].date_str == "2026-03-21"
+    assert abs(totals[0].cost_usd - 0.20) < 1e-6
+    assert totals[0].items_processed == 1
+
+    assert totals[1].date_str == "2026-03-20"
+    assert abs(totals[1].cost_usd - 0.80) < 1e-6
+    assert totals[1].items_processed == 2
+
+
+def test_list_daily_totals_empty(proxy):
+    """list_daily_totals() returns an empty list when completions table is empty."""
+    assert proxy.list_daily_totals() == []
+
+
+def test_session_dataclass_fields(proxy):
+    """Session returned by list_sessions() has all expected fields."""
+    session_id = proxy.create_session(label="test-label")
+    sessions = proxy.list_sessions()
+    assert len(sessions) == 1
+    s = sessions[0]
+    assert isinstance(s, Session)
+    assert s.id == session_id
+    assert s.label == "test-label"
+    assert s.start_time is not None
+    assert s.end_time is None
+    assert s.total_cost_usd == 0.0
+    assert s.items_processed == 0
+    assert s.notes is None
