@@ -7,6 +7,13 @@ acceptance criteria below. If any criterion fails, fix it. Do not
 rewrite from scratch — check what exists first.
 
 
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
+
 ## Status: Open
 
 ## Priority: Low

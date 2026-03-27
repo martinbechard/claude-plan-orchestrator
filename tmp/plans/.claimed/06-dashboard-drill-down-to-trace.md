@@ -89,3 +89,5 @@ The request is well-structured with clear current/expected behaviors and a concr
 **Root Need:** Operators require seamless navigation from high-level operational status (active workers, recent outcomes) into detailed execution traces to close the observability loop and reduce time-to-diagnosis for issues.
 
 **Summary:** The dashboard needs bidirectional traceability: from metrics to traces and vice versa, enabling operators to move fluidly between system state and execution context.
+
+## LangSmith Trace: 7d7aa813-fe73-479b-842a-36eb72001945
