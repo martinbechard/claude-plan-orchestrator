@@ -64,7 +64,7 @@ actually failed.
    probe_quota_available() before calling, or share the quota state with
    the Slack handler).
 
-## LangSmith Trace: cb193a87-4711-4eee-b74f-75a67e64c9dc
+
 
 
 ## 5 Whys Analysis
