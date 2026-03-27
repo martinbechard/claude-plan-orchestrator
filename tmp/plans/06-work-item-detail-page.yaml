@@ -1,0 +1,30 @@
+meta:
+  source_item: "tmp/plans/.claimed/06-work-item-detail-page.md"
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Add drill-down navigation links from dashboard and queue
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add drill-down links to dashboard and queue templates
+    agent: frontend-coder
+    status: pending
+    description: "Implement the work item: tmp/plans/.claimed/06-work-item-detail-page.md — Focus on the Navigation section: wrap slug text in anchor tags linking to /item/<slug> in dashboard.html (active worker cards and recent completion rows) and queue.html (queue rows). Match the link style already used in completions.html."
+- id: '2'
+  name: Polish work item detail page UI
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Review and polish item detail page layout
+    agent: frontend-coder
+    status: pending
+    description: "Implement the work item: tmp/plans/.claimed/06-work-item-detail-page.md — Focus on the UI Design section: ensure two-column responsive layout (requirements left, plan + history right on wide screens), clear section separators, task checkboxes for plan items, and outcome color coding for completion history rows. Use the frontend-design skill for polish."

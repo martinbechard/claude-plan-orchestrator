@@ -67,3 +67,37 @@ page by slug.
   but the page should be built regardless with a placeholder.
 
 ## LangSmith Trace: 334ee53b-cee4-4c0f-a5da-bad358e8c676
+
+
+## 5 Whys Analysis
+
+I see you want a focused analytical task—the 5 Whys analysis on this specific backlog item. That's different from the brainstorming design workflow. Let me apply that analysis directly:
+
+---
+
+**Title:** Understanding why a drill-down detail page is needed for work item visibility
+
+**Clarity:** 4/5 (well-structured spec, but the underlying user need could be clearer)
+
+**5 Whys:**
+
+1. **Why does the dashboard need links to a detail page?**
+   Because users viewing active workers or recent completions can only see a summary snapshot—they can't understand the full context of what a work item actually requires or how it's progressing without clicking through.
+
+2. **Why can't users understand context from the dashboard summary?**
+   Because the dashboard shows only immediate status (running/queued/completed) and cost roll-up, but doesn't expose the item's requirements (the markdown), its planned tasks, or its retry history—critical information for decision-making.
+
+3. **Why is markdown content and plan status important to expose?**
+   Because someone monitoring the pipeline needs to know: *What was the item supposed to do?* (requirements), *What steps are planned?* (tasks), and *How many times has this failed/succeeded?* (history)—without this, they can't troubleshoot blocks or validate completion.
+
+4. **Why can't the team get this information from the source files directly?**
+   Because the backlog files, plan YAMLs, and completion history are distributed across the filesystem and database—users would have to manually find and correlate multiple sources. The detail page centralizes this into one place per item.
+
+5. **Why does centralizing information matter for this project's workflow?**
+   Because the plan orchestrator runs autonomously, and when it stalls or makes unexpected decisions, a human needs to quickly investigate: *Is the item blocked?* *Was the plan wrong?* *Did a prior attempt fail?* The detail page eliminates context-switching and manual file hunting during incident triage.
+
+---
+
+**Root Need:** Enable rapid incident investigation and validation of orchestrator decisions by centralizing all metadata about a work item (requirements, plan, execution history) in one queryable location.
+
+**Summary:** The detail page is infrastructure for observability—it turns the autonomous pipeline into something debuggable by making the full history and intent of each item visible on demand.
