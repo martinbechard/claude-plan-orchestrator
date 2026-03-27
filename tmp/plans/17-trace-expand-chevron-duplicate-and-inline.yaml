@@ -17,5 +17,8 @@ sections:
   - id: '1.1'
     name: Validate and fix chevron duplicate and inline subrun details
     agent: frontend-coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/17-trace-expand-chevron-duplicate-and-inline.md'
+    last_attempt: '2026-03-27T14:16:45.740896'
+    attempts: 1
+    model_used: sonnet
