@@ -3,6 +3,7 @@ name: validator
 description: "Post-task verification. Reads work item for expectations, runs build/tests/E2E/code review. PASS/WARN/FAIL verdict."
 tools:
   - Read
+  - Write
   - Grep
   - Glob
   - Bash
@@ -30,9 +31,25 @@ Run the test command from the prompt. Failure = FAIL.
 
 ### Step 3: E2E Test
 If the work item or task references a test file (tests/*.spec.ts):
-- Run: pnpm test:e2e:dev <test-file>
+- Run: pnpm test:e2e tests/e2e/<test-file>
 - Failure = FAIL. Include full output in Evidence.
-If no test file referenced, skip.
+
+**UI acceptance criteria detection:** Scan all acceptance criteria from the work
+item. Any criterion that references user-visible behavior qualifies as a UI
+criterion. Look for patterns like:
+- "Does the page show X", "displays X", "shows Y", "page contains Z"
+- "filter works", "link navigates to", "button does X"
+- "table lists", "column appears", "row includes"
+
+For each UI criterion found:
+1. Write a targeted Playwright .spec.ts test under tests/e2e/ that navigates to
+   the relevant page and verifies the criterion using accessible selectors
+   (getByRole, getByText, getByLabel)
+2. Run: pnpm test:e2e tests/e2e/<test-file>.spec.ts
+3. Include the test result (PASS/FAIL) in the validation findings
+4. Clean up the .spec.ts file after the test runs
+
+If no UI criteria and no referenced test file, skip this step.
 
 ### Step 4: Code Review
 Read procedure-coding-rules.md. Check created/modified files:
@@ -56,20 +73,26 @@ Any hit = WARN. If the hit maps to an unmet acceptance criterion = FAIL.
 
 **5b. End-to-end gate**
 For acceptance criteria that involve the web UI ("displays X", "shows Y",
-"page contains Z"), the web server is running at http://localhost:7070.
-You MUST verify by running:
+"page contains Z"), use Playwright e2e tests instead of curl.
+
+The web server runs at http://localhost:7070. For each UI criterion:
+
+1. Create a targeted .spec.ts test under tests/e2e/ that:
+   - Navigates to the relevant page
+   - Uses accessible selectors (getByRole, getByText, getByLabel)
+   - Asserts the expected content or behavior is present
+2. Run: pnpm test:e2e tests/e2e/<test-file>.spec.ts
+3. If the test passes = PASS for that criterion
+4. If the test fails = FAIL, include the Playwright error output in Evidence
+5. Clean up the test file after running
+
+For simple static content checks where a full browser is unnecessary, curl
+remains acceptable as a quick alternative:
 
     curl -s http://localhost:7070/<path> | grep "<expected text>"
 
-For example:
-- "Does /analysis show cost?" → curl -s http://localhost:7070/analysis | grep '$'
-- "Does the item page show validation results?" → curl -s http://localhost:7070/item/<slug> | grep "Validation Results"
-
-If curl fails or the expected text is not found = FAIL.
-If curl succeeds and the text is found = PASS.
-
-Only report WARN for criteria that genuinely require user interaction
-(clicking buttons, filling forms) that curl cannot test.
+Only report WARN for criteria that genuinely require complex user interaction
+(multi-step form flows, drag-and-drop) that even Playwright cannot easily test.
 
 **5c. Test-data leak check**
 Grep all modified source files, DB migrations, AND production databases for
@@ -94,7 +117,9 @@ The coder is required to clean up test data before completion.
 - Command output or code references supporting each finding
 
 ## Constraints
-- Do NOT modify files. Only Bash for verification commands.
+- Do NOT modify application source files. Only observe and report.
+- Exception: you MAY create and delete .spec.ts files under tests/e2e/ for
+  e2e verification of UI criteria.
 - Be specific: file:line references in all findings.
 
 ## Output Protocol
