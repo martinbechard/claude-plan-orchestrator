@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "item_path": "tmp/plans/.claimed/04-timeline-duplicate-labels-and-elapsed-time.md",
+  "cost_usd": 0.6078819,
+  "input_tokens": 27,
+  "output_tokens": 7118,
+  "duration_s": 694.5272111250088,
+  "message": "Item processed successfully"
+}
