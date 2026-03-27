@@ -54,6 +54,11 @@ sections:
       session_start_time_iso. cli.py creates a session after web server starts and
       closes it in the finally block with cost and items from DashboardState. Added
       6 unit tests; all 1370 tests pass.
+    validation_attempts: 1
+    validation_findings: 'Updated docs/setup-guide.md: expanded required deps (langgraph/langsmith/fastapi/uvicorn
+      + optional chromadb/playwright), expanded mkdir step to all required directories,
+      added missing .gitignore entries (tmp/plans/, tmp/task-status.json, docs/reports/worker-output/,
+      pipeline DBs), and added first-run verification checklist as new step 8.'
 - id: '2'
   name: Sessions API route and history page
   status: pending
@@ -61,12 +66,15 @@ sections:
   - id: '2.1'
     name: Add sessions route and register in server
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
       -- Focus on the Dashboard display and Daily totals requirements. Create routes/sessions.py
       with GET /sessions (HTML) and GET /api/sessions (JSON returning sessions list
       and daily totals). Register the sessions router in server.py. Add unit tests
       for the endpoints.'
+    last_attempt: '2026-03-27T15:25:07.302535'
+    attempts: 1
+    model_used: sonnet
   - id: '2.2'
     name: Create sessions history HTML template
     agent: frontend-coder

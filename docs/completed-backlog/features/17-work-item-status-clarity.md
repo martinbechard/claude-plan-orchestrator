@@ -1,5 +1,12 @@
 # Work item detail page: show clear real-time status of what is happening
 
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
+
 ## Status: Open
 
 ## Priority: High
@@ -55,3 +62,33 @@ alongside the task list, not just the raw task checkboxes.
 - Use the existing DashboardState.active_workers to check if a worker is
   running for this slug.
 - The stage determination is a simple waterfall of file existence checks.
+
+
+
+
+## 5 Whys Analysis
+
+Title: Pipeline progress visibility drives user confidence in asynchronous processing
+
+Clarity: 4/5
+
+5 Whys:
+
+1. **Why can't users see what the pipeline is currently doing?**
+   Because the work item detail page only displays completed artifacts (traces, completion history) and static checks (document existence), not live pipeline state like active workers, current task progress, or intermediate processing stages.
+
+2. **Why wasn't real-time pipeline state integrated into the page?**
+   Because the pipeline's current state is distributed across multiple locations (backlog directories, .claimed/, docs/plans/, .claude/plans/, DashboardState), and there's no unified interface to query what stage an item is actually in at any moment.
+
+3. **Why is this distribution of state a problem for users?**
+   Because when users see "No plan found" they have no way to know if it's because the item is queued, being claimed, actively being designed right now, or genuinely stuck—all these states would show the same missing-document message.
+
+4. **Why does this ambiguity matter if users just wait?**
+   Because the pipeline's asynchronous processing means hours can pass between state changes with no feedback, and without intermediate progress indicators, users lose confidence and assume the system has failed or forgotten their item.
+
+5. **Why does absence of intermediate feedback erode confidence?**
+   Because humans distinguish "slow but working" from "broken" by seeing evidence of progress; silence in an asynchronous system reads as abandonment, leading users to take unintended action (re-submissions, escalations, giving up).
+
+Root Need: **Establish user confidence in asynchronous pipeline work by providing real-time stage visibility**, so users can distinguish normal multi-stage processing from genuine blockages without constant manual investigation.
+
+Summary: Users need live progress visibility at each pipeline stage to maintain trust that submitted items are being processed and to identify when intervention is actually needed.
