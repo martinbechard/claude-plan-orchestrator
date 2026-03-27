@@ -74,11 +74,59 @@ DEFECT_SYMPTOM_PROMPT = (
     "Summary: <one sentence describing the defect and its apparent status>"
 )
 
-ANALYSIS_FIVE_WHYS_PROMPT = (
-    "Analyze this analysis backlog item using the 5 Whys method.\n\n"
-    "Read the analysis backlog item at: {item_path}\n\n"
-    "Perform a 5 Whys analysis to identify the root cause.\n"
-    "IMPORTANT: Provide exactly 5 numbered Why questions and answers.\n\n"
+CHECK_HAS_FIVE_WHYS_PROMPT = (
+    "Read the backlog item at: {item_path}\n\n"
+    "Does this item already contain a 5 Whys analysis (5 numbered Why "
+    "questions with answers and a Root Need)?\n\n"
+    "Respond with ONLY one word: YES or NO"
+)
+
+CHECK_HAS_ACCEPTANCE_CHECKLIST_PROMPT = (
+    "Read the design document at: {design_doc_path}\n\n"
+    "Does this design document contain acceptance criteria written as a "
+    "checklist of specific YES/NO questions (e.g. 'Does X work? YES = pass, "
+    "NO = fail')?\n\n"
+    "Respond with ONLY one word: YES or NO"
+)
+
+DESIGN_VALIDATOR_MODEL = "claude-opus-4-6"
+DESIGN_VALIDATOR_TIMEOUT_SECONDS = 60
+
+VALIDATE_FIVE_WHYS_PROMPT = (
+    "Read the backlog item at: {item_path}\n\n"
+    "This item contains a 5 Whys analysis. Validate its quality:\n\n"
+    "1. Does each Why logically follow from the previous answer, with no "
+    "unjustified assumptions or leaps in reasoning?\n"
+    "2. Does the Root Need / final conclusion actually match and address "
+    "the original user request at the top of the item?\n"
+    "3. Are there any non-sequiturs where a Why introduces a new topic "
+    "not supported by the previous answer?\n\n"
+    "If the 5 Whys are valid, respond: VALID\n"
+    "If there are problems, respond: INVALID\n"
+    "Then on the next line explain what is wrong in one sentence."
+)
+
+VALIDATE_DESIGN_PROMPT = (
+    "Read the design document at: {design_doc_path}\n\n"
+    "Read the original backlog item at: {item_path}\n\n"
+    "Validate the design:\n\n"
+    "1. Does the design contain acceptance criteria as a checklist of "
+    "specific YES/NO questions?\n"
+    "2. Does the design actually address the original user request in the "
+    "backlog item, or does it solve a different problem?\n"
+    "3. Are there any unjustified assumptions or solutions that the user "
+    "did not ask for?\n\n"
+    "If the design is valid, respond: VALID\n"
+    "If there are problems, respond: INVALID\n"
+    "Then on the next line explain what is wrong in one sentence."
+)
+
+FIVE_WHYS_PROMPT = (
+    "Analyze this {item_type} backlog item using the 5 Whys method.\n\n"
+    "Read the backlog item at: {item_path}\n\n"
+    "Perform a 5 Whys analysis to uncover the root need behind this request.\n"
+    "IMPORTANT: Provide exactly 5 numbered Why questions and answers. Each Why\n"
+    "should dig deeper into the root cause of the previous answer.\n\n"
     "Respond in this exact format:\n\n"
     "Title: <one-line title>\n"
     "Clarity: <1-5 integer rating of the original request clarity>\n"
@@ -242,9 +290,62 @@ def _verify_defect_symptoms(item_path: str) -> dict[str, str | int | float]:
     return {"reproducible": reproducible, "clarity": clarity, "raw_output": output, "total_cost_usd": cost}
 
 
-def _run_five_whys_analysis(item_path: str) -> dict[str, str | int | float]:
-    """Spawn Claude to run a 5-Whys analysis on an analysis backlog item."""
-    prompt = ANALYSIS_FIVE_WHYS_PROMPT.format(item_path=item_path)
+def _invoke_claude_opus(prompt: str, timeout: int = DESIGN_VALIDATOR_TIMEOUT_SECONDS) -> tuple[str, float]:
+    """Invoke Claude CLI with Opus model for quality validation checks."""
+    try:
+        result = subprocess.run(
+            ["claude", "--model", DESIGN_VALIDATOR_MODEL, "--print", prompt,
+             "--output-format", "json", "--dangerously-skip-permissions",
+             "--permission-mode", "acceptEdits"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        if result.returncode == 0 and result.stdout:
+            data = json.loads(result.stdout)
+            text = data.get("result", "").strip()
+            cost = float(data.get("total_cost_usd", 0.0))
+            return text, cost
+        return result.stderr or "", 0.0
+    except (subprocess.TimeoutExpired, OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return "", 0.0
+
+
+def _has_five_whys(item_path: str) -> bool:
+    """Use Haiku to check if the backlog item already contains a 5 Whys analysis."""
+    prompt = CHECK_HAS_FIVE_WHYS_PROMPT.format(item_path=item_path)
+    output, _cost = _invoke_claude(prompt, timeout=30)
+    return output.strip().upper().startswith("YES")
+
+
+def _validate_five_whys(item_path: str) -> tuple[bool, str]:
+    """Use Opus to validate 5 Whys quality — no unjustified assumptions, conclusion matches request."""
+    prompt = VALIDATE_FIVE_WHYS_PROMPT.format(item_path=item_path)
+    output, _cost = _invoke_claude_opus(prompt)
+    valid = output.strip().upper().startswith("VALID")
+    reason = output.strip().split("\n", 1)[1].strip() if "\n" in output.strip() else ""
+    return valid, reason
+
+
+def _validate_design(design_doc_path: str, item_path: str) -> tuple[bool, str]:
+    """Use Opus to validate design — has checklist, matches request, no unjustified assumptions."""
+    prompt = VALIDATE_DESIGN_PROMPT.format(design_doc_path=design_doc_path, item_path=item_path)
+    output, _cost = _invoke_claude_opus(prompt)
+    valid = output.strip().upper().startswith("VALID")
+    reason = output.strip().split("\n", 1)[1].strip() if "\n" in output.strip() else ""
+    return valid, reason
+
+
+def _has_acceptance_checklist(design_doc_path: str) -> bool:
+    """Use Haiku to check if the design doc contains YES/NO acceptance criteria."""
+    prompt = CHECK_HAS_ACCEPTANCE_CHECKLIST_PROMPT.format(design_doc_path=design_doc_path)
+    output, _cost = _invoke_claude(prompt, timeout=30)
+    return output.strip().upper().startswith("YES")
+
+
+def _run_five_whys_analysis(item_path: str, item_type: str = "analysis") -> dict[str, str | int | float]:
+    """Spawn Claude to run a 5-Whys analysis on any backlog item."""
+    prompt = FIVE_WHYS_PROMPT.format(item_path=item_path, item_type=item_type)
     output, cost = _invoke_claude(prompt)
     clarity = _parse_clarity_score(output)
 
@@ -303,6 +404,7 @@ def intake_analyze(state: PipelineState) -> dict:
     total_cost_usd: float = 0.0
 
     if item_type == "defect" and item_path:
+        # Step 1: Verify symptoms are still reproducible.
         result = _verify_defect_symptoms(item_path)
         if detect_quota_exhaustion(str(result["raw_output"])):
             return {"quota_exhausted": True}
@@ -320,27 +422,64 @@ def intake_analyze(state: PipelineState) -> dict:
                 f"[intake_analyze] Defect symptoms not reproducible: {item_slug}"
             )
 
+        # Step 2: 5 Whys to understand root cause before planning (skip if already present).
+        if not _has_five_whys(item_path):
+            whys_result = _run_five_whys_analysis(item_path, item_type="defect")
+            if detect_quota_exhaustion(str(whys_result["raw_output"])):
+                return {"quota_exhausted": True}
+            total_cost_usd += float(whys_result.get("total_cost_usd", 0.0))
+        else:
+            print(f"[intake_analyze] 5 Whys already present for defect: {item_slug}")
+
+        # Step 3: Validate 5 Whys quality with Opus.
+        valid, reason = _validate_five_whys(item_path)
+        if not valid:
+            print(f"[intake_analyze] WARNING: 5 Whys validation failed for {item_slug}: {reason}")
+
         state_updates["intake_count_defects"] = (
             state.get("intake_count_defects", 0) + 1
         )
 
-    elif item_type == "analysis" and item_path:
-        result = _run_five_whys_analysis(item_path)
-        if detect_quota_exhaustion(str(result["raw_output"])):
-            return {"quota_exhausted": True}
-        clarity = result["clarity"]
-        total_cost_usd = float(result.get("total_cost_usd", 0.0))
+    elif item_type == "feature" and item_path:
+        # 5 Whys to understand the root need (skip if already present).
+        if not _has_five_whys(item_path):
+            result = _run_five_whys_analysis(item_path, item_type="feature")
+            if detect_quota_exhaustion(str(result["raw_output"])):
+                return {"quota_exhausted": True}
+            clarity = result["clarity"]
+            total_cost_usd = float(result.get("total_cost_usd", 0.0))
 
-        if clarity < INTAKE_CLARITY_THRESHOLD:
-            print(
-                f"[intake_analyze] Low clarity score {clarity} for analysis: {item_slug}"
-            )
+            if clarity < INTAKE_CLARITY_THRESHOLD:
+                print(
+                    f"[intake_analyze] Low clarity score {clarity} for feature: {item_slug}"
+                )
+        else:
+            print(f"[intake_analyze] 5 Whys already present for feature: {item_slug}")
+
+        # Validate 5 Whys quality with Opus.
+        valid, reason = _validate_five_whys(item_path)
+        if not valid:
+            print(f"[intake_analyze] WARNING: 5 Whys validation failed for {item_slug}: {reason}")
 
         state_updates["intake_count_features"] = (
             state.get("intake_count_features", 0) + 1
         )
 
-    elif item_type == "feature":
+    elif item_type == "analysis" and item_path:
+        if not _has_five_whys(item_path):
+            result = _run_five_whys_analysis(item_path, item_type="analysis")
+            if detect_quota_exhaustion(str(result["raw_output"])):
+                return {"quota_exhausted": True}
+            clarity = result["clarity"]
+            total_cost_usd = float(result.get("total_cost_usd", 0.0))
+
+            if clarity < INTAKE_CLARITY_THRESHOLD:
+                print(
+                    f"[intake_analyze] Low clarity score {clarity} for analysis: {item_slug}"
+                )
+        else:
+            print(f"[intake_analyze] 5 Whys already present for analysis: {item_slug}")
+
         state_updates["intake_count_features"] = (
             state.get("intake_count_features", 0) + 1
         )

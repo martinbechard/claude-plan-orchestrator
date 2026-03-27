@@ -35,7 +35,7 @@ from langgraph_pipeline.shared.claude_cli import (
 )
 from langgraph_pipeline.shared.config import load_orchestrator_config
 from langgraph_pipeline.shared.git import git_commit_files
-from langgraph_pipeline.shared.paths import ENV_ORCHESTRATOR_WEB_URL, STATUS_FILE_PATH, TASK_LOG_DIR
+from langgraph_pipeline.shared.paths import ENV_ORCHESTRATOR_WEB_URL, STATUS_FILE_PATH, TASK_LOG_DIR, WORKER_OUTPUT_DIR
 from langgraph_pipeline.shared.suspension import create_suspension_marker
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -240,34 +240,58 @@ def _write_task_log(
     stderr_text: str,
     duration: float,
     returncode: int,
+    slug: str = "",
+    task_id: str = "",
 ) -> None:
-    """Save Claude output and usage stats to a timestamped log file."""
+    """Save Claude output and usage stats to a timestamped log file.
+
+    When slug and task_id are provided, also writes a copy to
+    WORKER_OUTPUT_DIR/<slug>/task-<task_id>-<timestamp>.log so all output
+    for a given work item is accessible together.
+    """
+    timestamp_str = datetime.now().strftime('%Y%m%d-%H%M%S')
+
+    def _write_log_content(f) -> None:
+        f.write("=== Claude Task Output ===\n")
+        f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+        f.write(f"Duration: {duration:.1f}s\n")
+        f.write(f"Return code: {returncode}\n")
+        if result_capture:
+            cost = result_capture.get("total_cost_usd", 0)
+            usage = result_capture.get("usage", {})
+            f.write(f"Cost: ${cost:.4f}\n")
+            f.write(
+                f"Tokens: {usage.get('input_tokens', 0)} input / "
+                f"{usage.get('output_tokens', 0)} output\n"
+            )
+        f.write("\n=== STDOUT ===\n")
+        f.write(stdout_text)
+        f.write("\n=== STDERR ===\n")
+        f.write(stderr_text)
+
     try:
         TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)
-        log_path = TASK_LOG_DIR / f"task-{datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
+        log_path = TASK_LOG_DIR / f"task-{timestamp_str}.log"
         with open(log_path, "w") as f:
-            f.write("=== Claude Task Output ===\n")
-            f.write(f"Timestamp: {datetime.now().isoformat()}\n")
-            f.write(f"Duration: {duration:.1f}s\n")
-            f.write(f"Return code: {returncode}\n")
-            if result_capture:
-                cost = result_capture.get("total_cost_usd", 0)
-                usage = result_capture.get("usage", {})
-                f.write(f"Cost: ${cost:.4f}\n")
-                f.write(
-                    f"Tokens: {usage.get('input_tokens', 0)} input / "
-                    f"{usage.get('output_tokens', 0)} output\n"
-                )
-            f.write("\n=== STDOUT ===\n")
-            f.write(stdout_text)
-            f.write("\n=== STDERR ===\n")
-            f.write(stderr_text)
+            _write_log_content(f)
         print(f"[execute_task] Log: {log_path}")
     except Exception as exc:
         print(f"[execute_task] Failed to write task log: {exc}")
 
+    if slug and task_id:
+        try:
+            item_output_dir = WORKER_OUTPUT_DIR / slug
+            item_output_dir.mkdir(parents=True, exist_ok=True)
+            safe_task_id = task_id.replace(".", "-")
+            worker_log_path = item_output_dir / f"task-{safe_task_id}-{timestamp_str}.log"
+            with open(worker_log_path, "w") as f:
+                _write_log_content(f)
+            print(f"[execute_task] Worker output: {worker_log_path}")
+        except Exception as exc:
+            print(f"[execute_task] Failed to write worker output log: {exc}")
 
-def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, int, dict, str, str, list[ToolCallRecord]]:
+
+def _run_claude(prompt: str, model_cli_name: str, slug: str = "", task_id: str = "") -> tuple[bool, int, dict, str, str, list[ToolCallRecord]]:
     """Spawn Claude CLI and stream its output in real-time.
 
     Returns (success, returncode, result_capture, stdout_text, stderr_text, tool_calls).
@@ -329,6 +353,8 @@ def _run_claude(prompt: str, model_cli_name: str) -> tuple[bool, int, dict, str,
             stderr_text=stderr_collector.get_output(),
             duration=duration,
             returncode=process.returncode,
+            slug=slug,
+            task_id=task_id,
         )
         return (
             process.returncode == 0,

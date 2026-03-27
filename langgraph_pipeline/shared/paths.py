@@ -22,6 +22,10 @@ TASK_LOG_DIR = Path(".claude/plans/logs")
 PID_FILE_PATH = ".claude/plans/.pipeline.pid"
 LANGGRAPH_PID_FILE_PATH = ".claude/plans/.lg-pipeline.pid"
 
+# ─── Worker output directories ────────────────────────────────────────────────
+
+WORKER_OUTPUT_DIR = Path("docs/reports/worker-output")
+
 # ─── Backlog directories ───────────────────────────────────────────────────────
 
 DEFECT_DIR = "docs/defect-backlog"

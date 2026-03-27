@@ -41,6 +41,36 @@ class WorkerInfo:
     run_id: Optional[str] = None
     tokens_in: int = 0
     tokens_out: int = 0
+    token_history: list[tuple[float, int]] = field(default_factory=list)
+
+    def record_token_sample(self) -> None:
+        """Append the current total token count with a monotonic timestamp."""
+        self.token_history.append((time.monotonic(), self.tokens_in + self.tokens_out))
+
+    def current_velocity(self) -> float:
+        """Compute tokens/min from the last two samples. Returns 0.0 if < 2 samples."""
+        if len(self.token_history) < 2:
+            return 0.0
+        t1, tok1 = self.token_history[-2]
+        t2, tok2 = self.token_history[-1]
+        dt = t2 - t1
+        if dt <= 0:
+            return 0.0
+        return (tok2 - tok1) / (dt / 60.0)
+
+    def get_velocity_series(self) -> list[tuple[float, float]]:
+        """Convert token_history into (elapsed_s, tokens_per_min) pairs."""
+        series: list[tuple[float, float]] = []
+        for i in range(1, len(self.token_history)):
+            t_prev, tok_prev = self.token_history[i - 1]
+            t_curr, tok_curr = self.token_history[i]
+            dt = t_curr - t_prev
+            if dt <= 0:
+                continue
+            velocity = (tok_curr - tok_prev) / (dt / 60.0)
+            elapsed_s = t_curr - self.start_time
+            series.append((elapsed_s, velocity))
+        return series
 
 
 @dataclass
@@ -233,11 +263,11 @@ class DashboardState:
             active_list = []
             for w in self.active_workers.values():
                 elapsed_s = now - w.start_time
-                elapsed_min = max(elapsed_s / 60.0, 0.001)
-                if w.tokens_in == 0 and w.tokens_out == 0:
-                    tokens_per_minute = 0.0
-                else:
-                    tokens_per_minute = (w.tokens_in + w.tokens_out) / elapsed_min
+                tokens_per_minute = w.current_velocity()
+                velocity_history = [
+                    {"elapsed_s": round(es, 1), "tokens_per_minute": round(v, 1)}
+                    for es, v in w.get_velocity_series()
+                ]
                 active_list.append(
                     {
                         "pid": w.pid,
@@ -249,6 +279,7 @@ class DashboardState:
                         "tokens_in": w.tokens_in,
                         "tokens_out": w.tokens_out,
                         "tokens_per_minute": tokens_per_minute,
+                        "velocity_history": velocity_history,
                     }
                 )
             proxy = get_proxy()

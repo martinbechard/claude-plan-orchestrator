@@ -613,6 +613,11 @@ def _refresh_worker_token_counts(active_workers: dict[int, WorkerRecord]) -> Non
     for pid, run_id in workers_with_run_id:
         tokens_in, tokens_out = proxy.get_worker_token_counts(run_id)
         dashboard.update_worker_tokens(pid, tokens_in, tokens_out)
+        # Record sample for velocity history.
+        with dashboard._lock:
+            worker = dashboard.active_workers.get(pid)
+            if worker is not None:
+                worker.record_token_sample()
 
 
 # ─── Main supervisor loop ─────────────────────────────────────────────────────

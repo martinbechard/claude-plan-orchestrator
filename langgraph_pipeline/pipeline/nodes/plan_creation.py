@@ -33,7 +33,7 @@ CLAUDE_BINARY = "claude"
 DESIGN_DIR = "docs/plans"
 DESIGN_DOC_DATE_FORMAT = "%Y-%m-%d"
 PLAN_CREATION_TIMEOUT_SECONDS = 600
-PLANNER_MODEL = "claude-sonnet-4-6"  # Design quality requires sonnet minimum
+PLANNER_MODEL = "claude-opus-4-6"  # Design and planning require Opus for quality
 
 # Planner permission profile: reads, greps, globes, writes files, and runs shell commands.
 PLANNER_ALLOWED_TOOLS = ["Read", "Grep", "Glob", "Write", "Bash"]
@@ -237,6 +237,16 @@ def create_plan(state: PipelineState) -> dict:
         return {}
 
     print(f"[create_plan] Plan created: {expected_plan_path}")
+
+    # Validate design quality with Opus: acceptance checklist, matches request, no bad assumptions.
+    if Path(expected_design_doc_path).exists():
+        from langgraph_pipeline.pipeline.nodes.intake import _validate_design
+        valid, reason = _validate_design(expected_design_doc_path, item_path)
+        if not valid:
+            print(
+                f"[create_plan] WARNING: design validation failed for {item_slug}: {reason}"
+            )
+
     add_trace_metadata({
         "node_name": "create_plan",
         "graph_level": "pipeline",

@@ -30,6 +30,25 @@ from langgraph_pipeline.pipeline.nodes.intake import (
 )
 
 
+# ─── Autouse: mock Opus validators so unit tests never call real Claude Opus ──
+
+
+@pytest.fixture(autouse=True)
+def _mock_opus_validators():
+    """Prevent Opus subprocess calls during unit tests."""
+    with patch(
+        "langgraph_pipeline.pipeline.nodes.intake._validate_five_whys",
+        return_value=(True, ""),
+    ), patch(
+        "langgraph_pipeline.pipeline.nodes.intake._validate_design",
+        return_value=(True, ""),
+    ), patch(
+        "langgraph_pipeline.pipeline.nodes.intake._invoke_claude_opus",
+        return_value=("VALID", 0.0),
+    ):
+        yield
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -316,10 +335,16 @@ class TestIntakeAnalyzeNode:
     def test_feature_increments_intake_count_features(self, tmp_path, monkeypatch):
         import langgraph_pipeline.pipeline.nodes.intake as intake_mod
         monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
-        state = _make_state(item_type="feature", intake_count_features=1)
-        with patch("langgraph_pipeline.pipeline.nodes.intake._invoke_claude") as mock_claude:
+        item = tmp_path / "01-feature.md"
+        item.write_text("Some feature request")
+        state = _make_state(
+            item_path=str(item), item_type="feature", intake_count_features=1
+        )
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value=("Title: T\nClarity: 4", 0.01),
+        ):
             result = intake_analyze(state)
-        mock_claude.assert_not_called()
         assert result.get("intake_count_features") == 2
 
     def test_analysis_increments_intake_count_features(self, tmp_path, monkeypatch):
@@ -337,22 +362,49 @@ class TestIntakeAnalyzeNode:
             result = intake_analyze(state)
         assert result.get("intake_count_features") == 1
 
-    def test_does_not_spawn_claude_for_feature(self, tmp_path, monkeypatch):
+    def test_spawns_five_whys_for_feature(self, tmp_path, monkeypatch):
         import langgraph_pipeline.pipeline.nodes.intake as intake_mod
         monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
-        state = _make_state(item_type="feature")
+        item = tmp_path / "01-feature.md"
+        item.write_text("Some feature request")
+        state = _make_state(item_path=str(item), item_type="feature")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude"
-        ) as mock_claude:
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value=("NO", 0.001),
+        ) as mock_check, patch(
+            "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
+            return_value={"clarity": 4, "raw_output": "Title: T\nClarity: 4", "total_cost_usd": 0.02},
+        ) as mock_whys:
             intake_analyze(state)
-        mock_claude.assert_not_called()
+        mock_check.assert_called_once()  # _has_five_whys check
+        mock_whys.assert_called_once()   # actual 5 Whys
+
+    def test_skips_five_whys_when_already_present(self, tmp_path, monkeypatch):
+        import langgraph_pipeline.pipeline.nodes.intake as intake_mod
+        monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
+        item = tmp_path / "01-feature.md"
+        item.write_text("5 Whys:\n1. Why\nRoot Need: something")
+        state = _make_state(item_path=str(item), item_type="feature")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value=("YES", 0.001),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
+        ) as mock_whys:
+            intake_analyze(state)
+        mock_whys.assert_not_called()
 
     def test_records_intake_in_throttle(self, tmp_path, monkeypatch):
         import langgraph_pipeline.pipeline.nodes.intake as intake_mod
         path = tmp_path / "t.json"
         monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(path))
-        state = _make_state(item_type="feature")
-        with patch("langgraph_pipeline.pipeline.nodes.intake._invoke_claude"):
+        item = tmp_path / "01-feature.md"
+        item.write_text("Some feature")
+        state = _make_state(item_path=str(item), item_type="feature")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value=("Title: T\nClarity: 4", 0.01),
+        ):
             intake_analyze(state)
         data = json.loads(path.read_text())
         assert "feature" in data
@@ -444,8 +496,13 @@ class TestBlockingThrottleWait:
             intake_mod, "_check_throttle", mock_check_throttle
         )
 
-        state = _make_state(item_type="feature")
-        with patch("langgraph_pipeline.pipeline.nodes.intake._invoke_claude"):
+        item = tmp_path / "01-feature.md"
+        item.write_text("Some feature")
+        state = _make_state(item_path=str(item), item_type="feature")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value=("Title: T\nClarity: 4", 0.01),
+        ):
             result = intake_analyze(state)
 
         # Should have proceeded after throttle cleared.
@@ -482,8 +539,13 @@ class TestBlockingThrottleWait:
         monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
         monkeypatch.setattr(intake_mod, "_check_throttle", lambda item_type: False)
 
-        state = _make_state(item_type="feature")
-        with patch("langgraph_pipeline.pipeline.nodes.intake._invoke_claude"):
+        item = tmp_path / "01-feature.md"
+        item.write_text("Some feature")
+        state = _make_state(item_path=str(item), item_type="feature")
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            return_value=("Title: T\nClarity: 4", 0.01),
+        ):
             result = intake_analyze(state)
 
         assert result.get("intake_count_features") == 1

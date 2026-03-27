@@ -442,6 +442,11 @@ function buildTimelineRow(barEntry) {
   barLabel.textContent = barLabelText;
   bar.appendChild(barLabel);
 
+  // Full-detail tooltip for clipped text
+  var tooltipParts = [barEntry.slug, fmtElapsed(elapsedS), barEntry.itemType];
+  if (velStr !== "\u2014") tooltipParts.push(velStr);
+  bar.title = tooltipParts.join(" \u2022 ");
+
   return clone;
 }
 

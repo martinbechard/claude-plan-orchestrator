@@ -338,3 +338,60 @@ def test_thread_safety():
     assert exceptions == [], f"Thread safety violation: {exceptions}"
     # All workers added were also removed, so active_workers must be empty
     assert state.active_workers == {}
+
+
+# ─── Velocity tracking ──────────────────────────────────────────────────────
+
+
+def test_worker_velocity_no_samples():
+    """current_velocity returns 0.0 with fewer than 2 samples."""
+    from langgraph_pipeline.web.dashboard_state import WorkerInfo
+    w = WorkerInfo(pid=1, slug="test", item_type="feature", start_time=time.monotonic())
+    assert w.current_velocity() == 0.0
+    w.tokens_in = 500
+    w.record_token_sample()
+    assert w.current_velocity() == 0.0
+
+
+def test_worker_velocity_two_samples():
+    """current_velocity computes delta between last two samples."""
+    from langgraph_pipeline.web.dashboard_state import WorkerInfo
+    now = time.monotonic()
+    w = WorkerInfo(pid=1, slug="test", item_type="feature", start_time=now)
+    w.token_history.append((now, 0))
+    w.token_history.append((now + 30, 3000))
+    assert w.current_velocity() == 6000.0
+
+
+def test_worker_velocity_series():
+    """get_velocity_series returns per-interval velocities."""
+    from langgraph_pipeline.web.dashboard_state import WorkerInfo
+    now = time.monotonic()
+    w = WorkerInfo(pid=1, slug="test", item_type="feature", start_time=now)
+    w.token_history = [(now, 0), (now + 60, 1000), (now + 120, 4000)]
+    series = w.get_velocity_series()
+    assert len(series) == 2
+    assert series[0][1] == 1000.0
+    assert series[1][1] == 3000.0
+
+
+def test_snapshot_includes_velocity(monkeypatch):
+    """snapshot() includes tokens_per_minute and velocity_history."""
+    from langgraph_pipeline.web.dashboard_state import DashboardState
+    monkeypatch.setattr(
+        "langgraph_pipeline.web.dashboard_state.get_proxy", lambda: None
+    )
+    state = DashboardState()
+    # Disable sweep so fake PID isn't removed
+    state.sweep_dead_workers = lambda: None
+    now = time.monotonic()
+    state.add_active_worker(pid=9999, slug="vel-test", item_type="feature", start_time=now)
+    worker = state.active_workers[9999]
+    worker.tokens_in = 2000
+    worker.tokens_out = 1000
+    worker.token_history = [(now, 0), (now + 60, 3000)]
+    snap = state.snapshot()
+    w_snap = next(w for w in snap["active_workers"] if w["pid"] == 9999)
+    assert w_snap["tokens_per_minute"] == 3000.0
+    assert len(w_snap["velocity_history"]) == 1
+    state.remove_active_worker(9999, "success", 0.0, 1.0)
