@@ -8,8 +8,8 @@ Scans the backlog directories in priority order (defects, then features, then
 analyses), checks for in-progress plans that need resuming, and populates
 item_path, item_slug, item_type, and item_name in PipelineState.
 
-When no items are found, returns an empty item_path so the has_items conditional
-edge routes the graph to END (sleep/wait cycle).
+When no items are found, returns an empty item_path so the CLI skips graph
+invocation and enters a sleep/wait cycle.
 """
 
 import json
@@ -252,8 +252,8 @@ def scan_backlog(state: PipelineState) -> dict:
 
     Returns partial state. When an item is found, item_path, item_slug,
     item_type, item_name, and plan_path are populated. When the backlog is
-    empty, item_path is set to an empty string so the has_items conditional
-    edge routes to END.
+    empty, item_path is set to an empty string so the CLI skips graph
+    invocation.
     """
     # Short-circuit if the CLI already pre-scanned an item.
     if state.get("item_path"):

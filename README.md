@@ -447,7 +447,7 @@ For defects, the pipeline runs a verify-then-fix cycle after plan execution:
 ```
 scan_backlog --> intake_analyze --> create_plan --> execute_plan
                                                        |
-                                             (defect?) verify_symptoms
+                                             (defect?) verify_fix
                                                     |           |
                                                   PASS        FAIL
                                                     |           |
@@ -675,7 +675,7 @@ You can also run tasks manually using the `/implement` command in Claude Code:
 2. **intake_analyze**: Runs 5 Whys analysis on the item, checks for duplicates via RAG
 3. **create_plan**: Creates a design document and YAML plan via Claude
 4. **execute_plan**: Invokes the executor subgraph (see below)
-5. **verify_symptoms** (defects only): Runs a read-only Claude session to verify the fix
+5. **verify_fix** (defects only): Runs a read-only Claude session to verify the fix
 6. **archive**: Moves completed items to `docs/completed-backlog/`
 
 ### Executor Subgraph
@@ -735,7 +735,7 @@ your-project/
 |   |       +-- intake.py             # intake_analyze: 5 Whys, RAG dedup
 |   |       +-- plan_creation.py      # create_plan: design doc + YAML plan
 |   |       +-- execute_plan.py       # execute_plan: invoke executor subgraph
-|   |       +-- verification.py       # verify_symptoms: defect verification
+|   |       +-- verification.py       # verify_fix: defect verification
 |   |       +-- archival.py           # archive: move to completed
 |   +-- executor/                     # Task execution subgraph
 |   |   +-- graph.py                  # Executor graph assembly
