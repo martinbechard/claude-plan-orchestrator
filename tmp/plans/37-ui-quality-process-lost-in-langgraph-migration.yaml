@@ -17,8 +17,14 @@ sections:
   - id: '1.1'
     name: Validate existing implementation and fix gaps in agent prompts
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/37-ui-quality-process-lost-in-langgraph-migration.md'
     last_attempt: '2026-03-27T14:38:49.780245'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:42:32.752484'
+    result_message: 'Validated all three acceptance criteria. Planner.md has UI Work
+      Item Detection (PASS). Planner invokes frontend-design skill for UI items (PASS).
+      docs/ui-style-guide.md exists and covers all specific issues (PASS). Fixed gap:
+      added UI Work Item Detection section to coder.md so coder tasks touching langgraph_pipeline/web/
+      are now guided by the style guide.'
