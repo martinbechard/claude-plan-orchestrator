@@ -2,8 +2,8 @@
 
 ## Status
 
-Review Required -- the upsert fix was previously implemented. This plan validates
-that the fix is correct and no duplicate rows remain.
+Review Required -- the upsert fix was previously implemented and passed validation
+once (1314 tests passing). This plan re-validates after subsequent codebase changes.
 
 ## Background
 
@@ -13,22 +13,24 @@ two rows per run_id. The fix replaces this with an upsert pattern.
 
 ## Current State (already implemented)
 
-1. **Unique index** on traces.run_id (proxy.py line 101):
+1. **Unique index** on traces.run_id (proxy.py _init_db):
    CREATE UNIQUE INDEX IF NOT EXISTS idx_traces_run_id_unique ON traces (run_id)
 
-2. **Upsert in record_run()** (proxy.py lines 319-331):
+2. **Upsert in record_run()** (proxy.py record_run):
    INSERT ... ON CONFLICT(run_id) DO UPDATE SET end_time, outputs_json, error
+   Uses COALESCE to preserve existing values when the update carries NULLs.
 
-3. **Deduplication migration** for pre-existing duplicate rows (proxy.py lines 93-96):
-   Deletes older duplicates, keeping only the row with the highest id per run_id
+3. **Deduplication migration** for pre-existing duplicate rows (proxy.py _init_db):
+   Deletes older duplicates, keeping only the row with the highest id per run_id.
 
 ## Validation Task
 
-The single task validates that:
+Re-verify that:
 - The upsert produces one row per run_id (not two)
 - The dedup migration cleans pre-existing duplicates
 - Trace detail queries return correct non-duplicated results
 - Existing tests cover these scenarios adequately
+- No regressions introduced by recent changes
 
 ## Key Files
 
