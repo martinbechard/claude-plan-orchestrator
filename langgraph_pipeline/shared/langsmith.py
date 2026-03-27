@@ -363,23 +363,38 @@ def add_trace_metadata(metadata: dict[str, Any]) -> None:
     """Attach custom key-value metadata to the current LangSmith run.
 
     Intended for enriching traces with node name, graph level, cost, and token
-    counts. Degrades gracefully when the langsmith package is not installed or
-    when no active run context exists.
+    counts. Uses two strategies:
+    1. SDK: add_metadata on the in-memory RunTree (may not persist in newer SDK versions)
+    2. Direct DB: merge metadata into the proxy DB row for this run_id
 
     Args:
         metadata: Dict of metadata to attach (e.g. node_name, graph_level,
             total_cost_usd, input_tokens, output_tokens, model).
     """
+    run_id = None
     try:
         from langsmith.run_helpers import get_current_run_tree  # type: ignore[import]
 
         current_run = get_current_run_tree()
         if current_run is not None:
             current_run.add_metadata(metadata)
+            run_id = str(current_run.id)
     except ImportError:
-        pass  # langsmith package not installed -- degrade silently
+        pass
     except Exception as exc:  # noqa: BLE001
-        logger.debug("add_trace_metadata failed (non-fatal): %s", exc)
+        logger.debug("add_trace_metadata SDK call failed (non-fatal): %s", exc)
+
+    # Also write directly to the proxy DB so metadata persists regardless of
+    # SDK batching behavior (langsmith 0.7.22+ may not include add_metadata
+    # additions in the multipart payload sent to the proxy).
+    if run_id:
+        try:
+            from langgraph_pipeline.web.proxy import get_proxy
+            proxy = get_proxy()
+            if proxy is not None:
+                proxy.merge_metadata(run_id, metadata)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("add_trace_metadata DB merge failed (non-fatal): %s", exc)
 
 
 # ─── Private helpers ──────────────────────────────────────────────────────────

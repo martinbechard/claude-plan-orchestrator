@@ -709,6 +709,35 @@ class TracingProxy:
         except Exception:
             logger.debug("TracingProxy: failed to record cost_task for %s/%s", item_slug, task_id, exc_info=True)
 
+    def merge_metadata(self, run_id: str, metadata: dict) -> None:
+        """Merge custom metadata into an existing trace row's metadata_json.
+
+        Reads the current metadata_json for the given run_id, merges the new
+        keys, and writes back. Operates on the row with the latest created_at
+        for that run_id (the END event row if duplicates exist).
+
+        Args:
+            run_id: The run identifier to update.
+            metadata: Dict of key-value pairs to merge into metadata_json.
+        """
+        try:
+            with self._connect() as conn:
+                row = conn.execute(
+                    "SELECT id, metadata_json FROM traces WHERE run_id = ? "
+                    "ORDER BY created_at DESC LIMIT 1",
+                    [run_id],
+                ).fetchone()
+                if row is None:
+                    return
+                existing = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
+                existing.update(metadata)
+                conn.execute(
+                    "UPDATE traces SET metadata_json = ? WHERE id = ?",
+                    [json.dumps(existing), row["id"]],
+                )
+        except Exception:
+            logger.debug("TracingProxy: merge_metadata failed for run_id=%s", run_id, exc_info=True)
+
     # ─── Read Helpers ─────────────────────────────────────────────────────────
 
     def list_runs(

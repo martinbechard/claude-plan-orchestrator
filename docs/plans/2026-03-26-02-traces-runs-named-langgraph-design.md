@@ -6,54 +6,56 @@ Every root trace in the LangSmith proxy shows name="LangGraph" and
 slug="LangGraph". The slug filter in the proxy list is therefore useless
 because filtering by any real slug matches nothing.
 
+## Implementation Status
+
+This defect was previously implemented. The code changes described below
+are already in place. This plan exists to verify the fixes work correctly
+and address any remaining issues.
+
 ## Root Cause Analysis
 
-Three code paths contribute to the problem:
+Three code paths contributed to the problem:
 
-1. **finalize_root_run** (`langgraph_pipeline/shared/langsmith.py:332`):
-   Reconstructs the RunTree with hardcoded `name="root"` instead of the
-   item slug. This overwrites the correct name set at creation time when
-   the trace is finalized and posted.
+1. **finalize_root_run** (langgraph_pipeline/shared/langsmith.py):
+   Reconstructed the RunTree with hardcoded name="root" instead of the
+   item slug. This overwrote the correct name set at creation time when
+   the trace was finalized and posted.
 
-2. **cli.py graph invocations** (`langgraph_pipeline/cli.py:438,505,707`):
-   Single-item mode, once mode, and loop mode all invoke the pipeline graph
-   without `run_name` in the config. The LangGraph SDK falls back to
+2. **cli.py graph invocations** (langgraph_pipeline/cli.py):
+   Single-item mode, once mode, and loop mode all invoked the pipeline graph
+   without run_name in the config. The LangGraph SDK fell back to
    "LangGraph" as the root run name.
 
-3. **executor subgraph** (`langgraph_pipeline/pipeline/nodes/execute_plan.py:75`):
-   The executor is invoked without any `run_name` config, so child runs
-   from task execution also show as "LangGraph".
+3. **executor subgraph** (langgraph_pipeline/pipeline/nodes/execute_plan.py):
+   The executor was invoked without any run_name config, so child runs
+   from task execution also showed as "LangGraph".
 
-Note: `worker.py:252` already sets `run_name = item_slug` correctly.
+## Applied Fixes
 
-## Fix
+### 1. finalize_root_run — accepts item_slug parameter
 
-### 1. finalize_root_run — accept item_slug parameter
+Added item_slug parameter to finalize_root_run() and uses it as the
+RunTree name instead of "root". Callers (archival.py) pass the slug.
 
-Add an `item_slug` parameter to `finalize_root_run()` and use it as the
-RunTree name instead of `"root"`. Update callers (archival.py) to pass
-the slug.
+### 2. cli.py — run_name added to thread_config
 
-### 2. cli.py — add run_name to thread_config
+In all three invocation paths (single-item, once, loop), item_slug is
+derived from the state and added as run_name to the config when available.
 
-In all three invocation paths (single-item, once, loop), derive
-`item_slug` from the state and add `run_name` to the config when
-available.
+### 3. execute_plan.py — run_name config passed to executor
 
-### 3. execute_plan.py — pass run_name config to executor
-
-Pass the item_slug as `run_name` in the executor invoke config so child
+Passes item_slug as run_name in the executor invoke config so child
 runs are named correctly.
 
 ## Key Files
 
 | File | Change |
 |------|--------|
-| langgraph_pipeline/shared/langsmith.py | Add item_slug param to finalize_root_run |
-| langgraph_pipeline/pipeline/nodes/archival.py | Pass item_slug to finalize_root_run |
-| langgraph_pipeline/cli.py | Add run_name to thread_config in 3 paths |
-| langgraph_pipeline/pipeline/nodes/execute_plan.py | Add run_name config to executor invoke |
-| tests/langgraph/test_langsmith.py | Test finalize_root_run uses slug |
+| langgraph_pipeline/shared/langsmith.py | item_slug param on finalize_root_run |
+| langgraph_pipeline/pipeline/nodes/archival.py | Passes item_slug to finalize_root_run |
+| langgraph_pipeline/cli.py | run_name in thread_config in 3 paths |
+| langgraph_pipeline/pipeline/nodes/execute_plan.py | run_name config on executor invoke |
+| tests/langgraph/shared/test_langsmith.py | Tests finalize_root_run uses slug |
 
 ## Design Decisions
 
@@ -61,4 +63,4 @@ runs are named correctly.
   for edge cases (single-item mode without a slug).
 - No DB migration: new runs will be named correctly; old rows remain.
 - No proxy changes: list_runs() already filters by name LIKE ?, which
-  will work once root runs carry the slug.
+  works once root runs carry the slug.
