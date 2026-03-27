@@ -17,8 +17,13 @@ sections:
   - id: '1.1'
     name: Validate upsert fix and address any remaining issues
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/29-duplicate-trace-rows-start-and-end-events.md'
     last_attempt: '2026-03-27T09:40:45.818465'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T09:42:26.240157'
+    result_message: 'Validated upsert fix for duplicate trace rows. The ON CONFLICT(run_id)
+      DO UPDATE upsert in record_run(), the pre-existing deduplication migration in
+      _init_db(), and the UNIQUE index on traces.run_id are all correctly implemented.
+      All 4 duplicate/upsert-specific tests pass. Full suite: 1314 passed.'
