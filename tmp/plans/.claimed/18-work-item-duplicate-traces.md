@@ -87,3 +87,5 @@ Once investigated, either:
 **Root Need:** Establish and document a clear contract for trace display: define whether item detail pages should show root runs only, child runs only, or both, and ensure all trace queries consistently implement this contract.
 
 **Summary:** Duplicates result from ambiguous run hierarchy semantics in a multi-level execution model.
+
+## LangSmith Trace: a8d10888-fa72-4ed5-ba68-7db8b908acc6
