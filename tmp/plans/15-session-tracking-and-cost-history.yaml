@@ -79,7 +79,7 @@ sections:
   - id: '2.2'
     name: Create sessions history HTML template
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
       -- Focus on the Dashboard display and Daily totals requirements. Create templates/sessions.html
       with two sections: Sessions table (label, start, end, duration, cost, items)
@@ -88,6 +88,12 @@ sections:
     last_attempt: '2026-03-27T15:27:50.995630'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T15:30:21.578360'
+    result_message: 'Updated templates/sessions.html with two sections: Pipeline Sessions
+      table (label, start, end, duration, cost, items) and Daily Totals table (date,
+      cost, items). Follows existing patterns: table-wrap divs, aria-labelledby sections,
+      scope=col th attributes, <time> elements with local-time class, JS-computed
+      duration column from start/end timestamps, and icon-based empty states.'
 - id: '3'
   name: Dashboard frontend - show session start time and history link
   status: pending
