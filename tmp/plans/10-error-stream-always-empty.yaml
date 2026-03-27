@@ -17,5 +17,8 @@ sections:
   - id: '1.1'
     name: Validate error stream end-to-end and fix any gaps
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/10-error-stream-always-empty.md'
+    last_attempt: '2026-03-27T10:11:11.945983'
+    attempts: 1
+    model_used: sonnet
