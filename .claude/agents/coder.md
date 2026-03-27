@@ -53,6 +53,25 @@ These are the key rules from CODING-RULES.md. Read the full document for details
 - **Imports:** External libraries first, then project aliases, then relative imports.
   Remove all unused imports.
 
+## UI Work Item Detection
+
+Before writing any code, check whether your task touches files under
+`langgraph_pipeline/web/` (templates, static CSS/JS, or Python view handlers).
+
+If the task involves web UI files:
+
+1. **Read `docs/ui-style-guide.md`** — the canonical style reference. All colour
+   values, spacing, typography, table patterns, empty states, badges, and pagination
+   must follow the guide. Do not invent new values.
+2. **Use `.empty-state` pattern** for all zero-row states.
+3. **Use `$0.0123` format** for cost values — no tilde prefix.
+4. **Apply uniform `th`/`td` padding** (`8px 12px`) — do not override per-template.
+5. **Set `class="active"`** on the current page's nav `<a>` tag.
+
+If the task requires significant new UI design (a new page, a major layout change),
+flag it in your status message and suggest reassignment to `frontend-coder` so the
+`frontend-design` skill can be invoked first.
+
 ## Anti-Patterns to Avoid
 
 - **No over-engineering** beyond what was requested. A bug fix does not need surrounding
