@@ -29,3 +29,11 @@ sections:
       renders grandchild bars in SVG Gantt (indented, smaller height, colour-coded)
       and shows expandable tool call details section. All 27 proxy tests pass, full
       suite 1314/1314 passing.'
+    validation_attempts: 1
+    validation_findings: All acceptance criteria met. proxy_trace fetches grandchildren
+      via get_children_batch, computes span_s across all items, passes grandchildren_by_parent
+      to template. Template renders grandchild bars in SVG Gantt (indented GC_INDENT=16,
+      smaller height GC_BAR_H=12, colour-coded). Expandable tool call details section
+      confirmed present in live server output. 27 proxy tests pass, full suite 1314/1314
+      passing. Build command passes for auto-pipeline.py (plan-orchestrator.py referenced
+      in build command does not exist - WARN). No placeholders or TODOs found.
