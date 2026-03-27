@@ -1,0 +1,70 @@
+meta:
+  source_item: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Backend - sessions table, proxy helpers, and lifecycle
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add sessions table and proxy helpers
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
+      -- Focus on the Persistence requirements. Add the sessions table to proxy.py
+      init_db(). Implement create_session(), close_session(), list_sessions(), and
+      list_daily_totals() helpers. create_session() must close orphaned sessions
+      (end_time IS NULL) for crash recovery. Add unit tests for all helpers.'
+  - id: '1.2'
+    name: Wire session lifecycle into cli.py and DashboardState
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
+      -- Focus on Session lifecycle requirements. Create session on pipeline startup
+      in cli.py after web server starts. Close session on shutdown in finally block
+      reading cost and items from DashboardState. Add session_start_time (datetime)
+      and session_id fields to DashboardState, include session_start_time_iso in
+      snapshot(). Add unit tests.'
+- id: '2'
+  name: Sessions API route and history page
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Add sessions route and register in server
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
+      -- Focus on the Dashboard display and Daily totals requirements. Create
+      routes/sessions.py with GET /sessions (HTML) and GET /api/sessions (JSON
+      returning sessions list and daily totals). Register the sessions router
+      in server.py. Add unit tests for the endpoints.'
+  - id: '2.2'
+    name: Create sessions history HTML template
+    agent: frontend-coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
+      -- Focus on the Dashboard display and Daily totals requirements. Create
+      templates/sessions.html with two sections: Sessions table (label, start,
+      end, duration, cost, items) and Daily Totals table (date, cost, items).
+      Follow existing template patterns from dashboard.html and analysis.html.'
+- id: '3'
+  name: Dashboard frontend - show session start time and history link
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Update dashboard to show session start time and history link
+    agent: frontend-coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
+      -- Focus on the Dashboard display requirements. Update dashboard.html and
+      dashboard.js to show session start time next to session cost (e.g. "Session
+      Cost: $4.23 (started 10:30 AM)") using session_start_time_iso from snapshot.
+      Add a "Session History" navigation link pointing to /sessions.'
