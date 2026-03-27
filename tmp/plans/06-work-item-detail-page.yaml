@@ -43,7 +43,7 @@ sections:
   - id: '2.1'
     name: Review and polish item detail page layout
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/06-work-item-detail-page.md
       — Focus on the UI Design section: ensure two-column responsive layout (requirements
       left, plan + history right on wide screens), clear section separators, task
@@ -52,3 +52,8 @@ sections:
     last_attempt: '2026-03-27T14:57:08.858193'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-27T14:59:56.572812'
+    result_message: 'Polished item detail page: aligned border-radius to 6px per style
+      guide, added outcome color coding to completion history rows, changed task icons
+      to square checkboxes, fixed all empty states to follow style guide pattern (icon
+      + heading + sub-text), moved validation results inline styles to CSS classes.'
