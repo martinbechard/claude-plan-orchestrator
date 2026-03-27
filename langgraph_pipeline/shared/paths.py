@@ -8,6 +8,7 @@
 # live stats test
 # final stats test
 # val results test
+# val json test
 
 """Centralized path constants for the pipeline and orchestrator scripts."""
 
