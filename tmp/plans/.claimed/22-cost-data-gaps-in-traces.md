@@ -48,3 +48,5 @@ the Claude CLI JSON output (total_cost_usd field) not a hardcoded value.
    with the actual cost from Claude's response.
 3. Add cost recording to Slack intake LLM calls (call_claude in
    suspension.py) — these currently have no cost visibility at all.
+
+## LangSmith Trace: 276bd081-0150-40ed-95a8-ca0a51726c2a

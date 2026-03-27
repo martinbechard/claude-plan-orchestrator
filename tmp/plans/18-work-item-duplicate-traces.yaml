@@ -26,3 +26,8 @@ sections:
     result_message: 'Fix already implemented: list_root_traces_by_slug in proxy.py
       filters parent_run_id IS NULL and groups by run_id to prevent duplicates. All
       27 proxy tests pass including test_list_root_traces_by_slug_deduplicates_pre_existing_rows.'
+    validation_attempts: 1
+    validation_findings: 'Fix confirmed: list_root_traces_by_slug filters parent_run_id
+      IS NULL and uses GROUP BY run_id. All 1313 tests pass including test_list_root_traces_by_slug_deduplicates_pre_existing_rows.
+      Build (auto-pipeline.py) compiles clean. plan-orchestrator.py no longer exists
+      (deleted), which is expected per git log.'
