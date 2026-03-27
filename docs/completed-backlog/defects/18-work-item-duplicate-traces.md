@@ -1,5 +1,12 @@
 # Work item detail: traces table shows duplicate entries for same item
 
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
+
 ## Status: Open
 
 ## Priority: Medium
@@ -43,3 +50,33 @@ Once investigated, either:
 - Add parent_run_id IS NULL to the trace query on the item detail page.
 - Deduplicate by run_id in the route before passing to the template.
 - If a genuine double-dispatch, file a separate supervisor defect.
+
+
+
+
+## 5 Whys Analysis
+
+**Title:** Trace display semantics undefined for hierarchical execution model
+
+**Clarity:** 4/5 (Well-specified problem with investigation steps; missing only confirmation of root cause)
+
+**5 Whys:**
+
+1. **Why are duplicate traces appearing on the work item detail page?**
+   - The traces query is returning multiple run records (both parent and child) for the same work item without filtering to show only the intended run level.
+
+2. **Why does the query return both parent and child runs instead of deduplicating?**
+   - Because the route query doesn't filter on `parent_run_id IS NULL`, or uses name-based matching that captures both root and child runs that happen to share the slug.
+
+3. **Why wasn't the hierarchy filter included in the route?**
+   - Because the data model contract for runs (parent/child relationships in LangGraph) wasn't fully considered during initial implementation, or the naming convention changed after the route was written without the route being updated.
+
+4. **Why wasn't the parent-child relationship in the execution model accounted for upfront?**
+   - Because there's no documented specification defining which run level(s) the UI should display—root orchestrator runs only, worker child runs only, or both.
+
+5. **Why is there no specification for which runs users should see?**
+   - Because the LangGraph hierarchical execution model (orchestrator dispatching workers) wasn't translated into explicit UI requirements during design.
+
+**Root Need:** Establish and document a clear contract for trace display: define whether item detail pages should show root runs only, child runs only, or both, and ensure all trace queries consistently implement this contract.
+
+**Summary:** Duplicates result from ambiguous run hierarchy semantics in a multi-level execution model.
