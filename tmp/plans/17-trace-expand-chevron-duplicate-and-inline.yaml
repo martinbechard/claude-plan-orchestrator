@@ -17,8 +17,15 @@ sections:
   - id: '1.1'
     name: Validate and fix chevron duplicate and inline subrun details
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/17-trace-expand-chevron-duplicate-and-inline.md'
     last_attempt: '2026-03-27T14:16:45.740896'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:19:40.424901'
+    result_message: Validated existing fix for duplicate trace display. The list_root_traces_by_slug()
+      method in proxy.py (line 609-627) correctly filters with parent_run_id IS NULL
+      and uses GROUP BY run_id with MIN(created_at) to deduplicate. The DB schema
+      also has a unique index on run_id and deduplication SQL run at init. All 1314
+      tests pass including the specific test_list_root_traces_by_slug_deduplicates_pre_existing_rows
+      test.
