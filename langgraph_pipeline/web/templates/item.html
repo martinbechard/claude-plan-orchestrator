@@ -630,8 +630,21 @@
         <span class="badge item-type-{{ item_type }}"
               aria-label="Type: {{ item_type }}">{{ item_type }}</span>
       {% endif %}
-      <span class="badge status-{{ pipeline_stage }}"
-            aria-label="Pipeline stage: {{ pipeline_stage }}">{{ pipeline_stage }}</span>
+      {% if active_worker %}
+        {% if active_worker.current_task %}
+          <span class="badge status-executing"
+                aria-label="Currently executing">{{ active_worker.current_task }}</span>
+        {% elif pipeline_stage == "executing" %}
+          <span class="badge status-planning"
+                aria-label="Pipeline phase">intake / planning</span>
+        {% else %}
+          <span class="badge status-{{ pipeline_stage }}"
+                aria-label="Pipeline stage">{{ pipeline_stage }}</span>
+        {% endif %}
+      {% else %}
+        <span class="badge status-{{ pipeline_stage }}"
+              aria-label="Pipeline stage">{{ pipeline_stage }}</span>
+      {% endif %}
       {% if avg_velocity is not none and avg_velocity is number and avg_velocity > 0 %}
         {% if avg_velocity >= 1000 %}
           {% set vel_label = "%.1fk tok/min"|format(avg_velocity / 1000) %}
@@ -641,11 +654,6 @@
         <span class="badge velocity-badge" aria-label="Average velocity: {{ vel_label }}">
           {{ vel_label }}
         </span>
-      {% endif %}
-      {% if last_trace %}
-        <a class="last-trace-link"
-           href="/proxy?trace_id={{ last_trace.run_id }}"
-           aria-label="View most recent trace">Last run &rarr;</a>
       {% endif %}
     </div>
   </div>
