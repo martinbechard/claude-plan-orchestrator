@@ -1,45 +1,42 @@
-# Defect 27: Tool Call Cost Attribution Dummy Data — Verification Design
+# Defect 27: Tool Call Cost Attribution Dummy Data — Design
 
 Work item: tmp/plans/.claimed/27-tool-call-cost-attribution-dummy-data.md
 
 ## Problem
 
 The tool call cost attribution section on the cost analysis page was showing dummy
-placeholder data instead of real pipeline costs. The root cause was incomplete wiring:
-the executor nodes did not POST cost data to the API, and ToolCallRecord did not capture
-result_bytes from tool outputs.
+placeholder data instead of real pipeline costs. A prior implementation attempt
+addressed this and the item is marked "Review Required".
 
-## Current State
+## Current State (Prior Implementation)
 
-A prior implementation attempt addressed all four fix areas from the backlog item:
+The prior attempt wired up the full data pipeline:
 
-1. result_bytes capture added to ToolCallRecord in claude_cli.py (line 102, 321)
-2. _post_cost_to_api() wired in task_runner.py (line 406) and validator.py (line 250)
-3. _tool_call_to_dict() converts ToolCallRecord to API-compatible format in both nodes
-4. The UI in analysis.html already renders from real data via get_tool_call_attribution()
+1. ToolCallRecord in claude_cli.py captures result_bytes from tool outputs (line 362)
+2. task_runner.py and validator.py both POST cost data via _post_cost_to_api() with
+   tool call dicts including result_bytes
+3. TracingProxy.get_tool_call_attribution() reads cost_tasks rows, distributes cost
+   proportionally by result_bytes, returns ToolCallCost list
+4. analysis.html renders the attribution table from real data
 
-The item is marked "Review Required" because it was previously completed without
-end-to-end verification. The plan below verifies the existing implementation is correct
-and fixes any remaining issues.
+## Remaining Issue
+
+The test fixture in test_cost_log_reader.py (client_with_proxy fixture, line 455)
+mocks all proxy methods except get_tool_call_attribution(). This means the /analysis
+endpoint test passes a MagicMock instead of a list to the template. The fixture needs
+to mock this method with an empty list or valid ToolCallCost instances.
+
+## Plan
+
+Single verification-and-fix task: the coder agent reads the work item, checks the
+existing implementation against acceptance criteria, adds the missing test mock, and
+fixes any other gaps found during review.
 
 ## Key Files
 
-### Already Modified (verify correctness)
-- langgraph_pipeline/shared/claude_cli.py — ToolCallRecord.result_bytes + capture logic
-- langgraph_pipeline/executor/nodes/task_runner.py — _post_cost_to_api + _tool_call_to_dict
-- langgraph_pipeline/executor/nodes/validator.py — same wiring as task_runner
-- langgraph_pipeline/web/proxy.py — get_tool_call_attribution() proportional computation
+- langgraph_pipeline/shared/claude_cli.py — ToolCallRecord.result_bytes capture
+- langgraph_pipeline/executor/nodes/task_runner.py — _post_cost_to_api wiring
+- langgraph_pipeline/executor/nodes/validator.py — same wiring
+- langgraph_pipeline/web/proxy.py — get_tool_call_attribution() query + proportional calc
 - langgraph_pipeline/web/templates/analysis.html — attribution table rendering
-
-### No Changes Expected
-- langgraph_pipeline/web/routes/cost.py — POST /api/cost endpoint (already correct)
-- langgraph_pipeline/web/cost_log_reader.py — aggregation reader (already correct)
-
-## Design Decisions
-
-- This is a verification pass, not a rewrite. The coder agent must check what exists
-  before making changes, per the backlog item instructions.
-- The stale "12-test-item" rows in cost_tasks are a runtime DB concern, not a code fix.
-  If a DB cleanup script or migration is needed, the coder can add it.
-- The proportional attribution algorithm (cost * result_bytes / sum_bytes) is the
-  approved approach from Feature 11 design.
+- tests/langgraph/web/test_cost_log_reader.py — missing mock for get_tool_call_attribution
