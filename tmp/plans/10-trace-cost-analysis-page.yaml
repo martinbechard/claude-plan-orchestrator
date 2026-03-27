@@ -17,7 +17,7 @@ sections:
   - id: '1.1'
     name: Validate cost analysis page against acceptance criteria and fix gaps
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/10-trace-cost-analysis-page.md
       -- This feature was previously implemented. Validate each acceptance criterion
       against the existing code in langgraph_pipeline/web/routes/analysis.py, langgraph_pipeline/web/templates/analysis.html,
@@ -26,6 +26,12 @@ sections:
     last_attempt: '2026-03-27T15:01:31.132840'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T15:08:52.932238'
+    result_message: 'Validated all acceptance criteria. Two gaps found and fixed:
+      (1) analysis.js was never loaded — added <script> tag to analysis.html; (2)
+      Cost by Work Item table lacked expand/collapse structure — added item-row/task-detail-row
+      classes, expand buttons, and per-slug detail rows with get_slug_cost_runs()
+      in TracingProxy. All changes confirmed committed. All 1333 tests pass.'
 - id: '2'
   name: E2E tests
   status: pending
