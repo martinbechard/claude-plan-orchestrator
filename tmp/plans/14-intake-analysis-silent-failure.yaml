@@ -1,0 +1,21 @@
+meta:
+  source_item: tmp/plans/.claimed/14-intake-analysis-silent-failure.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Validate and fix intake analysis error propagation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Validate and fix intake analysis silent failure handling
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/14-intake-analysis-silent-failure.md'
