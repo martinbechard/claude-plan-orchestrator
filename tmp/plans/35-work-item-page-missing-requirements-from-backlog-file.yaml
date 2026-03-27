@@ -27,3 +27,9 @@ sections:
       Original request disclosure shows for archived items. AC #2 (design doc priority)
       and AC #3 (empty state) were already passing. AC #1 now passes: /item/34-remove-tilde-cost-prefix-third-attempt
       shows original backlog acceptance criteria via the Original request disclosure.'
+    validation_attempts: 1
+    validation_findings: 'Validated all 3 acceptance criteria for defect 39: (1) proxy_trace.html
+      relabels Inputs to State before and Outputs to State changes, (2) empty outputs
+      {} are hidden via fromjson filter, (3) scan.py adds short-circuit trace metadata.
+      Version bumped to 1.10.8 in prior session and defect 39 was archived. All changes
+      already committed.'

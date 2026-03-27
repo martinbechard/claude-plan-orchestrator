@@ -27,3 +27,7 @@ sections:
       (entry point is intake_analyze in graph.py), scan_backlog function still exists
       in scan.py for direct use, and all 224 pipeline tests pass. Implementation was
       already in place.'
+    validation_attempts: 1
+    validation_findings: 'All 5 acceptance criteria met: scan_backlog not in graph
+      nodes, entry point is intake_analyze, scan_backlog function exists and is exported
+      for direct use, 1321 tests pass, build compiles cleanly.'
