@@ -11,63 +11,131 @@
 
 {% block title %}Session History — Plan Orchestrator{% endblock %}
 
+{% block extra_head %}
+<style>
+  .duration-cell { white-space: nowrap; }
+</style>
+{% endblock %}
+
 {% block content %}
 <h1>Session History</h1>
 
 {# ── Sessions table ─────────────────────────────────────────────────────────── #}
-<h2>Pipeline Sessions</h2>
+<section aria-labelledby="hd-sessions" style="margin-bottom:2.5rem;">
+  <h2 id="hd-sessions">Pipeline Sessions</h2>
 
-{% if sessions %}
-<table>
-  <thead>
-    <tr>
-      <th>Label</th>
-      <th>Started</th>
-      <th>Ended</th>
-      <th>Cost</th>
-      <th>Items</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for s in sessions %}
-    <tr>
-      <td>{{ s.label or "—" }}</td>
-      <td>{{ s.start_time }}</td>
-      <td>{{ s.end_time or "Active" }}</td>
-      <td>${{ "%.4f" | format(s.total_cost_usd) }}</td>
-      <td>{{ s.items_processed }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<div class="empty-state">No sessions recorded yet.</div>
-{% endif %}
+  {% if sessions %}
+  <div class="table-wrap" role="region" aria-label="Pipeline sessions table">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Label</th>
+          <th scope="col">Started</th>
+          <th scope="col">Ended</th>
+          <th scope="col">Duration</th>
+          <th scope="col" style="text-align:right">Cost</th>
+          <th scope="col" style="text-align:right">Items</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sessions %}
+        <tr>
+          <td>{{ s.label or "&mdash;" | safe }}</td>
+          <td>
+            <time datetime="{{ s.start_time | e }}" class="local-time">
+              {{ s.start_time[:10] | e }} {{ s.start_time[11:19] | e }}
+            </time>
+          </td>
+          <td>
+            {% if s.end_time %}
+            <time datetime="{{ s.end_time | e }}" class="local-time">
+              {{ s.end_time[:10] | e }} {{ s.end_time[11:19] | e }}
+            </time>
+            {% else %}
+            <span class="badge" style="background:#e6f4ea;color:#276749;border:1px solid #b7dfc7;">Active</span>
+            {% endif %}
+          </td>
+          <td class="duration-cell"
+              data-start="{{ s.start_time | e }}"
+              data-end="{{ s.end_time | e if s.end_time else '' }}">&mdash;</td>
+          <td style="text-align:right">${{ "%.4f" | format(s.total_cost_usd) }}</td>
+          <td style="text-align:right">{{ s.items_processed }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state" role="status" aria-live="polite">
+    <div class="icon" aria-hidden="true">&#128203;</div>
+    <div><strong>No sessions recorded yet</strong></div>
+    <div>Sessions will appear here once the pipeline has run.</div>
+  </div>
+  {% endif %}
+</section>
 
 {# ── Daily totals table ─────────────────────────────────────────────────────── #}
-<h2>Daily Totals</h2>
+<section aria-labelledby="hd-daily" style="margin-bottom:2.5rem;">
+  <h2 id="hd-daily">Daily Totals</h2>
 
-{% if daily_totals %}
-<table>
-  <thead>
-    <tr>
-      <th>Date</th>
-      <th>Cost</th>
-      <th>Items</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for d in daily_totals %}
-    <tr>
-      <td>{{ d.date_str }}</td>
-      <td>${{ "%.4f" | format(d.cost_usd) }}</td>
-      <td>{{ d.items_processed }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<div class="empty-state">No completions data available.</div>
-{% endif %}
+  {% if daily_totals %}
+  <div class="table-wrap" role="region" aria-label="Daily cost totals table">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Date</th>
+          <th scope="col" style="text-align:right">Cost</th>
+          <th scope="col" style="text-align:right">Items</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in daily_totals %}
+        <tr>
+          <td>{{ d.date_str | e }}</td>
+          <td style="text-align:right">${{ "%.4f" | format(d.cost_usd) }}</td>
+          <td style="text-align:right">{{ d.items_processed }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state" role="status" aria-live="polite">
+    <div class="icon" aria-hidden="true">&#128200;</div>
+    <div><strong>No daily totals available</strong></div>
+    <div>Daily cost totals will appear here once completions are recorded.</div>
+  </div>
+  {% endif %}
+</section>
 
+<script>
+(function () {
+  var MS_PER_MINUTE = 60000;
+  var MS_PER_HOUR = 3600000;
+
+  function formatDuration(ms) {
+    if (ms < 0) { return "&mdash;"; }
+    var h = Math.floor(ms / MS_PER_HOUR);
+    var m = Math.floor((ms % MS_PER_HOUR) / MS_PER_MINUTE);
+    var s = Math.floor((ms % MS_PER_MINUTE) / 1000);
+    if (h > 0) {
+      return h + "h " + m + "m";
+    }
+    if (m > 0) {
+      return m + "m " + s + "s";
+    }
+    return s + "s";
+  }
+
+  document.querySelectorAll(".duration-cell").forEach(function (cell) {
+    var start = cell.getAttribute("data-start");
+    var end = cell.getAttribute("data-end");
+    if (!start) { return; }
+    var endDate = end ? new Date(end) : new Date();
+    var startDate = new Date(start);
+    var ms = endDate - startDate;
+    cell.innerHTML = formatDuration(ms);
+  });
+}());
+</script>
 {% endblock %}
