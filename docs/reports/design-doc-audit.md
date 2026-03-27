@@ -276,4 +276,190 @@ Documents classified as UPDATE require the following corrections:
 
 ---
 
-*Batch 4 will be appended by subsequent audit task.*
+## Batch 4a: 2026-03-26 (62 docs)
+
+### Additional Facts Verified for Batch 4
+
+- `scripts/plan-orchestrator.py` — **DELETED** (all references in -26/-27 docs are dead)
+- `langgraph_pipeline/web/routes/queue.py` — EXISTS (queue page implemented)
+- `langgraph_pipeline/web/routes/item.py` — EXISTS (work item detail page implemented)
+- `langgraph_pipeline/web/routes/completions.py` — EXISTS (completions page implemented)
+- `langgraph_pipeline/web/routes/sessions.py` — EXISTS (session tracking implemented)
+- `langgraph_pipeline/web/routes/cost.py` — EXISTS (cost POST endpoint implemented)
+- `langgraph_pipeline/web/routes/analysis.py` — EXISTS (cost analysis page implemented)
+- `langgraph_pipeline/web/routes/proxy.py` — EXISTS (tracing proxy routes implemented)
+- `langgraph_pipeline/web/dashboard_state.py` — EXISTS with `DashboardErrorHandler`
+- `langgraph_pipeline/cli.py` — EXISTS with `DashboardErrorHandler` installed
+- `ORCHESTRATOR_WEB_URL` — EXISTS in `shared/paths.py` and set in `cli.py`
+- `verification_notes` — EXISTS in `pipeline/nodes/execute_plan.py` and `worker.py`
+- `WorkerInfo.current_velocity()` / `get_velocity_series()` — EXISTS in `dashboard_state.py`
+- `sessions` table / session lifecycle — EXISTS in `proxy.py` and `routes/sessions.py`
+- `YYYY-MM-DD-feature-template.md` — EXISTS (one file, feature template placeholder)
+
+| # | File | Class | Issues |
+|---|------|-------|--------|
+| 1 | 2026-03-26-01-audit-design-docs-for-validity-design.md | UPDATE | Meta-doc for this audit; references plan-orchestrator.py as subject of deletion — accurate context but could mislead agents into looking for the script |
+| 2 | 2026-03-26-01-trace-smoke-test-design.md | ARCHIVE | One-off smoke test (write sentinel file); no ongoing architectural value |
+| 3 | 2026-03-26-01-traces-model-filter-broken-design.md | ARCHIVE | "Implementation Status: Review Required" — fix complete in proxy.py; no ongoing architectural value |
+| 4 | 2026-03-26-02-hello-world-test-design.md | ARCHIVE | Trivial smoke test (write "hello world"); no architectural value |
+| 5 | 2026-03-26-02-traces-runs-named-langgraph-design.md | ARCHIVE | Implementation confirmed complete; fix for root run naming in langsmith.py already applied; still in .claimed/ |
+| 6 | 2026-03-26-03-cost-analysis-db-backend-design.md | UPDATE | References deleted plan-orchestrator.py for `write_execution_cost_log()` — updated version exists as 2026-03-27-03 |
+| 7 | 2026-03-26-03-dashboard-items-stuck-running-design.md | KEEP | Describes supervisor + DashboardState dead-PID cleanup architecture; ongoing reference for worker lifecycle |
+| 8 | 2026-03-26-04-dashboard-scrolling-timeline-view-design.md | KEEP | Timeline view (Gantt/card toggle) architecture; renderTimeline() and localStorage design |
+| 9 | 2026-03-26-04-timeline-duplicate-labels-and-elapsed-time-design.md | ARCHIVE | Bug fix for proxy_trace.html tick labels and elapsed time; implemented |
+| 10 | 2026-03-26-05-queue-page-design.md | KEEP | Queue page architecture; describes FastAPI router + polling + backlog directory scanning |
+| 11 | 2026-03-26-05-traces-trace-id-column-and-filter-design.md | ARCHIVE | Trace ID column and LIKE filter feature; implemented in proxy.py and routes/proxy.py |
+| 12 | 2026-03-26-06-dashboard-drill-down-to-trace-design.md | KEEP | Run UUID threading from worker through SSE to dashboard links; ongoing architecture |
+| 13 | 2026-03-26-06-work-item-detail-page-design.md | KEEP | Work item detail page data sources and priority chain; key UI component architecture |
+| 14 | 2026-03-26-07-completions-paged-table-design.md | KEEP | Completions page architecture with pagination, filters, and summary stats |
+| 15 | 2026-03-26-07-timeline-bar-colors-too-similar-design.md | ARCHIVE | UI color palette change; single-file CSS fix; implemented |
+| 16 | 2026-03-26-08-timeline-sub-second-precision-lost-design.md | ARCHIVE | Bug fix for datetime.fromisoformat() precision; implemented in routes/proxy.py |
+| 17 | 2026-03-26-08-tracing-proxy-narrative-and-guid-generation-design.md | KEEP | Narrative document on tracing proxy origin; investigative doc with ongoing architectural context |
+| 18 | 2026-03-26-09-completions-finished-invalid-date-design.md | ARCHIVE | JS type-check bug fix for dashboard.js fmtFinished(); implemented |
+| 19 | 2026-03-26-09-verification-notes-in-work-item-page-design.md | KEEP | Verification notes threading from validator through pipeline to item page; key data flow |
+| 20 | 2026-03-26-10-error-stream-always-empty-design.md | KEEP | DashboardErrorHandler architecture; logging handler for dashboard error stream |
+| 21 | 2026-03-26-10-trace-cost-analysis-page-design.md | KEEP | Cost analysis page architecture; SQL json_extract() queries from traces table |
+| 22 | 2026-03-26-11-nav-active-item-styling-design.md | ARCHIVE | CSS pill styling for nav active item; single-rule change; implemented |
+| 23 | 2026-03-26-11-tool-call-cost-attribution-design.md | KEEP | Tool call cost attribution architecture; post-hoc proportional estimation design |
+| 24 | 2026-03-26-12-inclusive-cost-precomputation-design.md | KEEP | Two-pass inclusive cost query optimization; important performance architecture decision |
+| 25 | 2026-03-26-13-timeline-all-items-show-as-other-design.md | ARCHIVE | Bug fix for Gantt bar color classification; exact-match vs substring strategy; implemented |
+| 26 | 2026-03-26-13-trace-observability-gaps-design.md | KEEP | Trace metadata enrichment for executor nodes; returncode, failure_reason, verdict capture |
+| 27 | 2026-03-26-14-dashboard-timeline-wall-clock-with-navigation-design.md | KEEP | Wall-clock timeline with live/history toggle architecture; key UI feature |
+| 28 | 2026-03-26-14-intake-analysis-silent-failure-design.md | ARCHIVE | Bug fix for ClaudeResult.failure_reason visibility; implemented |
+| 29 | 2026-03-26-15-session-tracking-and-cost-history-design.md | KEEP | Session lifecycle architecture; sessions table, startup/shutdown, /sessions page |
+| 30 | 2026-03-26-15-traces-timestamps-utc-not-local-design.md | ARCHIVE | Client-side UTC-to-local conversion via &lt;time&gt; element; implemented |
+| 31 | 2026-03-26-16-tool-calls-missing-from-traces-design.md | ARCHIVE | Bug fix for grandchild trace fetching; implemented in routes/proxy.py |
+| 32 | 2026-03-26-16-worker-velocity-tracking-design.md | KEEP | Worker velocity (tokens/min) architecture; WorkerInfo methods, SSE payload, completions table |
+| 33 | 2026-03-26-17-trace-expand-chevron-duplicate-and-inline-design.md | ARCHIVE | UI bug fix for CSS marker suppression; implemented |
+| 34 | 2026-03-26-17-work-item-status-clarity-design.md | KEEP | Pipeline stage waterfall (9-condition derivation) architecture; key for understanding item lifecycle |
+| 35 | 2026-03-26-18-work-item-duplicate-traces-design.md | ARCHIVE | Bug fix; unique index and ON CONFLICT upsert for traces deduplication; implemented |
+| 36 | 2026-03-26-19-validator-marks-incomplete-work-as-done-design.md | KEEP | Validator prompt rigor design; binary YES/NO criteria; ongoing reference for validation quality |
+| 37 | 2026-03-26-20-worker-trace-link-finds-nothing-design.md | ARCHIVE | Bug fix for async run_id discovery in claimed files; implemented |
+| 38 | 2026-03-26-21-intake-throttle-warns-but-doesnt-block-design.md | KEEP | Intake throttle blocking enforcement architecture; shutdown event integration |
+| 39 | 2026-03-26-22-cost-data-gaps-in-traces-design.md | KEEP | Cost capture architecture; ClaudeResult.total_cost_usd wiring for all Claude nodes |
+| 40 | 2026-03-26-25-migrate-tests-off-legacy-plan-orchestrator-design.md | ARCHIVE | Task complete; plan-orchestrator.py deleted; tests/test_agent_identity.py migrated; no ongoing value |
+| 41 | 2026-03-26-26-remove-tilde-cost-prefix-from-templates-design.md | ARCHIVE | Cleanup task; 19 tilde-prefix occurrences replaced in templates; implemented |
+| 42 | 2026-03-26-27-tool-call-cost-attribution-dummy-data-design.md | UPDATE | References plan-orchestrator.py executor nodes — update to reference langgraph_pipeline/executor/nodes/; wiring architecture otherwise valid |
+| 43 | 2026-03-26-28-cost-by-node-type-display-bugs-design.md | ARCHIVE | Display bug fixes for SVG bar chart (float values, padding); implemented |
+| 44 | 2026-03-26-29-duplicate-trace-rows-start-and-end-events-design.md | ARCHIVE | Bug fix; ON CONFLICT deduplication for trace rows; implemented |
+| 45 | 2026-03-26-30-cost-posting-uses-wrong-env-var-and-is-never-wired-design.md | KEEP | ORCHESTRATOR_WEB_URL architecture; env var design for cost data pipeline wiring |
+| 46 | 2026-03-26-31-validation-criteria-must-be-checklist-with-clear-outcomes-design.md | KEEP | Planner/validator prompt policy; binary YES/NO acceptance criteria; ongoing reference |
+| 47 | 2026-03-26-32-test-data-cleanup-and-random-values-policy-design.md | KEEP | Test data hygiene policy; coder.md and validator.md test-data leak check |
+| 48 | 2026-03-26-33-wire-up-real-cost-data-pipeline-design.md | KEEP | Cost data pipeline wiring; ENV_ORCHESTRATOR_WEB_URL flow from cli.py to task_runner/validator |
+| 49 | 2026-03-26-34-remove-tilde-cost-prefix-third-attempt-design.md | ARCHIVE | Duplicate of 26-remove-tilde; same task (third attempt number); implemented |
+| 50 | 2026-03-26-35-work-item-page-missing-requirements-from-backlog-file-design.md | ARCHIVE | "Implementation Status: COMPLETE"; priority chain fix for _find_requirements_file(); implemented |
+| 51 | 2026-03-26-36-cost-analysis-ui-polish-design.md | KEEP | UI polish decisions for cost analysis page; tooltip vs collapsible, pagination choices |
+| 52 | 2026-03-26-37-ui-quality-process-lost-in-langgraph-migration-design.md | KEEP | UI quality process restoration; ux-designer/frontend-coder workflow; ongoing reference |
+| 53 | 2026-03-26-38-tool-call-attribution-table-missing-attribution-column-design.md | ARCHIVE | "Implementation Status: Review Required" — tilde prefix fix in attribution table; implemented |
+| 54 | 2026-03-26-39-scan-backlog-trace-confusing-inputs-outputs-design.md | ARCHIVE | UI relabeling for scan_backlog trace; context-aware labels; implemented |
+| 55 | 2026-03-26-40-remove-redundant-scan-backlog-node-design.md | KEEP | Graph topology change; scan_backlog node removal rationale and new entry point |
+| 56 | 2026-03-26-41-rename-misleading-graph-nodes-design.md | ARCHIVE | Code renames complete (verify_symptoms→verify_fix, etc.); no ongoing value |
+| 57 | 2026-03-26-42-task-status-json-blocked-by-sensitive-file-protection-design.md | KEEP | tmp/task-status.json relocation policy; ongoing reference for orchestrator file handling |
+| 58 | 2026-03-26-43-capture-agent-traces-per-item-for-review-design.md | KEEP | Per-item Claude Code trace capture architecture; future feature design |
+| 59 | 2026-03-26-43-capture-raw-worker-output-per-item-design.md | KEEP | Worker console output capture to docs/reports/worker-output/; ongoing architectural reference |
+| 60 | 2026-03-26-44-cost-analysis-disclaimer-use-tooltip-not-collapsible-design.md | ARCHIVE | UI pattern decision (inline tooltip vs collapsible section); implemented |
+| 61 | 2026-03-26-46-item-page-show-last-run-and-velocity-design.md | KEEP | Item page last trace link and velocity badge architecture |
+| 62 | 2026-03-26-47-velocity-badge-on-item-page-design.md | KEEP | Velocity badge with live override for active workers architecture |
+
+### Batch 4a Summary (2026-03-26)
+
+| Classification | Count |
+|---------------|-------|
+| KEEP | 30 |
+| UPDATE | 3 |
+| ARCHIVE | 29 |
+| DELETE | 0 |
+| **Total** | **62** |
+
+### Batch 4a UPDATE Details
+
+Documents classified as UPDATE require the following corrections:
+
+| Doc | Required Updates |
+|-----|-----------------|
+| 2026-03-26-01-audit-design-docs-for-validity | Clarify plan-orchestrator.py references are historical context (subject of deletion audit), not instructions to call the script |
+| 2026-03-26-03-cost-analysis-db-backend | Remove `write_execution_cost_log()` in `scripts/plan-orchestrator.py` reference; the 2026-03-27 version already corrects this |
+| 2026-03-26-27-tool-call-cost-attribution-dummy-data | Replace plan-orchestrator.py executor node references with `langgraph_pipeline/executor/nodes/task_runner.py` and `validator.py` |
+
+---
+
+## Batch 4b: 2026-03-27 (50 docs) + Template (1 doc)
+
+Note: 2026-03-27 documents are revised/updated versions of their 2026-03-26 counterparts. Where a -27 doc explicitly confirms implementation as complete ("Status: Review Required", "Previously implemented"), it is classified ARCHIVE. Where it improves on a stale -26 doc (fixing plan-orchestrator.py refs), the -27 version is KEEP. New docs (54, 55, 99) are classified on their own merits.
+
+| # | File | Class | Issues |
+|---|------|-------|--------|
+| 1 | 2026-03-27-01-audit-design-docs-for-validity-design.md | UPDATE | Same as -26 version; still references plan-orchestrator.py as historical subject; see -26 UPDATE notes |
+| 2 | 2026-03-27-01-traces-model-filter-broken-design.md | ARCHIVE | Previously implemented; model filter and column fix confirmed complete in proxy.py |
+| 3 | 2026-03-27-02-traces-runs-named-langgraph-design.md | ARCHIVE | Previously implemented; root run naming fix confirmed complete; still in .claimed/ for validation |
+| 4 | 2026-03-27-03-cost-analysis-db-backend-design.md | KEEP | Improved version of -26 doc; removes plan-orchestrator.py reference; accurate description of current cost_tasks DB + POST /api/cost architecture |
+| 5 | 2026-03-27-03-dashboard-items-stuck-running-design.md | KEEP | Same architectural content as -26 KEEP; no stale refs; ongoing reference for supervisor/DashboardState lifecycle |
+| 6 | 2026-03-27-04-dashboard-scrolling-timeline-view-design.md | KEEP | Architecture reference for timeline view; same as -26 KEEP |
+| 7 | 2026-03-27-04-timeline-duplicate-labels-and-elapsed-time-design.md | ARCHIVE | Previously implemented; bug fix for proxy_trace.html tick labels |
+| 8 | 2026-03-27-05-queue-page-design.md | KEEP | Queue page architecture reference |
+| 9 | 2026-03-27-05-traces-trace-id-column-and-filter-design.md | ARCHIVE | Previously implemented; trace_id column and filter feature complete |
+| 10 | 2026-03-27-06-dashboard-drill-down-to-trace-design.md | KEEP | Run UUID threading architecture reference |
+| 11 | 2026-03-27-06-work-item-detail-page-design.md | ARCHIVE | "Implementation Status: Complete"; work item detail page fully implemented |
+| 12 | 2026-03-27-07-completions-paged-table-design.md | KEEP | Completions page architecture reference |
+| 13 | 2026-03-27-07-timeline-bar-colors-too-similar-design.md | ARCHIVE | Previously implemented; color palette change applied |
+| 14 | 2026-03-27-08-timeline-sub-second-precision-lost-design.md | ARCHIVE | Previously implemented; datetime.fromisoformat() fix applied |
+| 15 | 2026-03-27-08-tracing-proxy-narrative-and-guid-generation-design.md | KEEP | Narrative and architectural context for tracing proxy; ongoing reference |
+| 16 | 2026-03-27-09-completions-finished-invalid-date-design.md | ARCHIVE | Previously implemented; dashboard.js fmtFinished() type-check applied |
+| 17 | 2026-03-27-09-verification-notes-in-work-item-page-design.md | KEEP | Verification notes data flow architecture reference |
+| 18 | 2026-03-27-10-error-stream-always-empty-design.md | KEEP | DashboardErrorHandler architecture reference |
+| 19 | 2026-03-27-10-trace-cost-analysis-page-design.md | KEEP | Cost analysis page architecture reference; json_extract() query design |
+| 20 | 2026-03-27-11-nav-active-item-styling-design.md | ARCHIVE | Previously implemented; pill styling applied |
+| 21 | 2026-03-27-11-tool-call-cost-attribution-design.md | KEEP | Tool call cost attribution architecture reference |
+| 22 | 2026-03-27-12-inclusive-cost-precomputation-design.md | KEEP | Two-pass inclusive cost query optimization architecture |
+| 23 | 2026-03-27-13-timeline-all-items-show-as-other-design.md | ARCHIVE | Previously implemented; bar color exact-match fix applied |
+| 24 | 2026-03-27-13-trace-observability-gaps-design.md | KEEP | Trace metadata enrichment architecture; returncode, failure_reason |
+| 25 | 2026-03-27-14-dashboard-timeline-wall-clock-with-navigation-design.md | KEEP | Wall-clock timeline architecture reference |
+| 26 | 2026-03-27-14-intake-analysis-silent-failure-design.md | ARCHIVE | Previously implemented; ClaudeResult.failure_reason wiring complete |
+| 27 | 2026-03-27-15-session-tracking-and-cost-history-design.md | KEEP | Describes sessions table + /sessions page architecture; sessions.py EXISTS (fully implemented) but doc provides architectural reference for ongoing maintenance |
+| 28 | 2026-03-27-15-traces-timestamps-utc-not-local-design.md | ARCHIVE | Previously implemented; UTC-to-local conversion applied |
+| 29 | 2026-03-27-16-tool-calls-missing-from-traces-design.md | ARCHIVE | Previously implemented; grandchild trace fetching applied |
+| 30 | 2026-03-27-16-worker-velocity-tracking-design.md | ARCHIVE | "Status: Review and fix gaps" — WorkerInfo velocity methods, SSE payload, completions column all exist; feature complete |
+| 31 | 2026-03-27-17-trace-expand-chevron-duplicate-and-inline-design.md | ARCHIVE | Previously implemented; CSS marker suppression applied |
+| 32 | 2026-03-27-17-work-item-status-clarity-design.md | ARCHIVE | "Previously implemented"; pipeline stage waterfall and _derive_pipeline_stage() complete |
+| 33 | 2026-03-27-18-work-item-duplicate-traces-design.md | ARCHIVE | Previously implemented; ON CONFLICT deduplication for traces applied |
+| 34 | 2026-03-27-19-validator-marks-incomplete-work-as-done-design.md | KEEP | Validator prompt rigor reference; binary YES/NO criteria design |
+| 35 | 2026-03-27-20-worker-trace-link-finds-nothing-design.md | ARCHIVE | Previously implemented; async run_id discovery fix applied |
+| 36 | 2026-03-27-22-cost-data-gaps-in-traces-design.md | KEEP | Cost capture architecture reference; ClaudeResult.total_cost_usd design |
+| 37 | 2026-03-27-25-migrate-tests-off-legacy-plan-orchestrator-design.md | ARCHIVE | "Previously implemented"; plan-orchestrator.py deleted; all 64 tests migrated; no ongoing value |
+| 38 | 2026-03-27-27-tool-call-cost-attribution-dummy-data-design.md | KEEP | Improved version of -26 UPDATE doc; provides accurate wiring architecture for cost attribution |
+| 39 | 2026-03-27-28-cost-by-node-type-display-bugs-design.md | ARCHIVE | Previously implemented; SVG bar chart display bugs fixed |
+| 40 | 2026-03-27-29-duplicate-trace-rows-start-and-end-events-design.md | ARCHIVE | "Implementation Status: COMPLETE"; ON CONFLICT deduplication complete |
+| 41 | 2026-03-27-30-cost-posting-uses-wrong-env-var-and-is-never-wired-design.md | KEEP | ORCHESTRATOR_WEB_URL architecture reference; env var set in cli.py |
+| 42 | 2026-03-27-33-wire-up-real-cost-data-pipeline-design.md | KEEP | Cost data pipeline end-to-end flow; ENV_ORCHESTRATOR_WEB_URL integration |
+| 43 | 2026-03-27-35-work-item-page-missing-requirements-from-backlog-file-design.md | ARCHIVE | "Previously implemented"; priority chain fix for _find_requirements_file() complete |
+| 44 | 2026-03-27-37-ui-quality-process-lost-in-langgraph-migration-design.md | KEEP | UI quality process documentation; ux-designer/frontend-coder workflow reference |
+| 45 | 2026-03-27-38-tool-call-attribution-table-missing-attribution-column-design.md | ARCHIVE | "Status: Review Required" — tilde prefix fix in attribution table complete |
+| 46 | 2026-03-27-40-remove-redundant-scan-backlog-node-design.md | KEEP | Graph topology change; scan_backlog removal rationale; architectural reference |
+| 47 | 2026-03-27-41-rename-misleading-graph-nodes-design.md | ARCHIVE | Code renames complete in source and tests; documentation cleanup the only remaining work (minimal value) |
+| 48 | 2026-03-27-54-validator-should-run-e2e-tests-for-ui-criteria-design.md | KEEP | New feature; e2e-test-agent + Playwright configuration architecture; not yet implemented |
+| 49 | 2026-03-27-55-readme-setup-guide-for-new-projects-design.md | KEEP | Documentation gap fix; setup-guide.md improvements; ongoing reference for onboarding |
+| 50 | 2026-03-27-99-test-val-v2-design.md | ARCHIVE | One-off smoke test (comment addition in paths.py); no ongoing architectural value |
+| 51 | YYYY-MM-DD-feature-template.md | KEEP | Template for new design docs; ongoing reference for document structure |
+
+### Batch 4b Summary (2026-03-27 + template)
+
+| Classification | Count |
+|---------------|-------|
+| KEEP | 25 |
+| UPDATE | 1 |
+| ARCHIVE | 25 |
+| DELETE | 0 |
+| **Total** | **51** |
+
+### Batch 4b UPDATE Details
+
+Documents classified as UPDATE require the following corrections:
+
+| Doc | Required Updates |
+|-----|-----------------|
+| 2026-03-27-01-audit-design-docs-for-validity | Same as -26 UPDATE: clarify plan-orchestrator.py references are historical context (the subject of deletion), not instructions to use the script |
+
+---
+
+## Audit Complete — All 218+ Documents Classified
+
