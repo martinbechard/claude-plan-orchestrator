@@ -1,5 +1,12 @@
 # Wire up real cost data from pipeline workers to the analysis page
 
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
+
 ## Status: Open
 
 ## Priority: High
@@ -41,3 +48,33 @@ The /analysis page shows dummy data because:
   YES = pass, NO = fail
 - Does the cost value shown on /analysis match the cost in the completions
   table for the same item (within rounding)? YES = pass, NO = fail
+
+
+
+
+## 5 Whys Analysis
+
+**Title:** Real cost data never flows to the analysis page because of configuration dependency and incomplete validation
+
+**Clarity:** 4 of 5 (clear problem statement, acceptance criteria well-defined, but the architectural failure across two previous attempts suggests the design issue wasn't fully surfaced upfront)
+
+**5 Whys:**
+
+1. **Why is the /analysis page showing dummy data instead of real cost data from the pipeline?**
+   Because _post_cost_to_api() was never actually configured to post. It only fires when LANGCHAIN_ENDPOINT is set to localhost, which was never configured, so test data was manually inserted as a workaround instead.
+
+2. **Why wasn't _post_cost_to_api() configured to post to the web server?**
+   Because the implementation made the web server URL dependent on LANGCHAIN_ENDPOINT—an environment variable that was intended for the LangChain integration, not configured for cost reporting, and never set in the orchestrator environment.
+
+3. **Why was the web server URL dependency tied to LANGCHAIN_ENDPOINT instead of a dedicated configuration?**
+   Because the design conflated two separate concerns: the LangChain integration endpoint and the internal web server URL for cost reporting. They were treated as the same thing, so no separate config path was created.
+
+4. **Why weren't these two concerns (LangChain vs. cost reporting) identified and separated during design?**
+   Because the implementation approach started with "how do we post data somewhere" and reused an existing env var rather than first identifying all the distinct configuration needs and how they should be managed (orchestrator-config.yaml, auto-detection, etc.).
+
+5. **Why did implementations pass validation twice without catching that real pipeline data never flowed through?**
+   Because acceptance criteria validated only the output (does the page render?) rather than the mechanism (does real cost data flow through task_runner.py → validator.py → web server → cost_tasks table?). Endpoint-to-endpoint verification was never enforced.
+
+**Root Need:** Establish a separate, explicit configuration path for cost reporting that is independent of LangChain setup, and enforce end-to-end acceptance criteria that verify real pipeline data flows through the actual mechanism, not just that the output page renders.
+
+**Summary:** The feature fails because configuration was never set up and validation only checked output, not the actual data flow mechanism.
