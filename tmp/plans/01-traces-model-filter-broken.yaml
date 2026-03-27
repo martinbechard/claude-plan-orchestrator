@@ -17,8 +17,13 @@ sections:
   - id: '1.1'
     name: Validate model propagation and fix any gaps
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/01-traces-model-filter-broken.md'
     last_attempt: '2026-03-27T13:55:57.308143'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:04:32.207296'
+    result_message: 'Fixed model filter dropdown: changed from full API model names
+      (claude-sonnet-4-6, etc.) to tier names (opus, sonnet, haiku) which match the
+      values stored in the model column via propagate_model_to_root. All 1314 tests
+      pass.'
