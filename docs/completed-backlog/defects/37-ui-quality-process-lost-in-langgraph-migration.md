@@ -1,5 +1,12 @@
 # UI quality review process lost during LangGraph migration
 
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
+
 ## Status: Open
 
 ## Priority: High
@@ -51,3 +58,33 @@ All web UI work items should go through a design quality process:
   YES = pass, NO = fail
 - Is there a style guide or reference page that enforces consistency?
   YES = pass, NO = fail
+
+
+
+
+## 5 Whys Analysis
+
+Title: UI design quality process not enforced in LangGraph pipeline agents
+
+Clarity: 4
+
+5 Whys:
+
+1. **Why was the UI design review process lost during the LangGraph migration?**
+   - The old pipeline's design competition workflow (3 parallel designs → judging → implementation) was not codified into agent prompts or pipeline configuration, leaving it as an implicit manual step rather than an automated gate.
+
+2. **Why wasn't this workflow codified into the new pipeline's agent logic?**
+   - The migration focused on achieving functional completeness (agents working, items flowing through) and did not include an audit of quality processes from the old system that should be preserved as automation triggers.
+
+3. **Why did migration prioritize functionality over preserving quality processes?**
+   - The frontend-design skill existed but had no integration points in planner or coder agent prompts—it required explicit, manual triggering that fell out of the process when old procedural documentation wasn't ported over.
+
+4. **Why was the frontend-design skill not integrated into the agent system prompts?**
+   - There was no explicit requirement or acceptance criteria during migration to verify that all old quality gates were either (a) automated in the new agents or (b) consciously deprecated with justification.
+
+5. **Why was there no quality-process audit during the LangGraph migration?**
+   - The migration treated the old pipeline as a "legacy system to replace" rather than a "source of truth about what quality practices matter," so procedural knowledge about design review gates was lost rather than intentionally preserved or evolved.
+
+Root Need: The LangGraph agents need explicit integration of quality gates (especially frontend-design skill invocation) in their prompts so that UI work items cannot bypass design review before implementation.
+
+Summary: A manual, procedural quality step became invisible when migrated to automation-first agents without explicit prompting or orchestration logic.
