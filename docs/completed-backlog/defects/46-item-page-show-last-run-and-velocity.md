@@ -25,7 +25,7 @@ Two missing pieces of information on the /item/<slug> detail page:
 - Is the velocity value consistent with what the dashboard timeline
   shows for the same item? YES = pass, NO = fail
 
-## LangSmith Trace: 12c69a35-a852-43c7-8650-9ba3fb619ac4
+
 
 
 ## 5 Whys Analysis
