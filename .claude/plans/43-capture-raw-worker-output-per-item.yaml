@@ -36,7 +36,7 @@ sections:
   - id: '1.2'
     name: Add output capture to parallel task runner
     agent: coder
-    status: in_progress
+    status: completed
     dependencies:
     - '1.1'
     description: 'Implement the work item: docs/feature-backlog/43-capture-raw-worker-output-per-item.md
@@ -49,6 +49,11 @@ sections:
     last_attempt: '2026-03-26T19:59:13.790263'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T20:02:29.598593'
+    result_message: Extended _run_claude_in_worktree() to accept slug and task_id
+      params and write per-item output logs via _write_task_log(). Also derives slug
+      from plan_path in execute_parallel_task() and passes it through. All 1290 tests
+      pass.
 - id: s2
   name: 'Web UI: expose console output on item detail page'
   tasks:
