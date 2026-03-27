@@ -1,0 +1,21 @@
+meta:
+  source_item: tmp/plans/.claimed/16-tool-calls-missing-from-traces.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Verify and fix tool calls in traces
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Verify and fix tool call display in trace detail
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/16-tool-calls-missing-from-traces.md'
