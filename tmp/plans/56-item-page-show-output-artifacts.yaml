@@ -29,13 +29,20 @@ sections:
       to the template in item_detail(). See design: docs/plans/2026-03-27-56-item-page-show-output-artifacts-design.md
 
       '
-    last_attempt: '2026-03-27T16:26:53.707596'
-    attempts: 1
-    model_used: sonnet
-    completed_at: '2026-03-27T16:30:19.544027'
-    result_message: Added _collect_output_artifacts(slug) to item.py gathering files
-      from git commits, design docs, and docs/reports/. Wired into item_detail() and
-      added collapsible Output Artifacts section to item.html.
+    last_attempt: '2026-03-27T16:37:17.467481'
+    attempts: 2
+    model_used: opus
+    completed_at: '2026-03-27T16:41:01.037668'
+    result_message: 'Fixed AC3: added _add_report_refs_from_file helper that scans
+      design doc content for docs/reports/ path references. Reports like design-doc-audit.md
+      that don''t contain the slug in their filename are now surfaced via regex extraction
+      from the design doc.'
+    validation_attempts: 1
+    validation_findings: 'AC3 not met: docs/reports/design-doc-audit.md is not surfaced
+      on the 01-audit-design-docs-for-validity page. The implementation searches docs/reports/
+      only for files whose name contains the slug, but design-doc-audit.md does not
+      contain the slug in its name and no commit with the slug message references
+      that file.'
 - id: '2'
   name: 'Frontend: render output artifacts section'
   status: pending
