@@ -1,0 +1,23 @@
+meta:
+  title: Timeline sub-second precision lost
+  source_item: tmp/plans/.claimed/08-timeline-sub-second-precision-lost.md
+  type: defect
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Validate and fix sub-second timeline precision
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Validate acceptance criteria and fix any failures
+    agent: frontend-coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/08-timeline-sub-second-precision-lost.md'

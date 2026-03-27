@@ -19,5 +19,8 @@ sections:
   - id: '1.1'
     name: Validate acceptance criteria and fix any failures
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/05-traces-trace-id-column-and-filter.md'
+    last_attempt: '2026-03-27T01:38:27.570511'
+    attempts: 1
+    model_used: sonnet
