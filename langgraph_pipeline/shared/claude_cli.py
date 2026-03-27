@@ -29,6 +29,39 @@ DEFAULT_CALL_TIMEOUT_SECONDS = 120
 _cumulative_tokens_in: int = 0
 _cumulative_tokens_out: int = 0
 _cumulative_cost_usd: float = 0.0
+_quota_exhausted: bool = False
+
+QUOTA_KEYWORDS = ["You've hit your limit", "Usage limit reached", "you've exceeded"]
+
+
+def is_quota_exhausted() -> bool:
+    """Return True if any call_claude invocation has detected quota exhaustion."""
+    return _quota_exhausted
+
+
+def _check_quota_in_output(stdout: str, stderr: str) -> bool:
+    """Check both stdout and stderr for quota exhaustion keywords."""
+    combined = (stderr or "") + (stdout or "")
+    return any(kw.lower() in combined.lower() for kw in QUOTA_KEYWORDS)
+
+
+def _report_quota_exhausted() -> None:
+    """Notify the supervisor that quota is exhausted via POST /api/quota-exhausted."""
+    web_url = os.environ.get("ORCHESTRATOR_WEB_URL", "")
+    if not web_url:
+        return
+    try:
+        import urllib.request
+        payload = json.dumps({"pid": os.getpid(), "quota_exhausted": True}).encode()
+        req = urllib.request.Request(
+            f"{web_url}/api/quota-exhausted",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=2)
+    except Exception:
+        pass
 
 
 def _report_worker_stats(tokens_in: int, tokens_out: int, cost_usd: float) -> None:
@@ -160,6 +193,14 @@ def call_claude(
             cwd=os.getcwd(),
             env=_build_child_env(),
         )
+        # Check for quota exhaustion in both success and failure paths
+        if _check_quota_in_output(proc.stdout or "", proc.stderr or ""):
+            global _quota_exhausted
+            _quota_exhausted = True
+            logger.warning("Quota exhaustion detected in call_claude output")
+            _report_quota_exhausted()
+            return ClaudeResult(text="", failure_reason="quota_exhausted", raw_stdout=proc.stdout or "")
+
         if proc.returncode == 0:
             data = json.loads(proc.stdout)
             cost = float(data.get("total_cost_usd", 0.0))

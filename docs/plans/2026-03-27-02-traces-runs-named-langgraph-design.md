@@ -57,3 +57,15 @@ are expected.
   be correct on first insert).
 - Old traces in the DB from before the fix will still show "LangGraph" - only new
   traces will have correct slugs.
+
+
+## Acceptance Criteria
+
+- Do root traces in the DB have names that match the actual work item slug
+  (not "LangGraph")? Run: SELECT DISTINCT name FROM traces WHERE
+  parent_run_id IS NULL ORDER BY created_at DESC LIMIT 10;
+  YES (slugs visible) = pass, NO (all say "LangGraph") = fail
+- Does the /proxy traces list page show the item slug in the Name column
+  instead of "LangGraph"? YES = pass, NO = fail
+- Can I filter traces by slug name and get meaningful results?
+  YES = pass, NO = fail

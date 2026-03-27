@@ -100,6 +100,7 @@ class DashboardState:
         self._lock = threading.Lock()
         self.active_workers: dict[int, WorkerInfo] = {}
         self.recent_completions: list[CompletionRecord] = []
+        self.quota_exhausted: bool = False
         self.session_cost_usd: float = 0.0
         self.session_start: float = time.monotonic()
         self.recent_errors: list[str] = []

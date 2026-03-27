@@ -368,6 +368,29 @@ def create_app(config: Optional[dict] = None):
             logger.debug("worker_stats: %s", exc)
         return JSONResponse({"ok": True}, status_code=202)
 
+    @app.post("/api/quota-exhausted")
+    async def quota_exhausted(request: Request):
+        """Worker reports quota exhaustion — sets global flag to halt dispatch."""
+        try:
+            from langgraph_pipeline.web.dashboard_state import get_dashboard_state
+            dashboard = get_dashboard_state()
+            dashboard.quota_exhausted = True
+            dashboard.add_error("Quota exhausted — pipeline dispatch halted")
+            logger.warning("Quota exhaustion reported by worker — dispatch halted")
+        except Exception as exc:
+            logger.debug("quota_exhausted: %s", exc)
+        return JSONResponse({"ok": True}, status_code=202)
+
+    @app.get("/api/quota-status")
+    async def quota_status():
+        """Return current quota status."""
+        try:
+            from langgraph_pipeline.web.dashboard_state import get_dashboard_state
+            dashboard = get_dashboard_state()
+            return JSONResponse({"quota_exhausted": getattr(dashboard, "quota_exhausted", False)})
+        except Exception:
+            return JSONResponse({"quota_exhausted": False})
+
     return app
 
 

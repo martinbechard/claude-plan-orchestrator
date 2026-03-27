@@ -259,7 +259,8 @@ def main() -> int:
         input_tokens = final_state.get("session_input_tokens", 0)
         output_tokens = final_state.get("session_output_tokens", 0)
 
-        if final_state.get("quota_exhausted"):
+        from langgraph_pipeline.shared.claude_cli import is_quota_exhausted
+        if final_state.get("quota_exhausted") or is_quota_exhausted():
             logger.warning("Worker: quota exhausted during item processing — reporting failure.")
             _write_result(
                 result_file,

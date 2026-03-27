@@ -698,8 +698,29 @@ def run_supervisor_loop(
             # Token counts are now updated by workers via POST /api/worker-stats.
             # No need for supervisor-side DB polling.
 
+            # Step 1d: Check if any worker reported quota exhaustion.
+            dashboard = get_dashboard_state()
+            if dashboard.quota_exhausted:
+                if active_workers:
+                    logger.warning("Quota exhausted — waiting for %d active worker(s) to finish before entering probe loop.",
+                                   len(active_workers))
+                else:
+                    logger.warning("Quota exhausted — entering probe loop.")
+                    from langgraph_pipeline.shared.quota import probe_quota_available
+                    while not shutdown_event.is_set():
+                        shutdown_event.wait(300)  # 5-minute probe interval
+                        if shutdown_event.is_set():
+                            break
+                        if probe_quota_available():
+                            logger.info("Quota probe succeeded — resuming pipeline.")
+                            dashboard.quota_exhausted = False
+                            if slack is not None:
+                                slack.send_status("Claude quota restored — pipeline resuming.", level="info")
+                            break
+                        logger.warning("Quota probe failed — still exhausted.")
+
             # Step 2: Dispatch new workers while slots are available.
-            if not budget_exceeded and not shutdown_event.is_set():
+            if not budget_exceeded and not dashboard.quota_exhausted and not shutdown_event.is_set():
                 while len(active_workers) < max_workers and not shutdown_event.is_set():
                     dispatched = _try_dispatch_one(active_workers)
                     if not dispatched:
