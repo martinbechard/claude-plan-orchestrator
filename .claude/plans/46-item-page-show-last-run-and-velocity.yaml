@@ -38,3 +38,9 @@ sections:
       from traces list, passed both to template. Updated item.html to show velocity
       badge (Xk tok/min or X tok/min) and last-trace link in the header badges row
       next to the pipeline stage badge.
+    validation_attempts: 1
+    validation_findings: Code compiles, all 1297 tests pass. Implementation adds _compute_avg_velocity
+      helper and last_trace extraction to item.py, updates item.html with velocity
+      badge and last-trace link in header badges row. No placeholders or test data
+      found. Runtime display behavior cannot be confirmed at validation time. item.py
+      header missing new design doc reference (minor).
