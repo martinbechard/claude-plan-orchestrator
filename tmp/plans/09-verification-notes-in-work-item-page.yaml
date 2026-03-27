@@ -18,7 +18,7 @@ sections:
     name: Thread verification notes from validator through pipeline to completions
       table
     agent: coder
-    status: completed
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/09-verification-notes-in-work-item-page.md
       -- Backend changes: add verification_notes TEXT column to completions table
       in proxy.py, add plan_verification_notes to TaskState and verification_notes
@@ -26,15 +26,19 @@ sections:
       through execute_plan, worker, and supervisor to record_completion(). Update
       validator agent prompt to require findings[] and evidence in status JSON. See
       design doc: docs/plans/2026-03-27-09-verification-notes-in-work-item-page-design.md'
-    last_attempt: '2026-03-27T15:01:25.560803'
-    attempts: 1
-    model_used: sonnet
+    last_attempt: '2026-03-27T15:11:31.994482'
+    attempts: 2
+    model_used: opus
     completed_at: '2026-03-27T15:07:40.061553'
     result_message: 'Threaded verification notes from validator through pipeline to
       completions table: added verification_notes TEXT column with ALTER TABLE migration,
       plan_verification_notes to TaskState, verification_notes to PipelineState, _build_verification_notes()
       helper in validator.py, updated validator prompt to require findings[] and evidence,
       forwarded through execute_plan.py -> worker.py -> supervisor.py -> proxy.record_completion()'
+    validation_attempts: 1
+    validation_findings: 'Backend pipeline threading complete, but UI not implemented:
+      item.py does not parse verification_notes from completions, item.html has no
+      Verification section per completion.'
 - id: '2'
   name: Frontend display of verification notes
   status: pending
