@@ -1,0 +1,27 @@
+meta:
+  source_item: tmp/plans/.claimed/11-tool-call-cost-attribution.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Validate and fix existing implementation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Verify attribution logic and fix gaps
+    agent: coder
+    status: pending
+    description: >-
+      Implement the work item: tmp/plans/.claimed/11-tool-call-cost-attribution.md
+      -- Section 1: Validate the existing tool call cost attribution implementation
+      in proxy.py (get_tool_call_attribution, ToolCallCost), analysis.py route,
+      and analysis.html template against the acceptance criteria in the work item.
+      Fix any gaps found. Add unit tests for get_tool_call_attribution() in
+      tests/langgraph/web/test_tool_call_attribution.py.
