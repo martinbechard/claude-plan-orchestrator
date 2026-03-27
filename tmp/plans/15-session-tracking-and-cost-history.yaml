@@ -17,7 +17,7 @@ sections:
   - id: '1.1'
     name: Add sessions table and proxy helpers
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
       -- Focus on the Persistence requirements. Add the sessions table to proxy.py
       init_db(). Implement create_session(), close_session(), list_sessions(), and
@@ -26,6 +26,11 @@ sections:
     last_attempt: '2026-03-27T15:12:30.134401'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T15:16:44.181045'
+    result_message: Added sessions table to proxy.py init_db(). Implemented create_session()
+      (with orphan recovery), close_session(), list_sessions(), and list_daily_totals()
+      helpers. Added Session and DailyTotal dataclasses. Added 8 unit tests; all 1355
+      tests pass.
   - id: '1.2'
     name: Wire session lifecycle into cli.py and DashboardState
     agent: coder
