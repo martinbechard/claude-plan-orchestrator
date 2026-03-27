@@ -38,7 +38,7 @@ sections:
   - id: '1.2'
     name: Wire session lifecycle into cli.py and DashboardState
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
       -- Focus on Session lifecycle requirements. Create session on pipeline startup
       in cli.py after web server starts. Close session on shutdown in finally block
@@ -48,6 +48,12 @@ sections:
     last_attempt: '2026-03-27T15:18:53.744869'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T15:22:54.727182'
+    result_message: Added session_start_time (datetime) and session_id to DashboardState.
+      Added set_session_id() and get_total_processed() methods. snapshot() now includes
+      session_start_time_iso. cli.py creates a session after web server starts and
+      closes it in the finally block with cost and items from DashboardState. Added
+      6 unit tests; all 1370 tests pass.
 - id: '2'
   name: Sessions API route and history page
   status: pending
