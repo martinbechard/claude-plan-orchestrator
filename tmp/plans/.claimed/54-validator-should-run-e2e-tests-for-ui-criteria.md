@@ -38,3 +38,32 @@ This requires:
   YES = pass, NO = fail
 
 ## LangSmith Trace: 7174e3f6-200c-467d-b2c1-f21d627bb549
+
+
+## 5 Whys Analysis
+
+**Title:** Validator needs e2e testing capability for UI acceptance criteria
+
+**Clarity:** 4/5  
+Clear on *what* (create Playwright tests), *where* (validator), and *acceptance criteria*, but could better explain *why* runtime UI validation is critical to the pipeline's purpose.
+
+**5 Whys:**
+
+1. **Why does the validator report "cannot verify" for UI criteria?**
+   - Because the validator only performs static analysis (code inspection, spec comparison) without running the application to test actual user-visible behavior.
+
+2. **Why was the validator designed to only perform static analysis?**
+   - Because it was built as a "dry run" validator to verify code and specs align without needing runtime execution—simpler, faster, and no infrastructure dependencies.
+
+3. **Why is static-only validation now insufficient?**
+   - Because the planner generates acceptance criteria based on user-visible behavior ("does the page show X", "does the filter work"), which can only be verified by actually running the application and testing the UI.
+
+4. **Why does the planner create user-centric acceptance criteria instead of code-level criteria?**
+   - Because user-visible behavior is the most meaningful validation target—a feature could pass code review and spec alignment but still be broken or missing at runtime where users actually interact with it.
+
+5. **Why must the pipeline automatically verify runtime behavior instead of relying on manual testing?**
+   - Because the orchestrator runs unattended and makes automated go/no-go decisions about feature completion; without runtime verification, static "PASS" verdicts become unreliable and the pipeline loses its value as an autonomous validation system.
+
+**Root Need:** The automated pipeline must validate user-centric acceptance criteria through runtime testing, not just static analysis, to ensure "PASS" verdicts reflect actual feature functionality and maintain pipeline credibility.
+
+**Summary:** Static validation is insufficient for a fully automated pipeline that must verify user-visible acceptance criteria—runtime testing is essential to close the gap.

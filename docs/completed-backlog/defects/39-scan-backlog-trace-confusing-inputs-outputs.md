@@ -1,5 +1,12 @@
 # scan_backlog trace: inputs show pre-populated item, outputs are empty
 
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
+
 ## Status: Open
 
 ## Priority: Low
@@ -33,3 +40,31 @@ This is a trace readability issue, not a functional bug. Options:
    are populated and outputs are empty.
 3. In the trace detail page, hide empty outputs ({}) rather than showing
    an "Outputs" section with just {}.
+
+
+
+
+## 5 Whys Analysis
+
+Title: Trace readability obscures pre-scanning behavior that developers need to understand for debugging
+Clarity: 4/5
+
+5 Whys:
+1. Why does the scan_backlog trace look confusing to viewers?
+   Because inputs show a fully populated item and outputs show {}, which appears backwards from scan_backlog's responsibility of finding the next item.
+
+2. Why do the inputs show the item that scan_backlog was supposed to find?
+   Because the LangGraph SDK logs the full graph state at each node as "inputs," not just what the node actually receives as input; the CLI had already pre-scanned the backlog and populated that item in state before invoking the graph.
+
+3. Why does the CLI pre-scan and populate the item before the graph runs?
+   To optimize execution: if an item is already found during pre-scan, the graph can short-circuit without repeating the scan operation, saving compute and time.
+
+4. Why do developers need to understand this pre-scanning optimization when reading traces?
+   Because they need to distinguish between "scan_backlog ran and found nothing" (empty outputs from normal operation) versus "scan_backlog short-circuited because the CLI pre-scanned" (empty outputs from optimization), which have different implications for debugging.
+
+5. Why does the distinction matter if both paths produce correct results?
+   Because without understanding the optimization, developers might misinterpret the trace as a failure or unexpected behavior, creating debugging friction and reducing confidence in observability—making the system harder to maintain and troubleshoot.
+
+Root Need: **Developer mental models of node behavior must align with what traces actually show, so optimization decisions are visible and don't create false signals during debugging.**
+
+Summary: This is a communication problem between the system's actual behavior (pre-scanning optimization) and what traces convey to developers trying to understand execution flow.
