@@ -1092,3 +1092,136 @@ def test_proxy_detail_sub_second_children_render_without_error(enabled_client):
     assert "<svg" in response.text
     # Axis ticks must use ms labels for sub-second spans
     assert "ms" in response.text
+
+
+# ─── Two-Pass Inclusive Cost Tests ────────────────────────────────────────────
+
+COST_ROOT_RUN_ID = "cost-root-run-1a2b"
+COST_CHILD_RUN_ID_A = "cost-child-run-3c4d"
+COST_CHILD_RUN_ID_B = "cost-child-run-5e6f"
+COST_ROOT_RUN_ID_2 = "cost-root-run-7g8h"
+
+COST_ROOT_COST = 0.4732
+COST_CHILD_A_COST = 0.1891
+COST_CHILD_B_COST = 0.2314
+COST_ROOT_2_COST = 0.3156
+
+
+def _record_cost_run(proxy, run_id, parent_run_id, cost_usd, item_slug="test-feature"):
+    """Helper: record a trace run with cost metadata."""
+    proxy.record_run(
+        run_id=run_id,
+        parent_run_id=parent_run_id,
+        name=f"run-{run_id[-4:]}",
+        inputs=None,
+        outputs=None,
+        metadata={
+            "total_cost_usd": cost_usd,
+            "item_slug": item_slug,
+            "item_type": "feature",
+            "input_tokens": 1000,
+            "output_tokens": 500,
+            "duration_ms": 1200,
+        },
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+
+
+def test_compute_inclusive_costs_empty(proxy):
+    """_compute_inclusive_costs returns an empty dict for an empty input list."""
+    result = proxy._compute_inclusive_costs([])
+    assert result == {}
+
+
+def test_compute_inclusive_costs_leaf_only(proxy):
+    """_compute_inclusive_costs returns own cost when run has no descendants."""
+    _record_cost_run(proxy, COST_ROOT_RUN_ID, None, COST_ROOT_COST)
+
+    result = proxy._compute_inclusive_costs([COST_ROOT_RUN_ID])
+
+    assert COST_ROOT_RUN_ID in result
+    assert abs(result[COST_ROOT_RUN_ID] - COST_ROOT_COST) < 1e-9
+
+
+def test_compute_inclusive_costs_with_children(proxy):
+    """_compute_inclusive_costs sums root + all descendant costs."""
+    _record_cost_run(proxy, COST_ROOT_RUN_ID, None, COST_ROOT_COST)
+    _record_cost_run(proxy, COST_CHILD_RUN_ID_A, COST_ROOT_RUN_ID, COST_CHILD_A_COST)
+    _record_cost_run(proxy, COST_CHILD_RUN_ID_B, COST_ROOT_RUN_ID, COST_CHILD_B_COST)
+
+    result = proxy._compute_inclusive_costs([COST_ROOT_RUN_ID])
+
+    expected = COST_ROOT_COST + COST_CHILD_A_COST + COST_CHILD_B_COST
+    assert abs(result[COST_ROOT_RUN_ID] - expected) < 1e-9
+
+
+def test_compute_inclusive_costs_multi_anchor(proxy):
+    """_compute_inclusive_costs handles multiple independent roots in one call."""
+    _record_cost_run(proxy, COST_ROOT_RUN_ID, None, COST_ROOT_COST)
+    _record_cost_run(proxy, COST_CHILD_RUN_ID_A, COST_ROOT_RUN_ID, COST_CHILD_A_COST)
+    _record_cost_run(proxy, COST_ROOT_RUN_ID_2, None, COST_ROOT_2_COST)
+
+    result = proxy._compute_inclusive_costs([COST_ROOT_RUN_ID, COST_ROOT_RUN_ID_2])
+
+    expected_root1 = COST_ROOT_COST + COST_CHILD_A_COST
+    assert abs(result[COST_ROOT_RUN_ID] - expected_root1) < 1e-9
+    assert abs(result[COST_ROOT_RUN_ID_2] - COST_ROOT_2_COST) < 1e-9
+
+
+def test_list_cost_runs_returns_inclusive_cost(proxy):
+    """list_cost_runs enriches rows with inclusive cost via two-pass strategy."""
+    _record_cost_run(proxy, COST_ROOT_RUN_ID, None, COST_ROOT_COST)
+    _record_cost_run(proxy, COST_CHILD_RUN_ID_A, COST_ROOT_RUN_ID, COST_CHILD_A_COST)
+    _record_cost_run(proxy, COST_CHILD_RUN_ID_B, COST_ROOT_RUN_ID, COST_CHILD_B_COST)
+
+    runs, total = proxy.list_cost_runs(page=1, sort="exclusive_desc")
+
+    # Only the root row should appear (it has item_slug metadata)
+    root_row = next((r for r in runs if r.run_id == COST_ROOT_RUN_ID), None)
+    assert root_row is not None
+    assert abs(root_row.exclusive_cost_usd - COST_ROOT_COST) < 1e-9
+
+    expected_inclusive = COST_ROOT_COST + COST_CHILD_A_COST + COST_CHILD_B_COST
+    assert abs(root_row.inclusive_cost_usd - expected_inclusive) < 1e-9
+
+
+def test_list_cost_runs_inclusive_desc_sort(proxy):
+    """list_cost_runs with inclusive_desc sorts page rows by inclusive cost."""
+    # root1 has children so its inclusive cost exceeds root2's exclusive cost
+    _record_cost_run(proxy, COST_ROOT_RUN_ID, None, COST_ROOT_COST, item_slug="slug-a")
+    _record_cost_run(proxy, COST_CHILD_RUN_ID_A, COST_ROOT_RUN_ID, COST_CHILD_A_COST, item_slug="slug-a")
+    _record_cost_run(proxy, COST_ROOT_RUN_ID_2, None, COST_ROOT_2_COST, item_slug="slug-b")
+
+    runs, _ = proxy.list_cost_runs(page=1, sort="inclusive_desc")
+
+    assert len(runs) >= 2
+    # Rows must be ordered by inclusive_cost_usd descending
+    for i in range(len(runs) - 1):
+        assert runs[i].inclusive_cost_usd >= runs[i + 1].inclusive_cost_usd
+
+
+def test_list_cost_runs_empty_db(proxy):
+    """list_cost_runs returns empty list and zero total on an empty database."""
+    runs, total = proxy.list_cost_runs(page=1)
+    assert runs == []
+    assert total == 0
+
+
+def test_list_cost_runs_pagination(proxy):
+    """list_cost_runs respects page/page_size and returns correct total_count."""
+    for i in range(5):
+        run_id = f"cost-page-run-{i:04d}"
+        _record_cost_run(proxy, run_id, None, round(0.1 + i * 0.07, 4), item_slug=f"slug-{i}")
+
+    runs_p1, total = proxy.list_cost_runs(page=1, page_size=3, sort="exclusive_desc")
+    runs_p2, _ = proxy.list_cost_runs(page=2, page_size=3, sort="exclusive_desc")
+
+    assert total == 5
+    assert len(runs_p1) == 3
+    assert len(runs_p2) == 2
+    # No overlap between pages
+    ids_p1 = {r.run_id for r in runs_p1}
+    ids_p2 = {r.run_id for r in runs_p2}
+    assert ids_p1.isdisjoint(ids_p2)
