@@ -43,7 +43,7 @@ sections:
   - id: '1.2'
     name: Verify and fix validator verdict trace metadata
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/13-trace-observability-gaps.md
       -- Focus on Gap 2. Verify that validate_task in validator.py records verdict,
       findings, requirements_checked, and requirements_met as specified. Fix any discrepancies
@@ -51,6 +51,12 @@ sections:
     last_attempt: '2026-03-27T15:15:08.871321'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T15:18:14.600177'
+    result_message: 'Fixed Gap 2: validate_task trace metadata now records findings
+      as a list of strings from status_dict["findings"] (was incorrectly using the
+      message string). Added 9 unit tests covering verdict, findings list, requirements_checked,
+      requirements_met, and None/empty fallbacks when status file is absent. All 1364
+      tests pass.'
 - id: '2'
   name: Implement pipeline decision and plan state traces (Gaps 3, 4)
   status: pending
