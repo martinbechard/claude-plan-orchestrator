@@ -1,0 +1,13 @@
+{
+  "name": "claude-plan-orchestrator",
+  "version": "1.0.0",
+  "description": "E2E test infrastructure for the pipeline dashboard UI",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.0"
+  }
+}
