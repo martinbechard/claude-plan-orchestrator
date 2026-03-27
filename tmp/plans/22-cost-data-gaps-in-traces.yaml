@@ -11,14 +11,11 @@ meta:
     max_validation_attempts: 2
 sections:
 - id: '1'
-  name: Verify and fix cost data gaps in traces
+  name: Fix cost data gaps in traces
   status: pending
   tasks:
   - id: '1.1'
-    name: Verify cost tracking implementation and fix remaining gaps
+    name: Add cost tracking to idea_classifier and verify all nodes
     agent: coder
-    status: in_progress
+    status: pending
     description: 'Implement the work item: tmp/plans/.claimed/22-cost-data-gaps-in-traces.md'
-    last_attempt: '2026-03-27T09:38:22.996491'
-    attempts: 1
-    model_used: sonnet
