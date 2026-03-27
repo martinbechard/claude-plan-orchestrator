@@ -27,3 +27,8 @@ sections:
       column present in proxy_list.html (8-char prefix with full UUID in title), copy-to-clipboard
       button works, trace_id filter input accepts prefix, backend list_runs/count_runs
       both support trace_id parameter. 1314 tests pass.'
+    validation_attempts: 1
+    validation_findings: 'All acceptance criteria met: trace_id column with truncation
+      and copy-to-clipboard in proxy_list.html, trace_id filter input, backend list_runs/count_runs
+      filtering in proxy.py, route handler accepts trace_id query param. 1314 tests
+      pass (4 trace_id-specific). No placeholders or test-data leaks.'
