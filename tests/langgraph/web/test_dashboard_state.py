@@ -193,35 +193,36 @@ def test_handler_forwards_error_record():
 
 
 def test_handler_ignores_debug_record():
-    """DashboardErrorHandler.emit() does not add DEBUG records to recent_errors.
+    """DashboardErrorHandler filters DEBUG records even when the logger is at DEBUG level.
 
-    The handler itself has no level filter — the caller (logging framework)
-    must enforce the minimum level. When emit() is called directly with a
-    DEBUG record it still adds it. This test verifies that installing the
-    handler on a logger with WARNING level filters DEBUG records before emit().
+    This verifies that the handler's own setLevel(WARNING) prevents DEBUG records
+    from reaching the error stream regardless of the logger's effective level —
+    the scenario that occurs when --verbose is used.
     """
     test_logger = logging.getLogger("langgraph_pipeline._test_debug_filter")
-    test_logger.setLevel(logging.WARNING)
+    test_logger.setLevel(logging.DEBUG)
     handler = DashboardErrorHandler()
     test_logger.addHandler(handler)
     try:
-        test_logger.debug("this should be filtered")
+        test_logger.debug("this should be filtered by the handler")
     finally:
         test_logger.removeHandler(handler)
+        test_logger.setLevel(logging.NOTSET)
 
     assert get_dashboard_state().recent_errors == []
 
 
 def test_handler_ignores_info_record():
-    """INFO records are filtered by the logger before reaching the handler."""
+    """DashboardErrorHandler filters INFO records even when the logger is at DEBUG level."""
     test_logger = logging.getLogger("langgraph_pipeline._test_info_filter")
-    test_logger.setLevel(logging.WARNING)
+    test_logger.setLevel(logging.DEBUG)
     handler = DashboardErrorHandler()
     test_logger.addHandler(handler)
     try:
         test_logger.info("this is informational")
     finally:
         test_logger.removeHandler(handler)
+        test_logger.setLevel(logging.NOTSET)
 
     assert get_dashboard_state().recent_errors == []
 

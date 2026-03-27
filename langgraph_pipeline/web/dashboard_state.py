@@ -372,6 +372,10 @@ class DashboardErrorHandler(logging.Handler):
     warnings without forwarding noise from third-party libraries.
     """
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.setLevel(logging.WARNING)
+
     def emit(self, record: logging.LogRecord) -> None:
         """Format the record and append it to DashboardState.recent_errors."""
         try:
