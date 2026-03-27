@@ -3,6 +3,7 @@
 # Design: docs/plans/2026-02-25-02-extract-shared-modules-design.md
 # Validation pipeline test v4
 # full pipeline test v2
+# yaml rescue test
 
 """Centralized path constants for the pipeline and orchestrator scripts."""
 
