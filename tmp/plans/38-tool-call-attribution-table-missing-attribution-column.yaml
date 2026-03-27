@@ -27,3 +27,9 @@ sections:
       Est. $ column present in analysis.html, proportional cost attribution implemented
       in proxy.py get_tool_call_attribution(), analysis route passes tool_attribution
       to template. All 8 cost endpoint tests pass.
+    validation_attempts: 1
+    validation_findings: 'All 3 acceptance criteria met: Est. $ column present in
+      analysis.html (line 405), proportional attribution implemented in proxy.py get_tool_call_attribution()
+      (line 1166-1203), analysis route passes tool_attribution to template (lines
+      102, 139). Live UI confirms ''Est. $'' column header via curl. 1321 tests all
+      pass. No placeholder/test data leaks found.'
