@@ -1,9 +1,0 @@
-{
-  "success": true,
-  "item_path": "tmp/plans/.claimed/09-completions-finished-invalid-date.md",
-  "cost_usd": 0.37291230000000003,
-  "input_tokens": 20,
-  "output_tokens": 4224,
-  "duration_s": 336.7534450829844,
-  "message": "Item processed successfully"
-}

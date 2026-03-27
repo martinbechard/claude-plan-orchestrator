@@ -17,5 +17,8 @@ sections:
   - id: '1.1'
     name: Validate and refine nav active state CSS
     agent: frontend-coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/11-nav-active-item-styling.md'
+    last_attempt: '2026-03-27T14:07:22.575876'
+    attempts: 1
+    model_used: sonnet
