@@ -27,3 +27,5 @@ A polished active state that clearly communicates the current page without
 looking like a default browser style. Consider a pill/capsule highlight,
 a subtle background fill, a top accent bar, or an inset indicator — executed
 with precision against the dark (#1a1a2e) nav background.
+
+## LangSmith Trace: 91a1834e-837f-4791-871a-7f49e75d390b
