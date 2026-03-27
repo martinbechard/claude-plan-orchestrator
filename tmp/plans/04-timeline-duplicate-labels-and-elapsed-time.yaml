@@ -1,0 +1,25 @@
+meta:
+  name: "Timeline duplicate labels and elapsed time fix — validation"
+  source_item: "tmp/plans/.claimed/04-timeline-duplicate-labels-and-elapsed-time.md"
+  plan_doc: "docs/plans/2026-03-27-04-timeline-duplicate-labels-and-elapsed-time-design.md"
+  status: "pending"
+  validation:
+    enabled: true
+    run_after:
+      - coder
+      - frontend-coder
+      - e2e-test-agent
+    validators:
+      - validator
+    max_validation_attempts: 2
+
+sections:
+  - id: "s1"
+    name: "Validate and fix timeline defect"
+    status: "pending"
+    tasks:
+      - id: "1.1"
+        name: "Validate acceptance criteria and fix any issues"
+        agent: coder
+        status: "pending"
+        description: "Validate and fix if needed: tmp/plans/.claimed/04-timeline-duplicate-labels-and-elapsed-time.md — This was previously implemented. Check that all three acceptance criteria pass: (1) elapsed labels not absolute HH:MM:SS, (2) no duplicate tick labels on short runs, (3) grandchildren expandable. Run existing tests and fix any failures."
