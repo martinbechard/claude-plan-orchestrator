@@ -17,7 +17,7 @@ sections:
   - id: '1.1'
     name: Implement two-pass inclusive cost query in proxy.py
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/12-inclusive-cost-precomputation.md
       -- Refactor list_cost_runs() in langgraph_pipeline/web/proxy.py to use a two-pass
       query strategy: (1) pre-filter pass that retrieves page run_ids without the
@@ -29,3 +29,10 @@ sections:
     last_attempt: '2026-03-27T15:04:13.001187'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T15:09:22.252563'
+    result_message: 'Refactored list_cost_runs() to use two-pass inclusive cost strategy:
+      (1) pre-filter pass retrieves page rows without recursive CTE, (2) _compute_inclusive_costs()
+      helper enriches page via single multi-anchor recursive CTE, (3) Python re-sort
+      for inclusive_desc. Removed dead _cost_run_order_by() method and _INCLUSIVE_COST_CTE
+      constant. Added 8 unit tests covering helper and refactored method. All 1341
+      tests pass.'
