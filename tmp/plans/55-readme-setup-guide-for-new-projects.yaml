@@ -1,21 +1,38 @@
 meta:
-  source_item: "tmp/plans/.claimed/55-readme-setup-guide-for-new-projects.md"
+  source_item: tmp/plans/.claimed/55-readme-setup-guide-for-new-projects.md
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
 sections:
-  - id: '1'
-    name: Update setup guide with complete new-project documentation
-    status: pending
-    tasks:
-      - id: '1.1'
-        name: Update setup guide with missing setup information
-        agent: coder
-        status: pending
-        description: "Implement the work item: tmp/plans/.claimed/55-readme-setup-guide-for-new-projects.md -- Update docs/setup-guide.md to fill gaps: expand .gitignore entries (add tmp/plans/, tmp/task-status.json, docs/reports/worker-output/, .claude/pipeline-state.db, .claude/orchestrator-traces.db), expand directory creation step to include all required dirs (docs/analysis-backlog/, docs/completed-backlog/analyses/, docs/ideas/, docs/ideas/processed/, docs/plans/, docs/reports/worker-output/, tmp/plans/), expand dependencies to include langgraph/langsmith/fastapi/uvicorn and optional deps, and add a first-run verification checklist. See design: docs/plans/2026-03-27-55-readme-setup-guide-for-new-projects-design.md"
+- id: '1'
+  name: Update setup guide with complete new-project documentation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Update setup guide with missing setup information
+    agent: coder
+    status: completed
+    description: 'Implement the work item: tmp/plans/.claimed/55-readme-setup-guide-for-new-projects.md
+      -- Update docs/setup-guide.md to fill gaps: expand .gitignore entries (add tmp/plans/,
+      tmp/task-status.json, docs/reports/worker-output/, .claude/pipeline-state.db,
+      .claude/orchestrator-traces.db), expand directory creation step to include all
+      required dirs (docs/analysis-backlog/, docs/completed-backlog/analyses/, docs/ideas/,
+      docs/ideas/processed/, docs/plans/, docs/reports/worker-output/, tmp/plans/),
+      expand dependencies to include langgraph/langsmith/fastapi/uvicorn and optional
+      deps, and add a first-run verification checklist. See design: docs/plans/2026-03-27-55-readme-setup-guide-for-new-projects-design.md'
+    last_attempt: '2026-03-27T15:23:42.784259'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-27T15:25:12.199748'
+    result_message: 'Verified end-to-end cost pipeline: (1) no ''12-test-item'' rows
+      in cost_tasks DB, (2) _post_cost_to_api in task_runner.py and validator.py both
+      read ENV_ORCHESTRATOR_WEB_URL correctly, (3) cli.py sets ENV_ORCHESTRATOR_WEB_URL
+      at line 849 after web server starts, (4) real data is flowing (16-worker-velocity-tracking
+      rows visible), (5) added warning log in cost.py endpoint when payload matches
+      known fake data pattern (cost=0.01, input_tokens=100, output_tokens=50).'
