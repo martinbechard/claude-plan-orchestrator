@@ -42,6 +42,7 @@ from langgraph_pipeline.shared.git import (
     create_worktree,
     git_commit_files,
 )
+from langgraph_pipeline.executor.nodes.task_runner import _write_task_log
 from langgraph_pipeline.shared.paths import STATUS_FILE_PATH  # noqa: F401 (re-exported for tests)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -237,7 +238,7 @@ def _build_child_env() -> dict:
 
 
 def _run_claude_in_worktree(
-    prompt: str, model_cli_name: str, worktree_path: Path
+    prompt: str, model_cli_name: str, worktree_path: Path, slug: str = "", task_id: str = ""
 ) -> tuple[bool, dict]:
     """Spawn Claude CLI inside the given worktree directory and stream output.
 
@@ -245,6 +246,8 @@ def _run_claude_in_worktree(
         prompt: Full text prompt to pass via --print.
         model_cli_name: Full model identifier for the --model flag.
         worktree_path: Absolute path to the git worktree root.
+        slug: Work item slug for per-item output file (e.g. "43-capture-raw-worker-output").
+        task_id: Task identifier for per-item output file (e.g. "1.2").
 
     Returns:
         (success, result_capture) where result_capture holds the parsed
@@ -295,6 +298,16 @@ def _run_claude_in_worktree(
         stdout_thread.join(timeout=5)
         stderr_thread.join(timeout=5)
 
+        duration = time.time() - start_time
+        _write_task_log(
+            result_capture=result_capture,
+            stdout_text=stdout_collector.get_output(),
+            stderr_text=stderr_collector.get_output(),
+            duration=duration,
+            returncode=process.returncode,
+            slug=slug,
+            task_id=task_id,
+        )
         return (process.returncode == 0, result_capture)
 
     except subprocess.TimeoutExpired:
@@ -494,13 +507,16 @@ def execute_parallel_task(state: TaskState) -> dict:
 
     prompt = _build_parallel_prompt(plan_data, section, task, plan_path, task_attempt)
     model_cli_name = MODEL_TIER_TO_CLI_NAME.get(effective_model, effective_model)
+    slug = Path(plan_path).stem
     print(
         f"[execute_parallel_task] Running task {task_id!r} in worktree {worktree_path} "
         f"with model {model_cli_name!r}"
     )
 
     _exec_start = time.time()
-    cli_success, result_capture = _run_claude_in_worktree(prompt, model_cli_name, worktree_path)
+    cli_success, result_capture = _run_claude_in_worktree(
+        prompt, model_cli_name, worktree_path, slug=slug, task_id=task_id
+    )
     _duration_ms = int((time.time() - _exec_start) * 1000)
 
     cost_usd = float(result_capture.get("total_cost_usd", 0.0))
