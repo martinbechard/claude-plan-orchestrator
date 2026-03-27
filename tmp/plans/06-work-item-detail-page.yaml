@@ -31,9 +31,11 @@ sections:
       slug links in worker cards, completion rows, and timeline labels. All match
       the completions.html link style. Previous validation failed only due to missing
       status file.'
-    validation_attempts: 1
-    validation_findings: 'Validator ''validator'' failed to execute: No status file
-      written by Claude'
+    validation_attempts: 2
+    validation_findings: 'Drill-down links correctly implemented in all required locations:
+      dashboard.js (worker cards :260, completion rows :307, timeline labels :418),
+      queue.html (:93), matching the completions.html link style. Build passes, all
+      1321 tests pass, no placeholders or test data found.'
 - id: '2'
   name: Polish work item detail page UI
   status: pending
@@ -41,9 +43,12 @@ sections:
   - id: '2.1'
     name: Review and polish item detail page layout
     agent: frontend-coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/06-work-item-detail-page.md
       — Focus on the UI Design section: ensure two-column responsive layout (requirements
       left, plan + history right on wide screens), clear section separators, task
       checkboxes for plan items, and outcome color coding for completion history rows.
       Use the frontend-design skill for polish.'
+    last_attempt: '2026-03-27T14:57:08.858193'
+    attempts: 1
+    model_used: opus
