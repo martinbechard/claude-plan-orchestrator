@@ -17,5 +17,8 @@ sections:
   - id: '1.1'
     name: Review and fix trace expand chevron and inline subrun details
     agent: frontend-coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/17-trace-expand-chevron-duplicate-and-inline.md'
+    last_attempt: '2026-03-27T09:29:32.667876'
+    attempts: 1
+    model_used: sonnet
