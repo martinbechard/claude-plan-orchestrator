@@ -19,8 +19,13 @@ sections:
   - id: '1.1'
     name: Fix handler level filter and validate error stream end-to-end
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/10-error-stream-always-empty.md'
     last_attempt: '2026-03-27T01:40:11.747097'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T01:42:10.269008'
+    result_message: Added DashboardErrorHandler.__init__ with self.setLevel(logging.WARNING)
+      to filter DEBUG/INFO records at the handler level. Updated tests to verify filtering
+      works when the logger is at DEBUG level (the --verbose scenario). All 23 tests
+      pass.
