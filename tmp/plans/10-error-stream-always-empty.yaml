@@ -17,8 +17,13 @@ sections:
   - id: '1.1'
     name: Validate error stream end-to-end and fix any gaps
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/10-error-stream-always-empty.md'
     last_attempt: '2026-03-27T14:08:24.560270'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:09:30.841881'
+    result_message: Validated error stream implementation end-to-end. DashboardErrorHandler
+      exists in dashboard_state.py, is installed in cli.py on startup, manual add_error()
+      calls are in supervisor.py for worker failures. All 23 unit tests pass. No gaps
+      found — no code changes needed.
