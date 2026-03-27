@@ -2,6 +2,7 @@
 # Unit tests for DashboardState and its module-level singleton helpers.
 # Design: docs/plans/2026-03-25-15-pipeline-activity-dashboard-design.md
 # Design: docs/plans/2026-03-26-10-error-stream-always-empty-design.md
+# Design: docs/plans/2026-03-27-03-dashboard-items-stuck-running-design.md
 
 """Unit tests for langgraph_pipeline.web.dashboard_state."""
 
@@ -395,3 +396,117 @@ def test_snapshot_includes_velocity(monkeypatch):
     assert w_snap["tokens_per_minute"] == 3000.0
     assert len(w_snap["velocity_history"]) == 1
     state.remove_active_worker(9999, "success", 0.0, 1.0)
+
+
+# ─── sweep_dead_workers Tests ─────────────────────────────────────────────────
+
+
+def test_sweep_dead_workers_removes_dead_pid(monkeypatch):
+    """sweep_dead_workers reaps a worker whose PID is no longer alive."""
+    state = get_dashboard_state()
+    state.add_active_worker(
+        pid=SAMPLE_PID,
+        slug=SAMPLE_SLUG,
+        item_type=SAMPLE_ITEM_TYPE,
+        start_time=time.monotonic(),
+    )
+    assert SAMPLE_PID in state.active_workers
+
+    monkeypatch.setattr(
+        "langgraph_pipeline.web.dashboard_state.os.kill",
+        lambda pid, sig: (_ for _ in ()).throw(OSError("no such process")),
+    )
+
+    state.sweep_dead_workers()
+
+    assert state.active_workers == {}
+    assert len(state.recent_completions) == 1
+    assert state.recent_completions[0].outcome == "fail"
+    assert state.recent_completions[0].slug == SAMPLE_SLUG
+
+
+def test_sweep_dead_workers_keeps_alive_pid(monkeypatch):
+    """sweep_dead_workers does not remove a worker whose PID is still running."""
+    state = get_dashboard_state()
+    state.add_active_worker(
+        pid=SAMPLE_PID,
+        slug=SAMPLE_SLUG,
+        item_type=SAMPLE_ITEM_TYPE,
+        start_time=time.monotonic(),
+    )
+
+    monkeypatch.setattr(
+        "langgraph_pipeline.web.dashboard_state.os.kill",
+        lambda pid, sig: None,
+    )
+
+    state.sweep_dead_workers()
+
+    assert SAMPLE_PID in state.active_workers
+    assert state.recent_completions == []
+
+
+def test_sweep_dead_workers_noop_when_empty():
+    """sweep_dead_workers is a no-op when there are no active workers."""
+    state = get_dashboard_state()
+    assert state.active_workers == {}
+
+    state.sweep_dead_workers()
+
+    assert state.active_workers == {}
+    assert state.recent_completions == []
+
+
+def test_sweep_dead_workers_handles_pid_removed_between_probe_and_reap(monkeypatch):
+    """sweep_dead_workers handles a TOCTOU race where the PID is removed by the
+    normal reap path between the os.kill probe and the removal call."""
+    state = get_dashboard_state()
+    state.add_active_worker(
+        pid=SAMPLE_PID,
+        slug=SAMPLE_SLUG,
+        item_type=SAMPLE_ITEM_TYPE,
+        start_time=time.monotonic(),
+    )
+
+    original_remove = state.remove_active_worker
+
+    def remove_and_then_kill(pid: int, sig: int) -> None:
+        # Simulate: normal reap removes the worker just before sweep tries to
+        original_remove(pid, "success", 0.01, 5.0)
+        raise OSError("no such process")
+
+    monkeypatch.setattr(
+        "langgraph_pipeline.web.dashboard_state.os.kill",
+        remove_and_then_kill,
+    )
+
+    # Should not raise; the TOCTOU guard (worker is None → continue) handles it
+    state.sweep_dead_workers()
+
+    assert state.active_workers == {}
+    # The completion was recorded by the normal reap (outcome=success), not sweep
+    assert len(state.recent_completions) == 1
+    assert state.recent_completions[0].outcome == "success"
+
+
+def test_snapshot_calls_sweep_dead_workers(monkeypatch):
+    """snapshot() invokes sweep_dead_workers before building the active list."""
+    monkeypatch.setattr(
+        "langgraph_pipeline.web.dashboard_state.get_proxy", lambda: None
+    )
+    state = get_dashboard_state()
+    sweep_calls: list[int] = []
+
+    original_sweep = state.sweep_dead_workers
+
+    def tracking_sweep() -> None:
+        sweep_calls.append(1)
+        original_sweep()
+
+    state.sweep_dead_workers = tracking_sweep
+    # Prevent real os.kill from probing non-existent PIDs during the sweep
+    monkeypatch.setattr("langgraph_pipeline.web.dashboard_state.os.kill", lambda pid, sig: None)
+
+    state.snapshot()
+
+    assert len(sweep_calls) == 1
