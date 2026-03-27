@@ -3,11 +3,13 @@
    Context: slug, item_type, pipeline_stage, active_worker, total_cost_usd, requirements_html,
             original_request_html (optional), plan_tasks [{id, name, status}],
             completions, traces [{run_id, name, created_at}],
-            output_files [filenames sorted newest-first]
+            output_files [filenames sorted newest-first],
+            avg_velocity (int tok/min or None), last_trace (dict or None)
    Design: docs/plans/2026-03-26-06-work-item-detail-page-design.md
            docs/plans/2026-03-26-17-work-item-status-clarity-design.md
            docs/plans/2026-03-26-35-work-item-page-missing-requirements-from-backlog-file-design.md
-           docs/plans/2026-03-26-43-capture-raw-worker-output-per-item-design.md #}
+           docs/plans/2026-03-26-43-capture-raw-worker-output-per-item-design.md
+           docs/plans/2026-03-26-46-item-page-show-last-run-and-velocity-design.md #}
 {% extends "base.html" %}
 
 {% block title %}{{ slug }} — Plan Orchestrator{% endblock %}
@@ -79,6 +81,32 @@
     line-height: 1.2;
     font-variant-numeric: tabular-nums;
 }
+
+/* Velocity badge */
+.velocity-badge {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Last-trace link badge */
+.last-trace-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 12px;
+    font-weight: 500;
+    color: #3b6fcf;
+    text-decoration: none;
+    padding: 2px 8px;
+    border: 1px solid #bfdbfe;
+    border-radius: 4px;
+    background: #eff6ff;
+    white-space: nowrap;
+}
+
+.last-trace-link:hover { background: #dbeafe; text-decoration: none; }
 
 /* Status / pipeline-stage badges */
 .status-running   { background: #d1fae5; color: #065f46; }
@@ -604,6 +632,21 @@
       {% endif %}
       <span class="badge status-{{ pipeline_stage }}"
             aria-label="Pipeline stage: {{ pipeline_stage }}">{{ pipeline_stage }}</span>
+      {% if avg_velocity is not none %}
+        {% if avg_velocity >= 1000 %}
+          {% set vel_label = "%.1fk tok/min"|format(avg_velocity / 1000) %}
+        {% else %}
+          {% set vel_label = "%d tok/min"|format(avg_velocity) %}
+        {% endif %}
+        <span class="badge velocity-badge" aria-label="Average velocity: {{ vel_label }}">
+          {{ vel_label }}
+        </span>
+      {% endif %}
+      {% if last_trace %}
+        <a class="last-trace-link"
+           href="/proxy?trace_id={{ last_trace.run_id }}"
+           aria-label="View most recent trace">Last run &rarr;</a>
+      {% endif %}
     </div>
   </div>
   <div class="item-header-cost" aria-label="Total API cost">

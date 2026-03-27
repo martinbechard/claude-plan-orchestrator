@@ -81,6 +81,8 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
     active_worker = _get_active_worker(slug)
     total_cost_usd = sum(c.get("cost_usd", 0.0) for c in completions)
     output_files = _list_output_files(slug)
+    avg_velocity = _compute_avg_velocity(completions)
+    last_trace = traces[0] if traces else None
 
     return templates.TemplateResponse(
         request,
@@ -97,6 +99,8 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
             "completions": completions,
             "traces": traces,
             "output_files": output_files,
+            "avg_velocity": avg_velocity,
+            "last_trace": last_trace,
         },
     )
 
@@ -457,6 +461,27 @@ def _list_output_files(slug: str) -> list[str]:
         (p.name for p in output_dir.iterdir() if p.suffix == ".log"),
         reverse=True,
     )
+
+
+def _compute_avg_velocity(completions: list[dict]) -> Optional[float]:
+    """Compute average tokens-per-minute across completions that have a value.
+
+    Args:
+        completions: List of completion dicts, each optionally containing
+            ``tokens_per_minute``.
+
+    Returns:
+        Average tokens/min rounded to the nearest integer, or None when no
+        completions carry velocity data.
+    """
+    values = [
+        c["tokens_per_minute"]
+        for c in completions
+        if c.get("tokens_per_minute") is not None
+    ]
+    if not values:
+        return None
+    return round(sum(values) / len(values))
 
 
 def _get_active_worker(slug: str) -> Optional[dict]:
