@@ -66,7 +66,7 @@ sections:
   - id: '2.1'
     name: Add sessions route and register in server
     agent: coder
-    status: in_progress
+    status: failed
     description: 'Implement the work item: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
       -- Focus on the Dashboard display and Daily totals requirements. Create routes/sessions.py
       with GET /sessions (HTML) and GET /api/sessions (JSON returning sessions list
@@ -75,15 +75,19 @@ sections:
     last_attempt: '2026-03-27T15:25:07.302535'
     attempts: 1
     model_used: sonnet
+    result_message: No status file written by Claude
   - id: '2.2'
     name: Create sessions history HTML template
     agent: frontend-coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
       -- Focus on the Dashboard display and Daily totals requirements. Create templates/sessions.html
       with two sections: Sessions table (label, start, end, duration, cost, items)
       and Daily Totals table (date, cost, items). Follow existing template patterns
       from dashboard.html and analysis.html.'
+    last_attempt: '2026-03-27T15:27:50.995630'
+    attempts: 1
+    model_used: sonnet
 - id: '3'
   name: Dashboard frontend - show session start time and history link
   status: pending

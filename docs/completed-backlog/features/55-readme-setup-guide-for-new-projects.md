@@ -51,7 +51,7 @@ information is scattered across code comments and tribal knowledge.
 - Can a new user follow the README to set up the orchestrator from scratch
   without asking questions? YES = pass, NO = fail
 
-## LangSmith Trace: 2ff02f69-2cd2-4917-b321-d5142b8ba540
+
 
 
 ## 5 Whys Analysis
