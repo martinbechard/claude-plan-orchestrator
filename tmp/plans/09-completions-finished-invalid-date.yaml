@@ -17,8 +17,12 @@ sections:
   - id: '1.1'
     name: Fix fmtFinished in dashboard.js
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/09-completions-finished-invalid-date.md'
     last_attempt: '2026-03-27T14:03:27.834768'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:04:21.093505'
+    result_message: 'Fix already implemented: finishedAtToMs() helper handles both
+      Unix timestamp (number * 1000) and ISO 8601 string (new Date(str)) formats.
+      fmtFinished() uses it correctly. No changes needed.'
