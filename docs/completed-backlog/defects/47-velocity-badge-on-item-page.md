@@ -20,7 +20,7 @@ bars in velocity mode.
   shows for the same item in velocity colour mode?
   YES = pass, NO = fail
 
-## LangSmith Trace: 3299899e-dcbd-49c3-a8c4-8d597a156496
+
 
 
 ## 5 Whys Analysis
