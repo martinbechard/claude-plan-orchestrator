@@ -899,7 +899,13 @@
                   {{ t.name }}
                 </td>
                 <td class="nowrap mono-sm">
-                  {{ t.created_at[:16] if t.created_at else '—' }}
+                  {% if t.created_at %}
+                    <time datetime="{{ t.created_at | e }}" class="local-time">
+                      {{ t.created_at[:10] | e }} {{ t.created_at[11:19] | e }}
+                    </time>
+                  {% else %}
+                    —
+                  {% endif %}
                 </td>
               </tr>
               {% endfor %}
