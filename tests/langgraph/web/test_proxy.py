@@ -686,6 +686,44 @@ def test_upsert_merges_start_and_completion_events(proxy):
     assert row["end_time"] == SAMPLE_END_TIME
 
 
+def test_upsert_with_null_end_time_preserves_existing_end_time(proxy):
+    """Re-posting a completed root run with end_time=None does not clear the stored end_time.
+
+    This covers the create_root_run() recovery scenario: if a worker is restarted
+    and the root run is re-posted without an end_time, the completed end_time from
+    finalize_root_run() must not be wiped out.
+    """
+    # Finalize sets end_time
+    proxy.record_run(
+        run_id=SAMPLE_RUN_ID,
+        parent_run_id=None,
+        name=SAMPLE_RUN_NAME,
+        inputs=SAMPLE_INPUTS,
+        outputs=SAMPLE_OUTPUTS,
+        metadata=SAMPLE_METADATA,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=SAMPLE_END_TIME,
+    )
+    # Re-post with no end_time (create_root_run recovery path)
+    proxy.record_run(
+        run_id=SAMPLE_RUN_ID,
+        parent_run_id=None,
+        name=SAMPLE_RUN_NAME,
+        inputs=SAMPLE_INPUTS,
+        outputs=None,
+        metadata=SAMPLE_METADATA,
+        error=None,
+        start_time=SAMPLE_START_TIME,
+        end_time=None,
+    )
+
+    row = proxy.get_run(SAMPLE_RUN_ID)
+    assert row is not None
+    # COALESCE must preserve the existing end_time when excluded.end_time is NULL
+    assert row["end_time"] == SAMPLE_END_TIME
+
+
 def test_init_db_deduplicates_pre_existing_duplicate_run_ids(tmp_path):
     """_init_db removes pre-existing duplicate run_id rows on startup.
 

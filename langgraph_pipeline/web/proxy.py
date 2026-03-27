@@ -325,9 +325,9 @@ class TracingProxy:
                         (:run_id, :parent_run_id, :name, :start_time, :end_time,
                          :inputs_json, :outputs_json, :metadata_json, :error, :created_at)
                     ON CONFLICT(run_id) DO UPDATE SET
-                        end_time     = excluded.end_time,
-                        outputs_json = excluded.outputs_json,
-                        error        = excluded.error
+                        end_time     = COALESCE(excluded.end_time,     traces.end_time),
+                        outputs_json = COALESCE(excluded.outputs_json, traces.outputs_json),
+                        error        = COALESCE(excluded.error,        traces.error)
                     """,
                     row,
                 )

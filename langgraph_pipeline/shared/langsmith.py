@@ -301,6 +301,9 @@ def create_root_run(item_slug: str, item_path: str) -> tuple[Any, Optional[str]]
             trace_id = str(uuid.uuid4())
             run_tree = RunTree(id=trace_id, name=item_slug, run_type="chain")
             _write_trace_id_to_file(item_path, trace_id)
+            # Post immediately so the root run appears in the proxy DB as soon as the
+            # worker starts — the dashboard trace link is non-empty from the first poll.
+            run_tree.post()
 
         return run_tree, trace_id
 

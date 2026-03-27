@@ -638,6 +638,8 @@ class TestCreateRootRun:
         assert f"{LANGSMITH_TRACE_LINE_PREFIX}{run_id}" in content
         # Verify UUID passed to RunTree constructor
         assert mock_cls.call_args.kwargs["id"] == run_id
+        # Verify post() called so root run appears in proxy DB immediately
+        mock_run.post.assert_called_once()
 
     def test_fresh_creation_uuid_matches_pattern(self, monkeypatch, tmp_path):
         self._set_tracing_active(monkeypatch)
