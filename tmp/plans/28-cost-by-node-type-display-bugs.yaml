@@ -28,3 +28,5 @@ sections:
       Added clipping edge case test asserting max-value label stays within SVG viewport
       and raw float values (55.605...) are formatted as dollar amounts ($55.61). All
       15 tests pass.'
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
