@@ -26,3 +26,9 @@ sections:
     result_message: 'Updated all stale old node name references: verify_symptoms->verify_fix
       in README.md (3 locations), has_items?/is_defect? updated in architecture diagram,
       and has_items conditional edge references updated in scan.py comments (2 locations).'
+    validation_attempts: 1
+    validation_findings: All stale node name references updated. Build passes, 1321
+      tests pass. verify_symptoms replaced with verify_fix in README.md (3 locations),
+      architecture diagram updated to route_after_execution/route_after_scan, scan.py
+      comments updated to remove has_items edge references. Source code (verification.py,
+      graph.py, edges.py) was already using correct names from a prior commit.
