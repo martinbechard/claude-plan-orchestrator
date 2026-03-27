@@ -27,3 +27,5 @@ sections:
       LLM=#7c3aed (line 140), Tool=#0891b2 (line 139), Other=#f59e0b (line 141). Legend
       rects match (lines 310-314). Text contrast colors updated. No old palette colors
       remain in bar_color() or legend. Build passes, 1314 tests pass.'
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
