@@ -17,8 +17,12 @@ sections:
   - id: '1.1'
     name: Update all remaining old node name references in docs and comments
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/41-rename-misleading-graph-nodes.md'
     last_attempt: '2026-03-27T14:47:35.937516'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:50:53.726274'
+    result_message: 'Updated all stale old node name references: verify_symptoms->verify_fix
+      in README.md (3 locations), has_items?/is_defect? updated in architecture diagram,
+      and has_items conditional edge references updated in scan.py comments (2 locations).'
