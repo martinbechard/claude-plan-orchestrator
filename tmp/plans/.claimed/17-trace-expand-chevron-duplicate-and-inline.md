@@ -93,3 +93,5 @@ rather than an inline detail panel.
 **Root Need:** Developers must explore nested call hierarchies efficiently without breaking their investigation flow or losing the relational context between parent and child executions.
 
 **Summary:** Users need expand-in-place UI patterns that reveal nested trace details inline, preserving context and allowing rapid exploration of execution flow.
+
+## LangSmith Trace: df140811-9dea-4ac3-9c11-8ad497fee366

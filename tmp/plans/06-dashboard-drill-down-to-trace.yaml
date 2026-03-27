@@ -17,5 +17,9 @@ sections:
   - id: '1.1'
     name: Validate trace drill-down links in dashboard and completions
     agent: coder
-    status: pending
+    status: failed
     description: 'Implement the work item: tmp/plans/.claimed/06-dashboard-drill-down-to-trace.md'
+    last_attempt: '2026-03-27T10:19:19.205914'
+    attempts: 1
+    model_used: sonnet
+    result_message: Unknown status
