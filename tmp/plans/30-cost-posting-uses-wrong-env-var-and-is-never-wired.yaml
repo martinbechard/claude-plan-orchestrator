@@ -17,8 +17,13 @@ sections:
   - id: '1.1'
     name: Validate implementation and fix any remaining gaps
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/30-cost-posting-uses-wrong-env-var-and-is-never-wired.md'
     last_attempt: '2026-03-27T14:34:42.757247'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:38:17.628445'
+    result_message: 'Validated implementation: no LANGCHAIN_ENDPOINT refs in cost
+      paths, ORCHESTRATOR_WEB_URL correctly set in cli.py and read in _post_cost_to_api
+      in both task_runner.py and validator.py. Added 4 unit tests covering skip-when-unset
+      and POST-to-correct-URL behaviors. All 1321 tests pass.'
