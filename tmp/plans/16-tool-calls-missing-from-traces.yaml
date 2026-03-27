@@ -17,8 +17,13 @@ sections:
   - id: '1.1'
     name: Verify and fix tool call display in trace detail
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/16-tool-calls-missing-from-traces.md'
     last_attempt: '2026-03-27T09:27:19.036223'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T09:29:05.480149'
+    result_message: 'Verified existing implementation: grandchild fetching (get_children_batch),
+      SVG timeline rendering with nested tool call bars, expandable detail sections,
+      and color classification all work correctly. All 1313 tests pass including 4
+      dedicated grandchild tests in test_proxy.py.'
