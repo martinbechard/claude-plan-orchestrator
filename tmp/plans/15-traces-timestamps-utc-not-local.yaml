@@ -17,8 +17,12 @@ sections:
   - id: '1.1'
     name: Convert item.html trace timestamps to local time
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/15-traces-timestamps-utc-not-local.md'
     last_attempt: '2026-03-27T09:25:49.196359'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T09:26:35.418934'
+    result_message: Converted item.html trace timestamps to use <time datetime class='local-time'>
+      pattern, matching proxy_list.html and other templates. The base.html JS snippet
+      converts these to local time on page load.
