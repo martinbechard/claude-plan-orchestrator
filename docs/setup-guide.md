@@ -15,12 +15,18 @@ For upgrading an existing install, see "Upgrading" at the bottom.
 ## 1. Install dependencies
 
 ```bash
-pip install pyyaml watchdog
+pip install pyyaml watchdog langgraph langsmith fastapi uvicorn
 ```
 
 Optional (for interactive Slack questions):
 ```bash
 pip install slack-bolt
+```
+
+Optional (for semantic search and browser-based E2E tests):
+```bash
+pip install chromadb
+pip install playwright && playwright install
 ```
 
 ## 2. Install the plugin
@@ -251,10 +257,21 @@ To aggregate costs for a plan: filter by `item_slug` tag, then sum `total_cost_u
 across all executor nodes. To compare model costs, group by the `model` metadata
 field in the Runs table view.
 
-## 5. Create backlog directories
+## 5. Create required directories
 
 ```bash
-mkdir -p docs/defect-backlog docs/feature-backlog docs/completed-backlog/defects docs/completed-backlog/features
+mkdir -p \
+  docs/defect-backlog \
+  docs/feature-backlog \
+  docs/completed-backlog/defects \
+  docs/completed-backlog/features \
+  docs/analysis-backlog \
+  docs/completed-backlog/analyses \
+  docs/ideas \
+  docs/ideas/processed \
+  docs/plans \
+  docs/reports/worker-output \
+  tmp/plans
 ```
 
 ## 6. Update .gitignore
@@ -270,6 +287,13 @@ Add these to your project's .gitignore:
 .claude/plans/logs/
 .claude/subagent-status/
 .claude/agent-claims.json
+tmp/plans/
+tmp/task-status.json
+docs/reports/worker-output/
+
+# Pipeline databases - auto-generated, never commit
+.claude/pipeline-state.db
+.claude/orchestrator-traces.db
 
 # Slack config contains tokens - never commit
 .claude/slack.local.yaml
@@ -298,7 +322,20 @@ To test without making changes:
 python scripts/auto-pipeline.py --dry-run
 ```
 
-## 8. Submit work via Slack
+## 8. First-run verification checklist
+
+After the pipeline starts, confirm the following before submitting your first work item:
+
+- [ ] **Dependencies installed** -- `python -c "import yaml, watchdog, langgraph, langsmith, fastapi, uvicorn; print('OK')"` prints OK
+- [ ] **Directories exist** -- `ls docs/defect-backlog docs/feature-backlog docs/plans tmp/plans` lists four directories without errors
+- [ ] **Slack config present** -- `python -c "import yaml; d=yaml.safe_load(open('.claude/slack.local.yaml')); print(d['slack']['bot_token'][:8])"` prints `xoxb-...`
+- [ ] **Dry-run passes** -- `python scripts/auto-pipeline.py --dry-run --once` exits 0 with no tracebacks
+- [ ] **Pipeline starts** -- `python scripts/auto-pipeline.py --once` blocks waiting for a backlog item (Ctrl-C to exit)
+- [ ] **Gitignore applied** -- `git status` shows no `.claude/pipeline-state.db`, `tmp/plans/`, or `docs/reports/worker-output/` entries
+
+If any check fails, review the relevant setup step before submitting work items.
+
+## 9. Submit work via Slack
 
 Send messages to your Slack channels:
 
