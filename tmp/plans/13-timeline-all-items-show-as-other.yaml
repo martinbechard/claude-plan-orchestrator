@@ -1,0 +1,22 @@
+meta:
+  source_item: "tmp/plans/.claimed/13-timeline-all-items-show-as-other.md"
+  validation:
+    enabled: true
+    run_after:
+      - coder
+      - e2e-test-agent
+      - frontend-coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+
+sections:
+  - id: '1'
+    name: Verify and fix timeline bar colour classification
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: Validate existing bar_color and text_color macros
+        agent: frontend-coder
+        status: pending
+        description: "Implement the work item: tmp/plans/.claimed/13-timeline-all-items-show-as-other.md"
