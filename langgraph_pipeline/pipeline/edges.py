@@ -10,9 +10,13 @@ Keeping routing logic here (separate from node implementations) makes it easy
 to test edge decisions without executing any node side effects.
 """
 
+import logging
+
 from langgraph.graph import END
 
 from langgraph_pipeline.pipeline.state import PipelineState
+
+logger = logging.getLogger(__name__)
 
 # ─── Routing policy constants ─────────────────────────────────────────────────
 
@@ -39,8 +43,11 @@ def route_after_intake(state: PipelineState) -> str:
 
 
 def route_after_plan(state: PipelineState) -> str:
-    """Route from create_plan: END on quota exhaustion, else execute_plan."""
+    """Route from create_plan: END on quota/plan failure, else execute_plan."""
     if state.get("quota_exhausted"):
+        return END
+    if not state.get("plan_path"):
+        logger.warning("route_after_plan: no plan_path — ending pipeline run")
         return END
     return NODE_EXECUTE_PLAN
 

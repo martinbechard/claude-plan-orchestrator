@@ -203,9 +203,13 @@ class TestRouteAfterPlan:
         assert route_after_plan(state) == END
 
     def test_normal_state_routes_to_execute_plan(self):
-        state = _make_state(quota_exhausted=False)
+        state = _make_state(quota_exhausted=False, plan_path=".claude/plans/test.yaml")
         assert route_after_plan(state) == NODE_EXECUTE_PLAN
 
     def test_missing_quota_exhausted_routes_to_execute_plan(self):
-        state = _make_state()
+        state = _make_state(plan_path=".claude/plans/test.yaml")
         assert route_after_plan(state) == NODE_EXECUTE_PLAN
+
+    def test_no_plan_path_routes_to_end(self):
+        state = _make_state(quota_exhausted=False, plan_path=None)
+        assert route_after_plan(state) == END
