@@ -1,0 +1,29 @@
+meta:
+  source_item: tmp/plans/.claimed/12-inclusive-cost-precomputation.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Optimize inclusive cost query with two-pass strategy
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Implement two-pass inclusive cost query in proxy.py
+    agent: coder
+    status: pending
+    description: >-
+      Implement the work item: tmp/plans/.claimed/12-inclusive-cost-precomputation.md
+      -- Refactor list_cost_runs() in langgraph_pipeline/web/proxy.py to use a two-pass
+      query strategy: (1) pre-filter pass that retrieves page run_ids without the
+      recursive CTE, (2) enrichment pass that computes inclusive_cost_usd via a single
+      multi-anchor recursive CTE for only the page run_ids, (3) re-sort in Python when
+      sort=inclusive_desc. Add a _compute_inclusive_costs() helper method. Keep the
+      CostRun dataclass and template contract unchanged. Add unit tests for the new
+      helper and the refactored list_cost_runs() method.
