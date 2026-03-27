@@ -27,3 +27,9 @@ sections:
       JSON cost extraction, add_trace_metadata call, graceful fallback on JSON parse
       failure. Verified all other Claude-invoking nodes already have cost tracking.
       14 tests pass.'
+    validation_attempts: 1
+    validation_findings: 'All requirements met: idea_classifier now uses --output-format
+      json, extracts total_cost_usd, calls add_trace_metadata, and handles JSON parse
+      failures gracefully. All other Claude-invoking nodes already had cost tracking.
+      1317 tests pass (14 idea_classifier + 1303 others). No dummy/placeholder data
+      found. No test data in production DBs.'

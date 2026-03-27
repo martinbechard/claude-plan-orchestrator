@@ -47,3 +47,23 @@ Requirements section should search in this priority order:
   YES = pass, NO = fail
 
 ## LangSmith Trace: 17d46cd5-dc67-43d5-a664-9856fd91cc50
+
+
+## 5 Whys Analysis
+
+Title: Work item page should display backlog item requirements when design doc doesn't exist
+Clarity: 4
+5 Whys:
+1. **Why does the page show "No requirements" when the backlog file exists?** Because the implementation hardcodes a single source (design docs in docs/plans/) and has no fallback logic to check the originating backlog files where requirements actually live.
+
+2. **Why was only the design doc path implemented, with no fallback?** Because the original mental model treated design documents as the authoritative requirements source, viewing backlog files as upstream inputs rather than displayable requirements.
+
+3. **Why is there a gap between where requirements originate and where the page looks for them?** Because the workflow assumes linear progression (backlog → design doc → display), but users navigate to items before design docs are created, especially for smaller defects or quick fixes that don't warrant separate design documentation.
+
+4. **Why do work items need to be viewable before formal design docs are created?** Because the workflow is iterative and non-linear in practice—items are triaged, prioritized, and assigned before design specs are written. Users need visibility into acceptance criteria and requirements *during* that earlier phase.
+
+5. **Why is this now a pain point requiring a fix?** Because the current "No requirements" state creates friction: users see empty pages for work they could start on immediately, forcing them to switch contexts to the backlog to understand what's actually needed.
+
+Root Need: Users need a single authoritative place (/item/<slug>) to see all requirements and acceptance criteria for a work item, in whatever form those requirements exist (design doc or backlog file), so they can understand scope and begin work without context switching.
+
+Summary: The page should display requirements from whatever source exists (prioritizing design docs when available) rather than failing silently when a formal design doc hasn't been created.
