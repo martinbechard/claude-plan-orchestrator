@@ -1,0 +1,73 @@
+{# langgraph_pipeline/web/templates/sessions.html
+   Session history page: past pipeline sessions and daily cost totals.
+   Context variables:
+     sessions     list[Session]    — past sessions (id, label, start_time, end_time,
+                                     total_cost_usd, items_processed, notes)
+     daily_totals list[DailyTotal] — daily aggregated totals (date_str, cost_usd,
+                                     items_processed)
+   Design: tmp/plans/.claimed/15-session-tracking-and-cost-history.md
+#}
+{% extends "base.html" %}
+
+{% block title %}Session History — Plan Orchestrator{% endblock %}
+
+{% block content %}
+<h1>Session History</h1>
+
+{# ── Sessions table ─────────────────────────────────────────────────────────── #}
+<h2>Pipeline Sessions</h2>
+
+{% if sessions %}
+<table>
+  <thead>
+    <tr>
+      <th>Label</th>
+      <th>Started</th>
+      <th>Ended</th>
+      <th>Cost</th>
+      <th>Items</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in sessions %}
+    <tr>
+      <td>{{ s.label or "—" }}</td>
+      <td>{{ s.start_time }}</td>
+      <td>{{ s.end_time or "Active" }}</td>
+      <td>${{ "%.4f" | format(s.total_cost_usd) }}</td>
+      <td>{{ s.items_processed }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">No sessions recorded yet.</div>
+{% endif %}
+
+{# ── Daily totals table ─────────────────────────────────────────────────────── #}
+<h2>Daily Totals</h2>
+
+{% if daily_totals %}
+<table>
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Cost</th>
+      <th>Items</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in daily_totals %}
+    <tr>
+      <td>{{ d.date_str }}</td>
+      <td>${{ "%.4f" | format(d.cost_usd) }}</td>
+      <td>{{ d.items_processed }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">No completions data available.</div>
+{% endif %}
+
+{% endblock %}
