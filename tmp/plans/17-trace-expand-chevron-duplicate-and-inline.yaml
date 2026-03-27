@@ -29,3 +29,11 @@ sections:
       also has a unique index on run_id and deduplication SQL run at init. All 1314
       tests pass including the specific test_list_root_traces_by_slug_deduplicates_pre_existing_rows
       test.
+    validation_attempts: 1
+    validation_findings: 'Acceptance criteria are met: chevron duplicate fix (list-style:none
+      + ::marker suppression on .grandchild-toggle in style.css) and inline subrun
+      details (grandchild-toggle details panel in proxy_trace.html) are both present
+      and verified via curl. All 1314 tests pass. WARN (1): Build command references
+      deleted scripts/plan-orchestrator.py — stale validation command, pre-existing
+      issue unrelated to this task. WARN (2): Task result message describes unrelated
+      backend deduplication logic instead of the actual UI fixes that were validated.'
