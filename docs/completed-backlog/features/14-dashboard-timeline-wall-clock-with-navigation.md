@@ -1,5 +1,12 @@
 # Dashboard timeline: wall-clock time axis with navigation and zoom
 
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
+
 ## Status: Open
 
 ## Priority: Medium
@@ -62,3 +69,33 @@ controls to scroll back in time and zoom in/out.
 - Add toolbar HTML to dashboard.html inside timeline-container
 - Add faint vertical gridlines at each tick position in the bar track
 - Use existing colour classes (.timeline-bar--defect, etc.)
+
+
+
+
+## 5 Whys Analysis
+
+Title: Dashboard timeline with wall-clock time and navigation controls
+
+Clarity: 4 (Requirements are detailed and specific, but the underlying problem being solved isn't explicitly stated)
+
+5 Whys:
+
+1. Why add wall-clock time to the dashboard timeline?
+   - Users need to match timeline events to specific absolute times so they can correlate them with external system events (logs, metrics, incident timelines, deployment windows).
+
+2. Why can't they do this with the current elapsed-duration display?
+   - Because elapsed duration is relative to a moving "now." An event shown as "5 minutes ago" cannot be reliably matched to a log entry timestamped "10:30 AM" without manual, error-prone time calculation.
+
+3. Why does manual time calculation prevent effective debugging?
+   - It introduces context-switching friction, mental overhead, and error risk into the diagnostic workflow. Users must leave the dashboard, calculate, verify, and risk miscalculating the actual wall-clock time.
+
+4. Why is this friction problematic for a pipeline automation tool?
+   - The tool's value depends on users trusting it enough to use it for real diagnostics. Friction and errors make users feel the tool is cumbersome rather than helpful, causing them to revert to manual investigation.
+
+5. Why does user confidence in the tool matter?
+   - Because the orchestrator system depends on users relying on automated execution. Without trust in the dashboard's diagnostics, users won't believe automation is safe, defeating the entire purpose of the pipeline.
+
+Root Need: Users need frictionless, accurate diagnostics for pipeline events so they trust the automation enough to rely on it instead of bypassing it with manual processes.
+
+Summary: Wall-clock time transforms the timeline from a UI feature into a trusted diagnostic tool by enabling direct event correlation without mental overhead or error risk.

@@ -1,0 +1,29 @@
+meta:
+  source_item: tmp/plans/.claimed/16-worker-velocity-tracking.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Fix velocity thresholds, colors, and gradient interpolation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Update velocity thresholds, add smooth color interpolation, and fix bar labels
+    agent: frontend-coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/16-worker-velocity-tracking.md
+      -- Focus on the Timeline colour mode toggle and Bar text and tooltips requirements.
+      In dashboard.js: update velocity thresholds to match spec (500/2000/5000), replace
+      discrete CSS velocity classes with inline background-color using JS interpolation
+      across the 4 spec colour stops (blue/green/yellow/red + grey for no data).
+      In Type colour mode bar labels show elapsed time only (e.g. "3m 42s"); in Velocity
+      mode show compact velocity only (e.g. "2.4k/m"). Tooltips always show full details
+      in both modes. Update style.css velocity classes accordingly. See design:
+      docs/plans/2026-03-27-16-worker-velocity-tracking-design.md'
