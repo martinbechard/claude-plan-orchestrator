@@ -1,30 +1,42 @@
-# Design: Nav Active Item Styling Fix
+# Design: Nav Active Item Styling (Defect 11)
 
 ## Problem
 
-The navigation active item uses a basic blue underline/highlight that looks
-unprofessional. The current style is:
+The navigation active state originally used a plain blue underline that looked
+amateurish. A prior fix improved it to a pill-style background with box-shadow,
+but this item is flagged "Review Required" to validate the current styling meets
+professional standards.
+
+## Current State
+
+The active styling in style.css (line 46) is:
 
 ```
-nav a.active { color: #7eb8f7; background: rgba(126, 184, 247, 0.12); border-radius: 4px; padding: 0.25rem 0.625rem; }
+nav a.active {
+  color: #e8e8f0;
+  background: rgba(126, 184, 247, 0.22);
+  box-shadow: 0 0 0 1px rgba(126, 184, 247, 0.3);
+  font-weight: 500;
+}
 ```
 
-While it already has a subtle background fill and border-radius (improved from the
-original plain underline), it still needs a more polished, professional appearance.
+This is already a pill/capsule highlight approach against the dark (#1a1a2e) nav
+background, which aligns with the acceptance criteria. The task is to review
+whether this is polished enough or needs refinement.
 
-## Key File
+## Key Files
 
-- langgraph_pipeline/web/static/style.css (line 44) -- the nav a.active rule
+- langgraph_pipeline/web/static/style.css -- active styling (line 46)
+- langgraph_pipeline/web/templates/base.html -- nav template with active class logic
 
-## Design Approach
+## Design Decisions
 
-The frontend-coder agent will use the frontend-design skill to redesign the active
-nav item styling. The work item specifies options like pill/capsule highlight, subtle
-background fill, top accent bar, or inset indicator -- executed with precision against
-the dark (#1a1a2e) nav background.
-
-Since the work item has "Implementation Status: Review Required", the agent must first
-validate the current state against acceptance criteria, then fix any shortcomings.
+- Use the frontend-coder agent to evaluate and refine the current pill-style
+  active indicator
+- Keep the approach consistent: pill/capsule highlight against the dark nav
+  background
+- Ensure the active state is clearly distinguishable from hover state
+- Maintain accessibility (sufficient color contrast, aria-current attribute)
 
 ## Scope
 
