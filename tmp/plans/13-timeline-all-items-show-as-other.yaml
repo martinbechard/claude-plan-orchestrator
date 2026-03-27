@@ -29,3 +29,5 @@ sections:
       matching on lowercased name for LLM calls (claude, llm, model, chatanthropic,
       langgraph, assistant). Graph nodes fall through to amber. Implementation matches
       spec — no changes required.
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
