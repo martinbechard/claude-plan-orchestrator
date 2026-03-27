@@ -17,8 +17,15 @@ sections:
   - id: '1.1'
     name: Re-verify trace link implementation and fix remaining issues
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/20-worker-trace-link-finds-nothing.md'
     last_attempt: '2026-03-27T14:23:20.167412'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:33:33.513870'
+    result_message: 'Fixed: create_root_run() now calls run_tree.post() for fresh
+      runs so the root trace row is written to the proxy DB immediately when a worker
+      starts. Previously the root run was only posted by finalize_root_run() at pipeline
+      end, so the /proxy?trace_id= page was empty until at least one task completed.
+      Also added COALESCE to the record_run upsert so re-posting with NULL end_time
+      never overwrites a finalized run''s end_time. All 1317 tests pass.'
