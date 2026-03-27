@@ -24,3 +24,9 @@ sections:
     model_used: sonnet
     completed_at: '2026-03-27T14:12:07.794138'
     result_message: 'PASS: All good'
+    validation_attempts: 1
+    validation_findings: All acceptance criteria satisfied. Local-time conversion
+      is implemented across all affected pages (proxy_list, proxy_trace, completions,
+      analysis, item) via <time class='local-time'> elements and base.html JS snippet.
+      Dashboard.js already uses toLocaleTimeString(). Build compiles, all 1314 tests
+      pass, no placeholders or test-data leaks found.

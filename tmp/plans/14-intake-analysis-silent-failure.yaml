@@ -31,3 +31,9 @@ sections:
       call_claude. All 1314 tests pass including dedicated tests: test_fallback_message_contains_failure_reason_on_empty_response,
       test_add_error_called_on_empty_llm_response, test_quota_exhausted_fallback_message_indicates_quota,
       test_add_error_called_on_quota_exhaustion.'
+    validation_attempts: 1
+    validation_findings: 'All 4 acceptance criteria verified: ClaudeResult NamedTuple
+      exposes full failure_reason (no stderr truncation); _run_intake_analysis_inner()
+      calls add_error() on both quota-exhaustion and LLM failure paths; Slack fallback
+      messages include failure reason; quota probed via probe_quota callback before
+      call_claude. All 1314 tests pass including 4 dedicated acceptance tests.'
