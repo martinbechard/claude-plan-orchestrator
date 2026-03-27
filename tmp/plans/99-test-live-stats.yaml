@@ -25,3 +25,7 @@ sections:
     model_used: sonnet
     completed_at: '2026-03-27T01:01:49.049416'
     result_message: Added '# live stats test' comment to langgraph_pipeline/shared/paths.py
+    validation_attempts: 1
+    validation_findings: Comment '# live stats test' confirmed at paths.py:8. Build
+      and all 1298 tests pass. Runtime acceptance criteria (live Cost/Tokens/velocity
+      badge display) cannot be verified statically — require runtime confirmation.
