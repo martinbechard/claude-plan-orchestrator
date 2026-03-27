@@ -21,3 +21,5 @@ langgraph_pipeline/shared/paths.py (after the existing header comment).
   YES = pass, NO = fail
 - Do the pipeline logs show either "PASSED" or "FAILED" for both validators?
   YES = pass, NO = fail
+
+## LangSmith Trace: 0d92d0c0-098e-49f5-bf91-47a55bda52a5
