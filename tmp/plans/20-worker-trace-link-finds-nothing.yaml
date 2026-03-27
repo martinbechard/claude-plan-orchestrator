@@ -17,8 +17,14 @@ sections:
   - id: '1.1'
     name: Verify existing implementation and fix remaining issues
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/20-worker-trace-link-finds-nothing.md'
     last_attempt: '2026-03-27T09:35:16.028173'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T09:38:18.733982'
+    result_message: 'Verified existing implementation: both fixes already in place.
+      (1) _refresh_worker_run_ids() polls item files to capture LangSmith trace IDs
+      and update DashboardState via update_worker_run_id(). (2) list_runs() uses (run_id
+      = ? OR parent_run_id = ?) so child traces are visible while worker is running.
+      All 1313 tests pass.'
