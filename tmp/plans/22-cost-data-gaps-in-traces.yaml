@@ -17,8 +17,10 @@ sections:
   - id: '1.1'
     name: Add cost tracking to idea_classifier and verify all nodes
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/22-cost-data-gaps-in-traces.md'
     last_attempt: '2026-03-27T14:26:54.527893'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:33:14.951754'
+    result_message: 'PASS: All good'
