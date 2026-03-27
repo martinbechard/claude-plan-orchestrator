@@ -33,3 +33,9 @@ sections:
       produces distinct sub-second offsets for millisecond-apart timestamps, (2) integration
       test confirming SVG renders with ms-unit axis ticks for sub-second spans. All
       1305 tests pass.'
+    validation_attempts: 1
+    validation_findings: 'Redesigned nav active state: normalized padding for all
+      links (prevents layout shift), replaced 12% opacity background with 22% opacity
+      + 1px box-shadow ring, changed active text to #e8e8f0 for better contrast, added
+      font-weight: 500, hover background, and CSS transitions. Updated ui-style-guide.md
+      with new design tokens.'
