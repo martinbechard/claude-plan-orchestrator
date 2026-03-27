@@ -17,8 +17,16 @@ sections:
   - id: '1.1'
     name: Review and fix drill-down links in dashboard
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/06-dashboard-drill-down-to-trace.md'
     last_attempt: '2026-03-27T09:21:23.582332'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T09:23:32.127680'
+    result_message: 'All drill-down link acceptance criteria are already implemented:
+      WorkerInfo and CompletionRecord have run_id fields, DashboardState.snapshot()
+      exposes run_id in the SSE payload, list_completions() returns run_id from the
+      DB, the completions table has a run_id column, the supervisor polls for run_ids
+      via _refresh_worker_run_ids(), dashboard.html templates include trace-link anchors,
+      dashboard.js renders the links when run_id is present pointing to /proxy?trace_id=<run_id>,
+      and the /proxy route accepts the trace_id filter. No changes were needed.'
