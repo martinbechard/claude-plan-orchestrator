@@ -1,6 +1,7 @@
 # langgraph_pipeline/shared/paths.py
 # Centralized path constants shared by auto-pipeline.py and plan-orchestrator.py.
 # Design: docs/plans/2026-02-25-02-extract-shared-modules-design.md
+# Validation pipeline test
 
 """Centralized path constants for the pipeline and orchestrator scripts."""
 
