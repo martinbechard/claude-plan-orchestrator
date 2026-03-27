@@ -27,3 +27,5 @@ sections:
       reserves space for value labels, value_formatter defaults to 2-decimal dollar
       format, bar_area_width caps bars to prevent clipping. All 15 tests pass including
       3 SVG bar chart tests covering formatting and clipping edge cases.'
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'

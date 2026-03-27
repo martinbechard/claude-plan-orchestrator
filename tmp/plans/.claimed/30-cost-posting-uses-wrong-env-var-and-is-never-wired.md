@@ -33,3 +33,31 @@ the pipeline config, no real cost data has ever been posted.
    in cost_tasks with actual token counts and costs.
 
 ## LangSmith Trace: f919c58c-c72c-4264-b85d-b8bfa4248780
+
+
+## 5 Whys Analysis
+
+Title: Cost data posting infrastructure not wired up to actual endpoint
+
+Clarity: 4
+
+5 Whys:
+
+1. Why doesn't cost posting work?
+   Because it's gated on `LANGCHAIN_ENDPOINT` containing "http://localhost", but this variable isn't set in production pipeline configurations, so the cost posting code never executes.
+
+2. Why is cost posting gated on a LangSmith environment variable instead of having dedicated configuration?
+   Because the cost posting feature was implemented as a quick addition to existing code rather than as a first-class pipeline capability with its own configuration path.
+
+3. Why was cost posting added as a quick addition instead of being designed properly?
+   Because it wasn't part of the original pipeline specification—it was identified as a need after the core pipeline (orchestration and verification) was already built and deployed.
+
+4. Why wasn't cost tracking included in the original pipeline design?
+   Because the initial requirements prioritized work orchestration and result verification, and cost observability was considered a secondary monitoring concern that could be added later.
+
+5. Why is cost observability important now?
+   Because without actual cost data, the team cannot measure pipeline efficiency, understand API spending patterns, or make informed decisions about optimizing token usage and controlling costs.
+
+Root Need: The pipeline requires a reliable cost tracking system that captures real API usage metrics so stakeholders can monitor, measure, and optimize pipeline spending and operational efficiency.
+
+Summary: Cost tracking was retrofitted without proper infrastructure, causing real data to never be posted, which prevents the team from understanding and controlling pipeline expenses.
