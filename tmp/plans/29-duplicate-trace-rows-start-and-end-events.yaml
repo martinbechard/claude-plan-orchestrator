@@ -17,8 +17,14 @@ sections:
   - id: '1.1'
     name: Validate upsert fix and address any remaining issues
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/29-duplicate-trace-rows-start-and-end-events.md'
     last_attempt: '2026-03-27T14:32:53.931441'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T14:34:41.345050'
+    result_message: 'Validated the upsert fix for duplicate trace rows. The ON CONFLICT(run_id)
+      DO UPDATE SET upsert is already implemented in TracingProxy.record_run(), the
+      unique index on run_id is created with deduplication of pre-existing rows in
+      _init_db(). Tests cover: single-row upsert, start+completion event merge, null
+      end_time preservation, and pre-existing duplicate cleanup. All 1317 tests pass.'
