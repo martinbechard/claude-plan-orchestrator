@@ -1,9 +1,0 @@
-{
-  "success": true,
-  "item_path": "tmp/plans/.claimed/16-tool-calls-missing-from-traces.md",
-  "cost_usd": 0.0,
-  "input_tokens": 0,
-  "output_tokens": 0,
-  "duration_s": 319.43719133298146,
-  "message": "Item processed successfully"
-}

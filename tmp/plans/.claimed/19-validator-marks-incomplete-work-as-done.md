@@ -103,3 +103,5 @@ The validator should:
 **Root Need:** Establish a clear protocol in work item definitions that distinguishes offline-verifiable criteria (code correctness, unit tests) from runtime-verifiable criteria (data flow, UI state), and empower the validator to fail or warn when acceptance criteria require runtime verification that cannot be performed offline.
 
 **Summary:** The validator marks work complete based on offline checks (code/tests) without realizing some acceptance criteria require runtime verification against a live system with real data.
+
+## LangSmith Trace: fe8424c2-b4ee-4c07-bff1-c1bac0b9bcf2
