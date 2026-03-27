@@ -95,7 +95,7 @@ sections:
   - id: '2.2'
     name: Add console output section to item.html template
     agent: frontend-coder
-    status: in_progress
+    status: completed
     dependencies:
     - '2.1'
     description: 'Implement the work item: docs/feature-backlog/43-capture-raw-worker-output-per-item.md
@@ -109,3 +109,8 @@ sections:
     last_attempt: '2026-03-26T20:12:09.080079'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T20:16:45.112892'
+    result_message: Added collapsible Console Output section to item.html. Lists all
+      captured log files with task ID, formatted timestamp, and raw-content link.
+      Each file has an inline expandable preview that lazy-loads via fetch() on open.
+      All 1290 tests pass.
