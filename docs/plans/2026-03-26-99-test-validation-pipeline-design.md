@@ -1,26 +1,18 @@
-# Design: Test Validation Pipeline (99-test-validation-pipeline)
+# Test Validation Pipeline - Design
 
-## Summary
+## Overview
 
-Test item to verify the validation pipeline works end to end. The actual
-code change is trivial (add a single comment), but the purpose is to confirm
-that intake 5 Whys analysis, design validation, and task execution all produce
-visible log output.
+This is a test defect to verify the full validation pipeline works end to end.
+The actual code change is trivial: add a comment to langgraph_pipeline/shared/paths.py.
 
-## Architecture
+## Key Files
 
-No architecture changes. This item exercises the existing pipeline:
-
-1. **Intake** - intake_analyze node runs 5 Whys validation on defect items
-2. **Plan creation** - create_plan node runs design validation
-3. **Task execution** - coder agent adds the comment to paths.py
-4. **Validation** - validator agent checks acceptance criteria
-
-## Files to Modify
-
-- langgraph_pipeline/shared/paths.py - add comment after header
+| File | Change |
+|------|--------|
+| langgraph_pipeline/shared/paths.py | Add comment "# Validation pipeline test v3" after header |
 
 ## Design Decisions
 
-- Single task, single section - the change is one line
-- Agent: coder - straightforward file edit
+- Single task plan since the change is a one-line comment addition
+- Uses the coder agent for the implementation
+- Acceptance criteria focus on pipeline log output (5 Whys, design validation) rather than the code change itself
