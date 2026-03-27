@@ -15,6 +15,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -103,6 +104,8 @@ class DashboardState:
         self.quota_exhausted: bool = False
         self.session_cost_usd: float = 0.0
         self.session_start: float = time.monotonic()
+        self.session_start_time: datetime = datetime.now(timezone.utc)
+        self.session_id: Optional[int] = None
         self.recent_errors: list[str] = []
         self._total_processed: int = 0
 
@@ -220,6 +223,20 @@ class DashboardState:
             if len(self.recent_errors) > MAX_RECENT_ERRORS:
                 self.recent_errors = self.recent_errors[:MAX_RECENT_ERRORS]
 
+    def set_session_id(self, session_id: int) -> None:
+        """Store the active session DB row id.
+
+        Args:
+            session_id: Primary key of the sessions table row for this run.
+        """
+        with self._lock:
+            self.session_id = session_id
+
+    def get_total_processed(self) -> int:
+        """Return the total number of items processed this session."""
+        with self._lock:
+            return self._total_processed
+
     def sweep_dead_workers(self) -> None:
         """Remove workers whose OS processes are no longer alive.
 
@@ -313,6 +330,7 @@ class DashboardState:
             "queue_count": queue_count,
             "session_cost_usd": session_cost,
             "session_elapsed_s": elapsed,
+            "session_start_time_iso": self.session_start_time.isoformat(),
             "active_count": active_count,
             "total_processed": total,
             "recent_errors": errors_copy,

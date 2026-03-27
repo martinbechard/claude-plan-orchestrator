@@ -868,6 +868,21 @@ def main() -> int:
             logger.warning("Could not initialise Slack (non-fatal): %s", exc)
             slack = None
 
+    # Create a DB session row now that the proxy (if any) is initialised.
+    # session_id stays None when web is disabled or the proxy is unavailable.
+    session_id: Optional[int] = None
+    if web_enabled:
+        try:
+            from langgraph_pipeline.web.proxy import get_proxy as _get_proxy
+            from langgraph_pipeline.web.dashboard_state import get_dashboard_state as _get_ds
+            _proxy = _get_proxy()
+            if _proxy is not None:
+                session_id = _proxy.create_session()
+                _get_ds().set_session_id(session_id)
+                logger.info("Session created (id=%d)", session_id)
+        except Exception as _exc:
+            logger.warning("Could not create session (non-fatal): %s", _exc)
+
     _check_stale_pid()
     _write_pid_file()
 
@@ -898,6 +913,26 @@ def main() -> int:
             )
     finally:
         _remove_pid_file()
+        if session_id is not None:
+            try:
+                from langgraph_pipeline.web.proxy import get_proxy as _get_proxy
+                from langgraph_pipeline.web.dashboard_state import get_dashboard_state as _get_ds
+                _proxy = _get_proxy()
+                if _proxy is not None:
+                    _ds = _get_ds()
+                    _proxy.close_session(
+                        session_id=session_id,
+                        total_cost_usd=_ds.session_cost_usd,
+                        items_processed=_ds.get_total_processed(),
+                    )
+                    logger.info(
+                        "Session closed (id=%d cost=$%.4f items=%d)",
+                        session_id,
+                        _ds.session_cost_usd,
+                        _ds.get_total_processed(),
+                    )
+            except Exception as _exc:
+                logger.warning("Could not close session (non-fatal): %s", _exc)
         if web_enabled:
             from langgraph_pipeline.web.server import stop_web_server
             stop_web_server()

@@ -116,6 +116,7 @@ def test_snapshot_returns_serialisable_dict():
         "queue_count",
         "session_cost_usd",
         "session_elapsed_s",
+        "session_start_time_iso",
         "active_count",
         "total_processed",
         "recent_errors",
@@ -511,3 +512,69 @@ def test_snapshot_calls_sweep_dead_workers(monkeypatch):
     state.snapshot()
 
     assert len(sweep_calls) == 1
+
+
+# ─── Session id and start time tests ─────────────────────────────────────────
+
+
+def test_session_id_defaults_to_none():
+    """DashboardState.session_id is None on construction."""
+    state = get_dashboard_state()
+    assert state.session_id is None
+
+
+def test_set_session_id_stores_value():
+    """set_session_id() stores the provided int and exposes it on session_id."""
+    state = get_dashboard_state()
+    state.set_session_id(42)
+    assert state.session_id == 42
+
+
+def test_get_total_processed_starts_at_zero():
+    """get_total_processed() returns 0 for a fresh DashboardState."""
+    state = get_dashboard_state()
+    assert state.get_total_processed() == 0
+
+
+def test_get_total_processed_increments_on_completion():
+    """get_total_processed() returns the number of items completed."""
+    state = get_dashboard_state()
+    state.add_active_worker(
+        pid=SAMPLE_PID,
+        slug=SAMPLE_SLUG,
+        item_type=SAMPLE_ITEM_TYPE,
+        start_time=time.monotonic(),
+    )
+    state.remove_active_worker(
+        pid=SAMPLE_PID,
+        outcome=SAMPLE_OUTCOME,
+        cost_usd=SAMPLE_COST_USD,
+        duration_s=SAMPLE_DURATION_S,
+    )
+    assert state.get_total_processed() == 1
+
+
+def test_snapshot_includes_session_start_time_iso(monkeypatch):
+    """snapshot() includes session_start_time_iso as a non-empty ISO 8601 string."""
+    monkeypatch.setattr(
+        "langgraph_pipeline.web.dashboard_state.get_proxy", lambda: None
+    )
+    state = get_dashboard_state()
+    snap = state.snapshot()
+    iso = snap["session_start_time_iso"]
+    assert isinstance(iso, str)
+    assert len(iso) > 0
+    # Verify it is a parseable ISO 8601 datetime
+    from datetime import datetime
+    parsed = datetime.fromisoformat(iso)
+    assert parsed.tzinfo is not None
+
+
+def test_snapshot_session_start_time_iso_matches_field(monkeypatch):
+    """snapshot() session_start_time_iso equals DashboardState.session_start_time.isoformat()."""
+    monkeypatch.setattr(
+        "langgraph_pipeline.web.dashboard_state.get_proxy", lambda: None
+    )
+    state = get_dashboard_state()
+    snap = state.snapshot()
+    assert snap["session_start_time_iso"] == state.session_start_time.isoformat()
