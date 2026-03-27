@@ -22,8 +22,9 @@ const MS_PER_MINUTE = 60 * 1000;
 const MS_PER_HOUR = 60 * MS_PER_MINUTE;
 const HALF_WINDOW_DIVISOR = 2;
 const ZOOM_FACTOR = 2;
+const VEL_IDLE_THRESHOLD = 250;
 const VEL_LOW_THRESHOLD = 1000;
-const VEL_HIGH_THRESHOLD = 5000;
+const VEL_HIGH_THRESHOLD = 2000;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -204,8 +205,9 @@ function outcomeBarBorderClass(outcome) {
 
 function velocityBarClass(tpm) {
   if (!tpm || tpm === 0) return "timeline-bar--vel-none";
+  if (tpm < VEL_IDLE_THRESHOLD) return "timeline-bar--vel-none";
   if (tpm < VEL_LOW_THRESHOLD) return "timeline-bar--vel-low";
-  if (tpm <= VEL_HIGH_THRESHOLD) return "timeline-bar--vel-medium";
+  if (tpm < VEL_HIGH_THRESHOLD) return "timeline-bar--vel-medium";
   return "timeline-bar--vel-high";
 }
 

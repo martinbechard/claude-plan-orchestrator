@@ -15,3 +15,9 @@ JSON is saved and displayed on the item page after task completion.
   the end-to-end validation pipeline.
 - The coder agent adds the comment; the orchestrator's built-in validator
   automatically verifies that validation results appear on the item page.
+
+
+## Acceptance Criteria
+
+- Does the item page show Validation Results with verdict after completion?
+  YES = pass, NO = fail

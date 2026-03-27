@@ -788,11 +788,6 @@ svg.gantt text { font-family: inherit; }
     font-weight: 400;
 }
 
-/* Velocity colour mode classes */
-.timeline-bar--vel-none   { background: #9ca3af; }
-.timeline-bar--vel-low    { background: #93c5d4; }
-.timeline-bar--vel-medium { background: #06b6d4; }
-.timeline-bar--vel-high   { background: #00e5bf; }
 
 /* Elapsed/velocity label overlaid on each bar */
 .timeline-bar-label {

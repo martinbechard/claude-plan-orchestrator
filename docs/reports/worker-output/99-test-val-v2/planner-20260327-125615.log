@@ -1,0 +1,8 @@
+=== planner for 99-test-val-v2 ===
+Exit code: 0
+
+=== STDOUT ===
+{"type":"result","subtype":"success","is_error":false,"duration_ms":123674,"duration_api_ms":120458,"num_turns":25,"result":"Done. Created and committed:\n\n- **Design doc**: `docs/plans/2026-03-27-99-test-val-v2-design.md`\n- **YAML plan**: `tmp/plans/99-test-val-v2.yaml` -- single task (1.1) using the coder agent to add the test comment marker to `paths.py`, with validation enabled after execution.","stop_reason":"end_turn","session_id":"9a950afb-ace8-41f0-acb8-ed97cccf56af","total_cost_usd":0.5932274999999999,"usage":{"input_tokens":18,"cache_creation_input_tokens":41234,"cache_read_input_tokens":506700,"output_tokens":3283,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":41234,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":18,"outputTokens":3283,"cacheReadInputTokens":506700,"cacheCreationInputTokens":41234,"webSearchRequests":0,"costUSD":0.5932274999999999,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"59778312-fe93-4a25-81ae-d66a08053b44"}
+
+=== STDERR ===
+Warning: no stdin data received in 3s, proceeding without it. If piping from a slow command, redirect stdin explicitly: < /dev/null to skip, or wait longer.

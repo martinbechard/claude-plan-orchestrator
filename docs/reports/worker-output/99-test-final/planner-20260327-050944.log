@@ -1,7 +1,0 @@
-=== planner for 99-test-final ===
-Exit code: 0
-
-=== STDOUT ===
-{"type":"result","subtype":"success","is_error":false,"duration_ms":104486,"duration_api_ms":101271,"num_turns":25,"result":"Done. Created:\n\n- **Design doc**: `docs/plans/2026-03-27-99-test-final-design.md` -- describes the verification test purpose\n- **YAML plan**: `tmp/plans/99-test-final.yaml` -- single task (1.1) using the coder agent to add the comment marker to paths.py, with validation enabled\n\nThe plan has one section with one task since the work item is simply adding a comment to `langgraph_pipeline/shared/paths.py`. The acceptance criteria (live Cost/Tokens/Velocity updates) are manual observations during execution.","stop_reason":"end_turn","session_id":"697c82da-c8f0-4ab5-af24-ccf31512a3b8","total_cost_usd":0.5092885,"usage":{"input_tokens":3348,"cache_creation_input_tokens":26046,"cache_read_input_tokens":513572,"output_tokens":2919,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":26046,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{"claude-opus-4-6":{"inputTokens":3348,"outputTokens":2919,"cacheReadInputTokens":513572,"cacheCreationInputTokens":26046,"webSearchRequests":0,"costUSD":0.5092885,"contextWindow":200000,"maxOutputTokens":64000}},"permission_denials":[],"fast_mode_state":"off","uuid":"929e5728-fb00-400d-b6cc-311c045532aa"}
-
-=== STDERR ===
