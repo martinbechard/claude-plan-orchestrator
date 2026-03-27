@@ -15,6 +15,7 @@ import logging
 from langgraph.graph import END
 
 from langgraph_pipeline.pipeline.state import PipelineState
+from langgraph_pipeline.shared.langsmith import add_trace_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -84,16 +85,45 @@ def verify_result(state: PipelineState) -> str:
     - Last outcome is FAIL
         - cycles not exhausted  → NODE_CREATE_PLAN  (retry with new plan)
         - cycles exhausted      → NODE_ARCHIVE   (mark exhausted)
+
+    Emits pipeline_decision trace metadata with the routing rationale.
     """
     history = state.get("verification_history") or []
+    cycle_number = state.get("verification_cycle") or 0
+    cycles_done_str = f"{cycle_number}/{MAX_VERIFICATION_CYCLES}"
+
     if not history:
+        add_trace_metadata({
+            "decision": "archive",
+            "reason": "no_verification_history",
+            "cycle_number": cycle_number,
+            "tasks_completed": cycles_done_str,
+        })
         return NODE_ARCHIVE
 
     last_outcome = history[-1].get("outcome")
     if last_outcome == "PASS":
+        add_trace_metadata({
+            "decision": "archive",
+            "reason": "validator_passed",
+            "cycle_number": cycle_number,
+            "tasks_completed": cycles_done_str,
+        })
         return NODE_ARCHIVE
 
     if cycles_exhausted(state):
+        add_trace_metadata({
+            "decision": "archive",
+            "reason": "max_verification_cycles_reached",
+            "cycle_number": cycle_number,
+            "tasks_completed": cycles_done_str,
+        })
         return NODE_ARCHIVE
 
+    add_trace_metadata({
+        "decision": "retry",
+        "reason": "validator_failed_retrying",
+        "cycle_number": cycle_number,
+        "tasks_completed": cycles_done_str,
+    })
     return NODE_CREATE_PLAN

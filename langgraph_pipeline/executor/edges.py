@@ -19,6 +19,7 @@ from langgraph.graph import END
 
 from langgraph_pipeline.executor.circuit_breaker import is_circuit_open
 from langgraph_pipeline.executor.state import TaskState
+from langgraph_pipeline.shared.langsmith import add_trace_metadata
 
 # ─── Route label constants ────────────────────────────────────────────────────
 # Returned by routing functions; matched against path_map in add_conditional_edges.
@@ -116,6 +117,21 @@ def circuit_check(state: TaskState) -> str:
     return ROUTE_CONTINUE
 
 
+def _tasks_completed_str(state: TaskState) -> str:
+    """Compute a 'X/Y' string of completed tasks vs total plan tasks.
+
+    Reads task_results for completed count and plan_data.sections for total.
+    Returns 'X/Y' when total is known, or 'X' when plan_data is unavailable.
+    """
+    task_results = state.get("task_results") or []
+    completed_count = sum(1 for r in task_results if r.get("status") == "completed")
+    total_count = sum(
+        len(section.get("tasks", []))
+        for section in (state.get("plan_data") or {}).get("sections", [])
+    )
+    return f"{completed_count}/{total_count}" if total_count else str(completed_count)
+
+
 def retry_check(state: TaskState) -> str:
     """Conditional edge routing from validate_task.
 
@@ -127,6 +143,8 @@ def retry_check(state: TaskState) -> str:
     The max attempt limit is read from plan_data.meta.max_attempts_default,
     falling back to DEFAULT_MAX_ATTEMPTS when not configured.
 
+    Emits pipeline_decision trace metadata with the routing rationale.
+
     Args:
         state: Current TaskState after validate_task has run.
 
@@ -134,16 +152,36 @@ def retry_check(state: TaskState) -> str:
         One of ROUTE_PASS, ROUTE_FAIL, or ROUTE_RETRY.
     """
     verdict = state.get("last_validation_verdict")
-    if verdict != "FAIL":
-        return ROUTE_PASS
-
     task_attempt = state.get("task_attempt") or 0
     max_attempts = (
         (state.get("plan_data") or {})
         .get("meta", {})
         .get("max_attempts_default", DEFAULT_MAX_ATTEMPTS)
     )
+    tasks_completed = _tasks_completed_str(state)
+
+    if verdict != "FAIL":
+        add_trace_metadata({
+            "decision": "pass",
+            "reason": "validator_passed",
+            "cycle_number": task_attempt,
+            "tasks_completed": tasks_completed,
+        })
+        return ROUTE_PASS
+
     if task_attempt >= max_attempts:
+        add_trace_metadata({
+            "decision": "fail",
+            "reason": "max_attempts_reached",
+            "cycle_number": task_attempt,
+            "tasks_completed": tasks_completed,
+        })
         return ROUTE_FAIL
 
+    add_trace_metadata({
+        "decision": "retry",
+        "reason": "validator_failed_retry_available",
+        "cycle_number": task_attempt,
+        "tasks_completed": tasks_completed,
+    })
     return ROUTE_RETRY

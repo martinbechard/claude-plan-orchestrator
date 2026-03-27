@@ -52,7 +52,7 @@ from langgraph_pipeline.executor.nodes.task_runner import execute_task
 from langgraph_pipeline.executor.nodes.task_selector import find_next_task
 from langgraph_pipeline.executor.nodes.validator import validate_task
 from langgraph_pipeline.executor.state import TaskState
-from langgraph_pipeline.shared.langsmith import configure_tracing
+from langgraph_pipeline.shared.langsmith import add_trace_metadata, configure_tracing
 
 # ─── Node name constants ──────────────────────────────────────────────────────
 # These must match the string names registered with add_node() below.
@@ -74,6 +74,8 @@ def _escalate_node(state: TaskState) -> dict:
     Called by the retry_check conditional edge when validate_task returns FAIL
     and retries remain.  The next execute_task invocation uses the upgraded model.
 
+    Emits pipeline_decision trace metadata recording the escalation decision.
+
     Args:
         state: Current TaskState after validate_task has run.
 
@@ -83,6 +85,13 @@ def _escalate_node(state: TaskState) -> dict:
     current_model = state.get("effective_model") or "sonnet"
     new_model = escalate_model(current_model)
     print(f"[escalate] Model upgrade: {current_model!r} -> {new_model!r}")
+    add_trace_metadata({
+        "decision": "escalate",
+        "reason": "validator_failed_retry_available",
+        "cycle_number": state.get("task_attempt") or 0,
+        "from_model": current_model,
+        "to_model": new_model,
+    })
     return {"effective_model": new_model, "task_attempt": 1}
 
 

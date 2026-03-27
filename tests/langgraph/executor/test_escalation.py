@@ -1,10 +1,11 @@
 # tests/langgraph/executor/test_escalation.py
-# Unit tests for the model escalation module.
+# Unit tests for the model escalation module and escalate_node trace metadata.
 # Design: docs/plans/2026-02-26-05-task-execution-subgraph-design.md
 
-"""Tests for langgraph_pipeline.executor.escalation."""
+"""Tests for langgraph_pipeline.executor.escalation and _escalate_node in graph."""
 
 from typing import get_type_hints
+from unittest.mock import patch
 
 from langgraph_pipeline.executor.escalation import (
     DEFAULT_STARTING_MODEL,
@@ -100,3 +101,68 @@ class TestResetModel:
     def test_reset_to_configured_starting_model(self):
         config: EscalationConfig = {"enabled": False, "starting_model": "opus"}
         assert reset_model(config) == "opus"
+
+
+# ─── Tests: _escalate_node trace metadata ─────────────────────────────────────
+
+
+def _make_task_state(**overrides) -> dict:
+    """Build a minimal TaskState dict for escalate_node tests."""
+    base = {
+        "plan_path": "",
+        "plan_data": None,
+        "current_task_id": "1.1",
+        "task_attempt": 2,
+        "task_results": [],
+        "effective_model": "haiku",
+        "consecutive_failures": 1,
+        "last_validation_verdict": "FAIL",
+        "plan_cost_usd": 0.0,
+        "plan_input_tokens": 0,
+        "plan_output_tokens": 0,
+    }
+    base.update(overrides)
+    return base
+
+
+class TestEscalateNodeTraceMetadata:
+    """_escalate_node emits pipeline_decision trace metadata on escalation."""
+
+    def test_emits_escalate_decision(self):
+        from langgraph_pipeline.executor.graph import _escalate_node
+
+        state = _make_task_state(effective_model="haiku", task_attempt=1)
+        with patch("langgraph_pipeline.executor.graph.add_trace_metadata") as mock_meta:
+            _escalate_node(state)
+        mock_meta.assert_called_once()
+        call_kwargs = mock_meta.call_args[0][0]
+        assert call_kwargs["decision"] == "escalate"
+        assert call_kwargs["reason"] == "validator_failed_retry_available"
+
+    def test_emits_from_and_to_model(self):
+        from langgraph_pipeline.executor.graph import _escalate_node
+
+        state = _make_task_state(effective_model="haiku", task_attempt=1)
+        with patch("langgraph_pipeline.executor.graph.add_trace_metadata") as mock_meta:
+            _escalate_node(state)
+        call_kwargs = mock_meta.call_args[0][0]
+        assert call_kwargs["from_model"] == "haiku"
+        assert call_kwargs["to_model"] == "sonnet"
+
+    def test_emits_cycle_number_from_task_attempt(self):
+        from langgraph_pipeline.executor.graph import _escalate_node
+
+        state = _make_task_state(effective_model="sonnet", task_attempt=2)
+        with patch("langgraph_pipeline.executor.graph.add_trace_metadata") as mock_meta:
+            _escalate_node(state)
+        call_kwargs = mock_meta.call_args[0][0]
+        assert call_kwargs["cycle_number"] == 2
+
+    def test_escalate_node_still_returns_upgraded_model(self):
+        from langgraph_pipeline.executor.graph import _escalate_node
+
+        state = _make_task_state(effective_model="haiku")
+        with patch("langgraph_pipeline.executor.graph.add_trace_metadata"):
+            result = _escalate_node(state)
+        assert result["effective_model"] == "sonnet"
+        assert result["task_attempt"] == 1

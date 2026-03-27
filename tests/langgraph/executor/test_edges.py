@@ -4,6 +4,8 @@
 
 """Tests for langgraph_pipeline.executor.edges."""
 
+from unittest.mock import patch
+
 from langgraph_pipeline.executor.edges import (
     DEFAULT_MAX_ATTEMPTS,
     ROUTE_ALL_DONE,
@@ -18,6 +20,7 @@ from langgraph_pipeline.executor.edges import (
     circuit_check,
     parallel_check,
     retry_check,
+    _tasks_completed_str,
 )
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -252,3 +255,99 @@ class TestRouteConstants:
 
     def test_default_max_attempts(self):
         assert DEFAULT_MAX_ATTEMPTS == 3
+
+
+# ─── Tests: _tasks_completed_str ─────────────────────────────────────────────
+
+
+class TestTasksCompletedStr:
+    """_tasks_completed_str computes 'X/Y' from task_results and plan_data."""
+
+    def test_returns_x_of_y_when_plan_data_present(self):
+        plan_data = _make_plan_data()
+        state = _make_state(
+            plan_data=plan_data,
+            task_results=[
+                {"task_id": "1.1", "status": "completed"},
+            ],
+        )
+        assert _tasks_completed_str(state) == "1/2"
+
+    def test_returns_zero_when_no_tasks_complete(self):
+        plan_data = _make_plan_data()
+        state = _make_state(plan_data=plan_data, task_results=[])
+        assert _tasks_completed_str(state) == "0/2"
+
+    def test_returns_count_only_when_no_plan_data(self):
+        state = _make_state(
+            plan_data=None,
+            task_results=[{"task_id": "1.1", "status": "completed"}],
+        )
+        assert _tasks_completed_str(state) == "1"
+
+    def test_counts_only_completed_status(self):
+        plan_data = _make_plan_data()
+        state = _make_state(
+            plan_data=plan_data,
+            task_results=[
+                {"task_id": "1.1", "status": "completed"},
+                {"task_id": "1.2", "status": "failed"},
+            ],
+        )
+        assert _tasks_completed_str(state) == "1/2"
+
+
+# ─── Tests: retry_check trace metadata ───────────────────────────────────────
+
+
+class TestRetryCheckTraceMetadata:
+    """retry_check emits pipeline_decision trace metadata on every code path."""
+
+    def test_emits_pass_decision_on_non_fail_verdict(self):
+        state = _make_state(last_validation_verdict="PASS")
+        with patch("langgraph_pipeline.executor.edges.add_trace_metadata") as mock_meta:
+            retry_check(state)
+        mock_meta.assert_called_once()
+        call_kwargs = mock_meta.call_args[0][0]
+        assert call_kwargs["decision"] == "pass"
+        assert call_kwargs["reason"] == "validator_passed"
+
+    def test_emits_fail_decision_on_max_attempts_reached(self):
+        plan_data = _make_plan_data(max_attempts_default=3)
+        state = _make_state(
+            last_validation_verdict="FAIL",
+            task_attempt=3,
+            plan_data=plan_data,
+        )
+        with patch("langgraph_pipeline.executor.edges.add_trace_metadata") as mock_meta:
+            retry_check(state)
+        call_kwargs = mock_meta.call_args[0][0]
+        assert call_kwargs["decision"] == "fail"
+        assert call_kwargs["reason"] == "max_attempts_reached"
+        assert call_kwargs["cycle_number"] == 3
+
+    def test_emits_retry_decision_with_attempts_remaining(self):
+        plan_data = _make_plan_data(max_attempts_default=3)
+        state = _make_state(
+            last_validation_verdict="FAIL",
+            task_attempt=1,
+            plan_data=plan_data,
+        )
+        with patch("langgraph_pipeline.executor.edges.add_trace_metadata") as mock_meta:
+            retry_check(state)
+        call_kwargs = mock_meta.call_args[0][0]
+        assert call_kwargs["decision"] == "retry"
+        assert call_kwargs["reason"] == "validator_failed_retry_available"
+
+    def test_emits_tasks_completed_string(self):
+        plan_data = _make_plan_data()
+        state = _make_state(
+            last_validation_verdict="PASS",
+            plan_data=plan_data,
+            task_results=[{"task_id": "1.1", "status": "completed"}],
+        )
+        with patch("langgraph_pipeline.executor.edges.add_trace_metadata") as mock_meta:
+            retry_check(state)
+        call_kwargs = mock_meta.call_args[0][0]
+        assert "tasks_completed" in call_kwargs
+        assert call_kwargs["tasks_completed"] == "1/2"

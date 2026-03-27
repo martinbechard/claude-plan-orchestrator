@@ -5,6 +5,7 @@
 """Tests for langgraph_pipeline.pipeline.edges."""
 
 import pytest
+from unittest.mock import patch
 from langgraph.graph import END
 
 from langgraph_pipeline.pipeline.edges import (
@@ -177,6 +178,67 @@ class TestVerifyResult:
     def test_returns_archive_when_history_missing_from_state(self):
         state = {}
         assert verify_result(state) == NODE_ARCHIVE
+
+
+class TestVerifyResultTraceMetadata:
+    """verify_result emits pipeline_decision trace metadata on every code path."""
+
+    def _record(self, outcome: str) -> dict:
+        return {"outcome": outcome, "timestamp": "2026-02-26T00:00:00Z", "notes": ""}
+
+    def test_emits_archive_reason_no_history(self):
+        state = _make_state(verification_history=[], verification_cycle=0)
+        with patch("langgraph_pipeline.pipeline.edges.add_trace_metadata") as mock_meta:
+            verify_result(state)
+        mock_meta.assert_called_once()
+        call_kwargs = mock_meta.call_args[0][0]
+        assert call_kwargs["decision"] == "archive"
+        assert call_kwargs["reason"] == "no_verification_history"
+        assert call_kwargs["cycle_number"] == 0
+
+    def test_emits_archive_reason_validator_passed(self):
+        state = _make_state(
+            verification_history=[self._record("PASS")],
+            verification_cycle=1,
+        )
+        with patch("langgraph_pipeline.pipeline.edges.add_trace_metadata") as mock_meta:
+            verify_result(state)
+        call_kwargs = mock_meta.call_args[0][0]
+        assert call_kwargs["decision"] == "archive"
+        assert call_kwargs["reason"] == "validator_passed"
+        assert call_kwargs["cycle_number"] == 1
+
+    def test_emits_archive_reason_max_cycles_reached(self):
+        state = _make_state(
+            verification_history=[self._record("FAIL")],
+            verification_cycle=MAX_VERIFICATION_CYCLES,
+        )
+        with patch("langgraph_pipeline.pipeline.edges.add_trace_metadata") as mock_meta:
+            verify_result(state)
+        call_kwargs = mock_meta.call_args[0][0]
+        assert call_kwargs["decision"] == "archive"
+        assert call_kwargs["reason"] == "max_verification_cycles_reached"
+
+    def test_emits_retry_reason_validator_failed(self):
+        state = _make_state(
+            verification_history=[self._record("FAIL")],
+            verification_cycle=1,
+        )
+        with patch("langgraph_pipeline.pipeline.edges.add_trace_metadata") as mock_meta:
+            verify_result(state)
+        call_kwargs = mock_meta.call_args[0][0]
+        assert call_kwargs["decision"] == "retry"
+        assert call_kwargs["reason"] == "validator_failed_retrying"
+
+    def test_tasks_completed_format_includes_cycle_of_max(self):
+        state = _make_state(
+            verification_history=[self._record("PASS")],
+            verification_cycle=2,
+        )
+        with patch("langgraph_pipeline.pipeline.edges.add_trace_metadata") as mock_meta:
+            verify_result(state)
+        call_kwargs = mock_meta.call_args[0][0]
+        assert call_kwargs["tasks_completed"] == f"2/{MAX_VERIFICATION_CYCLES}"
 
 
 class TestRouteAfterIntake:
