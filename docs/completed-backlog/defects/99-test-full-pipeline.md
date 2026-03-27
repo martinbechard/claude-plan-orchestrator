@@ -11,7 +11,7 @@ Add a comment "# full pipeline test v2" to langgraph_pipeline/shared/paths.py.
 - Does the traces DB have an execute_task row with input_tokens > 100
   for this item? YES = pass, NO = fail
 
-## LangSmith Trace: c6e8c8b2-064e-4461-bcb0-35967b612778
+
 
 
 ## 5 Whys Analysis
