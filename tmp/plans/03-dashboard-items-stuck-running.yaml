@@ -18,7 +18,12 @@ sections:
     name: Verify existing fix and add missing test coverage
     agent: coder
     description: 'Implement the work item: tmp/plans/.claimed/03-dashboard-items-stuck-running.md'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-27T01:26:45.387408'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T01:29:12.010739'
+    result_message: 'Verified existing fix (sweep_dead_workers + supervisor ChildProcessError
+      handling already in place). Added 5 missing unit tests: dead PID reap, alive
+      PID keep, empty state no-op, TOCTOU race guard, and snapshot() calls sweep.
+      All 1303 tests pass.'
