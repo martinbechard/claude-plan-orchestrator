@@ -6,7 +6,7 @@
 
 import json
 import os
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
@@ -20,6 +20,7 @@ from langgraph_pipeline.executor.nodes.validator import (
     _find_task_by_id,
     _load_agent_body,
     _parse_verdict,
+    _post_cost_to_api,
     _read_status_file,
     _save_plan_yaml,
     validate_task,
@@ -631,3 +632,59 @@ class TestValidateTask:
 
         assert "plan_data" in result
         assert result["plan_data"] is not None
+
+
+# ─── _post_cost_to_api Tests ──────────────────────────────────────────────────
+
+SAMPLE_PLAN_DATA = {
+    "meta": {"source_item": "tmp/plans/.claimed/01-some-feature.md"},
+    "sections": [],
+}
+
+
+def test_post_cost_skips_when_env_var_not_set(monkeypatch):
+    """_post_cost_to_api does nothing when ORCHESTRATOR_WEB_URL is not set."""
+    monkeypatch.delenv("ORCHESTRATOR_WEB_URL", raising=False)
+    with patch("langgraph_pipeline.executor.nodes.validator.urllib.request.urlopen") as mock_open:
+        _post_cost_to_api(
+            plan_data=SAMPLE_PLAN_DATA,
+            task_id="1.1",
+            model="claude-sonnet-4-6",
+            input_tokens=1000,
+            output_tokens=200,
+            cost_usd=0.0012,
+            duration_s=5.0,
+            tool_calls=[],
+        )
+    mock_open.assert_not_called()
+
+
+def test_post_cost_posts_to_orchestrator_web_url(monkeypatch):
+    """_post_cost_to_api POSTs to {ORCHESTRATOR_WEB_URL}/api/cost when set."""
+    monkeypatch.setenv("ORCHESTRATOR_WEB_URL", "http://localhost:8099")
+    captured = {}
+
+    def fake_urlopen(req, timeout):
+        captured["url"] = req.full_url
+        captured["method"] = req.method
+        body = json.loads(req.data.decode())
+        captured["body"] = body
+        return MagicMock().__enter__.return_value
+
+    with patch("langgraph_pipeline.executor.nodes.validator.urllib.request.urlopen", fake_urlopen):
+        _post_cost_to_api(
+            plan_data=SAMPLE_PLAN_DATA,
+            task_id="1.1",
+            model="claude-sonnet-4-6",
+            input_tokens=1000,
+            output_tokens=200,
+            cost_usd=0.0012,
+            duration_s=5.0,
+            tool_calls=[],
+        )
+
+    assert captured["url"] == "http://localhost:8099/api/cost"
+    assert captured["method"] == "POST"
+    assert captured["body"]["task_id"] == "1.1"
+    assert captured["body"]["agent_type"] == "validator"
+    assert captured["body"]["item_slug"] == "01-some-feature"
