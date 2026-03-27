@@ -43,8 +43,10 @@ Orchestrator web UI. Read it before making any change to a file under
 | `--blue` | `#3b6fcf` | Links, primary buttons, filter button, focus ring |
 | `--blue-hover` | `#2d5ab8` | Filter button hover |
 | `--blue-light` | `#eff4ff` | Pagination / toggle hover background |
-| `--nav-active-bg` | `rgba(126,184,247,0.12)` | Active nav link background pill |
-| `--nav-active-text` | `#7eb8f7` | Active nav link text |
+| `--nav-active-bg` | `rgba(126,184,247,0.22)` | Active nav link background pill |
+| `--nav-active-ring` | `rgba(126,184,247,0.3)` | Active nav link box-shadow ring |
+| `--nav-active-text` | `#e8e8f0` | Active nav link text |
+| `--nav-hover-bg` | `rgba(255,255,255,0.07)` | Idle nav link hover background |
 
 ### Status / Outcome Badges
 
@@ -160,14 +162,16 @@ The nav bar is `48px` tall with `#1a1a2e` background and `1.5rem` horizontal pad
 Apply class `active` to the current page's `<a>` tag. The active nav link uses:
 
 ```css
-color: #7eb8f7;
-background: rgba(126, 184, 247, 0.12);
-border-radius: 4px;
-padding: 0.25rem 0.625rem;
+color: #e8e8f0;
+background: rgba(126, 184, 247, 0.22);
+box-shadow: 0 0 0 1px rgba(126, 184, 247, 0.3);
+font-weight: 500;
 ```
 
-This creates a subtle pill highlight. Idle links use `color: #9090b0` and no
-background. Hover changes color to `#e8e8f0` with no underline.
+This creates a clearly visible pill with a subtle ring outline. All nav links
+share `padding: 0.25rem 0.625rem` and `border-radius: 4px` to prevent layout
+shift on navigation. Idle links use `color: #9090b0` and no background. Hover
+adds `background: rgba(255,255,255,0.07)` and changes color to `#e8e8f0`.
 
 ---
 

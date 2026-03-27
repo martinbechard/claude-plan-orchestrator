@@ -37,11 +37,13 @@ nav .brand {
 nav a {
     color: #9090b0;
     font-size: 13px;
-    padding: 0.25rem 0;
+    padding: 0.25rem 0.625rem;
+    border-radius: 4px;
+    transition: color 0.15s ease, background 0.15s ease;
 }
 
-nav a:hover { color: #e8e8f0; text-decoration: none; }
-nav a.active { color: #7eb8f7; background: rgba(126, 184, 247, 0.12); border-radius: 4px; padding: 0.25rem 0.625rem; }
+nav a:hover { color: #e8e8f0; text-decoration: none; background: rgba(255, 255, 255, 0.07); }
+nav a.active { color: #e8e8f0; background: rgba(126, 184, 247, 0.22); box-shadow: 0 0 0 1px rgba(126, 184, 247, 0.3); font-weight: 500; }
 
 /* ── Layout ─────────────────────────────────────────────────────────────── */
 main {
