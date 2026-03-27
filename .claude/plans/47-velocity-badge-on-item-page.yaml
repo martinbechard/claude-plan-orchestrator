@@ -23,7 +23,7 @@ sections:
   - id: '1.1'
     name: Wire active worker current_velocity into item page velocity badge
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: .claude/plans/.claimed/47-velocity-badge-on-item-page.md
       -- In _get_active_worker() add current_velocity to the returned dict. In item_detail(),
       override avg_velocity with the live value when an active worker is present and
@@ -31,3 +31,6 @@ sections:
     last_attempt: '2026-03-26T22:58:28.297235'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-26T22:59:41.634299'
+    result_message: Added current_velocity to _get_active_worker() dict and overrode
+      avg_velocity in item_detail() when active worker has non-zero live velocity
