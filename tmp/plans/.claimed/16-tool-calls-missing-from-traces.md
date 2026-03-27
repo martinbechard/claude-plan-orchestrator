@@ -68,3 +68,30 @@ This overlaps with defect 04/08 (expandable items in timeline):
 - Defect 13: bar colour classification (tool calls need distinct colour)
 
 ## LangSmith Trace: 69e284fb-f4ab-4fb5-9d7a-f97e277c3623
+
+
+## 5 Whys Analysis
+
+Title: Tool calls are invisible in trace timelines, breaking execution visibility
+Clarity: 4/5
+
+5 Whys:
+
+1. **Why aren't tool calls visible in the trace timeline?**
+   Because the `proxy_trace` route only fetches direct children of the root run via `proxy.get_children(root_run_id)`, which returns graph node runs (execute_plan, create_plan, etc.). Tool calls are grandchildren (children of graph nodes), so they never get fetched or rendered.
+
+2. **Why are tool calls structured as grandchildren instead of direct children?**
+   Because the execution model mirrors LangGraph's architecture: graph node invocations are children of the root run, and tool invocations (Read, Edit, Bash, etc.) are children of those graph nodes. This is a natural consequence of how the plan orchestrator instruments execution.
+
+3. **Why was the fetch logic designed to stop at one level?**
+   Because the initial implementation prioritized showing the high-level execution flow (which graph nodes ran, how long did each take?). Tool-level details were considered a secondary requirement, so the code was optimized for simplicity rather than completeness.
+
+4. **Why do users need to see tool calls in the trace?**
+   Because plan execution is **tool-driven** — the actual work happens via Read, Edit, Bash calls. Without visibility into which tools ran, in what order, and for how long, users cannot debug execution failures, understand performance bottlenecks, or analyze what the orchestrator actually did.
+
+5. **Why is this tool-level visibility critical to the system's purpose?**
+   Because this system's job is to make execution **auditable and debuggable**. If the trace is incomplete and hides the actual work (tool calls), then the trace system fails its core purpose: giving users confidence that their plans executed correctly and allowing them to diagnose what went wrong.
+
+Root Need: Complete hierarchical visibility into plan execution — from root run through graph nodes down to individual tool calls — so users can fully understand, debug, and optimize orchestrated execution.
+
+Summary: The system's trace feature is incomplete without tool-level visibility, making it impossible for users to debug execution or understand what work was actually performed.
