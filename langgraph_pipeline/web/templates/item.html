@@ -4,12 +4,14 @@
             original_request_html (optional), plan_tasks [{id, name, status}],
             completions, traces [{run_id, name, created_at}],
             output_files [filenames sorted newest-first],
+            output_artifacts [{path, source, display_name}],
             avg_velocity (int tok/min or None), last_trace (dict or None)
    Design: docs/plans/2026-03-26-06-work-item-detail-page-design.md
            docs/plans/2026-03-26-17-work-item-status-clarity-design.md
            docs/plans/2026-03-26-35-work-item-page-missing-requirements-from-backlog-file-design.md
            docs/plans/2026-03-26-43-capture-raw-worker-output-per-item-design.md
-           docs/plans/2026-03-26-46-item-page-show-last-run-and-velocity-design.md #}
+           docs/plans/2026-03-26-46-item-page-show-last-run-and-velocity-design.md
+           docs/plans/2026-03-27-56-item-page-show-output-artifacts-design.md #}
 {% extends "base.html" %}
 
 {% block title %}{{ slug }} — Plan Orchestrator{% endblock %}
@@ -759,6 +761,89 @@
     white-space: pre;
     line-height: 1.5;
 }
+
+/* ── Output Artifacts section ─────────────────────────────────────────── */
+.artifacts-section {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    margin-top: 1.5rem;
+    overflow: hidden;
+}
+
+.artifacts-summary {
+    padding: 0.625rem 1.25rem;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    list-style: none;
+    font-size: 11px;
+    font-weight: 700;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    user-select: none;
+}
+
+.artifacts-summary::-webkit-details-marker { display: none; }
+
+.artifacts-summary::before {
+    content: '▶';
+    font-size: 9px;
+    transition: transform 0.15s ease;
+    color: #374151;
+    font-weight: 700;
+}
+
+.artifacts-section[open] > .artifacts-summary::before {
+    transform: rotate(90deg);
+}
+
+.artifacts-count {
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    margin-left: auto;
+}
+
+.artifact-list {
+    padding: 0.5rem 0;
+}
+
+.artifact-entry {
+    padding: 0.4rem 1.25rem;
+    border-bottom: 1px solid #f0f4f8;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+}
+
+.artifact-entry:last-child { border-bottom: none; }
+
+.artifact-source-badge {
+    font-size: 10px;
+    font-weight: 600;
+    color: #6b7280;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 3px;
+    padding: 1px 5px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.artifact-path {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    font-size: 12px;
+    color: #374151;
+    word-break: break-all;
+}
 </style>
 {% endblock %}
 
@@ -1089,6 +1174,26 @@
   </div>{# /.item-right #}
 
 </div>{# /.item-layout #}
+
+{# ── Output Artifacts ─────────────────────────────────────────────────────── #}
+{% if output_artifacts %}
+<details class="artifacts-section" aria-label="Output artifacts">
+  <summary class="artifacts-summary">
+    Output Artifacts
+    <span class="artifacts-count">
+      {{ output_artifacts | length }} file{{ 's' if output_artifacts | length != 1 else '' }}
+    </span>
+  </summary>
+  <div class="artifact-list">
+    {% for artifact in output_artifacts %}
+    <div class="artifact-entry">
+      <span class="artifact-source-badge">{{ artifact.source }}</span>
+      <span class="artifact-path">{{ artifact.path }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</details>
+{% endif %}
 
 {# ── Console Output ───────────────────────────────────────────────────────── #}
 {% if output_files %}

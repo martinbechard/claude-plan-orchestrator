@@ -2,6 +2,7 @@
 # FastAPI router for the GET /item/{slug} work-item detail page.
 # Design: docs/plans/2026-03-26-35-work-item-page-missing-requirements-from-backlog-file-design.md
 # Design: docs/plans/2026-03-26-43-capture-raw-worker-output-per-item-design.md
+# Design: docs/plans/2026-03-27-56-item-page-show-output-artifacts-design.md
 
 """FastAPI router that serves the work-item detail page.
 
@@ -12,6 +13,7 @@ Endpoints:
 """
 
 import json
+import subprocess
 import time
 from pathlib import Path
 from typing import Optional
@@ -36,6 +38,12 @@ _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 _PLANS_DIR = Path("tmp/plans")
 _CLAIMED_PATH = Path(CLAIMED_DIR)
 _DESIGN_DOCS_DIR = Path("docs/plans")
+
+_REPORTS_DIR = Path("docs/reports")
+
+_SOURCE_GIT = "git"
+_SOURCE_DESIGN = "design"
+_SOURCE_REPORT = "report"
 
 _STAGE_EXECUTING = "executing"
 _STAGE_VALIDATING = "validating"
@@ -86,6 +94,7 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
     total_duration_s = sum(c.get("duration_s", 0.0) for c in completions)
     total_tokens = _compute_total_tokens(completions)
     output_files = _list_output_files(slug)
+    output_artifacts = _collect_output_artifacts(slug)
     validation_results = _load_validation_results(slug)
     avg_velocity = _compute_avg_velocity(completions)
 
@@ -117,6 +126,7 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
             "completions": completions,
             "traces": traces,
             "output_files": output_files,
+            "output_artifacts": output_artifacts,
             "validation_results": validation_results,
             "avg_velocity": avg_velocity,
             "last_trace": last_trace,
@@ -579,6 +589,82 @@ def _parse_verification_notes(completions: list[dict]) -> None:
                 c["verification_data"] = None
         else:
             c["verification_data"] = None
+
+
+def _collect_output_artifacts(slug: str) -> list[dict]:
+    """Gather output artifacts for a work item from git, design docs, and reports.
+
+    Searches four sources:
+    1. Git commits whose message contains the slug (via git log --all --grep).
+    2. Design document in docs/plans/ matching the slug.
+    3. Files in docs/reports/ whose name contains the slug.
+    4. Files in docs/reports/worker-output/<slug>/ (non-log artifacts).
+
+    Deduplicates by resolved absolute path.
+
+    Args:
+        slug: Work item slug.
+
+    Returns:
+        List of dicts with keys: path (str), source (str), display_name (str).
+        Sorted by source then path.
+    """
+    seen_paths: set[str] = set()
+    artifacts: list[dict] = []
+
+    def _add(raw_path: str, source: str) -> None:
+        p = Path(raw_path)
+        try:
+            resolved = str(p.resolve())
+        except Exception:
+            resolved = raw_path
+        if resolved in seen_paths:
+            return
+        seen_paths.add(resolved)
+        artifacts.append(
+            {
+                "path": raw_path,
+                "source": source,
+                "display_name": p.name,
+            }
+        )
+
+    # 1. Git commits
+    try:
+        result = subprocess.run(
+            ["git", "log", "--all", f"--grep={slug}", "--name-only", "--pretty=format:"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line and not line.startswith("commit "):
+                    if Path(line).exists():
+                        _add(line, _SOURCE_GIT)
+    except Exception:
+        pass
+
+    # 2. Design document
+    design_doc = _find_design_doc(slug)
+    if design_doc is not None:
+        _add(str(design_doc), _SOURCE_DESIGN)
+
+    # 3. Reports directory — files whose name contains the slug
+    if _REPORTS_DIR.is_dir():
+        for candidate in _REPORTS_DIR.iterdir():
+            if candidate.is_file() and slug in candidate.name:
+                _add(str(candidate), _SOURCE_REPORT)
+
+    # 4. Worker-output non-log artifacts
+    worker_output_slug_dir = WORKER_OUTPUT_DIR / slug
+    if worker_output_slug_dir.is_dir():
+        for candidate in worker_output_slug_dir.iterdir():
+            if candidate.is_file() and candidate.suffix != ".log":
+                _add(str(candidate), _SOURCE_REPORT)
+
+    return artifacts
 
 
 def _get_active_worker(slug: str) -> Optional[dict]:
