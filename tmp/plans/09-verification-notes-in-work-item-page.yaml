@@ -45,7 +45,7 @@ sections:
   - id: '2.1'
     name: Display verification notes on work item detail page
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/09-verification-notes-in-work-item-page.md
       -- Frontend changes: update item.py route to parse verification_notes JSON from
       completion records and pass to template. Update item.html to show a Verification
@@ -55,3 +55,12 @@ sections:
     last_attempt: '2026-03-27T15:17:21.401986'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-27T15:18:40.778954'
+    result_message: 'Verification notes frontend display was already fully implemented
+      by task 1.1: item.py has _parse_verification_notes() parsing JSON from completion
+      records, item.html has Verification column in completions table with verdict
+      badges (PASS/WARN/FAIL using outcome-success/warn/fail classes), findings list
+      with severity coloring (finding-pass/warn/fail classes), collapsible evidence
+      blocks via <details>, and graceful degradation showing dash for completions
+      without verification data. All styles follow the ui-style-guide. Build verified
+      clean.'
