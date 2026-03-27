@@ -1,5 +1,12 @@
 # Timeline: all child runs appear at same position when they span less than 1 second
 
+## Implementation Status: Review Required
+
+This item was previously implemented and marked complete. Validate the
+acceptance criteria below. If any criterion fails, fix it. Do not
+rewrite from scratch — check what exists first.
+
+
 ## Status: Open
 
 ## Priority: High
@@ -50,3 +57,26 @@ sub-second spans, or +0s/+30s for longer spans.
 
 This fix also resolves the duplicate tick label issue described in the
 related item (same secs() macro root cause).
+
+
+
+
+## 5 Whys Analysis
+
+Title: Microsecond-precision timeline needed for debugging fast-executing LangGraph pipelines
+Clarity: 5
+
+5 Whys:
+1. Why do all child run bars appear at the same position when they complete within the same second? → Because the secs() Jinja2 macro extracts only HH:MM:SS from ISO timestamps, completely discarding the fractional seconds that differentiate operations within 1-second windows.
+
+2. Why does the code only extract whole seconds instead of including fractional seconds? → Because the original template-based implementation treated sub-second precision as unnecessary overhead—it's simpler to parse three integer components in Jinja2 than to handle full datetime arithmetic with microsecond granularity.
+
+3. Why was the design built assuming whole-second granularity would be sufficient? → Because the timeline feature was designed for typical enterprise pipelines where most child operations span multiple seconds, not for high-throughput LangGraph workflows where 10 children can complete in 4 milliseconds.
+
+4. Why are we now encountering pipelines that execute at millisecond scale? → Because LangGraph enables orchestration of many small, fast operations (LLM calls, parsing, validation) that chain together with minimal overhead, creating legitimate use cases where sub-second precision is essential to understanding execution flow.
+
+5. Why is it critical that users can see millisecond-level timing differences in the timeline? → Because without fine-grained visibility, the timeline becomes useless for its core purpose: identifying performance bottlenecks, concurrency issues, and sequential vs. parallel execution patterns—users cannot optimize what they cannot see.
+
+Root Need: Users need high-resolution (microsecond-level) execution timing visualization to provide meaningful observability and enable performance optimization of fast-executing LangGraph orchestrations.
+
+Summary: The timeline feature must support microsecond-precision to remain functional as an observability tool for modern, fast-executing LangGraph workflows.
