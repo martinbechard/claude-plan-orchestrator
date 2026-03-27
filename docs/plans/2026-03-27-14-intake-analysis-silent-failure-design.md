@@ -1,66 +1,51 @@
-# Design: Intake Analysis Silent Failure (Pipeline Node)
+# Design: Intake Analysis Silent Failure
 
 ## Problem
 
-The pipeline intake_analyze() node in intake.py silently swallows Claude CLI
-failures. The _call_llm() wrapper was updated to return a 3-tuple
-(text, cost, failure_reason), and _verify_defect_symptoms() handles it correctly.
-However, three other callers still unpack only 2 values from the 3-tuple,
-causing ValueError at runtime:
+When call_claude() fails during Slack intake analysis, the failure is invisible:
+no error in the dashboard, no Slack message with the reason, no way to diagnose.
 
-- _run_five_whys_analysis() line 405: output, cost = _call_llm(prompt)
-- _validate_design() line 344: output, _cost = _call_llm(...)
-- _has_acceptance_checklist() line 356: output, _cost = _call_llm(...)
+The defect spans two layers:
+1. Slack intake (suspension.py) -- the original defect scope
+2. Pipeline intake node (intake.py) -- _call_llm() callers must handle 3-tuple
 
-Additionally, intake_analyze() never reports errors to the dashboard via
-add_error(), and does not gate on quota before spawning Claude subprocesses.
+## Current State
 
-## Architecture Overview
+A prior implementation addressed the Slack intake layer (items 1-4 from the defect Fix section):
 
-Single coordinated change in intake.py:
+1. call_claude() returns ClaudeResult NamedTuple with failure_reason (full stderr)
+2. _run_intake_analysis_inner() calls add_error() on failure
+3. Slack fallback message includes the failure reason
+4. Quota gate via probe_quota() before attempting call_claude()
 
-1. **Fix all _call_llm() callers** to unpack the 3-tuple (text, cost,
-   failure_reason) and handle failure_reason before using the text output.
-   Specifically: _run_five_whys_analysis(), _validate_design(),
-   _has_acceptance_checklist().
-
-2. **Prevent error strings from being appended** to backlog item files.
-   _run_five_whys_analysis() must check failure_reason before returning
-   raw_output that gets passed to _append_analysis_to_item().
-
-3. **intake_analyze() adds error reporting** via add_error() when any
-   analysis step fails, so the dashboard error stream receives the detail.
-
-4. **Quota gate** in intake_analyze() checks probe_quota_available() before
-   attempting Claude calls, returning quota_exhausted early.
-
-5. **Tests** verify failure propagation, add_error() calls, quota gating,
-   and that error strings are never appended as analysis.
+The pipeline intake node (intake.py) also needs _call_llm() callers fixed to
+unpack the 3-tuple (text, cost, failure_reason) and handle failures.
 
 ## Key Files
 
-| File | Change |
-|------|--------|
-| langgraph_pipeline/pipeline/nodes/intake.py | Fix 3-tuple unpacking in all _call_llm callers; add add_error() calls; add quota gate |
-| tests/langgraph/pipeline/nodes/test_intake.py | Add/update tests for failure paths, add_error, quota gating |
+| File | Role |
+|------|------|
+| langgraph_pipeline/shared/claude_cli.py | ClaudeResult NamedTuple, call_claude() with structured error returns |
+| langgraph_pipeline/slack/suspension.py | Quota gate, add_error(), failure reason in Slack message |
+| langgraph_pipeline/pipeline/nodes/intake.py | _call_llm() callers must unpack 3-tuple; add_error(); quota gate |
+| tests/langgraph/shared/test_claude_cli.py | Tests for ClaudeResult failure paths |
+| tests/langgraph/slack/test_suspension.py | Tests for Slack intake failure handling |
+| tests/langgraph/pipeline/nodes/test_intake.py | Tests for pipeline intake failure paths |
 
 ## Design Decisions
 
-- **Tuple return over exception** -- _call_llm is used in contexts where
-  exceptions would be disruptive. The structured 3-tuple return is already
-  in place; we just need all callers to use it correctly.
-
-- **No retry logic** -- the pipeline orchestrator already handles retries at
-  the task level. Adding retry in intake would create conflicting retry loops.
-
-- **add_error() is best-effort** -- wrapped in try/except so dashboard
-  unavailability does not break the pipeline node.
+- NamedTuple over exceptions: call_claude() is used in fire-and-forget contexts
+- Full stderr capture: no 200-char truncation
+- add_error() wrapped in try/except: dashboard unavailability must not break intake
+- Quota gate uses existing probe_quota_available() -- no new shared state
+- No retry logic in intake nodes -- pipeline orchestrator handles retries at task level
 
 ## Acceptance Criteria
 
-- Does _call_llm() return a 3-tuple (text, cost, failure_reason)? YES = pass
-- Do ALL callers of _call_llm() unpack and check failure_reason? YES = pass
-- Does intake_analyze() call add_error() when Claude calls fail? YES = pass
-- Does intake_analyze() check quota before calling Claude? YES = pass
-- Are error messages prevented from being appended to backlog files? YES = pass
-- Do tests cover failure propagation, add_error(), and quota gating? YES = pass
+- call_claude() returns ClaudeResult with failure_reason on all error paths
+- All _call_llm() callers in intake.py unpack and check failure_reason
+- _run_intake_analysis_inner() calls add_error() with failure detail
+- Slack message includes failure reason text
+- Quota check gates intake calls (both Slack and pipeline)
+- Error strings are never appended as analysis to backlog files
+- Tests cover failure paths in claude_cli.py, suspension.py, and intake.py
