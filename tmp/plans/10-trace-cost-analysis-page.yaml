@@ -1,0 +1,40 @@
+meta:
+  source_item: tmp/plans/.claimed/10-trace-cost-analysis-page.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Validate and fix existing implementation
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Validate cost analysis page against acceptance criteria and fix gaps
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/10-trace-cost-analysis-page.md
+      -- This feature was previously implemented. Validate each acceptance criterion
+      against the existing code in langgraph_pipeline/web/routes/analysis.py,
+      langgraph_pipeline/web/templates/analysis.html,
+      langgraph_pipeline/web/static/analysis.js, and
+      langgraph_pipeline/web/proxy.py. Fix any gaps found. Do NOT rewrite from
+      scratch.'
+- id: '2'
+  name: E2E tests
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Write Playwright E2E tests for the cost analysis page
+    agent: e2e-test-agent
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/10-trace-cost-analysis-page.md
+      -- Write E2E tests in tests/e2e/analysis.spec.ts covering: summary cards
+      render, cost over time chart presence, top runs table with pagination and
+      sorting, cost by work item table with expand/collapse, cost by node type
+      chart and table, and filter controls (slug, item_type, date range).'
