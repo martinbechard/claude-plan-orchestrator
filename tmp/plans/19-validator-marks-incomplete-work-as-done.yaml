@@ -26,3 +26,10 @@ sections:
     result_message: 'Validator agent already has all required fixes: placeholder scan
       (5a), end-to-end gate (5b), and test-data leak check (5c) were implemented in
       commits d53984d4 and be33160f. No additional changes needed.'
+    validation_attempts: 1
+    validation_findings: 'Fixed duplicate chevron bug in .grandchild-toggle: added
+      summary::marker { display: none } to suppress native Firefox disclosure widget,
+      and added .grandchild-toggle[open] > summary::before rule with higher specificity
+      to correctly show ▼ when expanded. Inline subrun details were already implemented
+      in proxy_trace.html (name, duration, elapsed, inputs/outputs JSON, error). No
+      template or route changes needed.'
