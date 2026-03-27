@@ -461,5 +461,78 @@ Documents classified as UPDATE require the following corrections:
 
 ---
 
-## Audit Complete — All 218+ Documents Classified
+---
+
+## Overall Summary Statistics
+
+**Total documents audited:** 219
+
+| Batch | Date Range | Docs | KEEP | UPDATE | ARCHIVE | DELETE |
+|-------|-----------|------|------|--------|---------|--------|
+| 1 | 2026-02-13 through 2026-02-18 | 44 | 1 | 8 | 26 | 9 |
+| 2 | 2026-02-19 through 2026-02-26 | 29 | 4 | 3 | 22 | 0 |
+| 3 | 2026-03-23 through 2026-03-25 | 33 | 3 | 5 | 24 | 1 |
+| 4a | 2026-03-26 | 62 | 30 | 3 | 29 | 0 |
+| 4b | 2026-03-27 + template | 51 | 25 | 1 | 25 | 0 |
+| **Total** | | **219** | **63** | **20** | **126** | **10** |
+
+| Classification | Count | % |
+|---------------|-------|---|
+| KEEP | 63 | 28.8% |
+| UPDATE | 20 | 9.1% |
+| ARCHIVE | 126 | 57.5% |
+| DELETE | 10 | 4.6% |
+
+### Top Issues Found
+
+1. **Deleted script references (primary issue)** — `scripts/plan-orchestrator.py` was deleted and is referenced in ~40+ docs across all batches, ranging from architectural context (acceptable) to line-number-specific function guidance (misleading to agents).
+2. **Spec-aware validator incomplete port** — Three versions of the spec-aware validator design (`2026-02-18`, `2026-03-24` x2, `2026-03-25`) still reference plan-orchestrator.py for `SPEC_DIR`, `build_validation_prompt`, and `parse_verification_blocks`. These concepts have not been ported to langgraph_pipeline/.
+3. **Cost analysis pipeline references** — `2026-03-26-03-cost-analysis-db-backend` and related docs reference `write_execution_cost_log()` in the deleted script. The -27 version corrects this, but the -26 version remains stale.
+4. **Slack module migration steps** — `2026-02-26-03-extract-slack-modules` retains plan-orchestrator.py line-number migration steps (3623–5655, 1559, etc.) that are now dead references.
+5. **Old SlackNotifier import path** — `2026-03-24--cost-analysis-design` instructs importing SlackNotifier from the deleted script instead of `langgraph_pipeline.slack.notifier`.
+
+---
+
+## Recommended Next Steps: UPDATE Documents
+
+The 20 UPDATE-classified documents require the following specific corrections. Highest-priority items are listed first.
+
+### High Priority (misleading to agents writing new code)
+
+| Doc | Required Correction |
+|-----|-------------------|
+| 2026-02-18-spec-aware-validator-with-e2e-logging | Remove plan-orchestrator.py refs; port `DEFAULT_SPEC_DIR`, `DEFAULT_E2E_COMMAND` to langgraph_pipeline/ config |
+| 2026-03-24-11-spec-aware-validator-with-e2e-logging | Remove "Already implemented" section citing plan-orchestrator.py for `SPEC_DIR`/`build_validation_prompt`/`parse_verification_blocks`; describe langgraph_pipeline/ equivalents |
+| 2026-03-24-spec-aware-validator-with-e2e-logging | Remove "Already Implemented" plan-orchestrator.py line refs (62–63, 377–378, 412, 1765); update to langgraph_pipeline/ approach |
+| 2026-03-24--cost-analysis-design | Replace `from scripts/plan-orchestrator.py import SlackNotifier` with `from langgraph_pipeline.slack.notifier import SlackNotifier` |
+| 2026-03-25-spec-aware-validator-with-e2e-logging | Remove plan-orchestrator.py line refs; remove CompletionTracker/auto_pipeline.py test refs; port `SPEC_DIR`/`E2E_COMMAND` to langgraph_pipeline/ config |
+| 2026-03-25-16-tool-call-timing-and-cost-analysis-ui | Update schema section: change "Files are written by `write_execution_cost_log()` in `scripts/plan-orchestrator.py`" to reference `langgraph_pipeline/shared/cost_log.py` (pending creation) |
+| 2026-03-26-27-tool-call-cost-attribution-dummy-data | Replace plan-orchestrator.py executor node references with `langgraph_pipeline/executor/nodes/task_runner.py` and `validator.py` |
+
+### Medium Priority (stale architecture references)
+
+| Doc | Required Correction |
+|-----|-------------------|
+| 2026-02-16-11-qa-audit-pipeline | Remove plan-orchestrator.py keyword inference refs; update agent dispatch for langgraph |
+| 2026-02-16-12-spec-verifier-ux-reviewer-agents | Remove plan-orchestrator.py keyword inference refs; update agent dispatch for langgraph |
+| 2026-02-16-13-slack-agent-communication | Remove plan-orchestrator.py SlackNotifier refs; update for langgraph slack/ module |
+| 2026-02-16-14-slack-app-migration | Remove plan-orchestrator.py refs; verify Socket Mode state in langgraph slack/ module |
+| 2026-02-16-15-slack-inbound-message-polling | Remove plan-orchestrator.py refs; update poll_messages design for langgraph |
+| 2026-02-18-9-ux-designer-opus-sonnet-loop | Remove plan-orchestrator.py refs; verify suspension state in langgraph pipeline |
+| 2026-02-18-16-least-privilege-agent-sandboxing | Remove plan-orchestrator.py refs; verify AGENT_PERMISSION_PROFILES in langgraph |
+| 2026-02-26-03-extract-slack-modules | Remove migration steps referencing plan-orchestrator.py line numbers (3623–5655, 1559, etc.); module architecture section is current and accurate |
+| 2026-02-26-04-pipeline-graph-nodes | Update execute_plan.py description from "Subprocess bridge to plan-orchestrator.py" to "Invokes executor subgraph in-process"; remove subprocess bridge references |
+| 2026-02-26-20-unified-langgraph-runner | Remove plan-orchestrator.py from "Unchanged Files" section (script is deleted) |
+
+### Low Priority (meta-doc clarification)
+
+| Doc | Required Correction |
+|-----|-------------------|
+| 2026-03-26-01-audit-design-docs-for-validity | Clarify plan-orchestrator.py references are historical context (subject of deletion audit), not instructions to call the script |
+| 2026-03-26-03-cost-analysis-db-backend | Remove `write_execution_cost_log()` in `scripts/plan-orchestrator.py` reference; the 2026-03-27 version already corrects this |
+| 2026-03-27-01-audit-design-docs-for-validity | Same as -26 UPDATE: clarify plan-orchestrator.py references are historical context |
+
+---
+
+## Audit Complete — All 219 Documents Classified
 
