@@ -1,44 +1,59 @@
-# Design: Traces Runs Named LangGraph (Validation)
+# Design: Traces Runs Named "LangGraph" Fix Validation
 
 ## Problem
 
-Every root trace in the LangSmith proxy was named "LangGraph" with slug
-"LangGraph", making the traces list unreadable. This defect was previously
-implemented and is now in "Review Required" status.
+All root traces in the proxy traces list show the generic name "LangGraph" instead
+of the actual work item slug. This makes the traces page unreadable since every run
+looks identical.
 
-## Prior Implementation
+## Current State
 
-Fixes were applied across three code paths:
+The fix was previously implemented across multiple files:
 
-1. **finalize_root_run** (langgraph_pipeline/shared/langsmith.py:314-344):
-   Now accepts item_slug parameter and uses it as RunTree name instead of "root".
+1. **langsmith.py** - create_root_run(item_slug, item_path) already creates RunTree
+   with name=item_slug (not hardcoded "LangGraph")
+2. **langsmith.py** - finalize_root_run() uses item_slug as the run name
+3. **proxy.py** - record_run() persists the name from the RunTree to SQLite
+4. **server.py** - HTTP interceptors (runs_multipart, runs_create) extract name
+   from the LangSmith SDK payload and pass it to record_run()
+5. **proxy_list.html** - Displays run.name in the "Run name" column and
+   run.display_slug (from metadata) in the "Item slug" column
 
-2. **cli.py graph invocations** (langgraph_pipeline/cli.py:440-442, 510-512, 747-749):
-   All three invocation paths (single-item, once, loop) now set run_name in
-   thread_config from the item_slug.
+## Architecture
 
-3. **executor subgraph** (langgraph_pipeline/pipeline/nodes/execute_plan.py:75):
-   Passes item_slug as run_name in executor config.
+The trace name flows through this path:
 
-## Acceptance Criteria to Validate
-
-1. Root traces in DB have names matching actual work item slugs (not "LangGraph")
-2. The /proxy traces list page shows item slug in the Name column
-3. Filtering traces by slug name returns meaningful results
+    scan_backlog node
+      -> slug = Path(filepath).stem
+      -> create_root_run(slug, filepath)
+         -> RunTree(name=item_slug, ...)
+            -> post() to local proxy
+               -> server.py runs_multipart/runs_create
+                  -> proxy.record_run(name=run_data["name"])
+                     -> SQLite traces table (name column)
 
 ## Key Files
 
-| File | Role |
-|------|------|
-| langgraph_pipeline/shared/langsmith.py | create_root_run / finalize_root_run |
-| langgraph_pipeline/cli.py | run_name in thread_config |
-| langgraph_pipeline/pipeline/nodes/execute_plan.py | executor run_name config |
-| langgraph_pipeline/web/routes/proxy.py | Trace list display and slug filter |
-| langgraph_pipeline/web/proxy.py | SQLite trace storage and query |
-| tests/langgraph/shared/test_langsmith.py | Unit tests for langsmith helpers |
+- langgraph_pipeline/shared/langsmith.py - Root trace creation and finalization
+- langgraph_pipeline/web/proxy.py - SQLite persistence, record_run ON CONFLICT clause
+- langgraph_pipeline/web/server.py - HTTP interceptors for LangSmith SDK calls
+- langgraph_pipeline/web/routes/proxy.py - _enrich_run display_slug from metadata
+- langgraph_pipeline/web/templates/proxy_list.html - Trace list UI template
+- langgraph_pipeline/pipeline/nodes/scan.py - Where slug is extracted and root trace created
+- langgraph_pipeline/pipeline/state.py - PipelineState with item_slug field
+- langgraph_pipeline/worker.py - Worker subprocess passes slug as run_name
 
-## Design Decisions
+## Scope
 
-- This is a validation-only plan: verify the existing code changes work
-- If any acceptance criterion fails, fix the specific code path
-- No DB migration needed: new traces get correct names, old rows remain
+This is a "Review Required" defect - the fix was previously implemented. The task is
+to validate the existing implementation against all acceptance criteria (DB query, UI
+display, slug filtering) and fix any remaining gaps. No major architectural changes
+are expected.
+
+## Risks
+
+- The ON CONFLICT clause in record_run does NOT update name - if the initial insert
+  had the wrong name, subsequent updates won't fix it. This is by design (name should
+  be correct on first insert).
+- Old traces in the DB from before the fix will still show "LangGraph" - only new
+  traces will have correct slugs.
