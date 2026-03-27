@@ -36,14 +36,14 @@ class TestConstants:
         assert ORCHESTRATOR_STASH_MESSAGE  # non-empty
 
     def test_stash_exclude_pathspec_excludes_plans(self):
-        assert ".claude/plans/" in STASH_EXCLUDE_PLANS_PATHSPEC
+        assert "tmp/plans/" in STASH_EXCLUDE_PLANS_PATHSPEC
 
     def test_worktree_base_dir_is_string(self):
         assert isinstance(WORKTREE_BASE_DIR, str)
         assert WORKTREE_BASE_DIR  # non-empty
 
     def test_skip_prefixes_contains_plans_dir(self):
-        assert any(".claude/plans/" in p for p in _WORKTREE_SKIP_PREFIXES)
+        assert any("tmp/plans/" in p for p in _WORKTREE_SKIP_PREFIXES)
 
     def test_skip_prefixes_contains_subagent_status(self):
         assert any("subagent-status" in p for p in _WORKTREE_SKIP_PREFIXES)
@@ -335,11 +335,11 @@ class TestCopyWorktreeArtifacts:
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     def test_skips_plans_dir_files(self, mock_run):
         # Prefix-skipped files never reach the cat-file guard
-        diff_output = "M\t.claude/plans/02-extract.yaml\n"
+        diff_output = "M\ttmp/plans/02-extract.yaml\n"
         mock_run.side_effect = self._make_run_results(diff_output=diff_output)
         success, msg, files = copy_worktree_artifacts(Path(".worktrees/plan"), "1.1")
         assert success is True
-        assert ".claude/plans/02-extract.yaml" not in files
+        assert "tmp/plans/02-extract.yaml" not in files
 
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     def test_skips_subagent_status_files(self, mock_run):

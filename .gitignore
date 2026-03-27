@@ -17,18 +17,18 @@ venv/
 
 # Auto-generated (user-specific)
 tmp/task-status.json
-.claude/plans/current-plan.yaml
-.claude/plans/.stop
-.claude/plans/.pipeline.pid
-.claude/plans/.lg-pipeline.pid
-.claude/plans/logs/
+tmp/plans/current-plan.yaml
+tmp/plans/.stop
+tmp/plans/.pipeline.pid
+tmp/plans/.lg-pipeline.pid
+tmp/plans/logs/
 .claude/subagent-status/
 .claude/agent-claims.json
 .claude/slack.local.yaml
 .claude/slack-*.json
 .claude/chroma/
-.claude/plans/.intake-history.json
-.claude/plans/.backlog-creation-throttle.json
+tmp/plans/.intake-history.json
+tmp/plans/.backlog-creation-throttle.json
 
 # Runtime pipeline state and logs
 .claude/pipeline-state.db

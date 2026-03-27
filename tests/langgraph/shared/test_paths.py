@@ -37,7 +37,7 @@ class TestPlansDir:
         assert isinstance(PLANS_DIR, str)
 
     def test_expected_value(self):
-        assert PLANS_DIR == ".claude/plans"
+        assert PLANS_DIR == "tmp/plans"
 
 
 class TestStatusFilePath:
@@ -56,7 +56,7 @@ class TestTaskLogDir:
         assert str(TASK_LOG_DIR).startswith(PLANS_DIR)
 
     def test_expected_value(self):
-        assert TASK_LOG_DIR == Path(".claude/plans/logs")
+        assert TASK_LOG_DIR == Path("tmp/plans/logs")
 
 
 class TestPidFilePath:
@@ -67,7 +67,7 @@ class TestPidFilePath:
         assert PID_FILE_PATH.startswith(PLANS_DIR)
 
     def test_expected_value(self):
-        assert PID_FILE_PATH == ".claude/plans/.pipeline.pid"
+        assert PID_FILE_PATH == "tmp/plans/.pipeline.pid"
 
 
 class TestLanggraphPidFilePath:
@@ -78,7 +78,7 @@ class TestLanggraphPidFilePath:
         assert LANGGRAPH_PID_FILE_PATH.startswith(PLANS_DIR)
 
     def test_expected_value(self):
-        assert LANGGRAPH_PID_FILE_PATH == ".claude/plans/.lg-pipeline.pid"
+        assert LANGGRAPH_PID_FILE_PATH == "tmp/plans/.lg-pipeline.pid"
 
     def test_distinct_from_pipeline_pid(self):
         assert LANGGRAPH_PID_FILE_PATH != PID_FILE_PATH

@@ -120,7 +120,7 @@ class TestFeatureItem:
 
         def mock_create_plan(state: dict) -> dict:
             node_calls.append("create_plan")
-            return {"plan_path": ".claude/plans/01-test-feature.yaml"}
+            return {"plan_path": "tmp/plans/01-test-feature.yaml"}
 
         def mock_execute_plan(state: dict) -> dict:
             node_calls.append("execute_plan")
@@ -155,7 +155,7 @@ class TestFeatureItem:
             return {}
 
         def mock_create_plan(state: dict) -> dict:
-            return {"plan_path": ".claude/plans/01-test-feature.yaml"}
+            return {"plan_path": "tmp/plans/01-test-feature.yaml"}
 
         def mock_execute_plan(state: dict) -> dict:
             return {}
@@ -194,7 +194,7 @@ class TestDefectItemPassVerification:
 
         def mock_create_plan(state: dict) -> dict:
             node_calls.append("create_plan")
-            return {"plan_path": ".claude/plans/01-test-defect.yaml"}
+            return {"plan_path": "tmp/plans/01-test-defect.yaml"}
 
         def mock_execute_plan(state: dict) -> dict:
             node_calls.append("execute_plan")
@@ -246,7 +246,7 @@ class TestDefectItemFailRetry:
 
         def mock_create_plan(state: dict) -> dict:
             node_calls.append("create_plan")
-            return {"plan_path": ".claude/plans/01-test-defect.yaml"}
+            return {"plan_path": "tmp/plans/01-test-defect.yaml"}
 
         def mock_execute_plan(state: dict) -> dict:
             node_calls.append("execute_plan")

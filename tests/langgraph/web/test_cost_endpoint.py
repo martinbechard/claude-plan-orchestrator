@@ -1,6 +1,6 @@
 # tests/langgraph/web/test_cost_endpoint.py
 # Unit tests for POST /api/cost endpoint and TracingProxy.record_cost_task.
-# Design: .claude/plans/.claimed/03-cost-analysis-db-backend.md
+# Design: tmp/plans/.claimed/03-cost-analysis-db-backend.md
 
 """Unit tests for langgraph_pipeline.web.routes.cost and the record_cost_task
 method on TracingProxy. Uses FastAPI TestClient for HTTP-level tests."""

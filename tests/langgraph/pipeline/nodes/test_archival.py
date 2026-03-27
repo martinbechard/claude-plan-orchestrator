@@ -33,7 +33,7 @@ def _make_state(**overrides) -> dict:
         "item_slug": "01-bug",
         "item_type": "defect",
         "item_name": "01 Bug",
-        "plan_path": ".claude/plans/01-bug.yaml",
+        "plan_path": "tmp/plans/01-bug.yaml",
         "design_doc_path": None,
         "verification_cycle": 1,
         "verification_history": [

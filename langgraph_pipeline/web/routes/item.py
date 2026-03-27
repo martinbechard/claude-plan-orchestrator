@@ -32,7 +32,7 @@ from langgraph_pipeline.web.proxy import get_proxy
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
-_PLANS_DIR = Path(".claude/plans")
+_PLANS_DIR = Path("tmp/plans")
 _CLAIMED_PATH = Path(CLAIMED_DIR)
 _DESIGN_DOCS_DIR = Path("docs/plans")
 
@@ -176,7 +176,7 @@ def _find_requirements_file(slug: str) -> Optional[Path]:
 
     Priority order:
     1. Design doc  — ``docs/plans/*-<slug>-design.md`` (most-recent glob match)
-    2. Claimed     — ``.claude/plans/.claimed/<slug>.md``
+    2. Claimed     — ``tmp/plans/.claimed/<slug>.md``
     3. Active backlog dirs
     4. Completed backlog dirs
 

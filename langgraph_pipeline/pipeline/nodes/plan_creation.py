@@ -6,7 +6,7 @@
 
 Spawns Claude with the 'planner' permission profile to read a backlog item,
 produce a design document at docs/plans/{date}-{slug}-design.md, and write
-a YAML plan at .claude/plans/{slug}.yaml.
+a YAML plan at tmp/plans/{slug}.yaml.
 
 Short-circuits when plan_path is already set (in-progress plan resumption from
 a previous pipeline run). Otherwise, runs the plan creation prompt and verifies
@@ -49,7 +49,7 @@ PLAN_CREATION_PROMPT = (
     "## Instructions\n\n"
     "1. Read the backlog item file: {item_path}\n"
     "2. Read procedure-coding-rules.md for coding standards\n"
-    "3. Read an existing YAML plan for format reference: look at .claude/plans/*.yaml files\n"
+    "3. Read an existing YAML plan for format reference: look at tmp/plans/*.yaml files\n"
     "4. Read the CLAUDE.md file for project conventions\n"
     "5. If the backlog item has a ## Verification Log section, READ IT CAREFULLY.\n"
     "   Previous fix attempts and their verification results are recorded there.\n"
@@ -59,7 +59,7 @@ PLAN_CREATION_PROMPT = (
     "   - Brief architecture overview\n"
     "   - Key files to create/modify\n"
     "   - Design decisions\n\n"
-    "2. Create a YAML plan at: .claude/plans/{slug}.yaml\n"
+    "2. Create a YAML plan at: tmp/plans/{slug}.yaml\n"
     "   - Use the exact format: meta + sections with nested tasks\n"
     "   - Each section has: id, name, status: pending, tasks: [...]\n"
     "   - Each task has: id, name, description, status: pending\n"
@@ -67,7 +67,7 @@ PLAN_CREATION_PROMPT = (
     "   - Do NOT rewrite or summarize the work item requirements into the task description\n"
     "   - Do NOT add separate verification, review, or code-review tasks\n"
     "   - The orchestrator runs a validator automatically after each task\n\n"
-    "3. Validate the plan: python scripts/plan-orchestrator.py --plan .claude/plans/{slug}.yaml --dry-run\n"
+    "3. Validate the plan: python scripts/plan-orchestrator.py --plan tmp/plans/{slug}.yaml --dry-run\n"
     "   - If validation fails, fix the YAML format and retry\n\n"
     "4. Git commit both files with message: \"plan: add {slug} design and YAML plan\"\n\n"
     "## Backlog item type: {item_type}\n\n"
@@ -169,28 +169,6 @@ def _plan_exists(plan_path: str) -> bool:
     return path.exists() and path.stat().st_size > 0
 
 
-def _rescue_yaml_from_denials(stdout: str, expected_plan_path: str) -> None:
-    """Extract YAML plan content from permission_denials in the planner's JSON output.
-
-    Claude Code blocks writes to .claude/ paths even with --dangerously-skip-permissions.
-    When the planner tried to Write the YAML but was denied, the intended content is
-    captured in the permission_denials array. We extract it and write it ourselves.
-    """
-    try:
-        data = json.loads(stdout)
-        denials = data.get("permission_denials", [])
-        for denial in denials:
-            tool_input = denial.get("tool_input", {})
-            file_path = tool_input.get("file_path", "")
-            content = tool_input.get("content", "")
-            if file_path.endswith(".yaml") and content and "sections:" in content:
-                Path(expected_plan_path).parent.mkdir(parents=True, exist_ok=True)
-                Path(expected_plan_path).write_text(content, encoding="utf-8")
-                logger.info("Rescued YAML plan from permission denial: %s", expected_plan_path)
-                return
-    except (json.JSONDecodeError, TypeError, OSError) as exc:
-        logger.debug("Could not rescue YAML from denials: %s", exc)
-
 
 def _ensure_acceptance_criteria_in_design(
     item_path: str, design_doc_path: str, item_slug: str
@@ -247,7 +225,7 @@ def create_plan(state: PipelineState) -> dict:
     permissions, and verifies the YAML plan was written to disk.
 
     Returns partial state updates:
-      plan_path: path to .claude/plans/{slug}.yaml on success.
+      plan_path: path to tmp/plans/{slug}.yaml on success.
       design_doc_path: expected docs/plans/{date}-{slug}-design.md path.
       rate_limited / rate_limit_reset: set when Claude reports a rate limit.
     """
@@ -298,10 +276,6 @@ def create_plan(state: PipelineState) -> dict:
     except (json.JSONDecodeError, TypeError):
         pass
 
-    # Rescue YAML from permission denials: Claude Code blocks writes to .claude/
-    # but the planner's intent is captured in the permission_denials array.
-    if not _plan_exists(expected_plan_path):
-        _rescue_yaml_from_denials(stdout, expected_plan_path)
 
     # Only check stderr for rate limit / quota signals — stdout contains
     # Claude's response which may include those keywords literally (e.g.

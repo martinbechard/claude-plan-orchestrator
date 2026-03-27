@@ -67,17 +67,17 @@ MAX_INTAKES_PER_WINDOW = 10
 INTAKE_RATE_WINDOW_SECONDS = 300  # 5-minute sliding window
 
 # A1: Chain detection history file
-INTAKE_HISTORY_PATH = ".claude/plans/.intake-history.json"
+INTAKE_HISTORY_PATH = "tmp/plans/.intake-history.json"
 INTAKE_HISTORY_MAX_ENTRIES = 100
 INTAKE_HISTORY_TTL_SECONDS = 3600  # 1 hour
 
 # Disk-persisted backlog creation throttle
-BACKLOG_CREATION_THROTTLE_PATH = ".claude/plans/.backlog-creation-throttle.json"
+BACKLOG_CREATION_THROTTLE_PATH = "tmp/plans/.backlog-creation-throttle.json"
 MAX_DEFECTS_PER_HOUR = 50
 MAX_FEATURES_PER_HOUR = 50
 BACKLOG_THROTTLE_WINDOW_SECONDS = 3600  # 1-hour sliding window
 
-STOP_SEMAPHORE_PATH = ".claude/plans/.stop"
+STOP_SEMAPHORE_PATH = "tmp/plans/.stop"
 MESSAGE_ROUTING_TIMEOUT_SECONDS = 30
 MINIMUM_INTAKE_MESSAGE_LENGTH = 20
 

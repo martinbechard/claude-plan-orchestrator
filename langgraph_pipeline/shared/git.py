@@ -15,12 +15,12 @@ from langgraph_pipeline.shared.paths import STATUS_FILE_PATH
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 ORCHESTRATOR_STASH_MESSAGE = "orchestrator-auto-stash"
-STASH_EXCLUDE_PLANS_PATHSPEC = ":(exclude).claude/plans/"
+STASH_EXCLUDE_PLANS_PATHSPEC = ":(exclude)tmp/plans/"
 WORKTREE_BASE_DIR = ".worktrees"
 
 # Coordination paths never copied from worktrees (owned by orchestrator)
 _WORKTREE_SKIP_PREFIXES = (
-    ".claude/plans/",
+    "tmp/plans/",
     ".claude/subagent-status/",
     ".claude/agent-claims",
 )
@@ -222,7 +222,7 @@ def copy_worktree_artifacts(
     1. Diffs the worktree branch against the fork point to find changed files
     2. Copies added/modified files from the worktree into main
     3. Removes deleted files from main
-    4. Skips coordination files (.claude/plans/) that the orchestrator manages
+    4. Skips coordination files (tmp/plans/) that the orchestrator manages
 
     Returns (success, message, files_copied) tuple.
     """

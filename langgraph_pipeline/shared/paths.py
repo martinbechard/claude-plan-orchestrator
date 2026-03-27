@@ -19,11 +19,11 @@ ENV_ORCHESTRATOR_WEB_URL = "ORCHESTRATOR_WEB_URL"
 
 # ─── Plans directory ───────────────────────────────────────────────────────────
 
-PLANS_DIR = ".claude/plans"
+PLANS_DIR = "tmp/plans"
 STATUS_FILE_PATH = "tmp/task-status.json"
-TASK_LOG_DIR = Path(".claude/plans/logs")
-PID_FILE_PATH = ".claude/plans/.pipeline.pid"
-LANGGRAPH_PID_FILE_PATH = ".claude/plans/.lg-pipeline.pid"
+TASK_LOG_DIR = Path("tmp/plans/logs")
+PID_FILE_PATH = "tmp/plans/.pipeline.pid"
+LANGGRAPH_PID_FILE_PATH = "tmp/plans/.lg-pipeline.pid"
 
 # ─── Worker output directories ────────────────────────────────────────────────
 
@@ -48,8 +48,8 @@ IDEAS_PROCESSED_DIR = "docs/ideas/processed"
 
 # ─── Parallel item processing ─────────────────────────────────────────────────
 
-CLAIMED_DIR = ".claude/plans/.claimed"
-WORKER_RESULT_DIR = ".claude/plans"
+CLAIMED_DIR = "tmp/plans/.claimed"
+WORKER_RESULT_DIR = "tmp/plans"
 
 # ─── Completed backlog directories ────────────────────────────────────────────
 

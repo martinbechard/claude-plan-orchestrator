@@ -5,7 +5,7 @@
 """archive node for the pipeline StateGraph.
 
 Moves a processed backlog item to the appropriate completed-backlog
-subdirectory, removes the plan YAML from .claude/plans/, and sends
+subdirectory, removes the plan YAML from tmp/plans/, and sends
 a Slack notification summarising the outcome.
 
 The archive node handles three outcome types:
@@ -95,7 +95,7 @@ def _move_item_to_completed(item_path: str, item_type: str) -> Optional[str]:
 
 
 def _remove_plan_yaml(plan_path: Optional[str]) -> None:
-    """Delete the plan YAML file from .claude/plans/ if it exists."""
+    """Delete the plan YAML file from tmp/plans/ if it exists."""
     if not plan_path:
         return
     path = Path(plan_path)
@@ -159,7 +159,7 @@ def _git_commit_archival(item_slug: str, item_type: str, outcome: str) -> None:
         subprocess.run(
             ["git", "add", "-A",
              "docs/completed-backlog/", "docs/defect-backlog/",
-             "docs/feature-backlog/", ".claude/plans/"],
+             "docs/feature-backlog/", "tmp/plans/"],
             capture_output=True, timeout=10,
         )
         # Check if there's anything staged
@@ -190,7 +190,7 @@ def archive(state: PipelineState) -> dict:
     1. Determine outcome (completed vs exhausted based on verification history).
     2. Finalize the LangSmith root trace and strip the trace ID line from the item file.
     3. Move the item file from the active backlog to the completed-backlog.
-    4. Remove the plan YAML file from .claude/plans/.
+    4. Remove the plan YAML file from tmp/plans/.
     5. Send a Slack notification with the outcome summary.
     6. Commit archival changes to git.
 

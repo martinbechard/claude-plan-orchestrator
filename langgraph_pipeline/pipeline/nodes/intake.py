@@ -14,7 +14,7 @@ Safety gates (non-blocking for existing backlog items):
   - Clarity gate: warns when item description falls below the threshold.
   - RAG deduplication: logs warnings when semantically similar items exist.
 
-The throttle file lives on disk (.claude/plans/.backlog-creation-throttle.json)
+The throttle file lives on disk (tmp/plans/.backlog-creation-throttle.json)
 so it survives LangGraph checkpoint restarts and process crashes.
 """
 
@@ -35,7 +35,7 @@ from langgraph_pipeline.shared.shutdown import get_shutdown_event
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-THROTTLE_FILE_PATH = ".claude/plans/.backlog-creation-throttle.json"
+THROTTLE_FILE_PATH = "tmp/plans/.backlog-creation-throttle.json"
 THROTTLE_WINDOW_SECONDS = 3600  # 1-hour rolling window
 
 # Maximum new items to create per type per hour.

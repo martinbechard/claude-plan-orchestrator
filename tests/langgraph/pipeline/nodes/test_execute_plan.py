@@ -32,7 +32,7 @@ def _make_state(**overrides) -> dict:
         "item_slug": "01-bug",
         "item_type": "defect",
         "item_name": "01 Bug",
-        "plan_path": ".claude/plans/01-bug.yaml",
+        "plan_path": "tmp/plans/01-bug.yaml",
         "design_doc_path": None,
         "verification_cycle": 0,
         "verification_history": [],
@@ -95,7 +95,7 @@ class TestExecutePlanNoPlanPath:
 
 class TestExecutePlanSubgraphInvocation:
     def test_invokes_subgraph_with_plan_path(self):
-        state = _make_state(plan_path=".claude/plans/test-plan.yaml")
+        state = _make_state(plan_path="tmp/plans/test-plan.yaml")
 
         mock_compiled = _make_mock_subgraph()
         with patch(
@@ -106,10 +106,10 @@ class TestExecutePlanSubgraphInvocation:
 
         mock_compiled.invoke.assert_called_once()
         invocation_args = mock_compiled.invoke.call_args[0][0]
-        assert invocation_args["plan_path"] == ".claude/plans/test-plan.yaml"
+        assert invocation_args["plan_path"] == "tmp/plans/test-plan.yaml"
 
     def test_initial_task_state_has_zero_accumulators(self):
-        state = _make_state(plan_path=".claude/plans/test-plan.yaml")
+        state = _make_state(plan_path="tmp/plans/test-plan.yaml")
 
         captured_state = {}
         mock_compiled = MagicMock()
@@ -140,7 +140,7 @@ class TestExecutePlanSubgraphInvocation:
 
 class TestExecutePlanCostMapping:
     def test_maps_plan_cost_to_session_cost(self):
-        state = _make_state(plan_path=".claude/plans/plan.yaml")
+        state = _make_state(plan_path="tmp/plans/plan.yaml")
         mock_compiled = _make_mock_subgraph(cost_usd=1.23)
         with patch(
             "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
@@ -151,7 +151,7 @@ class TestExecutePlanCostMapping:
         assert result["session_cost_usd"] == pytest.approx(1.23)
 
     def test_maps_plan_tokens_to_session_tokens(self):
-        state = _make_state(plan_path=".claude/plans/plan.yaml")
+        state = _make_state(plan_path="tmp/plans/plan.yaml")
         mock_compiled = _make_mock_subgraph(input_tokens=5000, output_tokens=2000)
         with patch(
             "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
@@ -163,7 +163,7 @@ class TestExecutePlanCostMapping:
         assert result["session_output_tokens"] == 2000
 
     def test_returns_zeros_when_subgraph_returns_none_accumulators(self):
-        state = _make_state(plan_path=".claude/plans/plan.yaml")
+        state = _make_state(plan_path="tmp/plans/plan.yaml")
         mock_compiled = MagicMock()
         mock_compiled.invoke.return_value = {
             "plan_cost_usd": None,
@@ -182,7 +182,7 @@ class TestExecutePlanCostMapping:
         assert result["session_output_tokens"] == 0
 
     def test_returns_all_three_session_fields(self):
-        state = _make_state(plan_path=".claude/plans/plan.yaml")
+        state = _make_state(plan_path="tmp/plans/plan.yaml")
         mock_compiled = _make_mock_subgraph(cost_usd=0.05, input_tokens=100, output_tokens=50)
         with patch(
             "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
