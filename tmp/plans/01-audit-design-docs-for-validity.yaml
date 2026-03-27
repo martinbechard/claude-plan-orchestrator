@@ -61,13 +61,24 @@ sections:
   - id: '3.1'
     name: Classify design docs from 2026-03-23 through 2026-03-25
     agent: code-reviewer
-    status: pending
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/01-audit-design-docs-for-validity.md
       -- Audit all design docs in docs/plans/2026-03-2[3-5]* (~33 docs). For each,
       classify as KEEP/UPDATE/ARCHIVE/DELETE per the analysis instructions. Append
       results to docs/reports/design-doc-audit.md (do not overwrite prior batches).
       Check actual codebase state for referenced files and functions. See design:
       docs/plans/2026-03-27-01-audit-design-docs-for-validity-design.md'
+    last_attempt: '2026-03-27T15:41:06.933340'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-27T15:47:19.387088'
+    result_message: 'Classified 33 design docs from 2026-03-23 through 2026-03-25:
+      3 KEEP, 5 UPDATE, 24 ARCHIVE, 1 DELETE. Key findings: most LangGraph feature
+      docs are ARCHIVE (implementations confirmed); progress.py/CompletionTracker
+      not implemented (2 KEEP docs); 5 UPDATE docs reference deleted plan-orchestrator.py
+      for active design concepts (spec-aware validator x3, cost analysis, cost UI);
+      1 DELETE: intake-single-digit-prefix instructs fixing deleted plan-orchestrator.py.
+      Results appended to docs/reports/design-doc-audit.md.'
 - id: '4'
   name: Audit design docs batch 4 (2026-03-26 through 2026-03-27)
   status: pending
