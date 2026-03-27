@@ -28,9 +28,10 @@ sections:
       render in dashboard.js with /proxy?trace_id= URLs, /proxy?trace_id= filter endpoint
       works in proxy.py, completions table includes run_id column. All 1314 tests
       pass. No code changes needed — implementation was completed in prior commits.'
-    validation_attempts: 1
-    validation_findings: 'Build command references deleted file scripts/plan-orchestrator.py.
-      Feature implementation exists from prior commits and is fully functional: run_id
-      exposed in SSE stream, trace links render in dashboard.js with /proxy?trace_id=
-      URLs, /proxy?trace_id= filter endpoint works. All 1314 tests pass. Task result_message=''Mock
-      task done'' is misleading — work was already done before this task ran.'
+    validation_attempts: 2
+    validation_findings: 'All acceptance criteria verified: run_id exposed in SSE
+      stream via dashboard_state.py, trace links render in dashboard.js with /proxy?trace_id=
+      URLs, proxy endpoint accepts trace_id filter, completions table has run_id column
+      with ALTER migration. Build passes, 1314 tests pass, no placeholders or test-data
+      leaks found. Web server confirms dashboard.js serves trace_id links and /proxy?trace_id=
+      endpoint responds.'

@@ -17,5 +17,8 @@ sections:
   - id: '1.1'
     name: Fix fmtFinished in dashboard.js
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/09-completions-finished-invalid-date.md'
+    last_attempt: '2026-03-27T14:03:27.834768'
+    attempts: 1
+    model_used: sonnet
