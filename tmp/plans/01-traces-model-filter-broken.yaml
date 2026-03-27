@@ -27,3 +27,7 @@ sections:
       (claude-sonnet-4-6, etc.) to tier names (opus, sonnet, haiku) which match the
       values stored in the model column via propagate_model_to_root. All 1314 tests
       pass.'
+    validation_attempts: 1
+    validation_findings: 'Model filter dropdown correctly uses tier names (opus, sonnet,
+      haiku) matching stored values. All 1314 tests pass. Web UI verified: filter
+      options display tier names and filtering by ''sonnet'' returns matching rows.'
