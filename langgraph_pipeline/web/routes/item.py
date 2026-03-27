@@ -82,6 +82,8 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
     total_cost_usd = sum(c.get("cost_usd", 0.0) for c in completions)
     output_files = _list_output_files(slug)
     avg_velocity = _compute_avg_velocity(completions)
+    if active_worker and active_worker.get("current_velocity", 0) > 0:
+        avg_velocity = active_worker["current_velocity"]
     last_trace = traces[0] if traces else None
 
     return templates.TemplateResponse(
@@ -518,6 +520,7 @@ def _get_active_worker(slug: str) -> Optional[dict]:
                     "elapsed_s": f"{minutes}m {seconds}s",
                     "run_id": worker.run_id,
                     "current_task": current_task,
+                    "current_velocity": round(worker.current_velocity()),
                 }
     except Exception:
         pass
