@@ -88,7 +88,13 @@
       badge.textContent = item.item_type;
       badge.classList.add("item-type-" + item.item_type);
 
-      tr.querySelector(".queue-slug").textContent = item.slug;
+      var slugCell = tr.querySelector(".queue-slug");
+      var slugLink = document.createElement("a");
+      slugLink.href = "/item/" + encodeURIComponent(item.slug);
+      slugLink.textContent = item.slug;
+      slugLink.setAttribute("aria-label", "View work item " + item.slug);
+      slugLink.addEventListener("click", function(e) { e.stopPropagation(); });
+      slugCell.appendChild(slugLink);
       tr.querySelector(".queue-age").textContent = formatAge(item.age_seconds);
 
       tr.addEventListener("click", (function(slug) {
