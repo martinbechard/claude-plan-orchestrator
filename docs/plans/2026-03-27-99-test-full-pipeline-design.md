@@ -28,3 +28,11 @@ validator confirms both acceptance criteria:
 - Single task: the change is trivial (one comment line) so no multi-section plan
 - The coder agent handles the edit; the validator checks acceptance criteria
 - No test changes needed -- this is a pipeline infrastructure verification
+
+
+## Acceptance Criteria
+
+- Does langgraph_pipeline/shared/paths.py contain "# full pipeline test v2"?
+  YES = pass, NO = fail
+- Does the traces DB have an execute_task row with input_tokens > 100
+  for this item? YES = pass, NO = fail

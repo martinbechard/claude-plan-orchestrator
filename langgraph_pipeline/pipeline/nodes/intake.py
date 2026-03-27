@@ -21,7 +21,6 @@ so it survives LangGraph checkpoint restarts and process crashes.
 import json
 import logging
 import re
-import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -29,6 +28,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 from langgraph_pipeline.pipeline.state import PipelineState
+from langgraph_pipeline.shared.claude_cli import call_claude
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.quota import detect_quota_exhaustion
 from langgraph_pipeline.shared.shutdown import get_shutdown_event
@@ -213,33 +213,21 @@ def _parse_timestamp(ts: str) -> float:
 # ─── Claude invocation ────────────────────────────────────────────────────────
 
 
-def _invoke_claude(prompt: str, timeout: int = INTAKE_ANALYSIS_TIMEOUT_SECONDS,
-                   slug: str = "", phase: str = "intake") -> tuple[str, float]:
-    """Invoke Claude CLI with --print and return (text, total_cost_usd).
+def _call_llm(prompt: str, model: str = INTAKE_MODEL,
+              timeout: int = INTAKE_ANALYSIS_TIMEOUT_SECONDS,
+              slug: str = "", phase: str = "intake") -> tuple[str, float]:
+    """Call Claude via shared call_claude. Saves output and returns (text, cost).
 
-    Uses --output-format json so cost data is available in the response.
-    Returns ("", 0.0) on failure. Saves stdout/stderr to the per-item output
-    directory when slug is provided.
+    Uses the shared call_claude which handles permissions, JSON parsing, and
+    error handling consistently. Saves raw stdout to per-item output dir.
     """
-    try:
-        result = subprocess.run(
-            ["claude", "--model", INTAKE_MODEL, "--print", prompt,
-             "--output-format", "json", "--dangerously-skip-permissions",
-             "--permission-mode", "acceptEdits"],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        if slug:
-            _save_subprocess_output(slug, phase, result.stdout or "", result.stderr or "", result.returncode)
-        if result.returncode == 0 and result.stdout:
-            data = json.loads(result.stdout)
-            text = data.get("result", "").strip()
-            cost = float(data.get("total_cost_usd", 0.0))
-            return text, cost
-        return result.stderr or "", 0.0
-    except (subprocess.TimeoutExpired, OSError, subprocess.SubprocessError, json.JSONDecodeError):
-        return "", 0.0
+    result = call_claude(prompt, model=model, timeout=timeout)
+    if slug and result.raw_stdout:
+        _save_subprocess_output(slug, phase, result.raw_stdout,
+                                result.failure_reason or "", 0 if not result.failure_reason else 1)
+    if result.failure_reason:
+        return result.failure_reason, 0.0
+    return result.text, result.total_cost_usd
 
 
 # ─── Analysis helpers ─────────────────────────────────────────────────────────
@@ -286,7 +274,7 @@ def _verify_defect_symptoms(item_path: str) -> dict[str, str | int | float]:
     """Spawn Claude to verify defect symptoms and return parsed result fields."""
     content = _read_file_content(item_path)
     prompt = DEFECT_SYMPTOM_PROMPT.format(item_content=content)
-    output, cost = _invoke_claude(prompt)
+    output, cost = _call_llm(prompt)
     clarity = _parse_clarity_score(output)
 
     reproducible_match = _REPRODUCIBLE_PATTERN.search(output)
@@ -295,28 +283,6 @@ def _verify_defect_symptoms(item_path: str) -> dict[str, str | int | float]:
     return {"reproducible": reproducible, "clarity": clarity, "raw_output": output, "total_cost_usd": cost}
 
 
-def _invoke_claude_opus(prompt: str, timeout: int = DESIGN_VALIDATOR_TIMEOUT_SECONDS,
-                        slug: str = "", phase: str = "opus-validate") -> tuple[str, float]:
-    """Invoke Claude CLI with Opus model for quality validation checks."""
-    try:
-        result = subprocess.run(
-            ["claude", "--model", DESIGN_VALIDATOR_MODEL, "--print", prompt,
-             "--output-format", "json", "--dangerously-skip-permissions",
-             "--permission-mode", "acceptEdits"],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        if slug:
-            _save_subprocess_output(slug, phase, result.stdout or "", result.stderr or "", result.returncode)
-        if result.returncode == 0 and result.stdout:
-            data = json.loads(result.stdout)
-            text = data.get("result", "").strip()
-            cost = float(data.get("total_cost_usd", 0.0))
-            return text, cost
-        return result.stderr or "", 0.0
-    except (subprocess.TimeoutExpired, OSError, subprocess.SubprocessError, json.JSONDecodeError):
-        return "", 0.0
 
 
 def _has_five_whys(item_path: str) -> bool:
@@ -325,7 +291,7 @@ def _has_five_whys(item_path: str) -> bool:
     if not content:
         return False
     prompt = CHECK_HAS_FIVE_WHYS_PROMPT.format(item_content=content)
-    output, _cost = _invoke_claude(prompt, timeout=30)
+    output, _cost = _call_llm(prompt, timeout=30)
     return output.strip().upper().startswith("YES")
 
 
@@ -335,7 +301,7 @@ def _validate_five_whys(item_path: str) -> tuple[bool, str]:
     if not content:
         return False, "Could not read item file"
     prompt = VALIDATE_FIVE_WHYS_PROMPT.format(item_content=content)
-    output, _cost = _invoke_claude_opus(prompt)
+    output, _cost = _call_llm(prompt, model=DESIGN_VALIDATOR_MODEL, timeout=DESIGN_VALIDATOR_TIMEOUT_SECONDS)
     valid = output.strip().upper().startswith("VALID")
     reason = output.strip().split("\n", 1)[1].strip() if "\n" in output.strip() else ""
     return valid, reason
@@ -350,7 +316,7 @@ def _validate_design(design_doc_path: str, item_path: str) -> tuple[bool, str]:
     if not item_content:
         return False, "Could not read item file"
     prompt = VALIDATE_DESIGN_PROMPT.format(design_content=design_content, item_content=item_content)
-    output, _cost = _invoke_claude_opus(prompt)
+    output, _cost = _call_llm(prompt, model=DESIGN_VALIDATOR_MODEL, timeout=DESIGN_VALIDATOR_TIMEOUT_SECONDS)
     valid = output.strip().upper().startswith("VALID")
     reason = output.strip().split("\n", 1)[1].strip() if "\n" in output.strip() else ""
     return valid, reason
@@ -362,7 +328,7 @@ def _has_acceptance_checklist(design_doc_path: str) -> bool:
     if not content:
         return False
     prompt = CHECK_HAS_ACCEPTANCE_CHECKLIST_PROMPT.format(design_content=content)
-    output, _cost = _invoke_claude(prompt, timeout=30)
+    output, _cost = _call_llm(prompt, timeout=30)
     return output.strip().upper().startswith("YES")
 
 
@@ -411,7 +377,7 @@ def _run_five_whys_analysis(item_path: str, item_type: str = "analysis") -> dict
     """Spawn Claude to run a 5-Whys analysis on any backlog item."""
     content = _read_file_content(item_path)
     prompt = FIVE_WHYS_PROMPT.format(item_content=content, item_type=item_type)
-    output, cost = _invoke_claude(prompt)
+    output, cost = _call_llm(prompt)
     clarity = _parse_clarity_score(output)
 
     return {"clarity": clarity, "raw_output": output, "total_cost_usd": cost}

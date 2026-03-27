@@ -34,8 +34,8 @@ from langgraph_pipeline.pipeline.nodes.intake import (
 
 
 @pytest.fixture(autouse=True)
-def _mock_opus_validators():
-    """Prevent Opus subprocess calls during unit tests."""
+def _mock_llm_calls():
+    """Prevent all LLM subprocess calls during unit tests."""
     with patch(
         "langgraph_pipeline.pipeline.nodes.intake._validate_five_whys",
         return_value=(True, ""),
@@ -43,8 +43,8 @@ def _mock_opus_validators():
         "langgraph_pipeline.pipeline.nodes.intake._validate_design",
         return_value=(True, ""),
     ), patch(
-        "langgraph_pipeline.pipeline.nodes.intake._invoke_claude_opus",
-        return_value=("VALID", 0.0),
+        "langgraph_pipeline.pipeline.nodes.intake._call_llm",
+        return_value=("Mocked response", 0.01),
     ):
         yield
 
@@ -241,7 +241,7 @@ class TestVerifyDefectSymptoms:
         item = tmp_path / "01-bug.md"
         item.write_text("## Defect\nSome symptom.\n")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("Reproducible: yes\nClarity: 4\nSummary: bug confirmed", 0.01),
         ) as mock_call:
             result = _verify_defect_symptoms(str(item))
@@ -253,7 +253,7 @@ class TestVerifyDefectSymptoms:
         item = tmp_path / "01-bug.md"
         item.write_text("")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("Reproducible: yes\nClarity: 4", 0.01),
         ):
             result = _verify_defect_symptoms(str(item))
@@ -263,7 +263,7 @@ class TestVerifyDefectSymptoms:
         item = tmp_path / "01-bug.md"
         item.write_text("")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("Reproducible: no\nClarity: 3", 0.01),
         ):
             result = _verify_defect_symptoms(str(item))
@@ -273,7 +273,7 @@ class TestVerifyDefectSymptoms:
         item = tmp_path / "01-bug.md"
         item.write_text("")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("Clarity: 3", 0.01),
         ):
             result = _verify_defect_symptoms(str(item))
@@ -288,7 +288,7 @@ class TestRunFiveWhysAnalysis:
         item = tmp_path / "01-analysis.md"
         item.write_text("## Analysis\nSome analysis request.\n")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("Title: X\nClarity: 4\n5 Whys:\n1.a\n2.b\n3.c\n4.d\n5.e", 0.01),
         ) as mock_call:
             _run_five_whys_analysis(str(item))
@@ -300,7 +300,7 @@ class TestRunFiveWhysAnalysis:
         item = tmp_path / "01-analysis.md"
         item.write_text("")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("Title: X\nClarity: 2", 0.01),
         ):
             result = _run_five_whys_analysis(str(item))
@@ -314,7 +314,7 @@ class TestIntakeAnalyzeNode:
     def test_returns_empty_dict_when_plan_already_set(self, tmp_path):
         """If plan_path is set, skip analysis entirely (in-progress plan)."""
         state = _make_state(plan_path="some-plan.yaml")
-        with patch("langgraph_pipeline.pipeline.nodes.intake._invoke_claude") as mock_claude:
+        with patch("langgraph_pipeline.pipeline.nodes.intake._call_llm") as mock_claude:
             result = intake_analyze(state)
         assert result == {}
         mock_claude.assert_not_called()
@@ -326,7 +326,7 @@ class TestIntakeAnalyzeNode:
         item.write_text("")
         state = _make_state(item_path=str(item), item_type="defect", intake_count_defects=2)
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("Reproducible: yes\nClarity: 4", 0.01),
         ):
             result = intake_analyze(state)
@@ -341,7 +341,7 @@ class TestIntakeAnalyzeNode:
             item_path=str(item), item_type="feature", intake_count_features=1
         )
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("Title: T\nClarity: 4", 0.01),
         ):
             result = intake_analyze(state)
@@ -356,7 +356,7 @@ class TestIntakeAnalyzeNode:
             item_path=str(item), item_type="analysis", intake_count_features=0
         )
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("Title: T\nClarity: 4", 0.01),
         ):
             result = intake_analyze(state)
@@ -369,7 +369,7 @@ class TestIntakeAnalyzeNode:
         item.write_text("Some feature request")
         state = _make_state(item_path=str(item), item_type="feature")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("NO", 0.001),
         ) as mock_check, patch(
             "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
@@ -386,7 +386,7 @@ class TestIntakeAnalyzeNode:
         item.write_text("5 Whys:\n1. Why\nRoot Need: something")
         state = _make_state(item_path=str(item), item_type="feature")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("YES", 0.001),
         ), patch(
             "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
@@ -402,7 +402,7 @@ class TestIntakeAnalyzeNode:
         item.write_text("Some feature")
         state = _make_state(item_path=str(item), item_type="feature")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("Title: T\nClarity: 4", 0.01),
         ):
             intake_analyze(state)
@@ -428,7 +428,7 @@ class TestIntakeAnalyzeQuotaDetection:
         item.write_text("## Defect\nSome symptom.\n")
         state = _make_state(item_path=str(item), item_type="defect")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=(QUOTA_EXHAUSTION_OUTPUT, 0.0),
         ):
             result = intake_analyze(state)
@@ -444,7 +444,7 @@ class TestIntakeAnalyzeQuotaDetection:
         item.write_text("## Analysis\nSome analysis.\n")
         state = _make_state(item_path=str(item), item_type="analysis")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=(QUOTA_EXHAUSTION_OUTPUT, 0.0),
         ):
             result = intake_analyze(state)
@@ -500,7 +500,7 @@ class TestBlockingThrottleWait:
         item.write_text("Some feature")
         state = _make_state(item_path=str(item), item_type="feature")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("Title: T\nClarity: 4", 0.01),
         ):
             result = intake_analyze(state)
@@ -543,7 +543,7 @@ class TestBlockingThrottleWait:
         item.write_text("Some feature")
         state = _make_state(item_path=str(item), item_type="feature")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._invoke_claude",
+            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("Title: T\nClarity: 4", 0.01),
         ):
             result = intake_analyze(state)

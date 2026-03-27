@@ -34,11 +34,16 @@ class ClaudeResult(NamedTuple):
     text holds the LLM response on success, or empty string on failure.
     failure_reason holds a descriptive string on failure, or None on success.
     total_cost_usd is the cost reported by the Claude CLI, or 0.0 when unavailable.
+    input_tokens / output_tokens are from the usage dict in the JSON response.
+    raw_stdout holds the full subprocess stdout for logging/debugging.
     """
 
     text: str
     failure_reason: Optional[str]
     total_cost_usd: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    raw_stdout: str = ""
 
 
 class ToolCallRecord(TypedDict):
@@ -123,10 +128,18 @@ def call_claude(
         if proc.returncode == 0:
             data = json.loads(proc.stdout)
             cost = float(data.get("total_cost_usd", 0.0))
-            return ClaudeResult(text=data.get("result", "").strip(), failure_reason=None, total_cost_usd=cost)
+            usage = data.get("usage", {})
+            return ClaudeResult(
+                text=data.get("result", "").strip(),
+                failure_reason=None,
+                total_cost_usd=cost,
+                input_tokens=int(usage.get("input_tokens", 0)),
+                output_tokens=int(usage.get("output_tokens", 0)),
+                raw_stdout=proc.stdout or "",
+            )
         reason = f"claude --print returned code {proc.returncode}: {proc.stderr}"
         logger.warning(reason)
-        return ClaudeResult(text="", failure_reason=reason)
+        return ClaudeResult(text="", failure_reason=reason, raw_stdout=proc.stdout or "")
     except subprocess.TimeoutExpired:
         reason = f"claude --print timed out after {timeout}s"
         logger.warning(reason)

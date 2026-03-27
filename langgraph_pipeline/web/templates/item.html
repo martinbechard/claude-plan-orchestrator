@@ -15,6 +15,9 @@
 {% block title %}{{ slug }} — Plan Orchestrator{% endblock %}
 
 {% block extra_head %}
+{% if active_worker %}
+<meta http-equiv="refresh" content="10">
+{% endif %}
 <style>
 /* ── Item detail page ─────────────────────────────────────────────────── */
 
