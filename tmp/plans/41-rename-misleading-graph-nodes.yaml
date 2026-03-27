@@ -1,0 +1,21 @@
+meta:
+  source_item: tmp/plans/.claimed/41-rename-misleading-graph-nodes.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Update stale references to old node names
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Update all remaining old node name references in docs and comments
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/41-rename-misleading-graph-nodes.md'
