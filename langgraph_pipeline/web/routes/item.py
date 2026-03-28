@@ -4,14 +4,17 @@
 # Design: docs/plans/2026-03-26-43-capture-raw-worker-output-per-item-design.md
 # Design: docs/plans/2026-03-27-56-item-page-show-output-artifacts-design.md
 # Design: docs/plans/2026-03-27-57-track-and-display-item-artifacts-design.md
+# Design: docs/plans/2026-03-28-72-item-page-auto-refresh-collapses-sections-design.md
 
 """FastAPI router that serves the work-item detail page.
 
 Endpoints:
-    GET /item/{slug}               — Renders item.html with requirements, plan tasks,
-                                     completion history, and linked root traces.
-    GET /item/{slug}/output/{filename} — Returns a worker log file as text/plain.
-    GET /item/{slug}/artifact-content  — Returns a project file as text/plain.
+    GET /item/{slug}                    — Renders item.html with requirements, plan tasks,
+                                          completion history, and linked root traces.
+    GET /item/{slug}/dynamic            — Returns JSON with dynamic item data for
+                                          selective refresh (D2).
+    GET /item/{slug}/output/{filename}  — Returns a worker log file as text/plain.
+    GET /item/{slug}/artifact-content   — Returns a project file as text/plain.
 """
 
 import json
@@ -23,7 +26,7 @@ from typing import Callable, Optional
 
 import yaml
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
@@ -33,6 +36,7 @@ from langgraph_pipeline.shared.paths import (
     CLAIMED_DIR,
     COMPLETED_DIRS,
     WORKER_OUTPUT_DIR,
+    workspace_path as ws_path_fn,
 )
 from langgraph_pipeline.web.proxy import get_proxy
 
@@ -91,6 +95,10 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
     """
     requirements_html = _load_requirements_html(slug)
     original_request_html = _load_original_request_html(slug)
+    structured_requirements_html = _load_structured_requirements_html(slug)
+    clause_register_html = _load_workspace_artifact_html(slug, "clauses.md")
+    five_whys_html = _load_workspace_artifact_html(slug, "five-whys.md")
+    cross_ref_reports = _load_cross_reference_reports(slug)
     item_type = _detect_item_type(slug)
     plan_tasks = _load_plan_tasks(slug)
     completions = _load_completions(slug)
@@ -130,6 +138,10 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
             "total_tokens": total_tokens,
             "requirements_html": requirements_html,
             "original_request_html": original_request_html,
+            "structured_requirements_html": structured_requirements_html,
+            "clause_register_html": clause_register_html,
+            "five_whys_html": five_whys_html,
+            "cross_ref_reports": cross_ref_reports,
             "plan_tasks": plan_tasks,
             "completions": completions,
             "traces": traces,
@@ -140,6 +152,54 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
             "last_trace": last_trace,
         },
     )
+
+
+@router.get("/item/{slug}/dynamic", response_class=JSONResponse)
+def item_dynamic(slug: str) -> JSONResponse:
+    """Return dynamic item data as JSON for selective refresh (D2).
+
+    Computes only the values that change during processing, reusing
+    the same helper functions as item_detail. When an active worker
+    is present, its live stats override completion aggregates.
+
+    Args:
+        slug: Work item slug (e.g. "72-item-page-auto-refresh").
+
+    Returns:
+        JSON object with pipeline_stage, active_worker, total_cost_usd,
+        total_duration_s, total_tokens, avg_velocity, plan_tasks, and
+        validation_results.
+    """
+    completions = _load_completions(slug)
+    pipeline_stage = _derive_pipeline_stage(slug, completions)
+    active_worker = _get_active_worker(slug)
+    total_cost_usd = sum(c.get("cost_usd", 0.0) for c in completions)
+    total_duration_s = sum(c.get("duration_s", 0.0) for c in completions)
+    total_tokens = _compute_total_tokens(completions)
+    avg_velocity = _compute_avg_velocity(completions)
+    plan_tasks = _load_plan_tasks(slug)
+    validation_results = _load_validation_results(slug)
+
+    # When a worker is active, use its live stats instead of completions
+    if active_worker:
+        if active_worker.get("tokens_in", 0) + active_worker.get("tokens_out", 0) > 0:
+            total_tokens = active_worker["tokens_in"] + active_worker["tokens_out"]
+        if active_worker.get("cost_usd", 0) > 0:
+            total_cost_usd = active_worker["cost_usd"]
+        total_duration_s = active_worker.get("elapsed_raw_s", 0)
+        if active_worker.get("current_velocity", 0) > 0:
+            avg_velocity = active_worker["current_velocity"]
+
+    return JSONResponse(content={
+        "pipeline_stage": pipeline_stage,
+        "active_worker": active_worker,
+        "total_cost_usd": total_cost_usd,
+        "total_duration_s": total_duration_s,
+        "total_tokens": total_tokens,
+        "avg_velocity": avg_velocity,
+        "plan_tasks": plan_tasks,
+        "validation_results": validation_results,
+    })
 
 
 @router.get("/item/{slug}/output/{filename}", response_class=PlainTextResponse)
@@ -274,21 +334,18 @@ def _find_requirements_file(slug: str) -> Optional[Path]:
 
 
 def _find_original_request_file(slug: str) -> Optional[Path]:
-    """Return the original backlog/claimed file when the primary source is a design doc.
+    """Return the original backlog/claimed file (the raw input).
 
-    When the highest-priority requirements source is a design doc, the original
-    backlog or claimed file is surfaced as a secondary "Original request" block.
     Searches claimed, active backlog, and completed backlog in that order.
+    Always returns the raw backlog file if found, regardless of whether a
+    design doc or structured requirements exist.
 
     Args:
         slug: Work item slug.
 
     Returns:
-        Path to the original request file, or None if not applicable.
+        Path to the original request file, or None if not found.
     """
-    if _find_design_doc(slug) is None:
-        return None
-
     claimed = _CLAIMED_PATH / f"{slug}.md"
     if claimed.exists():
         return claimed
@@ -304,6 +361,84 @@ def _find_original_request_file(slug: str) -> Optional[Path]:
             return candidate
 
     return None
+
+
+def _find_structured_requirements_file(slug: str) -> Optional[Path]:
+    """Locate the structured requirements file for the given slug.
+
+    Checks workspace first, then falls back to docs/plans/ glob.
+
+    Args:
+        slug: Work item slug.
+
+    Returns:
+        Path to the structured requirements file, or None if not found.
+    """
+    # Check workspace first
+    ws_req = ws_path_fn(slug) / "requirements.md"
+    if ws_req.exists():
+        return ws_req
+    # Fallback to legacy location
+    matches = sorted(_DESIGN_DOCS_DIR.glob(f"*-{slug}-requirements.md"))
+    return matches[0] if matches else None
+
+
+def _load_structured_requirements_html(slug: str) -> Optional[str]:
+    """Return structured requirements rendered as HTML, or None if not found.
+
+    Args:
+        slug: Work item slug.
+
+    Returns:
+        HTML string, or None when no structured requirements file exists.
+    """
+    md_path = _find_structured_requirements_file(slug)
+    if md_path is None:
+        return None
+    html = _render_md_to_html(md_path)
+    return html if html else None
+
+
+def _load_workspace_artifact_html(slug: str, filename: str) -> Optional[str]:
+    """Load a markdown artifact from the workspace and render as HTML.
+
+    Args:
+        slug: Work item slug.
+        filename: Artifact filename (e.g. 'clauses.md', 'five-whys.md').
+
+    Returns:
+        HTML string, or None if the file does not exist.
+    """
+    artifact_path = ws_path_fn(slug) / filename
+    if not artifact_path.exists():
+        return None
+    html = _render_md_to_html(artifact_path)
+    return html if html else None
+
+
+def _load_cross_reference_reports(slug: str) -> list[dict[str, str]]:
+    """Load all cross-reference validation reports from the workspace.
+
+    Returns a list of dicts with 'name' (human-readable step name) and 'html'
+    (rendered markdown content), sorted by step number.
+    """
+    val_dir = ws_path_fn(slug) / "validation"
+    if not val_dir.exists():
+        return []
+    reports: list[dict[str, str]] = []
+    for report_file in sorted(val_dir.glob("step-*.md")):
+        html = _render_md_to_html(report_file)
+        if html:
+            # Extract step name from filename: step-3-requirements-structuring-20260328T...md
+            parts = report_file.stem.split("-", 3)
+            step_num = parts[1] if len(parts) > 1 else "?"
+            step_name = parts[2] if len(parts) > 2 else "unknown"
+            # Remove timestamp from step_name if present
+            if len(parts) > 3:
+                step_name = parts[2]
+            display_name = f"Step {step_num}: {step_name.replace('-', ' ').title()}"
+            reports.append({"name": display_name, "html": html})
+    return reports
 
 
 def _load_requirements_html(slug: str) -> str:
@@ -324,22 +459,32 @@ def _load_requirements_html(slug: str) -> str:
 
 
 def _load_original_request_html(slug: str) -> Optional[str]:
-    """Return original backlog/claimed request rendered as HTML, or None if not applicable.
+    """Return original backlog/claimed request (raw input) rendered as HTML.
 
-    Only returns content when the primary requirements source is a design doc and
-    an original backlog or claimed file also exists.
+    Strips the appended 5 Whys section if present, since the 5 Whys has its
+    own dedicated display section from the workspace artifact.
 
     Args:
         slug: Work item slug.
 
     Returns:
-        HTML string, or None when not applicable.
+        HTML string, or None when no raw backlog file is found.
     """
     md_path = _find_original_request_file(slug)
     if md_path is None:
         return None
-    html = _render_md_to_html(md_path)
-    return html if html else None
+    try:
+        import markdown
+        text = md_path.read_text(encoding="utf-8")
+        # Strip appended 5 Whys section to avoid duplication with the
+        # dedicated 5 Whys panel (loaded from workspace five-whys.md).
+        whys_marker = "\n## 5 Whys Analysis"
+        marker_idx = text.find(whys_marker)
+        if marker_idx >= 0:
+            text = text[:marker_idx].rstrip()
+        return markdown.markdown(text, extensions=["fenced_code", "tables"])
+    except Exception:
+        return None
 
 
 def _detect_item_type(slug: str) -> Optional[str]:
@@ -375,9 +520,19 @@ def _load_plan_tasks(slug: str) -> Optional[list[dict]]:
     plan_path = _PLANS_DIR / f"{slug}.yaml"
     if not plan_path.exists():
         matches = sorted(_PLANS_DIR.glob(f"{slug}*.yaml"))
-        if not matches:
-            return None
-        plan_path = matches[0]
+        if matches:
+            plan_path = matches[0]
+        else:
+            # Check workspace and worker-output for archived plans
+            for candidate in [
+                ws_path_fn(slug) / "plan.yaml",
+                WORKER_OUTPUT_DIR / slug / "plan.yaml",
+            ]:
+                if candidate.exists():
+                    plan_path = candidate
+                    break
+            else:
+                return None
 
     try:
         with plan_path.open(encoding="utf-8") as fh:
@@ -448,9 +603,9 @@ def _find_plan_yaml(slug: str) -> Optional[Path]:
 
 
 def _find_design_doc(slug: str) -> Optional[Path]:
-    """Locate the design document for the given slug in docs/plans/.
+    """Locate the design document for the given slug.
 
-    Matches files of the form ``docs/plans/*-<slug>-design.md``.
+    Checks workspace first, then falls back to docs/plans/ glob.
 
     Args:
         slug: Work item slug.
@@ -458,6 +613,11 @@ def _find_design_doc(slug: str) -> Optional[Path]:
     Returns:
         Path to the design doc, or None if not found.
     """
+    # Check workspace first
+    ws_design = ws_path_fn(slug) / "design.md"
+    if ws_design.exists():
+        return ws_design
+    # Fallback to legacy location
     matches = sorted(_DESIGN_DOCS_DIR.glob(f"*-{slug}-design.md"))
     return matches[0] if matches else None
 
@@ -548,37 +708,47 @@ def _derive_pipeline_stage(slug: str, completions: list[dict]) -> str:
 
 
 def _list_output_files(slug: str) -> list[str]:
-    """List log filenames in the worker-output directory for the given slug.
+    """List log filenames from worker-output and workspace logs for the given slug.
 
     Args:
         slug: Work item slug.
 
     Returns:
-        Sorted list of ``.log`` filenames, newest first (by name, which encodes
-        the timestamp). Empty list if the directory does not exist.
+        Sorted deduplicated list of ``.log`` filenames, newest first.
     """
-    output_dir = WORKER_OUTPUT_DIR / slug
-    if not output_dir.is_dir():
-        return []
-    return sorted(
-        (p.name for p in output_dir.iterdir() if p.suffix == ".log"),
-        reverse=True,
-    )
+    seen: set[str] = set()
+    logs: list[str] = []
+
+    for log_dir in [WORKER_OUTPUT_DIR / slug, ws_path_fn(slug) / "logs"]:
+        if not log_dir.is_dir():
+            continue
+        for p in log_dir.iterdir():
+            if p.suffix == ".log" and p.name not in seen:
+                seen.add(p.name)
+                logs.append(p.name)
+
+    return sorted(logs, reverse=True)
 
 
 def _load_validation_results(slug: str) -> list[dict]:
-    """Load validation result JSON files from the per-item worker output directory."""
-    output_dir = WORKER_OUTPUT_DIR / slug
-    results = []
-    if not output_dir.exists():
-        return results
-    for f in sorted(output_dir.glob("validation-*.json"), reverse=True):
-        try:
-            data = json.loads(f.read_text(encoding="utf-8"))
-            results.append(data)
-        except (json.JSONDecodeError, OSError):
+    """Load validation result JSON files from worker-output and workspace."""
+    seen_names: set[str] = set()
+    results: list[dict] = []
+
+    for val_dir in [WORKER_OUTPUT_DIR / slug, ws_path_fn(slug) / "validation"]:
+        if not val_dir.exists():
             continue
-    return results
+        for f in sorted(val_dir.glob("validation-*.json"), reverse=True):
+            if f.name in seen_names:
+                continue
+            seen_names.add(f.name)
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                results.append(data)
+            except (json.JSONDecodeError, OSError):
+                continue
+
+    return sorted(results, key=lambda r: r.get("timestamp", ""), reverse=True)
 
 
 def _compute_total_tokens(completions: list[dict]) -> int:
