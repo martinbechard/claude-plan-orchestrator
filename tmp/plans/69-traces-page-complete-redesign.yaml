@@ -89,7 +89,7 @@ sections:
   - id: '3.1'
     name: Fix narrative page title, links, and phase details
     agent: frontend-coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/69-traces-page-complete-redesign.md
 
       Focus on the narrative detail page (proxy_narrative.html and narrative route):
@@ -101,3 +101,6 @@ sections:
       show real durations/costs. Design: docs/plans/2026-03-28-69-traces-page-complete-redesign-design.md
 
       '
+    last_attempt: '2026-03-28T01:17:00.989973'
+    attempts: 1
+    model_used: sonnet
