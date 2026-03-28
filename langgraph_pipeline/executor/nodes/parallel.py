@@ -36,6 +36,7 @@ from langgraph_pipeline.shared.claude_cli import (
     stream_json_output,
     stream_output,
 )
+from langgraph_pipeline.shared.artifact_manifest import record_artifact
 from langgraph_pipeline.shared.git import (
     cleanup_worktree,
     copy_worktree_artifacts,
@@ -545,6 +546,8 @@ def execute_parallel_task(state: TaskState) -> dict:
         elif copied_files:
             with _PLAN_LOCK:
                 subprocess.run(["git", "add"] + copied_files, capture_output=True, check=False)
+                for file_path in copied_files:
+                    record_artifact(slug, file_path, "created", task_id)
 
     cleanup_worktree(worktree_path)
 
