@@ -13,7 +13,7 @@ provides on-demand review of accumulated test logs.
 ### Processing Flow
 
 ```
-build_validation_prompt()  (plan-orchestrator.py)
+_build_validator_prompt()  (langgraph_pipeline/executor/nodes/validator.py)
     |
     v  (includes spec_dir + e2e_command from config)
 validator agent session
@@ -70,7 +70,7 @@ Type values:
 
 2. **Validator prompt enrichment, not code**: The validation logic is in the agent
    prompt (validator.md). The only Python change is passing config values into
-   build_validation_prompt().
+   `_build_validator_prompt()` in `langgraph_pipeline/executor/nodes/validator.py`.
 
 3. **Timestamped JSON logs**: E2E results go to logs/e2e/YYYY-MM-DDTHHMMSS.json.
    The logs/e2e/ directory already exists in REQUIRED_DIRS.
@@ -84,9 +84,9 @@ Type values:
    generic validation still runs).
 
 6. **Verification block parsing helper**: A small Python helper
-   parse_verification_blocks() is added to plan-orchestrator.py. While the
-   agent could parse markdown itself, having a utility function enables reliable
-   testing and consistent parsing across agents.
+   `parse_verification_blocks()` is in `langgraph_pipeline/executor/nodes/validator.py`.
+   While the agent could parse markdown itself, having a utility function enables
+   reliable testing and consistent parsing across agents.
 
 ## Files Affected
 
@@ -95,11 +95,11 @@ Type values:
 - `.claude/agents/validator.md` - Add spec-aware validation section with
   instructions for reading verification blocks, running E2E tests, and capturing
   JSON results.
-- `scripts/plan-orchestrator.py`:
+- `langgraph_pipeline/executor/nodes/validator.py`:
   - Add DEFAULT_SPEC_DIR, DEFAULT_E2E_COMMAND constants
   - Read spec_dir, e2e_command from orchestrator config
   - Add parse_verification_blocks() helper function
-  - Update build_validation_prompt() to include spec-aware context when configured
+  - Update _build_validator_prompt() to include spec-aware context when configured
 
 ### New
 
@@ -109,8 +109,8 @@ Type values:
 
 ### Tests
 
-- `tests/test_plan_orchestrator.py` - Add tests for parse_verification_blocks()
-  and the updated build_validation_prompt()
+- `tests/langgraph/executor/nodes/test_validator.py` - Add tests for
+  parse_verification_blocks() and the updated _build_validator_prompt()
 
 ## Edge Cases
 

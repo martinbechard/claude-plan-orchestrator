@@ -12,10 +12,10 @@ pre-existing unit test failures also need to be fixed before the version is bump
 
 ### Already implemented
 
-- `parse_verification_blocks(content)` helper in `scripts/plan-orchestrator.py`
+- `parse_verification_blocks(content)` helper in `langgraph_pipeline/executor/nodes/validator.py`
 - `DEFAULT_SPEC_DIR = ""` and `SPEC_DIR` config reading from orchestrator config
 - `DEFAULT_E2E_COMMAND` and `E2E_COMMAND` constants
-- `build_validation_prompt()` injects spec-aware context block when `SPEC_DIR` is set
+- `_build_validator_prompt()` injects spec-aware context block when `SPEC_DIR` is set
 - `.claude/agents/e2e-analyzer.md` — on-demand test log analyzer agent
 - `docs/templates/verification-block.md` — reference template for spec authors
 - Unit tests for `parse_verification_blocks()` (6 tests, all passing)
@@ -86,7 +86,7 @@ When `spec_dir` is absent or empty, the validator falls back to generic behavior
   - Add verdict rule: E2E failures for unrelated tests = WARN, related = FAIL
   - Add constraint: save E2E output to `logs/e2e/<timestamp>.json`
 
-- `tests/test_plan_orchestrator.py`
+- `tests/langgraph/executor/nodes/test_validator.py`
   - Fix `test_create_backlog_item_returns_dict`: assert `startswith("01-")`
   - Fix `test_create_backlog_item_increments_number`: assert `startswith("02-")`
 

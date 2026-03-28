@@ -3,17 +3,17 @@
 ## Overview
 
 Completion pass for the spec-aware validator feature. Core infrastructure
-(plan-orchestrator.py changes, e2e-analyzer agent, verification block template)
+(validator node changes, e2e-analyzer agent, verification block template)
 was implemented in February 2026 but the plan had merge conflicts that left
 `validator.md` unmodified. Additional test regressions appeared since then.
 
 ## Already Implemented
 
-- `scripts/plan-orchestrator.py`:
-  - `DEFAULT_SPEC_DIR`, `DEFAULT_E2E_COMMAND` constants (lines 62-63)
-  - `SPEC_DIR`, `E2E_COMMAND` config values read from orchestrator-config.yaml (lines 377-378)
-  - `parse_verification_blocks()` helper function (line 412)
-  - `build_validation_prompt()` includes spec-aware context when SPEC_DIR is set (line 1765)
+- `langgraph_pipeline/executor/nodes/validator.py`:
+  - `DEFAULT_SPEC_DIR`, `DEFAULT_E2E_COMMAND` constants
+  - `SPEC_DIR`, `E2E_COMMAND` config values read from orchestrator-config.yaml
+  - `parse_verification_blocks()` helper function
+  - `_build_validator_prompt()` includes spec-aware context when SPEC_DIR is set
 - `.claude/agents/e2e-analyzer.md`: On-demand analyzer for accumulated E2E test logs.
 - `docs/templates/verification-block.md`: Reference format for verification blocks.
 
@@ -47,13 +47,9 @@ Constraint additions:
 
 Two categories require fixes:
 
-- `tests/test_plan_orchestrator.py`: 2 assertion failures — backlog filename format
-  changed from `1-slug.md` to `01-slug.md` (zero-padded) but test assertions
-  were not updated.
-
-- `tests/test_auto_pipeline.py` and `tests/test_completed_archive.py`: Collection
-  errors because `CompletionTracker` was removed from `auto_pipeline.py` but the
-  tests still reference it at import time.
+- `tests/langgraph/executor/nodes/test_validator.py`: 2 assertion failures — backlog
+  filename format changed from `1-slug.md` to `01-slug.md` (zero-padded) but test
+  assertions were not updated.
 
 ### 3. Plugin version bump
 
@@ -63,7 +59,7 @@ now fully wired end-to-end) and add a `RELEASE-NOTES.md` entry.
 ## Architecture Reference
 
 ```
-build_validation_prompt()  (plan-orchestrator.py)
+_build_validator_prompt()  (langgraph_pipeline/executor/nodes/validator.py)
     |
     v  (includes spec_dir + e2e_command from config when SPEC_DIR set)
 validator agent session
@@ -81,8 +77,6 @@ validator agent session
 | File | Action |
 |------|--------|
 | `.claude/agents/validator.md` | Modify — add spec-aware step |
-| `tests/test_plan_orchestrator.py` | Modify — fix zero-padded filename assertions |
-| `tests/test_auto_pipeline.py` | Modify — remove or fix CompletionTracker reference |
-| `tests/test_completed_archive.py` | Modify — remove or fix CompletionTracker reference |
+| `tests/langgraph/executor/nodes/test_validator.py` | Modify — fix zero-padded filename assertions |
 | `plugin.json` | Modify — version 1.9.3 to 1.10.0 |
 | `RELEASE-NOTES.md` | Modify — add 1.10.0 entry |

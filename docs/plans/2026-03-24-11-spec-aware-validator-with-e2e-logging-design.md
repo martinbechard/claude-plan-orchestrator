@@ -11,7 +11,7 @@ context into the validation prompt, updating the validator agent, and adding tes
 
 ### Already implemented
 
-- `parse_verification_blocks(content)` helper in `scripts/plan-orchestrator.py`
+- `parse_verification_blocks(content)` helper in `langgraph_pipeline/executor/nodes/validator.py`
 - `DEFAULT_E2E_COMMAND` and `E2E_COMMAND` constants and config reading
 - `.claude/agents/e2e-analyzer.md` agent
 - `docs/templates/verification-block.md` reference template
@@ -20,8 +20,8 @@ context into the validation prompt, updating the validator agent, and adding tes
 ### Still missing
 
 1. `DEFAULT_SPEC_DIR = ""` constant and `SPEC_DIR = _config.get("spec_dir", ...)` in
-   `plan-orchestrator.py` — the config opt-in mechanism
-2. Spec-aware context block in `build_validation_prompt()` — injected when SPEC_DIR set
+   `langgraph_pipeline/executor/nodes/validator.py` — the config opt-in mechanism
+2. Spec-aware context block in `_build_validator_prompt()` — injected when SPEC_DIR set
 3. Spec-aware step in `.claude/agents/validator.md` — instructions to run git diff,
    read spec files, run E2E tests, and write timestamped JSON to logs/e2e/
 4. Unit tests for the SPEC_DIR-gated spec_context in `build_validation_prompt()`
@@ -31,7 +31,7 @@ context into the validation prompt, updating the validator agent, and adding tes
 ### Processing Flow
 
 ```
-build_validation_prompt()         (plan-orchestrator.py)
+_build_validator_prompt()         (langgraph_pipeline/executor/nodes/validator.py)
     |
     +-- if SPEC_DIR configured:
     |       inject spec-aware context block into prompt
@@ -70,7 +70,7 @@ generic behavior. Zero impact for projects without functional specs.
    config values (SPEC_DIR, E2E_COMMAND) are passed from Python.
 
 3. **Timestamped JSON capture**: `logs/e2e/YYYY-MM-DDTHHMMSS.json` — the
-   directory is already in `REQUIRED_DIRS` in `plan-orchestrator.py`.
+   directory is defined in `REQUIRED_DIRS` in `langgraph_pipeline/shared/paths.py`.
 
 4. **E2E only when spec files changed**: The validator runs git diff first.
    Pure backend changes without spec file touches skip E2E entirely.
@@ -82,10 +82,10 @@ generic behavior. Zero impact for projects without functional specs.
 
 ### Modified
 
-- `scripts/plan-orchestrator.py`
-  - Add `DEFAULT_SPEC_DIR = ""` constant (after `DEFAULT_AGENTS_DIR`)
-  - Add `SPEC_DIR = _config.get("spec_dir", DEFAULT_SPEC_DIR)` in config section
-  - Update `build_validation_prompt()` to inject spec context when SPEC_DIR is set
+- `langgraph_pipeline/executor/nodes/validator.py`
+  - Add `DEFAULT_SPEC_DIR = ""` constant
+  - Add `SPEC_DIR` config reading from orchestrator config
+  - Update `_build_validator_prompt()` to inject spec context when SPEC_DIR is set
 
 - `.claude/agents/validator.md`
   - Insert spec-aware step between "Step 2: Unit Tests" and "Step 3: E2E Test"
@@ -94,12 +94,12 @@ generic behavior. Zero impact for projects without functional specs.
 
 ### Tests
 
-- `tests/test_plan_orchestrator.py`
-  - `test_build_validation_prompt_includes_spec_context`: assert prompt includes
+- `tests/langgraph/executor/nodes/test_validator.py`
+  - `test_build_validator_prompt_includes_spec_context`: assert prompt includes
     "Spec-Aware Validation" when SPEC_DIR monkeypatched
-  - `test_build_validation_prompt_omits_spec_when_unconfigured`: assert absent
+  - `test_build_validator_prompt_omits_spec_when_unconfigured`: assert absent
     when SPEC_DIR is empty string
-  - `test_build_validation_prompt_standard_checks_present_with_spec`: assert
+  - `test_build_validator_prompt_standard_checks_present_with_spec`: assert
     BUILD_COMMAND and TEST_COMMAND still appear alongside spec context
 
 ## Edge Cases
