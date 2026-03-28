@@ -760,6 +760,12 @@ def _collect_output_artifacts(slug: str) -> list[dict]:
             if candidate.is_file() and candidate.suffix != ".log":
                 _add(str(candidate), _SOURCE_REPORT)
 
+    # 5. Manifest-only entries (files recorded by workers but not found by discovery)
+    for entry in load_manifest(slug):
+        entry_path = entry.get("path", "")
+        if entry_path:
+            _add(entry_path, _SOURCE_GIT)
+
     return artifacts
 
 
