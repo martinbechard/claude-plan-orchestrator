@@ -3,6 +3,7 @@
 # Design: docs/plans/2026-03-26-35-work-item-page-missing-requirements-from-backlog-file-design.md
 # Design: docs/plans/2026-03-26-43-capture-raw-worker-output-per-item-design.md
 # Design: docs/plans/2026-03-27-56-item-page-show-output-artifacts-design.md
+# Design: docs/plans/2026-03-27-57-track-and-display-item-artifacts-design.md
 
 """FastAPI router that serves the work-item detail page.
 
@@ -10,6 +11,7 @@ Endpoints:
     GET /item/{slug}               — Renders item.html with requirements, plan tasks,
                                      completion history, and linked root traces.
     GET /item/{slug}/output/{filename} — Returns a worker log file as text/plain.
+    GET /item/{slug}/artifact-content  — Returns a project file as text/plain.
 """
 
 import json
@@ -20,11 +22,12 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import yaml
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
+from langgraph_pipeline.shared.artifact_manifest import load_manifest
 from langgraph_pipeline.shared.paths import (
     BACKLOG_DIRS,
     CLAIMED_DIR,
@@ -45,6 +48,10 @@ _REPORTS_DIR = Path("docs/reports")
 _SOURCE_GIT = "git"
 _SOURCE_DESIGN = "design"
 _SOURCE_REPORT = "report"
+
+_ACTION_CREATED = "created"
+_ACTION_MODIFIED = "modified"
+_ACTION_DISCOVERED = "discovered"
 
 _STAGE_EXECUTING = "executing"
 _STAGE_VALIDATING = "validating"
@@ -173,6 +180,41 @@ def item_output_file(slug: str, filename: str) -> PlainTextResponse:
         raise HTTPException(status_code=404, detail="Log file not found")
 
     return PlainTextResponse(content=resolved.read_text(encoding="utf-8", errors="replace"))
+
+
+@router.get("/item/{slug}/artifact-content", response_class=PlainTextResponse)
+def item_artifact_content(
+    slug: str, path: str = Query(..., description="Relative path to the artifact file")
+) -> PlainTextResponse:
+    """Return the text content of an artifact file within the project root.
+
+    Validates that the requested path resolves to a location inside the project
+    root to prevent directory traversal. Only serves regular files.
+
+    Args:
+        slug: Work item slug (used for URL structure; the path param selects the file).
+        path: Relative or absolute path to the artifact (query parameter).
+
+    Returns:
+        Plain-text content of the file.
+
+    Raises:
+        HTTPException 400: If the path resolves outside the project root.
+        HTTPException 404: If the file does not exist or is not a regular file.
+    """
+    project_root = Path.cwd().resolve()
+    try:
+        requested = Path(path).resolve()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid path")
+
+    if not str(requested).startswith(str(project_root) + "/"):
+        raise HTTPException(status_code=400, detail="Path outside project root")
+
+    if not requested.exists() or not requested.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return PlainTextResponse(content=requested.read_text(encoding="utf-8", errors="replace"))
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -626,15 +668,26 @@ def _collect_output_artifacts(slug: str) -> list[dict]:
     3. Files in docs/reports/ whose name contains the slug.
     4. Files in docs/reports/worker-output/<slug>/ (non-log artifacts).
 
-    Deduplicates by resolved absolute path.
+    Deduplicates by resolved absolute path. Enriches each artifact with
+    file_size (bytes) and action (created/modified/discovered) from the
+    artifact manifest when available.
 
     Args:
         slug: Work item slug.
 
     Returns:
-        List of dicts with keys: path (str), source (str), display_name (str).
-        Sorted by source then path.
+        List of dicts with keys: path (str), source (str), display_name (str),
+        file_size (int or None), action (str).
     """
+    # Build a resolved-path -> action lookup from the manifest
+    manifest_by_resolved: dict[str, str] = {}
+    for entry in load_manifest(slug):
+        try:
+            resolved_key = str(Path(entry["path"]).resolve())
+        except Exception:
+            resolved_key = entry["path"]
+        manifest_by_resolved[resolved_key] = entry.get("action", _ACTION_DISCOVERED)
+
     seen_paths: set[str] = set()
     artifacts: list[dict] = []
 
@@ -647,11 +700,23 @@ def _collect_output_artifacts(slug: str) -> list[dict]:
         if resolved in seen_paths:
             return
         seen_paths.add(resolved)
+
+        file_size: Optional[int] = None
+        try:
+            if p.exists():
+                file_size = p.stat().st_size
+        except Exception:
+            pass
+
+        action = manifest_by_resolved.get(resolved, _ACTION_DISCOVERED)
+
         artifacts.append(
             {
                 "path": raw_path,
                 "source": source,
                 "display_name": p.name,
+                "file_size": file_size,
+                "action": action,
             }
         )
 
