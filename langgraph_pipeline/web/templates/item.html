@@ -1,7 +1,8 @@
 {# langgraph_pipeline/web/templates/item.html
    Work-item detail page: requirements, plan tasks, completions, traces, console output.
    Context: slug, item_type, pipeline_stage, active_worker, total_cost_usd, requirements_html,
-            original_request_html (optional), plan_tasks [{id, name, status}],
+            original_request_html (optional), structured_requirements_html (optional),
+            plan_tasks [{id, name, status}],
             completions, traces [{run_id, name, created_at}],
             output_files [filenames sorted newest-first],
             output_artifacts [{path, source, display_name, file_size, action}],
@@ -18,9 +19,6 @@
 {% block title %}{{ slug }} — Plan Orchestrator{% endblock %}
 
 {% block extra_head %}
-{% if pipeline_stage != "completed" and pipeline_stage != "unknown" %}
-<meta http-equiv="refresh" content="10">
-{% endif %}
 <style>
 /* ── Item detail page ─────────────────────────────────────────────────── */
 
@@ -896,6 +894,7 @@
         <span class="badge item-type-{{ item_type }}"
               aria-label="Type: {{ item_type }}">{{ item_type }}</span>
       {% endif %}
+      <span data-dynamic="stage-badge">
       {% if active_worker %}
         {% if active_worker.current_task %}
           <span class="badge status-{{ pipeline_stage }}"
@@ -911,6 +910,8 @@
         <span class="badge status-{{ pipeline_stage }}"
               aria-label="Pipeline stage">{{ pipeline_stage }}</span>
       {% endif %}
+      </span>
+      <span data-dynamic="velocity-badge">
       {% if avg_velocity is not none and avg_velocity is number and avg_velocity > 0 %}
         {% if avg_velocity >= 1000 %}
           {% set vel_label = "%.1fk tok/min"|format(avg_velocity / 1000) %}
@@ -921,20 +922,21 @@
           {{ vel_label }}
         </span>
       {% endif %}
+      </span>
     </div>
   </div>
   <div class="item-header-stats">
     <div class="item-stat" aria-label="Total API cost">
       <span class="item-cost-label">Cost</span>
-      <span class="item-cost-value">${{ "%.4f"|format(total_cost_usd) }}</span>
+      <span class="item-cost-value" data-dynamic="cost">${{ "%.4f"|format(total_cost_usd) }}</span>
     </div>
     <div class="item-stat" aria-label="Total tokens">
       <span class="item-cost-label">Tokens</span>
-      <span class="item-cost-value">{{ "{:,}".format(total_tokens) }}</span>
+      <span class="item-cost-value" data-dynamic="tokens">{{ "{:,}".format(total_tokens) }}</span>
     </div>
     <div class="item-stat" aria-label="Total duration">
       <span class="item-cost-label">Duration</span>
-      <span class="item-cost-value">
+      <span class="item-cost-value" data-dynamic="duration">
         {%- if total_duration_s >= 3600 -%}
           {{ (total_duration_s // 3600)|int }}h {{ ((total_duration_s % 3600) // 60)|int }}m
         {%- elif total_duration_s >= 60 -%}
@@ -946,7 +948,7 @@
     </div>
     <div class="item-stat" aria-label="Average velocity">
       <span class="item-cost-label">Velocity</span>
-      <span class="item-cost-value">
+      <span class="item-cost-value" data-dynamic="velocity">
         {%- if avg_velocity is not none and avg_velocity is number and avg_velocity >= 1000 -%}
           {{ "%.1fk"|format(avg_velocity / 1000) }}<span class="item-stat-unit">tok/min</span>
         {%- elif avg_velocity is not none and avg_velocity is number and avg_velocity > 0 -%}
@@ -960,6 +962,7 @@
 </div>
 
 {# ── Active-worker banner ─────────────────────────────────────────────────── #}
+<div data-dynamic="worker-banner">
 {% if active_worker %}
 <div class="active-worker-banner" role="status" aria-live="polite"
      aria-label="Active worker running this item">
@@ -978,36 +981,103 @@
   {% endif %}
 </div>
 {% endif %}
+</div>
 
 {# ── Two-column layout ───────────────────────────────────────────────────── #}
 <div class="item-layout">
 
-  {# ── Left: Requirements ──────────────────────────────────────────────────── #}
+  {# ── Left: Traceability Chain (Raw Input → Clauses → 5 Whys → Requirements → Design) ── #}
   <div>
+    {# 1. Raw input (original backlog item) #}
+    {% if original_request_html %}
+    <div class="item-card">
+      <div class="item-card-header">
+        <h2 class="item-card-title">Raw Input</h2>
+      </div>
+      <div class="requirements-body" aria-label="Original backlog item">
+        {{ original_request_html | safe }}
+      </div>
+    </div>
+    {% endif %}
+
+    {# 2. Clause Register (C1, C2, ... extracted from raw input) #}
+    {% if clause_register_html %}
+    <div class="item-card" style="margin-top: 1rem;">
+      <div class="item-card-header">
+        <h2 class="item-card-title">Clause Register</h2>
+      </div>
+      <div class="requirements-body" aria-label="Clause register">
+        {{ clause_register_html | safe }}
+      </div>
+    </div>
+    {% endif %}
+
+    {# 3. 5 Whys Analysis (W1-W5 with clause references) #}
+    {% if five_whys_html %}
+    <div class="item-card" style="margin-top: 1rem;">
+      <div class="item-card-header">
+        <h2 class="item-card-title">5 Whys Analysis</h2>
+      </div>
+      <div class="requirements-body" aria-label="5 Whys analysis">
+        {{ five_whys_html | safe }}
+      </div>
+    </div>
+    {% endif %}
+
+    {# 4. Structured requirements (P/UC/FR numbered with ACs) #}
+    {% if structured_requirements_html %}
+    <div class="item-card" style="margin-top: 1rem;">
+      <div class="item-card-header">
+        <h2 class="item-card-title">Structured Requirements</h2>
+      </div>
+      <div class="requirements-body" aria-label="Structured requirements document">
+        {{ structured_requirements_html | safe }}
+      </div>
+    </div>
+    {% endif %}
+
+    {# 5. Design document #}
+    {% if requirements_html %}
+    <div class="item-card" style="margin-top: 1rem;">
+      <div class="item-card-header">
+        <h2 class="item-card-title">Design</h2>
+      </div>
+      <div class="requirements-body" aria-label="Design document">
+        {{ requirements_html | safe }}
+      </div>
+    </div>
+    {% endif %}
+
+    {# 6. Cross-reference validation reports #}
+    {% if cross_ref_reports %}
+    <div class="item-card" style="margin-top: 1rem;">
+      <div class="item-card-header">
+        <h2 class="item-card-title">Validation Reports</h2>
+      </div>
+      {% for report in cross_ref_reports %}
+      <details style="margin: 0.5rem 1rem;">
+        <summary style="cursor: pointer; font-weight: 600; padding: 0.4rem 0;">{{ report.name }}</summary>
+        <div class="requirements-body" aria-label="{{ report.name }}">
+          {{ report.html | safe }}
+        </div>
+      </details>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {# No data at all #}
+    {% if not requirements_html and not structured_requirements_html and not original_request_html and not clause_register_html %}
     <div class="item-card">
       <div class="item-card-header">
         <h2 class="item-card-title">Requirements</h2>
       </div>
-      {% if requirements_html %}
-        <div class="requirements-body" aria-label="Requirements document">
-          {{ requirements_html | safe }}
-          {% if original_request_html %}
-            <details class="original-request-toggle">
-              <summary>Original request</summary>
-              <div class="original-request-body" aria-label="Original request document">
-                {{ original_request_html | safe }}
-              </div>
-            </details>
-          {% endif %}
-        </div>
-      {% else %}
-        <div class="empty-state" style="padding: 2.5rem 1rem;">
-          <div class="icon" aria-hidden="true">&#128462;</div>
-          <div><strong>No requirements document</strong></div>
-          <div>No backlog file was found for this item.</div>
-        </div>
-      {% endif %}
+      <div class="empty-state" style="padding: 2.5rem 1rem;">
+        <div class="icon" aria-hidden="true">&#128462;</div>
+        <div><strong>No requirements document</strong></div>
+        <div>No backlog file was found for this item.</div>
+      </div>
     </div>
+    {% endif %}
   </div>
 
   {# ── Right: Plan + Completions + Traces ──────────────────────────────────── #}
@@ -1017,13 +1087,14 @@
     <div class="item-card">
       <div class="item-card-header">
         <h2 class="item-card-title">Plan Tasks</h2>
+        <span class="item-card-count" data-dynamic="plan-task-count">
         {% if plan_tasks %}
-          <span class="item-card-count">
             {{ plan_tasks | selectattr('status', 'equalto', 'completed') | list | length }}
             / {{ plan_tasks | length }}
-          </span>
         {% endif %}
+        </span>
       </div>
+      <div data-dynamic="plan-tasks">
       {% if plan_tasks %}
         <ul class="task-list" aria-label="Plan tasks">
           {% for task in plan_tasks %}
@@ -1049,6 +1120,7 @@
           <div>A plan will appear here once the orchestrator creates one.</div>
         </div>
       {% endif %}
+      </div>
     </div>
 
     {# ── Output Artifacts (between Plan Tasks and Completions) ────────────── #}
@@ -1104,12 +1176,12 @@
     {% endif %}
 
     {# Validation Results #}
-    {% if validation_results %}
-    <div class="item-card">
+    <div class="item-card" data-dynamic="validation-card" {% if not validation_results %}hidden{% endif %}>
       <div class="item-card-header">
         <h2 class="item-card-title">Validation Results</h2>
-        <span class="item-card-count">{{ validation_results | length }}</span>
+        <span class="item-card-count" data-dynamic="validation-count">{{ validation_results | length if validation_results else 0 }}</span>
       </div>
+      <div data-dynamic="validation-results">
       {% for vr in validation_results %}
       <div class="validation-row">
         <span class="badge {% if vr.verdict == 'PASS' %}outcome-success{% elif vr.verdict == 'WARN' %}outcome-warn{% else %}outcome-fail{% endif %}">{{ vr.verdict }}</span>
@@ -1122,8 +1194,8 @@
         <p class="validation-message">{{ vr.message }}</p>
       </div>
       {% endfor %}
+      </div>
     </div>
-    {% endif %}
 
     {# Completion history #}
     <div class="item-card">
@@ -1344,6 +1416,243 @@ document.querySelectorAll('.output-preview-details').forEach(function (el) {
                 .catch(function (err) { pre.textContent = 'Failed to load content: ' + err.message; });
         });
     });
+}());
+
+/* ── Selective refresh: fetch /item/{slug}/dynamic and update data-dynamic elements (D4, D5, D6) ── */
+(function () {
+    var REFRESH_INTERVAL_MS = 10000;
+    var TERMINAL_STAGES = ['completed', 'unknown'];
+    var slug = {{ slug | tojson }};
+    var currentStage = {{ pipeline_stage | tojson }};
+    var timerId = null;
+
+    function el(name) {
+        return document.querySelector('[data-dynamic="' + name + '"]');
+    }
+
+    /* ── Formatters ──────────────────────────────────────────────────────── */
+
+    function formatCost(val) {
+        return '$' + Number(val).toFixed(4);
+    }
+
+    function formatTokens(val) {
+        return Number(val).toLocaleString();
+    }
+
+    function formatDuration(s) {
+        s = Math.floor(s);
+        if (s >= 3600) {
+            return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+        }
+        if (s >= 60) {
+            return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+        }
+        return s + 's';
+    }
+
+    function formatVelocity(val) {
+        if (val === null || val === undefined || val <= 0) {
+            return '\u2014';
+        }
+        if (val >= 1000) {
+            return (val / 1000).toFixed(1) + 'k<span class="item-stat-unit">tok/min</span>';
+        }
+        return Math.round(val) + '<span class="item-stat-unit">tok/min</span>';
+    }
+
+    /* ── Escape helper ───────────────────────────────────────────────────── */
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = String(str);
+        return div.innerHTML;
+    }
+
+    /* ── Badge builders ──────────────────────────────────────────────────── */
+
+    function stageBadgeHtml(stage, worker) {
+        if (worker) {
+            if (worker.current_task) {
+                return '<span class="badge status-' + escapeHtml(stage) +
+                    '" aria-label="Currently ' + escapeHtml(stage) + '">' +
+                    escapeHtml(worker.current_task) + '</span>';
+            }
+            if (stage === 'executing' || stage === 'validating') {
+                return '<span class="badge status-planning" aria-label="Pipeline phase">intake / planning</span>';
+            }
+        }
+        return '<span class="badge status-' + escapeHtml(stage) +
+            '" aria-label="Pipeline stage">' + escapeHtml(stage) + '</span>';
+    }
+
+    function velocityBadgeHtml(val) {
+        if (val === null || val === undefined || val <= 0) { return ''; }
+        var label;
+        if (val >= 1000) { label = (val / 1000).toFixed(1) + 'k tok/min'; }
+        else { label = Math.round(val) + ' tok/min'; }
+        return '<span class="badge velocity-badge" aria-label="Average velocity: ' +
+            escapeHtml(label) + '">' + escapeHtml(label) + '</span>';
+    }
+
+    /* ── Worker banner ───────────────────────────────────────────────────── */
+
+    function workerBannerHtml(worker, stage) {
+        if (!worker) { return ''; }
+        var label = stage === 'validating' ? 'Validating' : 'Currently running';
+        var h = '<div class="active-worker-banner" role="status" aria-live="polite"' +
+            ' aria-label="Active worker running this item">';
+        h += '<span class="active-worker-label">' + escapeHtml(label) + '</span>';
+        h += '<span class="active-worker-sep" aria-hidden="true">|</span>';
+        h += '<span>PID ' + escapeHtml(String(worker.pid)) + '</span>';
+        if (worker.current_task) {
+            h += '<span class="active-worker-sep" aria-hidden="true">|</span>';
+            h += '<span class="active-worker-task">' + escapeHtml(worker.current_task) + '</span>';
+        }
+        if (worker.run_id) {
+            h += '<span class="active-worker-sep" aria-hidden="true">|</span>';
+            h += '<a class="active-worker-trace" href="/proxy?trace_id=' +
+                encodeURIComponent(worker.run_id) +
+                '" aria-label="View trace for this run">View trace \u2192</a>';
+        }
+        h += '</div>';
+        return h;
+    }
+
+    /* ── Plan tasks ──────────────────────────────────────────────────────── */
+
+    function planTasksHtml(tasks) {
+        if (!tasks || tasks.length === 0) {
+            return '<div class="empty-state" style="padding: 1.5rem 1rem;">' +
+                '<div class="icon" aria-hidden="true">&#128203;</div>' +
+                '<div><strong>No plan yet</strong></div>' +
+                '<div>A plan will appear here once the orchestrator creates one.</div></div>';
+        }
+        var h = '<ul class="task-list" aria-label="Plan tasks">';
+        for (var i = 0; i < tasks.length; i++) {
+            var t = tasks[i];
+            var icon;
+            if (t.status === 'completed') { icon = '&#10003;'; }
+            else if (t.status === 'in_progress') { icon = '&#9679;'; }
+            else if (t.status === 'skipped') { icon = '&mdash;'; }
+            else { icon = '&nbsp;'; }
+            var nameClass = t.status === 'completed' ? 'task-name task-name--done' : 'task-name';
+            h += '<li class="task-item">';
+            h += '<span class="task-icon task-icon--' + escapeHtml(t.status) +
+                '" title="' + escapeHtml(t.status) +
+                '" aria-label="' + escapeHtml(t.status) + '">' + icon + '</span>';
+            h += '<span class="' + nameClass + '">' + escapeHtml(t.name) + '</span>';
+            h += '<span class="task-id-label">#' + escapeHtml(t.id) + '</span>';
+            h += '</li>';
+        }
+        h += '</ul>';
+        return h;
+    }
+
+    function planTaskCountText(tasks) {
+        if (!tasks || tasks.length === 0) { return ''; }
+        var completed = 0;
+        for (var i = 0; i < tasks.length; i++) {
+            if (tasks[i].status === 'completed') { completed++; }
+        }
+        return completed + ' / ' + tasks.length;
+    }
+
+    /* ── Validation results ──────────────────────────────────────────────── */
+
+    function validationResultsHtml(results) {
+        var h = '';
+        for (var i = 0; i < results.length; i++) {
+            var vr = results[i];
+            var bc = vr.verdict === 'PASS' ? 'outcome-success'
+                : (vr.verdict === 'WARN' ? 'outcome-warn' : 'outcome-fail');
+            h += '<div class="validation-row">';
+            h += '<span class="badge ' + bc + '">' + escapeHtml(vr.verdict || '') + '</span>';
+            h += '<strong>Task ' + escapeHtml(vr.task_id || '') + '</strong>';
+            if (vr.requirements_checked) {
+                h += '<span class="validation-criteria">' +
+                    (vr.requirements_met || 0) + '/' + vr.requirements_checked +
+                    ' criteria met</span>';
+            }
+            h += '<p class="validation-message">' + escapeHtml(vr.message || '') + '</p>';
+            h += '</div>';
+        }
+        return h;
+    }
+
+    /* ── Refresh cycle ───────────────────────────────────────────────────── */
+
+    function refresh() {
+        fetch('/item/' + encodeURIComponent(slug) + '/dynamic')
+            .then(function (r) {
+                if (!r.ok) { throw new Error('HTTP ' + r.status); }
+                return r.json();
+            })
+            .then(function (data) {
+                currentStage = data.pipeline_stage;
+
+                /* Simple values — textContent (D4) */
+                var costEl = el('cost');
+                if (costEl) { costEl.textContent = formatCost(data.total_cost_usd); }
+
+                var tokensEl = el('tokens');
+                if (tokensEl) { tokensEl.textContent = formatTokens(data.total_tokens); }
+
+                var durationEl = el('duration');
+                if (durationEl) { durationEl.textContent = formatDuration(data.total_duration_s); }
+
+                /* Complex values — innerHTML (D4) */
+                var velocityEl = el('velocity');
+                if (velocityEl) { velocityEl.innerHTML = formatVelocity(data.avg_velocity); }
+
+                var stageEl = el('stage-badge');
+                if (stageEl) { stageEl.innerHTML = stageBadgeHtml(data.pipeline_stage, data.active_worker); }
+
+                var velBadgeEl = el('velocity-badge');
+                if (velBadgeEl) { velBadgeEl.innerHTML = velocityBadgeHtml(data.avg_velocity); }
+
+                var bannerEl = el('worker-banner');
+                if (bannerEl) { bannerEl.innerHTML = workerBannerHtml(data.active_worker, data.pipeline_stage); }
+
+                var tasksEl = el('plan-tasks');
+                if (tasksEl) { tasksEl.innerHTML = planTasksHtml(data.plan_tasks); }
+
+                var taskCountEl = el('plan-task-count');
+                if (taskCountEl) { taskCountEl.textContent = planTaskCountText(data.plan_tasks); }
+
+                /* Validation results — show/hide card + update content */
+                var valCard = document.querySelector('[data-dynamic="validation-card"]');
+                var valEl = el('validation-results');
+                var valCountEl = el('validation-count');
+                if (data.validation_results && data.validation_results.length > 0) {
+                    if (valCard) { valCard.hidden = false; }
+                    if (valEl) { valEl.innerHTML = validationResultsHtml(data.validation_results); }
+                    if (valCountEl) { valCountEl.textContent = String(data.validation_results.length); }
+                } else {
+                    if (valCard) { valCard.hidden = true; }
+                }
+
+                /* Stop on terminal stage (D6) */
+                if (TERMINAL_STAGES.indexOf(data.pipeline_stage) !== -1) {
+                    stop();
+                }
+            })
+            .catch(function () {
+                /* Silently ignore fetch errors; next tick will retry */
+            });
+    }
+
+    function stop() {
+        if (timerId !== null) {
+            clearInterval(timerId);
+            timerId = null;
+        }
+    }
+
+    /* Only start the timer when the initial stage is active (D6) */
+    if (TERMINAL_STAGES.indexOf(currentStage) === -1) {
+        timerId = setInterval(refresh, REFRESH_INTERVAL_MS);
+    }
 }());
 </script>
 {% endblock %}
