@@ -28,7 +28,7 @@ When a worker commits changes to files under langgraph_pipeline/web/:
 - Does the validator retry once if it gets a 404 on a curl check?
   YES = pass, NO = fail
 
-## LangSmith Trace: 7d99f028-ed57-4e90-af7b-03b8cca8b3b6
+
 
 
 ## 5 Whys Analysis
