@@ -241,13 +241,19 @@ sections:
       new endpoint.
 
       '
-    status: in_progress
+    status: completed
     target_acs:
     - AC6
     - AC10
     last_attempt: '2026-03-28T18:44:37.778381'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-28T18:48:30.651427'
+    result_message: Added GET /item/{slug}/dynamic JSON endpoint returning pipeline_stage,
+      active_worker, total_cost_usd, total_duration_s, total_tokens, avg_velocity,
+      plan_tasks, and validation_results. Reuses existing helpers. Active worker live
+      stats override completion aggregates. 7 unit tests pass. All 1545 tests pass
+      with no regressions.
 - id: '2'
   name: Frontend - Selective Refresh Mechanism
   status: pending
