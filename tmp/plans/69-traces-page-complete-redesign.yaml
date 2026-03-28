@@ -137,6 +137,10 @@ sections:
       item slugs). Added child_count display as 'N spans' below trace ID. Added font-variant-numeric
       tabular-nums to duration and cost cells. Template correctly uses display_duration,
       display_cost, display_model from _enrich_run enrichment. All 1484 tests pass.
+    validation_attempts: 1
+    validation_findings: Template correctly uses display_duration, display_cost, display_model
+      from _enrich_run. Column renamed to 'Item', filter to 'Name', child_count displays
+      as 'N spans', tabular-nums styling added. Build clean, 1484 tests pass.
   - id: '3.2'
     name: Add work item grouping toggle to trace list
     agent: frontend-coder
@@ -146,9 +150,12 @@ sections:
       execution, with an expand arrow to reveal individual runs. This requires both
       backend support (adding a grouping query mode to the proxy_list endpoint) and
       frontend template changes.'
-    status: pending
+    status: in_progress
     dependencies:
     - '3.1'
+    last_attempt: '2026-03-28T11:33:24.775076'
+    attempts: 1
+    model_used: sonnet
 - id: '4'
   name: Narrative page refinements
   status: pending
