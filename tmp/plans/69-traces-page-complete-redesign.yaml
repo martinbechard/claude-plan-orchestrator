@@ -208,9 +208,17 @@ sections:
       did, not just a generic ''PASS'' label. Verify that activity_summary, files_read,
       files_written, and bash_commands are populated from tool call data in grandchild
       runs. Fix any extraction logic gaps in _extract_file_details or _count_tools.'
-    status: in_progress
+    status: completed
     dependencies:
     - '4.1'
     last_attempt: '2026-03-28T12:05:59.602785'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-28T12:14:56.647731'
+    result_message: 'Fixed P15: _accumulate_tool_counts and _extract_file_details
+      now handle the direct tool run format from emit_tool_call_traces. Each tool
+      call is stored as a child run where name IS the tool name and inputs_json holds
+      the flat arg dict — both functions now check run.get(''name'') in addition to
+      scanning messages.content.tool_use blocks. Removed dead _collect_from_tool_use.
+      Added 13 targeted tests (3 for _accumulate_tool_counts, 6 for _extract_file_details,
+      2 integration). All 1526 tests pass.'
