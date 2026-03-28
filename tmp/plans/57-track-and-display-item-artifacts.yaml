@@ -42,7 +42,7 @@ sections:
   - id: '1.2'
     name: Enrich _collect_output_artifacts with manifest data, size, and content endpoint
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/57-track-and-display-item-artifacts.md
 
       Enhance _collect_output_artifacts() in langgraph_pipeline/web/routes/item.py
@@ -51,6 +51,9 @@ sections:
       fields to each artifact dict. Add a new GET /item/<slug>/artifact-content endpoint
       that accepts a path query parameter, validates it is within the project root,
       reads the file, and returns its content as text/plain. See design: docs/plans/2026-03-27-57-track-and-display-item-artifacts-design.md'
+    last_attempt: '2026-03-27T21:42:49.607849'
+    attempts: 1
+    model_used: sonnet
 - id: '2'
   name: 'Frontend: interactive artifact display with inline viewer'
   status: pending
