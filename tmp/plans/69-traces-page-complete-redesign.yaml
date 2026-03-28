@@ -125,12 +125,18 @@ sections:
       list template correctly displays the enriched duration (real minutes), cost,
       and model values from the updated _enrich_run data. Verify the template renders
       correctly with the new data fields.'
-    status: in_progress
+    status: completed
     dependencies:
     - '2.1'
     last_attempt: '2026-03-28T11:24:41.742865'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-28T11:29:52.922319'
+    result_message: Updated proxy_list.html for enriched P3/P4/P5 data display. Renamed
+      column header 'Run name' to 'Item' and filter label to 'Name' (column now shows
+      item slugs). Added child_count display as 'N spans' below trace ID. Added font-variant-numeric
+      tabular-nums to duration and cost cells. Template correctly uses display_duration,
+      display_cost, display_model from _enrich_run enrichment. All 1484 tests pass.
   - id: '3.2'
     name: Add work item grouping toggle to trace list
     agent: frontend-coder
