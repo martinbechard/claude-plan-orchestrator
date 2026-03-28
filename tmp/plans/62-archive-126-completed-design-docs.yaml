@@ -1,0 +1,30 @@
+meta:
+  name: 62-archive-126-completed-design-docs
+  source_item: tmp/plans/.claimed/62-archive-126-completed-design-docs.md
+  plan_doc: docs/plans/2026-03-27-62-archive-126-completed-design-docs-design.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - frontend-coder
+    - e2e-test-agent
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Archive ARCHIVE-classified design docs
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Move all ARCHIVE-classified docs to docs/plans/archive/
+    agent: coder
+    status: pending
+    description: >
+      Implement the work item: tmp/plans/.claimed/62-archive-126-completed-design-docs.md
+
+      Create docs/plans/archive/ directory. Parse docs/reports/design-doc-audit.md to
+      extract every filename classified as ARCHIVE. Use git mv to move each file from
+      docs/plans/ to docs/plans/archive/. Verify that docs/plans/ afterward contains
+      only KEEP, UPDATE, and non-audited docs. See design:
+      docs/plans/2026-03-27-62-archive-126-completed-design-docs-design.md
