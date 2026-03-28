@@ -4,7 +4,7 @@
 
 **Architecture:** Define a qa-auditor agent that orchestrates a multi-stage pipeline: (1) extract user-facing behaviors from functional specs, (2) map behaviors to test scenarios using domain checklists, (3) run individual checklist items as fast/cheap audits, (4) produce a structured QA audit report with coverage matrix. Domain checklists are reusable markdown templates stored in .claude/checklists/. The qa-auditor integrates as an additional validator in the existing ValidationConfig.validators list.
 
-**Tech Stack:** Python 3 (plan-orchestrator.py for validator registration), Markdown (agent definition, checklist templates), YAML (plan meta.validation.validators list)
+**Tech Stack:** Python 3 (langgraph_pipeline/ for validator registration), Markdown (agent definition, checklist templates), YAML (plan meta.validation.validators list)
 
 ---
 
@@ -91,7 +91,7 @@ Each checklist file is a simple markdown document with one rule per line (prefix
 
 ### Integration with Validation Pipeline
 
-The qa-auditor registers as a validator in the plan meta.validation.validators list. No code changes are needed to plan-orchestrator.py because the validator mechanism is already generic: it loads any agent name from the validators list, builds a validation prompt using that agent's body, and runs it.
+The qa-auditor registers as a validator in the plan meta.validation.validators list. No code changes are needed to the pipeline because the validator mechanism is already generic: it loads any agent name from the validators list, builds a validation prompt using that agent's body, and runs it.
 
 To enable qa-auditor for a plan:
 
@@ -128,7 +128,7 @@ The qa-auditor produces a structured report matching this template:
 
     ## Coverage: X/Y requirements covered (Z%)
 
-The report is included in the validator output and parsed by the existing VERDICT_PATTERN and FINDING_PATTERN regex in plan-orchestrator.py.
+The report is included in the validator output and parsed by the langgraph pipeline's verdict pattern matching.
 
 ---
 
@@ -146,9 +146,7 @@ The report is included in the validator output and parsed by the existing VERDIC
 
 ### Modified Files
 
-| File | Change |
-|------|--------|
-| scripts/plan-orchestrator.py | Add QA_AUDITOR_KEYWORDS to infer_agent_for_task() so qa-auditor is auto-selected for tasks with audit/qa/checklist keywords |
+None. The qa-auditor integrates as a configuration-only change via the validators list.
 
 ---
 
@@ -156,12 +154,12 @@ The report is included in the validator output and parsed by the existing VERDIC
 
 1. **qa-auditor runs as a single sonnet session, not a multi-model pipeline.** The backlog item describes haiku for checklists and sonnet for test plan generation. In the initial version, the qa-auditor runs everything in one sonnet session with instructions to process checklists concisely. This avoids the complexity of agent-to-agent dispatch while delivering the core value. Multi-model dispatch can be added later by having the orchestrator run individual checklist items as separate haiku tasks.
 
-2. **No changes to plan-orchestrator.py validation mechanics.** The existing validation pipeline already supports arbitrary validator names. Adding qa-auditor to the validators list is a pure configuration change. The only code change is adding audit-related keywords to infer_agent_for_task() for auto-selection.
+2. **No changes to validation mechanics.** The existing validation pipeline already supports arbitrary validator names. Adding qa-auditor to the validators list is a pure configuration change.
 
 3. **Checklists are static markdown files, not dynamic.** Checklists live in .claude/checklists/ as plain markdown. They are not generated or parameterized. The qa-auditor reads them and applies each item as a verification check. This keeps checklists simple, version-controlled, and human-editable.
 
-4. **qa-auditor produces standard VERDICT format.** The agent outputs **Verdict: PASS/WARN/FAIL** with - [PASS/WARN/FAIL] findings, matching the existing VERDICT_PATTERN and FINDING_PATTERN in plan-orchestrator.py. This means no parser changes are needed.
+4. **qa-auditor produces standard VERDICT format.** The agent outputs **Verdict: PASS/WARN/FAIL** with - [PASS/WARN/FAIL] findings, matching the langgraph pipeline's verdict pattern matching. This means no parser changes are needed.
 
 5. **Checklists are organized by domain, not by page.** A CRUD page applies the crud-operations checklist plus the data-display checklist. The qa-auditor selects which checklists apply based on the functional spec content, not a hardcoded mapping.
 
-6. **Keywords for agent inference include "audit", "qa", "checklist", "test plan".** These are added to a new QA_AUDITOR_KEYWORDS list in plan-orchestrator.py, following the same pattern as REVIEWER_KEYWORDS and DESIGNER_KEYWORDS.
+6. **Keywords for agent inference include "audit", "qa", "checklist", "test plan".** Task descriptions containing these keywords cause the langgraph pipeline to auto-select the qa-auditor agent.

@@ -2,9 +2,9 @@
 
 **Goal:** Create two validator agents (spec-verifier and ux-reviewer) that check UI code changes against functional specifications and usability standards, producing structured PASS/WARN/FAIL verdicts.
 
-**Architecture:** Define two read-only agents in .claude/agents/ following the established agent definition pattern. Both use tools: Read, Grep, Glob (no Bash since they only inspect code, unlike qa-auditor which runs tests). Add inference keywords (SPEC_VERIFIER_KEYWORDS and UX_REVIEWER_KEYWORDS) to plan-orchestrator.py so tasks with spec/ux keywords auto-select the correct agent. Both agents integrate as additional validators in the existing ValidationConfig.validators list.
+**Architecture:** Define two read-only agents in .claude/agents/ following the established agent definition pattern. Both use tools: Read, Grep, Glob (no Bash since they only inspect code, unlike qa-auditor which runs tests). Inference keywords (SPEC_VERIFIER_KEYWORDS and UX_REVIEWER_KEYWORDS) cause tasks with spec/ux keywords to auto-select the correct agent. Both agents integrate as additional validators in the existing ValidationConfig.validators list.
 
-**Tech Stack:** Python 3 (plan-orchestrator.py for keyword registration), Markdown (agent definitions), YAML (plan meta.validation.validators)
+**Tech Stack:** Python 3 (langgraph_pipeline/ for agent dispatch), Markdown (agent definitions), YAML (plan meta.validation.validators)
 
 ---
 
@@ -75,7 +75,7 @@ The ux-reviewer evaluates implemented UI code for usability. It checks:
 
 ### Agent Inference Keywords
 
-New keyword constants added to plan-orchestrator.py:
+The langgraph pipeline uses the following keyword patterns for agent auto-selection:
 
     SPEC_VERIFIER_KEYWORDS = [
         "spec verifier", "spec verification", "functional spec",
@@ -87,7 +87,7 @@ New keyword constants added to plan-orchestrator.py:
         "accessibility review", "ui quality"
     ]
 
-These are multi-word phrases checked before single-word DESIGNER_KEYWORDS in infer_agent_for_task() to avoid false positives.
+These are multi-word phrases checked before single-word designer keywords to avoid false positives.
 
 ### Integration with Validation Pipeline
 
@@ -136,9 +136,7 @@ The ux-reviewer additionally produces a quality score section:
 
 ### Modified Files
 
-| File | Change |
-|------|---------|
-| scripts/plan-orchestrator.py | Add SPEC_VERIFIER_KEYWORDS and UX_REVIEWER_KEYWORDS to infer_agent_for_task() |
+None. Both agents integrate as configuration-only changes via the validators list.
 
 ---
 
@@ -154,4 +152,4 @@ The ux-reviewer additionally produces a quality score section:
 
 5. **CRUD checklist reference in spec-verifier.** The spec-verifier references .claude/checklists/crud-operations.md (created in feature 11) for CRUD-specific verification rules. This reuses existing domain knowledge without duplication.
 
-6. **Multi-word keywords checked before single-word DESIGNER_KEYWORDS.** Keywords like "spec verification" and "ux review" are multi-word phrases. They are checked before single-word keywords (like "design") to prevent false matches where a "ux review" task would match the "design" keyword in DESIGNER_KEYWORDS.
+6. **Multi-word keywords checked before single-word designer keywords.** Keywords like "spec verification" and "ux review" are multi-word phrases. They are checked before single-word keywords (like "design") to prevent false matches where a "ux review" task would match the designer keyword.

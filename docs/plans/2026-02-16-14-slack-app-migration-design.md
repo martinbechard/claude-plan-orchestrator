@@ -69,7 +69,7 @@ New (Slack App):
 
 | File | Change |
 |------|--------|
-| scripts/plan-orchestrator.py | SlackNotifier: replace _post_webhook with _post_message, update __init__ to read new config fields, add Socket Mode handler for questions |
+| langgraph_pipeline/slack/notifier.py | SlackNotifier: replace _post_webhook with _post_message, update __init__ to read new config fields, add Socket Mode handler for questions |
 | .claude/slack.local.yaml.template | Replace webhook_url with bot_token/app_token/channel_id, add Slack App setup instructions |
 | tests/test_slack_notifier.py | Update all config fixtures to use new fields, add tests for _post_message and Socket Mode fallback |
 | scripts/auto-pipeline.py | No code changes needed (uses SlackNotifier public API which is unchanged) |
@@ -89,7 +89,7 @@ and add setup instructions as comments.
 
 ### Task 2.1: Update SlackNotifier config loading and transport
 
-In scripts/plan-orchestrator.py:
+In langgraph_pipeline/slack/notifier.py:
 - Update SLACK_CONFIG_PATH constants (no change needed - path is the same)
 - In __init__: replace self._webhook_url with self._bot_token, self._app_token,
   self._channel_id. Read from config["slack"]["bot_token"], etc.

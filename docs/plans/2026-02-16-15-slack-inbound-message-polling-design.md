@@ -118,11 +118,11 @@ to never disrupt the pipeline.
 ### Auto-pipeline (main_loop)
 
 Call slack.process_inbound() at three points:
-1. Before scan_all_backlogs() (line ~1597)
-2. After each process_item() returns (line ~1648)
-3. During idle wait before new_item_event.wait() (line ~1615)
+1. Before scan_all_backlogs()
+2. After each process_item() returns
+3. During idle wait before new_item_event.wait()
 
-### Orchestrator (main execution loop)
+### Langgraph pipeline (main execution loop)
 
 Call slack.process_inbound() at two points:
 1. At the top of the while True loop, after stop/circuit-breaker checks
@@ -134,7 +134,7 @@ Call slack.process_inbound() at two points:
 
 | File | Change |
 |------|--------|
-| scripts/plan-orchestrator.py | Add SLACK_LAST_READ_PATH and SLACK_INBOUND_POLL_LIMIT constants. Add poll_messages, classify_message, create_backlog_item, handle_control_command, answer_question, process_inbound methods to SlackNotifier. |
+| langgraph_pipeline/slack/poller.py | Add SLACK_LAST_READ_PATH and SLACK_INBOUND_POLL_LIMIT constants. Add poll_messages, classify_message, create_backlog_item, handle_control_command, answer_question, process_inbound methods to SlackNotifier. |
 | scripts/auto-pipeline.py | Call slack.process_inbound() at scan, post-item, and idle checkpoints in main_loop. |
 | .claude/slack.local.yaml.template | Add channels:history to the Bot Token Scopes comment. |
 | tests/test_slack_notifier.py | Add tests for poll_messages, classify_message, create_backlog_item, process_inbound. |
@@ -188,10 +188,10 @@ and dispatches to handlers. Wraps everything in try/except.
 Add slack.process_inbound() calls at scan, post-item, and idle
 checkpoints in auto-pipeline.py main_loop.
 
-### Task 3.2: Integrate process_inbound into orchestrator
+### Task 3.2: Integrate process_inbound into langgraph pipeline
 
 Add slack.process_inbound() calls between tasks and after validation
-in plan-orchestrator.py main execution loop.
+in the langgraph pipeline main execution loop.
 
 ---
 

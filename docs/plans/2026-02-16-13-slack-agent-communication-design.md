@@ -2,7 +2,7 @@
 
 **Goal:** Allow orchestrator agents to communicate with the human operator via Slack. Agents send status updates, ask blocking questions, report defects, and propose feature ideas as Slack messages. The human can respond to questions directly in Slack, unblocking agents without needing to be at the terminal. The feature is strictly opt-in: dormant unless a local Slack configuration file exists.
 
-**Architecture:** A SlackNotifier class in plan-orchestrator.py reads configuration from .claude/slack.local.yaml (gitignored). It integrates at the same lifecycle points where send_notification() is already called, plus additional hooks for validation failures and budget thresholds. For receiving answers to questions, the initial implementation uses file-based polling (Approach B from the backlog spec) - the simplest approach requiring no external infrastructure. The auto-pipeline.py gains a thin wrapper that delegates to the same SlackNotifier. Agent-initiated messages use the existing task-status.json with an optional slack_messages field.
+**Architecture:** A SlackNotifier class in langgraph_pipeline/slack/notifier.py reads configuration from .claude/slack.local.yaml (gitignored). It integrates at the same lifecycle points where notifications are already sent, plus additional hooks for validation failures and budget thresholds. For receiving answers to questions, the initial implementation uses file-based polling (Approach B from the backlog spec) - the simplest approach requiring no external infrastructure. The auto-pipeline.py gains a thin wrapper that delegates to the same SlackNotifier. Agent-initiated messages use the existing task-status.json with an optional slack_messages field.
 
 **Tech Stack:** Python 3 (urllib.request for HTTP POST to Slack webhooks, no new dependencies), YAML (slack.local.yaml configuration), JSON (Slack Block Kit payloads, slack-pending-question.json / slack-answer.json for polling)
 
@@ -41,7 +41,7 @@ Configuration lives in .claude/slack.local.yaml - a gitignored file alongside ot
 
 ### SlackNotifier Class
 
-A standalone class in plan-orchestrator.py (below the existing send_notification function):
+A standalone class in langgraph_pipeline/slack/notifier.py:
 
     class SlackNotifier:
         """Sends messages to Slack via Incoming Webhooks.
@@ -97,16 +97,16 @@ The human answers by creating .claude/slack-answer.json manually or via a lightw
 
 The SlackNotifier hooks into existing lifecycle events:
 
-| Event | Where in Code | Method |
-|-------|--------------|--------|
-| Plan starts | run_plan() entry (~line 2585) | send_status("Plan X started: N tasks") |
-| Task completes | after task SUCCESS (~line 2970+) | send_status("Task X.Y completed") |
-| Task fails | after max_attempts (~line 2938) | send_status("Task X.Y failed", level="error") |
-| Validation fails | after validation FAIL verdict | send_question("Retry or skip?") |
-| Plan completes | after "All tasks completed" (~line 2888) | send_status("Plan complete: summary") |
-| Budget threshold | BudgetGuard.can_proceed() returns False | send_status("Budget reached", level="warning") |
-| Design tie | future: judge scoring | send_question("Pick winner: A or B") |
-| Stop requested | check_stop_requested() true | send_status("Graceful stop", level="warning") |
+| Event | Method |
+|-------|--------|
+| Plan starts | send_status("Plan X started: N tasks") |
+| Task completes | send_status("Task X.Y completed") |
+| Task fails | send_status("Task X.Y failed", level="error") |
+| Validation fails | send_question("Retry or skip?") |
+| Plan completes | send_status("Plan complete: summary") |
+| Budget threshold | send_status("Budget reached", level="warning") |
+| Design tie | send_question("Pick winner: A or B") |
+| Stop requested | send_status("Graceful stop", level="warning") |
 
 ### Agent-Initiated Messages (via task-status.json)
 
@@ -122,7 +122,7 @@ The existing task-status.json schema gains an optional slack_messages field:
       ]
     }
 
-After reading the status file in run_claude_task() (~line 2432), the orchestrator iterates over slack_messages and dispatches each via the appropriate SlackNotifier method (send_defect or send_idea).
+After reading the status file, the langgraph pipeline iterates over slack_messages and dispatches each via the appropriate SlackNotifier method (send_defect or send_idea).
 
 ### Auto-Pipeline Integration
 
@@ -131,7 +131,7 @@ The auto-pipeline.py gains its own SlackNotifier instance, sending:
 - Session budget report
 - Pipeline paused/stopped with reason
 
-The SlackNotifier class is imported from plan-orchestrator.py to avoid duplication.
+The SlackNotifier class is imported from langgraph_pipeline/slack/notifier.py to avoid duplication.
 
 ### Message Formatting (Slack Block Kit)
 
@@ -178,7 +178,7 @@ Questions include options listed as text (file-based polling means buttons are i
 
 | File | Change |
 |------|---------|
-| scripts/plan-orchestrator.py | Add SlackNotifier class, SLACK_CONFIG_PATH constant, hook into plan/task lifecycle |
+| langgraph_pipeline/slack/notifier.py | SlackNotifier class with SLACK_CONFIG_PATH constant, integrated into plan/task lifecycle |
 | scripts/auto-pipeline.py | Import and use SlackNotifier for pipeline events |
 | .gitignore | Add .claude/slack.local.yaml and .claude/slack-*.json patterns |
 
