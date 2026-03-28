@@ -146,7 +146,7 @@ acceptance criteria below.
 - Is raw LangSmith data hidden by default, accessible via toggle?
   YES = pass, NO = fail
 
-## LangSmith Trace: c23cc522-8782-4be2-8951-077f51f710d7
+
 
 
 ## 5 Whys Analysis
