@@ -14,7 +14,7 @@ corrections listed in docs/reports/design-doc-audit.md under
 - Is it clear in each doc that plan-orchestrator.py references are
   historical and not actionable? YES = pass, NO = fail
 
-## LangSmith Trace: 63a7eaf7-36b1-4db3-872c-2e57e66d12f3
+
 
 
 ## 5 Whys Analysis
