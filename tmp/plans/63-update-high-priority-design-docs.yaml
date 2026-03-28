@@ -44,7 +44,7 @@ sections:
   - id: '2.1'
     name: Fix plan-orchestrator.py references in 3 cost/tool-call design docs
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/63-update-high-priority-design-docs.md
 
       Update the 3 cost/tool-call design docs per the high-priority corrections in
@@ -54,3 +54,10 @@ sections:
     last_attempt: '2026-03-27T22:01:38.425684'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T22:03:07.794248'
+    result_message: 'Updated 3 cost/tool-call design docs: replaced all scripts/plan-orchestrator.py
+      references with langgraph_pipeline paths. cost-analysis-design.md now references
+      langgraph_pipeline/slack/notifier.py for SlackNotifier. tool-call-timing-and-cost-analysis-ui-design.md
+      now references langgraph_pipeline/shared/cost_log.py as the schema writer. tool-call-cost-attribution-dummy-data-design.md
+      now references langgraph_pipeline/shared/claude_cli.py stream_json_output()
+      instead of plan-orchestrator.py _extract_tool_calls_from_json_output().'
