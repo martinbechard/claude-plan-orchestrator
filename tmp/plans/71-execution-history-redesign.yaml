@@ -302,6 +302,10 @@ sections:
       D2 (three-tier name resolution in resolve_display_name()), D3 (UI-level deduplication
       by run_id), TreeNode dataclass, build_tree(), and classify_node_type() in execution_tree.py.
       45 unit tests all passing. Full suite (1590 tests) green.
+    validation_attempts: 1
+    validation_findings: All 15 target ACs verified. Recursive tree fetch (D1), three-tier
+      name resolution (D2), and UI-level deduplication (D3) correctly implemented
+      with 45 passing unit tests. Full suite (1590 tests) green, no regressions.
   - id: '1.2'
     name: Implement real cost aggregation and wall-clock duration
     agent: coder
@@ -325,7 +329,7 @@ sections:
       (near-zero replacement).
 
       '
-    status: pending
+    status: in_progress
     target_acs:
     - AC4
     - AC5
@@ -338,6 +342,9 @@ sections:
     - AC47
     - AC48
     - AC49
+    last_attempt: '2026-03-28T18:53:38.414551'
+    attempts: 1
+    model_used: opus
   - id: '1.3'
     name: Create execution history API endpoint
     agent: coder
