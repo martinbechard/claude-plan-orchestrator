@@ -1148,6 +1148,38 @@ class TracingProxy:
             rows = conn.execute(sql, run_ids).fetchall()
         return {row["parent_run_id"]: row["resolved_slug"] for row in rows}
 
+    # ─── Full Tree Fetch ─────────────────────────────────────────────────────
+
+    def get_full_tree(self, run_id: str) -> list[dict]:
+        """Fetch all descendants of a run_id using iterative breadth-first traversal.
+
+        Returns a flat list of all trace rows in the subtree rooted at run_id.
+        The root run itself is NOT included — only descendants.  Each row is a
+        full trace dict (all columns).  No depth limit: traversal continues until
+        get_children_batch() returns no new children.
+
+        Args:
+            run_id: The root run identifier whose descendants to fetch.
+
+        Returns:
+            Flat list of all descendant trace row dicts, ordered by BFS level
+            then start_time within each level.
+        """
+        all_rows: list[dict] = []
+        frontier: list[str] = [run_id]
+        while frontier:
+            children_by_parent = self.get_children_batch(frontier)
+            next_frontier: list[str] = []
+            for parent_id in frontier:
+                children = children_by_parent.get(parent_id, [])
+                for child in children:
+                    all_rows.append(child)
+                    child_run_id = child.get("run_id", "")
+                    if child_run_id:
+                        next_frontier.append(child_run_id)
+            frontier = next_frontier
+        return all_rows
+
     # ─── Cost Analysis Queries ────────────────────────────────────────────────
 
     def get_cost_summary(self) -> CostSummary:
