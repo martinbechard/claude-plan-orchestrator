@@ -277,7 +277,7 @@ sections:
       and dedup logic.
 
       '
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -297,6 +297,11 @@ sections:
     last_attempt: '2026-03-28T18:43:38.083285'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-28T18:50:17.533897'
+    result_message: Implemented D1 (recursive tree fetch via BFS in proxy.py get_full_tree()),
+      D2 (three-tier name resolution in resolve_display_name()), D3 (UI-level deduplication
+      by run_id), TreeNode dataclass, build_tree(), and classify_node_type() in execution_tree.py.
+      45 unit tests all passing. Full suite (1590 tests) green.
   - id: '1.2'
     name: Implement real cost aggregation and wall-clock duration
     agent: coder
