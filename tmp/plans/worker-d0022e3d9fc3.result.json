@@ -1,0 +1,10 @@
+{
+  "success": false,
+  "item_path": "tmp/plans/.claimed/test-traceability-validation.md",
+  "cost_usd": 0.0,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "duration_s": 955.0073593339766,
+  "message": "Unhandled exception: [Errno 2] No such file or directory: 'tmp/plans/test-traceability-validation.yaml'",
+  "verification_notes": null
+}
