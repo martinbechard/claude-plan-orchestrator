@@ -182,12 +182,20 @@ sections:
       durations use child-span computation (_duration_from_children and _build_merged_phase_view).
       Fix any edge cases where durations still show 0.01s or incorrect values, such
       as when some children have NULL end_time.'
-    status: in_progress
+    status: completed
     dependencies:
     - '2.1'
     last_attempt: '2026-03-28T11:53:20.183492'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-28T12:02:23.501685'
+    result_message: 'Fixed P11 and P12: added _NEAR_ZERO_DURATION_S constant and _compute_child_span_secs
+      helper; updated _build_phase_view to use grandchildren span as primary phase
+      duration (falling back to child timestamps when absent/all-null-end); updated
+      _build_merged_phase_view to fall back to grandchildren when all merged children
+      have NULL end_time; updated build_execution_view to use grandchildren as intermediate
+      fallback when children span is near-zero or unavailable. Added 6 targeted tests.
+      All 1510 tests pass.'
   - id: '4.2'
     name: Ensure narrative phases show real agent activity detail
     agent: coder
