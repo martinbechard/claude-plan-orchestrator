@@ -59,6 +59,10 @@ _RUN_ID_PREFIX_LENGTH = 8
 # Key in metadata_json that holds per-node cost in USD.
 COST_METADATA_KEY = "total_cost_usd"
 
+# Keys in metadata_json for token counts.
+INPUT_TOKENS_METADATA_KEY = "input_tokens"
+OUTPUT_TOKENS_METADATA_KEY = "output_tokens"
+
 # Durations below this threshold (in seconds) are considered "near-zero" and
 # replaced with the descendant time span (earliest start to latest end).
 NEAR_ZERO_DURATION_THRESHOLD_SECONDS = 1.0
@@ -102,6 +106,28 @@ class TreeNode:
     error: Optional[str]
     created_at: str
     children: list["TreeNode"] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        """Serialize this node and all descendants to a JSON-compatible dict.
+
+        Includes token_count extracted from metadata_json for the API response.
+        Used by the /api/execution-tree/{run_id} endpoint (D6).
+        """
+        return {
+            "run_id": self.run_id,
+            "name": self.name,
+            "display_name": self.display_name,
+            "node_type": self.node_type,
+            "status": self.status,
+            "duration": self.duration_seconds,
+            "cost": self.cost,
+            "model": self.model,
+            "token_count": extract_token_count(self.metadata_json),
+            "inputs_json": self.inputs_json,
+            "outputs_json": self.outputs_json,
+            "metadata_json": self.metadata_json,
+            "children": [child.to_dict() for child in self.children],
+        }
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
@@ -259,6 +285,27 @@ def extract_node_cost(metadata_json: Optional[str]) -> float:
         return cost if cost >= 0.0 else 0.0
     except (ValueError, TypeError):
         return 0.0
+
+
+def extract_token_count(metadata_json: Optional[str]) -> int:
+    """Extract total token count (input + output) from a node's metadata_json.
+
+    Reads the input_tokens and output_tokens fields from the JSON and sums them.
+    Returns 0 when absent or unparseable.
+
+    Args:
+        metadata_json: Raw JSON string from the traces DB metadata_json column.
+
+    Returns:
+        Total token count as an integer, or 0 if no token data is present.
+    """
+    meta = _parse_json(metadata_json)
+    input_tokens = meta.get(INPUT_TOKENS_METADATA_KEY, 0)
+    output_tokens = meta.get(OUTPUT_TOKENS_METADATA_KEY, 0)
+    try:
+        return int(input_tokens) + int(output_tokens)
+    except (ValueError, TypeError):
+        return 0
 
 
 # ─── Internal Helpers ─────────────────────────────────────────────────────────

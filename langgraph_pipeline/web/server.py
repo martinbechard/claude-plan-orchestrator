@@ -10,6 +10,7 @@ Gracefully degrades with a logged warning when fastapi or uvicorn are not instal
 
 import json
 import logging
+import os
 import re
 import socket
 import threading
@@ -151,6 +152,7 @@ def create_app(config: Optional[dict] = None):
     from langgraph_pipeline.web.routes.completions import router as completions_router
     from langgraph_pipeline.web.routes.cost import router as cost_router
     from langgraph_pipeline.web.routes.dashboard import router as dashboard_router
+    from langgraph_pipeline.web.routes.execution_history import router as execution_history_router
     from langgraph_pipeline.web.routes.item import router as item_router
     from langgraph_pipeline.web.routes.queue import router as queue_router
     from langgraph_pipeline.web.routes.sessions import router as sessions_router
@@ -159,6 +161,7 @@ def create_app(config: Optional[dict] = None):
     app.include_router(analysis_router)
     app.include_router(completions_router)
     app.include_router(cost_router)
+    app.include_router(execution_history_router)
     app.include_router(queue_router)
     app.include_router(item_router)
     app.include_router(sessions_router)
@@ -378,7 +381,7 @@ def create_app(config: Optional[dict] = None):
             from langgraph_pipeline.web.dashboard_state import get_dashboard_state
             dashboard = get_dashboard_state()
             dashboard.quota_exhausted = True
-            dashboard.add_error("Quota exhausted — pipeline dispatch halted")
+            dashboard.add_notification("Quota exhausted — pipeline dispatch halted")
             logger.warning("Quota exhaustion reported by worker — dispatch halted")
         except Exception as exc:
             logger.debug("quota_exhausted: %s", exc)
@@ -398,6 +401,61 @@ def create_app(config: Optional[dict] = None):
 
 
 # ─── Lifecycle ────────────────────────────────────────────────────────────────
+
+
+def _kill_process_on_port(port: int) -> None:
+    """Kill any process listening on the given TCP port.
+
+    Uses lsof to find the PID bound to the port and sends SIGTERM, then
+    SIGKILL if it doesn't exit within 2 seconds. This prevents "address
+    already in use" errors from stale pipeline processes.
+    """
+    import signal
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f"tcp:{port}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        pids = result.stdout.strip().split()
+        if not pids:
+            return
+
+        my_pid = os.getpid()
+        for pid_str in pids:
+            try:
+                pid = int(pid_str)
+            except ValueError:
+                continue
+            if pid == my_pid:
+                continue
+            logger.info("Killing stale process %d on port %d", pid, port)
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                continue
+            except PermissionError:
+                logger.warning("No permission to kill PID %d on port %d", pid, port)
+                continue
+
+        # Brief wait for processes to exit
+        import time as _time
+        _time.sleep(0.5)
+
+        # SIGKILL any that didn't exit
+        for pid_str in pids:
+            try:
+                pid = int(pid_str)
+                if pid == my_pid:
+                    continue
+                os.kill(pid, 0)  # Check if still alive
+                os.kill(pid, signal.SIGKILL)
+                logger.info("Force-killed stale process %d on port %d", pid, port)
+            except (ProcessLookupError, ValueError, PermissionError):
+                pass
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass  # lsof not available or failed — proceed and let uvicorn report the error
 
 
 def start_web_server(
@@ -434,6 +492,8 @@ def start_web_server(
             "install fastapi and uvicorn to enable the web interface"
         )
         return
+
+    _kill_process_on_port(port)
 
     global _active_port
     _active_port = port

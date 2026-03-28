@@ -1,0 +1,16 @@
+{# langgraph_pipeline/web/templates/execution_history.html
+   Execution history page shell with loading state.
+   The tree is fetched via /api/execution-tree/{run_id} and rendered client-side.
+   Design: docs/plans/2026-03-28-71-execution-history-redesign-design.md (D6, D8) #}
+{% extends "base.html" %}
+
+{% block title %}Execution History - {{ run_id[:8] }}{% endblock %}
+
+{% block content %}
+<h1>Execution History</h1>
+<p>Run: <code>{{ run_id }}</code></p>
+
+<div id="execution-tree" data-run-id="{{ run_id }}">
+  <p class="empty-state">Loading execution tree...</p>
+</div>
+{% endblock %}
