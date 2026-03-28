@@ -1,9 +1,10 @@
 {# langgraph_pipeline/web/templates/proxy_list.html
-   Paginated LangSmith trace list with filter bar and expandable row details.
+   Item-centric execution history list with filter bar.
    Context variables:
      runs        list[dict]  — enriched rows from _enrich_run(); each row has
                                display_duration, display_cost, display_model,
-                               display_slug, child_count (int), plus raw DB fields
+                               display_slug, display_status, child_count (int),
+                               plus raw DB fields
      page        int         — current 1-based page number
      total_pages int         — total number of pages
      slug        str         — active slug filter value (substring on name)
@@ -11,11 +12,11 @@
      date_from   str         — active date-from filter value (ISO date)
      date_to     str         — active date-to filter value (ISO date)
      trace_id    str         — active trace_id filter value (run_id prefix/substring)
-   Design: docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md
+   Design: docs/plans/2026-03-28-69-traces-page-complete-redesign-design.md
 #}
 {% extends "base.html" %}
 
-{% block title %}Traces — Plan Orchestrator{% endblock %}
+{% block title %}Execution History — Plan Orchestrator{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -34,7 +35,7 @@
 {% endblock %}
 
 {% block content %}
-<h1>LangSmith Traces</h1>
+<h1>Execution History</h1>
 
 {# ── Filter bar ────────────────────────────────────────────────────────────── #}
 <form class="filter-bar" method="get" action="/proxy" role="search"
@@ -89,7 +90,6 @@
       <tr>
         <th scope="col">Trace ID</th>
         <th scope="col">Run name</th>
-        <th scope="col">Item slug</th>
         <th scope="col">Start time</th>
         <th scope="col" style="text-align:right">Duration</th>
         <th scope="col" style="text-align:right">Cost</th>
@@ -100,13 +100,16 @@
     <tbody>
       {% for run in runs %}
 
-      {# Determine status badge ─────────────────────────────────────────────── #}
-      {% if run.error %}
+      {# Determine status badge from pre-computed display_status ──────────────── #}
+      {% if run.display_status == "error" %}
         {% set badge_class = "badge-error" %}
         {% set badge_label = "Error" %}
-      {% elif run.end_time %}
+      {% elif run.display_status == "completed" %}
         {% set badge_class = "badge-success" %}
-        {% set badge_label = "Success" %}
+        {% set badge_label = "Completed" %}
+      {% elif run.display_status == "stale" %}
+        {% set badge_class = "badge-unknown" %}
+        {% set badge_label = "Stale" %}
       {% else %}
         {% set badge_class = "badge-unknown" %}
         {% set badge_label = "Running" %}
@@ -127,17 +130,9 @@
         </td>
 
         <td class="name">
-          <a href="/proxy/{{ run.run_id | e }}/narrative">{{ run.name | e }}</a>
-        </td>
-
-        <td>
-          {% if run.display_slug %}
-            {{ run.display_slug | e }}
-          {% elif run.name %}
-            {{ run.name.split(" ")[0] | e }}
-          {% else %}
-            &mdash;
-          {% endif %}
+          <a href="/proxy/{{ run.run_id | e }}/narrative">
+            {{ run.display_slug | e if run.display_slug else run.name | e }}
+          </a>
         </td>
 
         <td>
@@ -156,33 +151,6 @@
 
         <td>
           <span class="badge {{ badge_class }}" role="status">{{ badge_label }}</span>
-        </td>
-      </tr>
-
-      {# Expandable detail row ──────────────────────────────────────────────── #}
-      <tr class="row-details" aria-label="Details for {{ run.name | e }}">
-        <td colspan="8">
-          <details>
-            <summary>
-              Details ({{ run.child_count }} child run{{ "s" if run.child_count != 1 else "" }}) &mdash;
-              <a href="/proxy/{{ run.run_id | e }}/narrative"
-                 aria-label="Open narrative for {{ run.name | e }}">
-                open narrative &rarr;
-              </a>
-            </summary>
-            <div style="padding:6px 0 2px;">
-              <strong style="font-size:12px;color:#555;display:block;margin-bottom:4px;">
-                Metadata JSON
-              </strong>
-              {% if run.metadata_json %}
-                <pre aria-label="Metadata JSON for {{ run.name | e }}">{{ run.metadata_json | e }}</pre>
-              {% else %}
-                <p style="font-size:12px;color:#888;margin:4px 0 0;">
-                  No metadata recorded.
-                </p>
-              {% endif %}
-            </div>
-          </details>
         </td>
       </tr>
 

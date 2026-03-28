@@ -147,7 +147,11 @@ def test_proxy_get_children(proxy):
 
 
 def test_proxy_list_endpoint(enabled_client):
-    """GET /proxy returns 200 and contains the run name in the HTML."""
+    """GET /proxy returns 200 and shows the resolved slug in the HTML.
+
+    SAMPLE_METADATA contains slug='item-42', so display_slug resolves to
+    'item-42' — the raw run name is replaced by the slug in the run name column.
+    """
     proxy = get_proxy()
     assert proxy is not None
     proxy.record_run(
@@ -164,7 +168,8 @@ def test_proxy_list_endpoint(enabled_client):
 
     response = enabled_client.get("/proxy")
     assert response.status_code == 200
-    assert SAMPLE_RUN_NAME in response.text
+    # The list page shows display_slug (from metadata) rather than the raw run name.
+    assert "item-42" in response.text
 
 
 def test_proxy_detail_endpoint(enabled_client):
