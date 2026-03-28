@@ -13,7 +13,12 @@ from fastapi.testclient import TestClient
 
 import langgraph_pipeline.web.proxy as proxy_module
 from langgraph_pipeline.web.proxy import ChildTimeSpan, DailyTotal, Session, TracingProxy, get_proxy, init_proxy
-from langgraph_pipeline.web.routes.proxy import _compute_elapsed, _parse_iso
+from langgraph_pipeline.web.routes.proxy import (
+    ChildAggregation,
+    _compute_elapsed,
+    _enrich_run,
+    _parse_iso,
+)
 from langgraph_pipeline.web.server import create_app
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -1985,3 +1990,274 @@ def test_get_child_slugs_batch_multiple_parents(proxy):
     assert len(result) == 2
     assert result[SLUG_PARENT_A] == "11-feature-alpha"
     assert result[SLUG_PARENT_B] == "22-feature-beta"
+
+
+# ─── _enrich_run Child Aggregation Tests ─────────────────────────────────────
+
+
+def test_enrich_run_uses_child_span_for_near_zero_duration():
+    """_enrich_run replaces near-zero root duration with child-aggregated span.
+
+    Root run records 0.01s (LangSmith start/end event artifact); child span
+    covers the real pipeline duration of 5 minutes.
+    """
+    run = {
+        "run_id": "root-near-zero",
+        "name": "my-item",
+        "start_time": "2026-03-28T09:00:00",
+        "end_time": "2026-03-28T09:00:00.01",
+        "model": "",
+        "metadata_json": None,
+        "error": None,
+    }
+    child_agg = ChildAggregation(
+        time_span=ChildTimeSpan(
+            earliest_start="2026-03-28T09:00:00",
+            latest_end="2026-03-28T09:05:00",
+        ),
+        cost=None,
+        model=None,
+        slug=None,
+    )
+    enriched = _enrich_run(run, child_agg)
+    assert enriched["display_duration"] == "5m 00s"
+
+
+def test_enrich_run_uses_child_span_when_root_end_time_missing():
+    """_enrich_run uses child span when root run has no end_time (still running or missing)."""
+    run = {
+        "run_id": "root-no-end",
+        "name": "my-item",
+        "start_time": "2026-03-28T09:00:00",
+        "end_time": None,
+        "model": "",
+        "metadata_json": None,
+        "error": None,
+    }
+    child_agg = ChildAggregation(
+        time_span=ChildTimeSpan(
+            earliest_start="2026-03-28T09:00:01",
+            latest_end="2026-03-28T09:03:00",
+        ),
+        cost=None,
+        model=None,
+        slug=None,
+    )
+    enriched = _enrich_run(run, child_agg)
+    assert enriched["display_duration"] == "2m 59s"
+
+
+def test_enrich_run_keeps_root_duration_when_real():
+    """_enrich_run preserves root duration when it exceeds the near-zero threshold."""
+    run = {
+        "run_id": "root-real-duration",
+        "name": "my-item",
+        "start_time": "2026-03-28T09:00:00",
+        "end_time": "2026-03-28T09:02:30",
+        "model": "",
+        "metadata_json": None,
+        "error": None,
+    }
+    child_agg = ChildAggregation(
+        time_span=ChildTimeSpan(
+            earliest_start="2026-03-28T09:00:10",
+            latest_end="2026-03-28T09:10:00",
+        ),
+        cost=None,
+        model=None,
+        slug=None,
+    )
+    enriched = _enrich_run(run, child_agg)
+    # Root is 2m30s, well above threshold — keep root duration, not child span
+    assert enriched["display_duration"] == "2m 30s"
+
+
+def test_enrich_run_uses_child_cost_when_root_has_no_cost():
+    """_enrich_run uses child-aggregated cost when root metadata has no cost field."""
+    run = {
+        "run_id": "root-no-cost",
+        "name": "my-item",
+        "start_time": "2026-03-28T09:00:00",
+        "end_time": "2026-03-28T09:00:05",
+        "model": "",
+        "metadata_json": json.dumps({"node_name": "execute_task"}),
+        "error": None,
+    }
+    child_agg = ChildAggregation(
+        time_span=None,
+        cost=0.3712,
+        model=None,
+        slug=None,
+    )
+    enriched = _enrich_run(run, child_agg)
+    assert enriched["display_cost"] == "$0.3712"
+
+
+def test_enrich_run_prefers_root_cost_over_child():
+    """_enrich_run keeps root cost when the root metadata carries a cost field."""
+    run = {
+        "run_id": "root-with-cost",
+        "name": "my-item",
+        "start_time": "2026-03-28T09:00:00",
+        "end_time": "2026-03-28T09:00:05",
+        "model": "",
+        "metadata_json": json.dumps({"total_cost": 0.1111}),
+        "error": None,
+    }
+    child_agg = ChildAggregation(
+        time_span=None,
+        cost=0.9999,
+        model=None,
+        slug=None,
+    )
+    enriched = _enrich_run(run, child_agg)
+    assert enriched["display_cost"] == "$0.1111"
+
+
+def test_enrich_run_uses_child_model_when_root_model_empty():
+    """_enrich_run fills display_model from child_agg when root model column is empty."""
+    run = {
+        "run_id": "root-no-model",
+        "name": "my-item",
+        "start_time": "2026-03-28T09:00:00",
+        "end_time": "2026-03-28T09:00:05",
+        "model": "",
+        "metadata_json": None,
+        "error": None,
+    }
+    child_agg = ChildAggregation(
+        time_span=None,
+        cost=None,
+        model="claude-sonnet-4-6",
+        slug=None,
+    )
+    enriched = _enrich_run(run, child_agg)
+    assert enriched["display_model"] == "claude-sonnet-4-6"
+
+
+def test_enrich_run_prefers_root_model_over_child():
+    """_enrich_run keeps root model when the root row has a non-empty model value."""
+    run = {
+        "run_id": "root-with-model",
+        "name": "my-item",
+        "start_time": "2026-03-28T09:00:00",
+        "end_time": "2026-03-28T09:00:05",
+        "model": "claude-opus-4-6",
+        "metadata_json": None,
+        "error": None,
+    }
+    child_agg = ChildAggregation(
+        time_span=None,
+        cost=None,
+        model="claude-haiku-4-5",
+        slug=None,
+    )
+    enriched = _enrich_run(run, child_agg)
+    assert enriched["display_model"] == "claude-opus-4-6"
+
+
+def test_enrich_run_uses_child_slug_for_langgraph_root():
+    """_enrich_run resolves slug from child_agg when root is named 'LangGraph'."""
+    run = {
+        "run_id": "root-langgraph",
+        "name": "LangGraph",
+        "start_time": "2026-03-28T09:00:00",
+        "end_time": "2026-03-28T09:00:01",
+        "model": "",
+        "metadata_json": None,
+        "error": None,
+    }
+    child_agg = ChildAggregation(
+        time_span=None,
+        cost=None,
+        model=None,
+        slug="07-real-work-item",
+    )
+    enriched = _enrich_run(run, child_agg)
+    assert enriched["display_slug"] == "07-real-work-item"
+
+
+def test_enrich_run_prefers_meta_slug_over_child_slug():
+    """_enrich_run keeps the metadata slug even if child_agg provides a different one."""
+    run = {
+        "run_id": "root-with-meta-slug",
+        "name": "LangGraph",
+        "start_time": "2026-03-28T09:00:00",
+        "end_time": "2026-03-28T09:00:01",
+        "model": "",
+        "metadata_json": json.dumps({"item_slug": "04-from-metadata"}),
+        "error": None,
+    }
+    child_agg = ChildAggregation(
+        time_span=None,
+        cost=None,
+        model=None,
+        slug="99-from-child",
+    )
+    enriched = _enrich_run(run, child_agg)
+    assert enriched["display_slug"] == "04-from-metadata"
+
+
+def test_enrich_run_without_child_agg_unchanged():
+    """_enrich_run called without child_agg behaves identically to before the change."""
+    run = {
+        "run_id": "root-no-child-agg",
+        "name": "my-item",
+        "start_time": "2026-03-28T09:00:00",
+        "end_time": "2026-03-28T09:02:00",
+        "model": "claude-opus-4-6",
+        "metadata_json": json.dumps({"total_cost": 0.25, "slug": "02-my-item"}),
+        "error": None,
+    }
+    enriched = _enrich_run(run)
+    assert enriched["display_duration"] == "2m 00s"
+    assert enriched["display_cost"] == "$0.2500"
+    assert enriched["display_model"] == "claude-opus-4-6"
+    assert enriched["display_slug"] == "02-my-item"
+
+
+def test_proxy_list_integrates_child_aggregation(enabled_client):
+    """GET /proxy enriches list rows with child-aggregated slug, cost, model, and duration.
+
+    The root run is named 'LangGraph' with no metadata. A child carries the real
+    slug, model, cost, and a wide time span. The list response must show child-derived values.
+    """
+    proxy = get_proxy()
+    assert proxy is not None
+
+    root_id = "enrich-test-root-a1b2"
+    child_id = "enrich-test-child-c3d4"
+
+    # Root run: 'LangGraph' name, 0.01s duration, no cost, no model
+    proxy.record_run(
+        run_id=root_id,
+        parent_run_id=None,
+        name="LangGraph",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time="2026-03-28T08:00:00",
+        end_time="2026-03-28T08:00:00.01",
+    )
+    # Child run: carries real slug, model, cost, and a wide time span
+    proxy.record_run(
+        run_id=child_id,
+        parent_run_id=root_id,
+        name="execute_task",
+        inputs=None,
+        outputs=None,
+        metadata={"item_slug": "55-real-slug", "total_cost_usd": 0.4321},
+        error=None,
+        start_time="2026-03-28T08:00:05",
+        end_time="2026-03-28T08:07:30",
+    )
+    # Give the child a model value via the model column
+    proxy.propagate_model_to_root(root_id, "claude-sonnet-4-6")
+
+    response = enabled_client.get("/proxy")
+    assert response.status_code == 200
+    html = response.text
+
+    # Child-resolved slug should appear in the list
+    assert "55-real-slug" in html

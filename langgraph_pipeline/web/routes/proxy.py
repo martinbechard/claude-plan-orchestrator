@@ -15,6 +15,7 @@ Both endpoints return HTTP 404 when the proxy is disabled (get_proxy() is None).
 
 import json
 import math
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -25,7 +26,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
 from langgraph_pipeline.web.helpers.trace_narrative import build_execution_view
-from langgraph_pipeline.web.proxy import PAGE_SIZE_DEFAULT, get_proxy
+from langgraph_pipeline.web.proxy import PAGE_SIZE_DEFAULT, ChildTimeSpan, get_proxy
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,29 @@ HTTP_NOT_FOUND = 404
 # Runs with no end_time whose start_time is older than this many minutes are
 # shown as "stale" rather than "running" on the list page.
 _STALE_RUN_THRESHOLD_MINUTES = 30
+
+# Root run durations below this threshold (seconds) are treated as near-zero and
+# replaced with the child-aggregated span when child data is available.
+# LangSmith root runs often record 0.01s because the SDK emits two events
+# (start and end) that are nearly simultaneous at the graph level.
+_NEAR_ZERO_DURATION_S = 1.0
+
+
+# ─── Child Aggregation ────────────────────────────────────────────────────────
+
+
+@dataclass
+class ChildAggregation:
+    """Child-aggregated values for a single root run, used by _enrich_run.
+
+    Bundles all four child-derived fields so _enrich_run stays at two
+    parameters (run + child_agg).
+    """
+
+    time_span: Optional[ChildTimeSpan]
+    cost: Optional[float]
+    model: Optional[str]
+    slug: Optional[str]
 
 # ─── Jinja2 Setup ─────────────────────────────────────────────────────────────
 
@@ -144,14 +168,19 @@ def _compute_display_status(run: dict) -> str:
     return "running"
 
 
-def _enrich_run(run: dict) -> dict:
+def _enrich_run(run: dict, child_agg: Optional[ChildAggregation] = None) -> dict:
     """Add pre-computed display fields to a run dict for template rendering.
 
     Adds: display_duration, display_slug, display_model, display_cost, display_status.
-    Never exposes "LangGraph" as the display slug; prefers metadata slug.
+    When child_agg is provided, child-aggregated values replace root-row data
+    that is missing or near-zero (duration < _NEAR_ZERO_DURATION_S, empty model,
+    missing cost, or "LangGraph" slug).
+
+    Args:
+        run: Raw trace row dict from the database.
+        child_agg: Optional batch-aggregated child values for this run_id.
     """
     run = dict(run)
-    run["display_duration"] = _format_duration(run.get("start_time"), run.get("end_time"))
 
     meta: dict = {}
     if run.get("metadata_json"):
@@ -160,13 +189,46 @@ def _enrich_run(run: dict) -> dict:
         except (ValueError, TypeError):
             meta = {}
 
+    # display_duration: prefer child span when root is missing or near-zero
+    root_start = _parse_iso(run.get("start_time"))
+    root_end = _parse_iso(run.get("end_time"))
+    use_child_span = False
+    if child_agg and child_agg.time_span:
+        if root_start is None or root_end is None:
+            use_child_span = True
+        else:
+            root_delta = (root_end - root_start).total_seconds()
+            use_child_span = root_delta < _NEAR_ZERO_DURATION_S
+    if use_child_span and child_agg and child_agg.time_span:
+        run["display_duration"] = _format_duration(
+            child_agg.time_span.earliest_start, child_agg.time_span.latest_end
+        )
+    else:
+        run["display_duration"] = _format_duration(run.get("start_time"), run.get("end_time"))
+
+    # display_slug: prefer child slug when root is "LangGraph" or empty
     raw_name = run.get("name", "")
     meta_slug = meta.get("slug") or meta.get("item_slug") or ""
-    run["display_slug"] = meta_slug or (raw_name if raw_name != "LangGraph" else "")
+    display_slug = meta_slug or (raw_name if raw_name != "LangGraph" else "")
+    if not display_slug and child_agg and child_agg.slug:
+        display_slug = child_agg.slug
+    run["display_slug"] = display_slug
 
-    run["display_model"] = run.get("model") or ""
-    cost = meta.get("cost") or meta.get("total_cost")
-    run["display_cost"] = f"${float(cost):.4f}" if cost is not None else ""
+    # display_model: prefer child model when root is empty
+    root_model = run.get("model") or ""
+    if not root_model and child_agg and child_agg.model:
+        root_model = child_agg.model
+    run["display_model"] = root_model
+
+    # display_cost: prefer child cost when root metadata carries no cost
+    root_cost = meta.get("cost") or meta.get("total_cost")
+    if root_cost is not None:
+        run["display_cost"] = f"${float(root_cost):.4f}"
+    elif child_agg and child_agg.cost is not None:
+        run["display_cost"] = f"${child_agg.cost:.4f}"
+    else:
+        run["display_cost"] = ""
+
     run["display_status"] = _compute_display_status(run)
     return run
 
@@ -235,10 +297,26 @@ def proxy_list(
         date_to=date_to,
         trace_id=trace_id,
     )
-    runs = [_enrich_run(r) for r in raw_runs]
+    run_ids = [r["run_id"] for r in raw_runs if r.get("run_id")]
 
-    # Child run counts in a single batch query
-    run_ids = [r["run_id"] for r in runs if r.get("run_id")]
+    # Batch-aggregate child data for the entire page in four queries
+    child_time_spans = proxy.get_child_time_spans_batch(run_ids)
+    child_costs = proxy.get_child_costs_batch(run_ids)
+    child_models = proxy.get_child_models_batch(run_ids)
+    child_slugs = proxy.get_child_slugs_batch(run_ids)
+
+    runs = []
+    for r in raw_runs:
+        rid = r.get("run_id", "")
+        child_agg = ChildAggregation(
+            time_span=child_time_spans.get(rid),
+            cost=child_costs.get(rid),
+            model=child_models.get(rid),
+            slug=child_slugs.get(rid),
+        )
+        runs.append(_enrich_run(r, child_agg))
+
+    # Child run counts in a single batch query (run_ids already computed above)
     child_counts = proxy.count_children_batch(run_ids)
     for run in runs:
         run["child_count"] = child_counts.get(run.get("run_id", ""), 0)
