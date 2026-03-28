@@ -68,6 +68,10 @@ _DURATION_UNKNOWN = "—"
 # ago are treated as completed rather than still-running.
 _STATUS_STALE_THRESHOLD_MINUTES = 5
 
+# Maximum number of individual file paths or bash commands surfaced per phase.
+_MAX_FILE_DETAIL_ENTRIES = 20
+_MAX_BASH_COMMANDS = 10
+
 
 # ─── Data Types ───────────────────────────────────────────────────────────────
 
@@ -93,6 +97,9 @@ class PhaseView:
     cost: str                # human-readable, e.g. "$0.0123"
     activity_summary: str    # e.g. "Read 5 files, edited 2, ran 8 bash commands"
     artifacts: list[PhaseArtifact] = field(default_factory=list)
+    files_read: list[str] = field(default_factory=list)
+    files_written: list[str] = field(default_factory=list)
+    bash_commands: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -191,6 +198,7 @@ def _build_phase_view(child: dict, grandchildren: list[dict]) -> PhaseView:
     tool_counts = _count_tools(child, grandchildren)
     activity_summary = _format_activity_summary(tool_counts)
     artifacts = _extract_artifacts(child, grandchildren)
+    files_read, files_written, bash_commands = _extract_file_details([child] + grandchildren)
 
     return PhaseView(
         phase_name=phase_name,
@@ -202,6 +210,9 @@ def _build_phase_view(child: dict, grandchildren: list[dict]) -> PhaseView:
         cost=cost,
         activity_summary=activity_summary,
         artifacts=artifacts,
+        files_read=files_read,
+        files_written=files_written,
+        bash_commands=bash_commands,
     )
 
 
@@ -244,6 +255,9 @@ def _build_merged_phase_view(
     # Treat non-primary children as extra grandchildren for artifact scanning
     other_children = [c for c in children if c is not primary]
     artifacts = _extract_artifacts(primary, other_children + all_grandchildren)
+    files_read, files_written, bash_commands = _extract_file_details(
+        children + all_grandchildren
+    )
 
     return PhaseView(
         phase_name=phase_name,
@@ -255,6 +269,9 @@ def _build_merged_phase_view(
         cost=cost,
         activity_summary=activity_summary,
         artifacts=artifacts,
+        files_read=files_read,
+        files_written=files_written,
+        bash_commands=bash_commands,
     )
 
 
@@ -483,6 +500,74 @@ def _artifact_label(path: str) -> str:
             return label
     # Fall back to the last path component
     return path.split("/")[-1] if "/" in path else path
+
+
+# ─── File detail extraction ───────────────────────────────────────────────────
+
+
+def _extract_file_details(
+    runs: list[dict],
+) -> tuple[list[str], list[str], list[str]]:
+    """Extract file paths read/written and bash commands from a list of run dicts.
+
+    Scans tool_use blocks in inputs_json and outputs_json to collect:
+    - files_read: file_path arguments of Read tool calls
+    - files_written: file_path arguments of Write/Edit tool calls
+    - bash_commands: command arguments of Bash tool calls
+
+    Each list is deduplicated and capped at _MAX_FILE_DETAIL_ENTRIES /
+    _MAX_BASH_COMMANDS to prevent flooding the UI.
+
+    Args:
+        runs: List of run dicts (child + grandchildren for a phase).
+
+    Returns:
+        Tuple of (files_read, files_written, bash_commands).
+    """
+    files_read: list[str] = []
+    files_written: list[str] = []
+    bash_commands: list[str] = []
+    seen_read: set[str] = set()
+    seen_written: set[str] = set()
+    seen_bash: set[str] = set()
+
+    for run in runs:
+        for field_name in ("inputs_json", "outputs_json"):
+            raw = run.get(field_name)
+            if not raw:
+                continue
+            parsed = _parse_json(raw)
+            messages = parsed.get("messages", [])
+            if not isinstance(messages, list):
+                continue
+            for msg in messages:
+                if not isinstance(msg, dict):
+                    continue
+                content = msg.get("content", [])
+                if not isinstance(content, list):
+                    continue
+                for block in content:
+                    if not isinstance(block, dict) or block.get("type") != "tool_use":
+                        continue
+                    tool_name = block.get("name", "")
+                    inp = block.get("input", {}) or {}
+                    if tool_name == "Read":
+                        path = inp.get("file_path", "")
+                        if path and path not in seen_read and len(files_read) < _MAX_FILE_DETAIL_ENTRIES:
+                            seen_read.add(path)
+                            files_read.append(path)
+                    elif tool_name in ("Edit", "Write"):
+                        path = inp.get("file_path", "")
+                        if path and path not in seen_written and len(files_written) < _MAX_FILE_DETAIL_ENTRIES:
+                            seen_written.add(path)
+                            files_written.append(path)
+                    elif tool_name == "Bash":
+                        cmd = inp.get("command", "")
+                        if cmd and cmd not in seen_bash and len(bash_commands) < _MAX_BASH_COMMANDS:
+                            seen_bash.add(cmd)
+                            bash_commands.append(cmd)
+
+    return files_read, files_written, bash_commands
 
 
 # ─── Formatting helpers ───────────────────────────────────────────────────────

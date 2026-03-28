@@ -1,12 +1,22 @@
 {# langgraph_pipeline/web/templates/proxy_narrative.html
    Item-centric execution narrative page: vertical timeline of pipeline phases.
    Context variables:
-     run    dict          — enriched root run (display_slug, display_duration, display_cost, etc.)
-     view   ExecutionView — built by trace_narrative.build_execution_view()
-   Design: docs/plans/2026-03-27-66-redesign-traces-page-for-usability-design.md #}
+     run         dict          — enriched root run (display_slug, display_duration, display_cost, etc.)
+     view        ExecutionView — built by trace_narrative.build_execution_view()
+     worker_logs list[str]     — log filenames under logs/ matching the item slug
+   Design: docs/plans/2026-03-28-69-traces-page-complete-redesign-design.md #}
 {% extends "base.html" %}
 
-{% block title %}{{ view.item_slug or run.name }} — Plan Orchestrator{% endblock %}
+{% block title %}{{ view.item_slug or run.display_slug or run.name }} — Plan Orchestrator{% endblock %}
+
+{# Resolved display name: prefer non-LangGraph item slug, then display_slug, then raw name #}
+{% if view.item_slug and view.item_slug != "LangGraph" %}
+  {% set display_name = view.item_slug %}
+{% elif run.display_slug %}
+  {% set display_name = run.display_slug %}
+{% else %}
+  {% set display_name = run.name %}
+{% endif %}
 
 {% block extra_head %}
 <style>
@@ -20,21 +30,34 @@
     --phase-unknown:    #9090b0;
   }
 
-  /* ── Raw-trace toggle button ──────────────────────────────────────── */
+  /* ── Raw-trace toggle button — prominent secondary action ─────────── */
   .raw-toggle {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
     font-size: 13px;
+    font-weight: 500;
     color: #3b6fcf;
-    padding: 0.25rem 0.625rem;
-    border: 1px solid #e2e8f0;
+    padding: 0.375rem 0.875rem;
+    border: 1.5px solid #3b6fcf;
     border-radius: 4px;
     background: #fff;
     text-decoration: none;
-    transition: background 0.15s;
+    transition: background 0.15s, color 0.15s;
   }
-  .raw-toggle:hover { background: #eff4ff; text-decoration: none; }
+  .raw-toggle:hover { background: #eff4ff; color: #2d5ab8; text-decoration: none; }
+
+  /* ── Item link ────────────────────────────────────────────────────── */
+  .item-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 13px;
+    font-weight: 500;
+    color: #3b6fcf;
+    text-decoration: none;
+  }
+  .item-link:hover { text-decoration: underline; }
 
   /* ── Header actions row ───────────────────────────────────────────── */
   .narrative-header-row {
@@ -45,9 +68,32 @@
     gap: 0.75rem;
     flex-wrap: wrap;
   }
+  .narrative-header-left { display: flex; align-items: center; gap: 1rem; }
 
   /* ── Running badge ────────────────────────────────────────────────── */
   .badge-running { background: #dbeafe; color: #1e40af; }
+
+  /* ── Worker logs section ─────────────────────────────────────────── */
+  .worker-logs {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #e2e8f0;
+    flex: 1 1 100%;
+  }
+  .worker-logs-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.4rem;
+  }
+  .worker-log-entry {
+    font-size: 12px;
+    font-family: monospace;
+    color: #1a1a2e;
+    padding: 2px 0;
+  }
 
   /* ── Timeline spine ──────────────────────────────────────────────── */
   .narrative-timeline {
@@ -178,6 +224,32 @@
   .activity-pill-write  { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
   .activity-pill-bash   { background: #faf5ff; border-color: #e9d5ff; color: #6d28d9; }
 
+  /* File detail groups */
+  .file-detail-group { margin-top: 0.75rem; }
+  .file-detail-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.35rem;
+  }
+  .file-detail-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .file-detail-entry {
+    font-size: 11px;
+    font-family: monospace;
+    padding: 2px 6px;
+    border-radius: 3px;
+    word-break: break-all;
+  }
+  .file-detail-entry-read  { background: #eff6ff; color: #1d4ed8; }
+  .file-detail-entry-write { background: #f0fdf4; color: #166534; }
+  .file-detail-entry-bash  { background: #faf5ff; color: #6d28d9; }
+
   /* Artifacts */
   .artifacts { margin-top: 0.75rem; }
   .artifacts-title {
@@ -217,7 +289,14 @@
 
 {# ── Back link + raw-trace toggle ──────────────────────────────────── #}
 <div class="narrative-header-row">
-  <a href="/proxy" style="font-size:13px;">&larr; Back to traces</a>
+  <div class="narrative-header-left">
+    <a href="/proxy" style="font-size:13px;">&larr; Back to traces</a>
+    {% if display_name %}
+    <a href="/item/{{ display_name }}" class="item-link" aria-label="View work item {{ display_name }}">
+      &#128196; View work item
+    </a>
+    {% endif %}
+  </div>
   <a href="/proxy/{{ run.run_id }}" class="raw-toggle" aria-label="Switch to raw trace view">
     &#128270; Show raw trace
   </a>
@@ -226,7 +305,7 @@
 {# ── Run header card ───────────────────────────────────────────────── #}
 <div class="detail-header">
   <div class="run-name">
-    {{ view.item_slug or run.name }}
+    {{ display_name }}
     <span class="badge {{ root_badge_class }}" role="status">{{ root_badge_label }}</span>
   </div>
 
@@ -257,6 +336,15 @@
     Phases
     <span>{{ view.phases | length }}</span>
   </div>
+
+  {% if worker_logs %}
+  <div class="worker-logs">
+    <div class="worker-logs-title">Worker output logs</div>
+    {% for log in worker_logs %}
+    <div class="worker-log-entry">logs/{{ log }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
 </div>
 
 {# ── Vertical timeline ─────────────────────────────────────────────── #}
@@ -272,7 +360,7 @@
     {% set phase_color = "var(--phase-planning)" %}
   {% elif phase.phase_name == "Execution" %}
     {% set phase_color = "var(--phase-execution)" %}
-  {% elif phase.phase_name == "Validation" %}
+  {% elif phase.phase_name == "Validation" or phase.phase_name == "Verification" %}
     {% set phase_color = "var(--phase-validation)" %}
   {% elif phase.phase_name == "Archival" %}
     {% set phase_color = "var(--phase-archival)" %}
@@ -306,7 +394,7 @@
       <span class="phase-number">{{ "%02d" | format(loop.index) }}</span>
       <div class="phase-title-group">
         <div class="phase-title">{{ phase.phase_name }}</div>
-        {% if phase.run_name %}
+        {% if phase.run_name and phase.run_name != phase.phase_name %}
         <div class="phase-subtitle" title="{{ phase.run_name }}">{{ phase.run_name }}</div>
         {% endif %}
       </div>
@@ -348,6 +436,42 @@
         {% endif %}
       </div>
 
+      {# ── Files read ──────────────────────────────────────────────── #}
+      {% if phase.files_read %}
+      <div class="file-detail-group">
+        <div class="file-detail-title">Files read ({{ phase.files_read | length }})</div>
+        <div class="file-detail-list">
+          {% for path in phase.files_read %}
+          <div class="file-detail-entry file-detail-entry-read">{{ path }}</div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {# ── Files written / edited ───────────────────────────────────── #}
+      {% if phase.files_written %}
+      <div class="file-detail-group">
+        <div class="file-detail-title">Files written / edited ({{ phase.files_written | length }})</div>
+        <div class="file-detail-list">
+          {% for path in phase.files_written %}
+          <div class="file-detail-entry file-detail-entry-write">{{ path }}</div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {# ── Bash commands ───────────────────────────────────────────── #}
+      {% if phase.bash_commands %}
+      <div class="file-detail-group">
+        <div class="file-detail-title">Bash commands ({{ phase.bash_commands | length }})</div>
+        <div class="file-detail-list">
+          {% for cmd in phase.bash_commands %}
+          <div class="file-detail-entry file-detail-entry-bash">{{ cmd[:120] }}{% if cmd | length > 120 %}…{% endif %}</div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
       {% if phase.artifacts %}
       <div class="artifacts">
         <div class="artifacts-title">Artifacts</div>
@@ -369,7 +493,9 @@
 </div>
 {% else %}
 <div class="empty-state" role="status">
-  <p>No pipeline phases found for this trace.</p>
+  <div class="icon">&#128270;</div>
+  <div><strong>No pipeline phases found</strong></div>
+  <div>This trace has no child runs with recognised phase names.</div>
 </div>
 {% endif %}
 

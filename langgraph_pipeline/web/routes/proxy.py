@@ -31,6 +31,9 @@ from langgraph_pipeline.web.proxy import PAGE_SIZE_DEFAULT, get_proxy
 
 _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 
+# Logs directory relative to the project root (four levels above this file).
+_LOGS_DIR = Path(__file__).parent.parent.parent.parent / "logs"
+
 HTTP_NOT_FOUND = 404
 
 # Runs with no end_time whose start_time is older than this many minutes are
@@ -168,6 +171,28 @@ def _enrich_run(run: dict) -> dict:
     return run
 
 
+def _find_worker_logs(slug: str) -> list[str]:
+    """Return log file names under logs/ whose name contains the item slug.
+
+    Scans _LOGS_DIR for files where the slug substring appears in the filename.
+    Returns just the filenames (not full paths) sorted alphabetically.
+
+    Args:
+        slug: Work item slug to search for, e.g. "03-add-dark-mode".
+
+    Returns:
+        Sorted list of matching log filenames, empty when none found.
+    """
+    if not slug or not _LOGS_DIR.exists():
+        return []
+    slug_key = slug.lower()
+    return sorted(
+        p.name
+        for p in _LOGS_DIR.iterdir()
+        if p.is_file() and slug_key in p.name.lower()
+    )
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 
@@ -270,6 +295,7 @@ def proxy_narrative(request: Request, run_id: str) -> HTMLResponse:
     )
 
     view = build_execution_view(run, children, grandchildren)
+    worker_logs = _find_worker_logs(view.item_slug)
 
     return templates.TemplateResponse(
         request,
@@ -277,6 +303,7 @@ def proxy_narrative(request: Request, run_id: str) -> HTMLResponse:
         {
             "run": _enrich_run(run),
             "view": view,
+            "worker_logs": worker_logs,
         },
     )
 

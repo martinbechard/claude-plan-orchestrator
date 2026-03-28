@@ -14,6 +14,7 @@ from langgraph_pipeline.web.helpers.trace_narrative import (
     PhaseView,
     _artifact_label,
     _classify_phase,
+    _extract_file_details,
     _extract_status,
     _format_activity_summary,
     _format_duration,
@@ -272,3 +273,66 @@ class TestBuildExecutionView:
         )
         view = build_execution_view(root, [child], {})
         assert view.phases[0].status == "error"
+
+    def test_phase_view_has_file_detail_fields(self) -> None:
+        root = _make_run(run_id=FIXTURE_RUN_ID, metadata={})
+        child = _make_run(run_id=FIXTURE_CHILD_ID, name="intake_task", parent_run_id=FIXTURE_RUN_ID)
+        view = build_execution_view(root, [child], {})
+        phase = view.phases[0]
+        assert hasattr(phase, "files_read")
+        assert hasattr(phase, "files_written")
+        assert hasattr(phase, "bash_commands")
+        assert isinstance(phase.files_read, list)
+        assert isinstance(phase.files_written, list)
+        assert isinstance(phase.bash_commands, list)
+
+
+# ─── _extract_file_details ────────────────────────────────────────────────────
+
+
+class TestExtractFileDetails:
+    def _make_tool_use_run(self, tool_name: str, **inp_kwargs: str) -> dict:
+        tool_use_block = {"type": "tool_use", "name": tool_name, "input": inp_kwargs}
+        return _make_run(
+            outputs={"messages": [{"content": [tool_use_block]}]}
+        )
+
+    def test_extracts_files_read(self) -> None:
+        run = self._make_tool_use_run("Read", file_path="src/foo.py")
+        files_read, files_written, bash_commands = _extract_file_details([run])
+        assert files_read == ["src/foo.py"]
+        assert files_written == []
+        assert bash_commands == []
+
+    def test_extracts_files_written_from_write(self) -> None:
+        run = self._make_tool_use_run("Write", file_path="src/bar.py")
+        files_read, files_written, _ = _extract_file_details([run])
+        assert files_written == ["src/bar.py"]
+
+    def test_extracts_files_written_from_edit(self) -> None:
+        run = self._make_tool_use_run("Edit", file_path="src/baz.py")
+        _, files_written, _ = _extract_file_details([run])
+        assert files_written == ["src/baz.py"]
+
+    def test_extracts_bash_commands(self) -> None:
+        run = self._make_tool_use_run("Bash", command="pytest tests/ -v")
+        _, _, bash_commands = _extract_file_details([run])
+        assert bash_commands == ["pytest tests/ -v"]
+
+    def test_deduplicates_across_runs(self) -> None:
+        run1 = self._make_tool_use_run("Read", file_path="src/foo.py")
+        run2 = self._make_tool_use_run("Read", file_path="src/foo.py")
+        files_read, _, _ = _extract_file_details([run1, run2])
+        assert files_read == ["src/foo.py"]
+
+    def test_empty_runs(self) -> None:
+        files_read, files_written, bash_commands = _extract_file_details([])
+        assert files_read == []
+        assert files_written == []
+        assert bash_commands == []
+
+    def test_ignores_non_tool_use_messages(self) -> None:
+        run = _make_run(outputs={"messages": [{"content": [{"type": "text", "text": "hello"}]}]})
+        files_read, files_written, bash_commands = _extract_file_details([run])
+        assert files_read == []
+        assert bash_commands == []
