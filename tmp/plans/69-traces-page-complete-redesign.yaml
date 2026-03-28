@@ -93,7 +93,7 @@ sections:
       cost, model, and slug. Pass the results into _enrich_run so that display_duration,
       display_cost, display_model, and display_slug use child-aggregated values when
       the root row data is missing or shows near-zero.'
-    status: in_progress
+    status: completed
     dependencies:
     - '1.1'
     - '1.2'
@@ -101,6 +101,13 @@ sections:
     last_attempt: '2026-03-28T11:14:42.160518'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-28T11:21:11.759915'
+    result_message: Integrated batch child aggregation into proxy_list endpoint. Added
+      ChildAggregation dataclass; updated _enrich_run to use child-derived duration
+      (replaces near-zero root spans), cost (when root metadata has none), model (when
+      root column empty), and slug (when root is LangGraph or empty). proxy_list now
+      calls all four batch methods in one pass. Added 11 targeted tests. All 1484
+      tests pass.
 - id: '3'
   name: List page UI improvements
   status: pending
