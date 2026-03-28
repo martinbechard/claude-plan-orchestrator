@@ -71,10 +71,15 @@ sections:
       -- Create proxy_narrative.html template and GET /proxy/{run_id}/narrative endpoint
       using the winning design from section 1. Wire the trace_narrative helper into
       the route. See design doc: docs/plans/2026-03-27-66-redesign-traces-page-for-usability-design.md'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-27T22:31:55.515856'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T22:36:08.345066'
+    result_message: Created proxy_narrative.html (vertical timeline with expandable
+      phase cards, activity pills, artifacts) and GET /proxy/{run_id}/narrative endpoint
+      wired to build_execution_view(). Route registered before /proxy/{run_id} for
+      correct FastAPI dispatch. All 1444 tests pass.
   - id: '3.2'
     name: Wire navigation between narrative and raw trace views
     agent: frontend-coder
