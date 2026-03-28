@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import langgraph_pipeline.web.proxy as proxy_module
-from langgraph_pipeline.web.proxy import DailyTotal, Session, TracingProxy, get_proxy, init_proxy
+from langgraph_pipeline.web.proxy import ChildTimeSpan, DailyTotal, Session, TracingProxy, get_proxy, init_proxy
 from langgraph_pipeline.web.routes.proxy import _compute_elapsed, _parse_iso
 from langgraph_pipeline.web.server import create_app
 
@@ -1346,3 +1346,168 @@ def test_session_dataclass_fields(proxy):
     assert s.total_cost_usd == 0.0
     assert s.items_processed == 0
     assert s.notes is None
+
+
+# ─── get_child_time_spans_batch Tests ────────────────────────────────────────
+
+
+CHILD_SPAN_PARENT_A = "parent-span-a"
+CHILD_SPAN_PARENT_B = "parent-span-b"
+CHILD_SPAN_CHILD_A1 = "child-span-a1"
+CHILD_SPAN_CHILD_A2 = "child-span-a2"
+CHILD_SPAN_CHILD_B1 = "child-span-b1"
+
+
+def test_get_child_time_spans_batch_empty_input(proxy):
+    """get_child_time_spans_batch([]) returns an empty dict without querying the DB."""
+    result = proxy.get_child_time_spans_batch([])
+    assert result == {}
+
+
+def test_get_child_time_spans_batch_no_children(proxy):
+    """Parent run_id with no children is absent from the result dict."""
+    proxy.record_run(
+        run_id=CHILD_SPAN_PARENT_A,
+        parent_run_id=None,
+        name="lone-parent",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time="2026-03-28T09:00:00",
+        end_time="2026-03-28T09:01:00",
+    )
+    result = proxy.get_child_time_spans_batch([CHILD_SPAN_PARENT_A])
+    assert CHILD_SPAN_PARENT_A not in result
+
+
+def test_get_child_time_spans_batch_single_parent(proxy):
+    """Returns correct earliest start and latest end across two children of one parent."""
+    proxy.record_run(
+        run_id=CHILD_SPAN_PARENT_A,
+        parent_run_id=None,
+        name="root-run",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time="2026-03-28T09:00:00",
+        end_time="2026-03-28T09:00:01",
+    )
+    # First child: starts earlier, ends earlier
+    proxy.record_run(
+        run_id=CHILD_SPAN_CHILD_A1,
+        parent_run_id=CHILD_SPAN_PARENT_A,
+        name="phase-1",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time="2026-03-28T09:00:10",
+        end_time="2026-03-28T09:05:00",
+    )
+    # Second child: starts later, ends later
+    proxy.record_run(
+        run_id=CHILD_SPAN_CHILD_A2,
+        parent_run_id=CHILD_SPAN_PARENT_A,
+        name="phase-2",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time="2026-03-28T09:05:30",
+        end_time="2026-03-28T09:12:00",
+    )
+
+    result = proxy.get_child_time_spans_batch([CHILD_SPAN_PARENT_A])
+
+    assert CHILD_SPAN_PARENT_A in result
+    span = result[CHILD_SPAN_PARENT_A]
+    assert isinstance(span, ChildTimeSpan)
+    assert span.earliest_start == "2026-03-28T09:00:10"
+    assert span.latest_end == "2026-03-28T09:12:00"
+
+
+def test_get_child_time_spans_batch_multiple_parents(proxy):
+    """Returns correct spans for two parents in a single batch query."""
+    # Parent A with two children
+    proxy.record_run(
+        run_id=CHILD_SPAN_PARENT_A,
+        parent_run_id=None,
+        name="root-a",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T08:00:00",
+        end_time="2026-03-28T08:00:01",
+    )
+    proxy.record_run(
+        run_id=CHILD_SPAN_CHILD_A1,
+        parent_run_id=CHILD_SPAN_PARENT_A,
+        name="child-a1",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T08:01:00",
+        end_time="2026-03-28T08:10:00",
+    )
+    proxy.record_run(
+        run_id=CHILD_SPAN_CHILD_A2,
+        parent_run_id=CHILD_SPAN_PARENT_A,
+        name="child-a2",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T08:11:00",
+        end_time="2026-03-28T08:20:00",
+    )
+    # Parent B with one child
+    proxy.record_run(
+        run_id=CHILD_SPAN_PARENT_B,
+        parent_run_id=None,
+        name="root-b",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T10:00:00",
+        end_time="2026-03-28T10:00:01",
+    )
+    proxy.record_run(
+        run_id=CHILD_SPAN_CHILD_B1,
+        parent_run_id=CHILD_SPAN_PARENT_B,
+        name="child-b1",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T10:03:00",
+        end_time="2026-03-28T10:07:30",
+    )
+
+    result = proxy.get_child_time_spans_batch([CHILD_SPAN_PARENT_A, CHILD_SPAN_PARENT_B])
+
+    assert len(result) == 2
+
+    span_a = result[CHILD_SPAN_PARENT_A]
+    assert span_a.earliest_start == "2026-03-28T08:01:00"
+    assert span_a.latest_end == "2026-03-28T08:20:00"
+
+    span_b = result[CHILD_SPAN_PARENT_B]
+    assert span_b.earliest_start == "2026-03-28T10:03:00"
+    assert span_b.latest_end == "2026-03-28T10:07:30"
+
+
+def test_get_child_time_spans_batch_null_end_time(proxy):
+    """A child with NULL end_time does not break aggregation; latest_end may be None."""
+    proxy.record_run(
+        run_id=CHILD_SPAN_PARENT_A,
+        parent_run_id=None,
+        name="root-run",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T09:00:00",
+        end_time=None,
+    )
+    proxy.record_run(
+        run_id=CHILD_SPAN_CHILD_A1,
+        parent_run_id=CHILD_SPAN_PARENT_A,
+        name="still-running",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T09:01:00",
+        end_time=None,
+    )
+
+    result = proxy.get_child_time_spans_batch([CHILD_SPAN_PARENT_A])
+
+    assert CHILD_SPAN_PARENT_A in result
+    span = result[CHILD_SPAN_PARENT_A]
+    assert span.earliest_start == "2026-03-28T09:01:00"
+    assert span.latest_end is None

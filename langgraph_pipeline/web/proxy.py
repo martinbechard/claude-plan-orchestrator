@@ -143,6 +143,15 @@ SELECT
 FROM traces t JOIN subtree s ON t.run_id = s.run_id
 """
 
+_CHILD_TIME_SPANS_BATCH_SQL_TEMPLATE = """
+    SELECT parent_run_id,
+           MIN(start_time) AS earliest_start,
+           MAX(end_time)   AS latest_end
+    FROM traces
+    WHERE parent_run_id IN ({placeholders})
+    GROUP BY parent_run_id
+"""
+
 
 # ─── Cost Data Types ──────────────────────────────────────────────────────────
 
@@ -236,6 +245,14 @@ class DailyTotal:
     date_str: str
     cost_usd: float
     items_processed: int
+
+
+@dataclass
+class ChildTimeSpan:
+    """Earliest child start_time and latest child end_time for a parent run."""
+
+    earliest_start: Optional[str]
+    latest_end: Optional[str]
 
 
 # ─── Module State ─────────────────────────────────────────────────────────────
@@ -958,6 +975,34 @@ class TracingProxy:
             parent_id = row_dict["parent_run_id"]
             result.setdefault(parent_id, []).append(row_dict)
         return result
+
+    def get_child_time_spans_batch(self, run_ids: list[str]) -> dict[str, ChildTimeSpan]:
+        """Return the earliest child start_time and latest child end_time for each parent.
+
+        Uses a single SQL query with GROUP BY parent_run_id to avoid N+1 queries.
+        Enables computing real pipeline duration from child spans rather than the
+        near-zero root-run timestamps recorded by LangSmith.
+
+        Args:
+            run_ids: List of root run_ids whose children to aggregate.
+
+        Returns:
+            Dict mapping each parent run_id to a ChildTimeSpan with earliest_start
+            and latest_end.  Run_ids with no children are absent from the result.
+        """
+        if not run_ids:
+            return {}
+        placeholders = ",".join("?" for _ in run_ids)
+        sql = _CHILD_TIME_SPANS_BATCH_SQL_TEMPLATE.format(placeholders=placeholders)
+        with self._connect() as conn:
+            rows = conn.execute(sql, run_ids).fetchall()
+        return {
+            row["parent_run_id"]: ChildTimeSpan(
+                earliest_start=row["earliest_start"],
+                latest_end=row["latest_end"],
+            )
+            for row in rows
+        }
 
     # ─── Cost Analysis Queries ────────────────────────────────────────────────
 
