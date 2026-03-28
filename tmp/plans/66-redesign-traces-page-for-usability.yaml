@@ -47,10 +47,15 @@ sections:
       -- Create langgraph_pipeline/web/helpers/trace_narrative.py with phase mapping,
       agent activity summarization, cost/duration rollup, and artifact extraction.
       See design doc: docs/plans/2026-03-27-66-redesign-traces-page-for-usability-design.md'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-27T22:25:12.502642'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T22:29:03.385541'
+    result_message: 'Created langgraph_pipeline/web/helpers/trace_narrative.py with
+      phase classification, agent activity summarization, cost/duration rollup, and
+      artifact extraction. Public API: build_execution_view(run, children, grandchildren)
+      -> ExecutionView. Added 35 unit tests, all passing. 1444 total tests pass.'
 - id: '3'
   name: UI implementation
   status: pending
