@@ -18,6 +18,7 @@ from langgraph_pipeline.web.helpers.trace_narrative import (
     _extract_status,
     _format_activity_summary,
     _format_duration,
+    _accumulate_tool_counts,
     build_execution_view,
 )
 
@@ -455,3 +456,136 @@ class TestDurationFromGrandchildren:
         )
         view = build_execution_view(root, [child], {})
         assert view.total_duration == "3m 00s"
+
+
+# ─── P15 fix: direct tool run extraction ─────────────────────────────────────
+
+
+class TestAccumulateToolCountsDirectFormat:
+    """Verify _accumulate_tool_counts handles the emit_tool_call_traces format.
+
+    In this format each tool invocation is a separate run whose ``name`` field
+    is the tool name and whose ``inputs_json`` holds the flat argument dict.
+    """
+
+    def _direct_tool_run(self, tool_name: str, **inp_kwargs: str) -> dict:
+        return _make_run(name=tool_name, inputs=inp_kwargs)
+
+    def test_counts_read_from_run_name(self) -> None:
+        counts: dict[str, int] = {}
+        _accumulate_tool_counts(self._direct_tool_run("Read", file_path="src/a.py"), counts)
+        assert counts.get("Read") == 1
+
+    def test_counts_edit_from_run_name(self) -> None:
+        counts: dict[str, int] = {}
+        _accumulate_tool_counts(self._direct_tool_run("Edit", file_path="src/b.py"), counts)
+        assert counts.get("Edit") == 1
+
+    def test_counts_bash_from_run_name(self) -> None:
+        counts: dict[str, int] = {}
+        _accumulate_tool_counts(self._direct_tool_run("Bash", command="pytest tests/"), counts)
+        assert counts.get("Bash") == 1
+
+    def test_ignores_non_tool_run_name(self) -> None:
+        counts: dict[str, int] = {}
+        # Chain-type run like "execute_task:1.1" must not be counted as a tool
+        _accumulate_tool_counts(_make_run(name="execute_task:1.1"), counts)
+        assert not counts
+
+    def test_no_double_count_for_messages_format(self) -> None:
+        """Messages-format tool_use blocks are still counted from outputs_json."""
+        counts: dict[str, int] = {}
+        tool_use_block = {"type": "tool_use", "name": "Grep", "input": {"pattern": "foo"}}
+        run = _make_run(outputs={"messages": [{"content": [tool_use_block]}]})
+        _accumulate_tool_counts(run, counts)
+        # "Grep" does not appear as the run name, so only the messages path fires.
+        assert counts.get("Grep") == 1
+        assert counts.get("Read", 0) == 0
+
+
+class TestExtractFileDetailsDirectFormat:
+    """Verify _extract_file_details handles the emit_tool_call_traces format.
+
+    Direct tool runs: name = tool name, inputs_json = flat arg dict.
+    """
+
+    def _direct_tool_run(self, tool_name: str, **inp_kwargs: str) -> dict:
+        return _make_run(name=tool_name, inputs=inp_kwargs)
+
+    def test_read_extracted_from_run_name(self) -> None:
+        run = self._direct_tool_run("Read", file_path="/repo/src/foo.py")
+        files_read, files_written, bash_commands = _extract_file_details([run])
+        assert files_read == ["/repo/src/foo.py"]
+        assert files_written == []
+        assert bash_commands == []
+
+    def test_edit_extracted_from_run_name(self) -> None:
+        run = self._direct_tool_run("Edit", file_path="/repo/src/bar.py")
+        _, files_written, _ = _extract_file_details([run])
+        assert files_written == ["/repo/src/bar.py"]
+
+    def test_write_extracted_from_run_name(self) -> None:
+        run = self._direct_tool_run("Write", file_path="/repo/src/new.py")
+        _, files_written, _ = _extract_file_details([run])
+        assert files_written == ["/repo/src/new.py"]
+
+    def test_bash_extracted_from_run_name(self) -> None:
+        run = self._direct_tool_run("Bash", command="~/.pyenv/versions/3.11.0/bin/python -m pytest tests/")
+        _, _, bash_commands = _extract_file_details([run])
+        assert bash_commands == ["~/.pyenv/versions/3.11.0/bin/python -m pytest tests/"]
+
+    def test_deduplication_across_direct_runs(self) -> None:
+        run1 = self._direct_tool_run("Read", file_path="/repo/src/foo.py")
+        run2 = self._direct_tool_run("Read", file_path="/repo/src/foo.py")
+        files_read, _, _ = _extract_file_details([run1, run2])
+        assert files_read == ["/repo/src/foo.py"]
+
+    def test_non_tool_run_name_not_extracted(self) -> None:
+        run = _make_run(name="execute_task:1.1")
+        files_read, files_written, bash_commands = _extract_file_details([run])
+        assert files_read == []
+        assert files_written == []
+        assert bash_commands == []
+
+
+class TestBuildExecutionViewDirectToolRuns:
+    """Integration: build_execution_view with grandchild tool runs in direct format (P15)."""
+
+    def test_activity_summary_populated_from_direct_tool_grandchildren(self) -> None:
+        root = _make_run(run_id=FIXTURE_RUN_ID, metadata={})
+        child = _make_run(
+            run_id=FIXTURE_CHILD_ID,
+            name="execute_task:1.1",
+            parent_run_id=FIXTURE_RUN_ID,
+        )
+        gc_read = _make_run(run_id="gc-read", name="Read",
+                            inputs={"file_path": "/repo/src/foo.py"})
+        gc_edit = _make_run(run_id="gc-edit", name="Edit",
+                            inputs={"file_path": "/repo/src/bar.py"})
+        gc_bash = _make_run(run_id="gc-bash", name="Bash",
+                            inputs={"command": "pytest tests/ -v"})
+        view = build_execution_view(
+            root, [child], {FIXTURE_CHILD_ID: [gc_read, gc_edit, gc_bash]}
+        )
+        assert len(view.phases) == 1
+        phase = view.phases[0]
+        assert "Read 1 file" in phase.activity_summary
+        assert "edited 1" in phase.activity_summary
+        assert "ran 1 bash command" in phase.activity_summary
+        assert phase.files_read == ["/repo/src/foo.py"]
+        assert phase.files_written == ["/repo/src/bar.py"]
+        assert phase.bash_commands == ["pytest tests/ -v"]
+
+    def test_activity_summary_empty_when_no_tool_grandchildren(self) -> None:
+        root = _make_run(run_id=FIXTURE_RUN_ID, metadata={})
+        child = _make_run(
+            run_id=FIXTURE_CHILD_ID,
+            name="execute_task:1.1",
+            parent_run_id=FIXTURE_RUN_ID,
+        )
+        # Grandchild is an assistant text block, not a tool run
+        gc_text = _make_run(run_id="gc-text", name="assistant_text",
+                            inputs={"text": "Here is my plan..."})
+        view = build_execution_view(root, [child], {FIXTURE_CHILD_ID: [gc_text]})
+        assert len(view.phases) == 1
+        assert view.phases[0].activity_summary == ""

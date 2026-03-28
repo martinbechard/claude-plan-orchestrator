@@ -357,16 +357,23 @@ def _count_tools(child: dict, grandchildren: list[dict]) -> dict[str, int]:
 def _accumulate_tool_counts(run: dict, counts: dict[str, int]) -> None:
     """Add tool call counts from one run dict into the accumulator.
 
-    Tool calls are stored in outputs_json under the 'messages' key for LLM runs,
-    or in inputs_json for tool runs. We inspect both and count by tool name.
+    Handles two storage formats:
+    1. LLM outputs: tool_use blocks embedded in messages[].content[] in outputs_json.
+    2. Direct tool runs (emit_tool_call_traces): the run's own ``name`` field is the
+       tool name and ``inputs_json`` holds the flat argument dict.
     """
+    # Format 1: tool_use blocks in LLM message content
     for field_name in ("inputs_json", "outputs_json"):
         raw = run.get(field_name)
         if not raw:
             continue
         parsed = _parse_json(raw)
         _collect_from_messages(parsed.get("messages", []), counts)
-        _collect_from_tool_use(parsed, counts)
+
+    # Format 2: direct tool run — name IS the tool name
+    tool_name = run.get("name", "")
+    if tool_name and tool_name in _TOOL_VERB:
+        counts[tool_name] = counts.get(tool_name, 0) + 1
 
 
 def _collect_from_messages(messages: object, counts: dict[str, int]) -> None:
@@ -386,12 +393,6 @@ def _collect_from_messages(messages: object, counts: dict[str, int]) -> None:
                 tool_name = block.get("name", "unknown")
                 counts[tool_name] = counts.get(tool_name, 0) + 1
 
-
-def _collect_from_tool_use(parsed: dict, counts: dict[str, int]) -> None:
-    """Count tool name from a tool-run dict that has a top-level 'name' field."""
-    name = parsed.get("name")
-    if isinstance(name, str) and name:
-        counts[name] = counts.get(name, 0) + 1
 
 
 # ─── Activity summary ─────────────────────────────────────────────────────────
@@ -556,6 +557,28 @@ def _extract_file_details(
     seen_bash: set[str] = set()
 
     for run in runs:
+        # Format 1: direct tool run (emit_tool_call_traces) — name IS the tool name
+        # and inputs_json holds the flat argument dict directly.
+        tool_name = run.get("name", "")
+        if tool_name in ("Read", "Edit", "Write", "Bash"):
+            inp = _parse_json(run.get("inputs_json"))
+            if tool_name == "Read":
+                path = inp.get("file_path", "")
+                if path and path not in seen_read and len(files_read) < _MAX_FILE_DETAIL_ENTRIES:
+                    seen_read.add(path)
+                    files_read.append(path)
+            elif tool_name in ("Edit", "Write"):
+                path = inp.get("file_path", "")
+                if path and path not in seen_written and len(files_written) < _MAX_FILE_DETAIL_ENTRIES:
+                    seen_written.add(path)
+                    files_written.append(path)
+            elif tool_name == "Bash":
+                cmd = inp.get("command", "")
+                if cmd and cmd not in seen_bash and len(bash_commands) < _MAX_BASH_COMMANDS:
+                    seen_bash.add(cmd)
+                    bash_commands.append(cmd)
+
+        # Format 2: tool_use blocks embedded in LLM message content
         for field_name in ("inputs_json", "outputs_json"):
             raw = run.get(field_name)
             if not raw:
@@ -573,19 +596,19 @@ def _extract_file_details(
                 for block in content:
                     if not isinstance(block, dict) or block.get("type") != "tool_use":
                         continue
-                    tool_name = block.get("name", "")
+                    block_tool = block.get("name", "")
                     inp = block.get("input", {}) or {}
-                    if tool_name == "Read":
+                    if block_tool == "Read":
                         path = inp.get("file_path", "")
                         if path and path not in seen_read and len(files_read) < _MAX_FILE_DETAIL_ENTRIES:
                             seen_read.add(path)
                             files_read.append(path)
-                    elif tool_name in ("Edit", "Write"):
+                    elif block_tool in ("Edit", "Write"):
                         path = inp.get("file_path", "")
                         if path and path not in seen_written and len(files_written) < _MAX_FILE_DETAIL_ENTRIES:
                             seen_written.add(path)
                             files_written.append(path)
-                    elif tool_name == "Bash":
+                    elif block_tool == "Bash":
                         cmd = inp.get("command", "")
                         if cmd and cmd not in seen_bash and len(bash_commands) < _MAX_BASH_COMMANDS:
                             seen_bash.add(cmd)
