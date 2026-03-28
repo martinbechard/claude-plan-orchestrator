@@ -1,6 +1,7 @@
 # langgraph_pipeline/web/helpers/execution_tree.py
-# Assembles flat trace DB rows into a nested execution tree with display names.
-# Design: docs/plans/2026-03-28-71-execution-history-redesign-design.md (D1, D2, D3)
+# Assembles flat trace DB rows into a nested execution tree with display names,
+# aggregated costs, and wall-clock durations.
+# Design: docs/plans/2026-03-28-71-execution-history-redesign-design.md (D1, D2, D3, D4, D5)
 
 """Build a nested TreeNode tree from flat TracingProxy rows.
 
@@ -12,11 +13,14 @@ The tree construction includes:
 - D1: Recursive nesting with no depth limit
 - D2: Three-tier name resolution (metadata slug -> child span scan -> run_id prefix)
 - D3: UI-level deduplication by run_id (keep most complete row)
+- D4: Real cost aggregation from metadata (no placeholders)
+- D5: Wall-clock duration from descendant time spans
 """
 
 import json
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -52,6 +56,19 @@ _LANGGRAPH_DEFAULT_NAME = "LangGraph"
 # Prefix length for run_id fallback display name (first 8 hex chars).
 _RUN_ID_PREFIX_LENGTH = 8
 
+# Key in metadata_json that holds per-node cost in USD.
+COST_METADATA_KEY = "total_cost_usd"
+
+# Durations below this threshold (in seconds) are considered "near-zero" and
+# replaced with the descendant time span (earliest start to latest end).
+NEAR_ZERO_DURATION_THRESHOLD_SECONDS = 1.0
+
+# Supported ISO 8601 timestamp formats from the traces DB.
+_TIMESTAMP_FORMATS = [
+    "%Y-%m-%dT%H:%M:%S.%f",
+    "%Y-%m-%dT%H:%M:%S",
+]
+
 
 # ─── Data Types ───────────────────────────────────────────────────────────────
 
@@ -62,6 +79,10 @@ class TreeNode:
 
     Each node corresponds to one trace row and may contain nested children.
     The node_type field classifies the node for UI rendering (badges, icons).
+    cost is the aggregated cost in USD (D4): leaf cost from metadata, intermediate
+    cost from summing all descendants. Zero means no cost data, never 0.01.
+    duration_seconds is the wall-clock duration (D5): for near-zero own durations,
+    replaced with the descendant time span (earliest start to latest end).
     """
 
     run_id: str
@@ -72,6 +93,8 @@ class TreeNode:
     status: str     # "success" | "error" | "running" | "unknown"
     start_time: Optional[str]
     end_time: Optional[str]
+    cost: float     # aggregated cost USD; 0.0 = no data (never 0.01)
+    duration_seconds: float  # wall-clock seconds; 0.0 = no data
     model: str
     inputs_json: Optional[str]
     outputs_json: Optional[str]
@@ -89,7 +112,8 @@ def build_tree(root_run_id: str, flat_rows: list[dict]) -> list["TreeNode"]:
 
     Performs D3 deduplication first (by run_id, keeping most complete row),
     then builds parent->children relationships, classifies node types,
-    and resolves display names (D2 three-tier fallback).
+    resolves display names (D2 three-tier fallback), and enriches nodes
+    with aggregated costs (D4) and wall-clock durations (D5).
 
     Args:
         root_run_id: The run_id of the root trace (not included in output).
@@ -97,7 +121,7 @@ def build_tree(root_run_id: str, flat_rows: list[dict]) -> list["TreeNode"]:
 
     Returns:
         List of top-level TreeNode children of root_run_id, each with nested
-        children populated recursively.
+        children populated recursively, with cost and duration computed.
     """
     deduped = _deduplicate_rows(flat_rows)
 
@@ -114,10 +138,16 @@ def build_tree(root_run_id: str, flat_rows: list[dict]) -> list["TreeNode"]:
 
     # Build tree recursively starting from root's direct children
     top_level_rows = children_by_parent.get(root_run_id, [])
-    return [
+    nodes = [
         _build_node(row, children_by_parent)
         for row in top_level_rows
     ]
+
+    # Enrich with aggregated costs (D4) and wall-clock durations (D5)
+    _enrich_costs(nodes)
+    _enrich_durations(nodes)
+
+    return nodes
 
 
 def resolve_display_name(
@@ -208,6 +238,29 @@ def classify_node_type(name: str, row: dict) -> str:
     return NODE_TYPE_GRAPH
 
 
+def extract_node_cost(metadata_json: Optional[str]) -> float:
+    """Extract the cost in USD from a single node's metadata_json.
+
+    Reads the total_cost_usd field from the JSON. Returns 0.0 when absent
+    or unparseable -- never a placeholder like 0.01.
+
+    Args:
+        metadata_json: Raw JSON string from the traces DB metadata_json column.
+
+    Returns:
+        Cost in USD as a float, or 0.0 if no cost data is present.
+    """
+    meta = _parse_json(metadata_json)
+    raw_cost = meta.get(COST_METADATA_KEY)
+    if raw_cost is None:
+        return 0.0
+    try:
+        cost = float(raw_cost)
+        return cost if cost >= 0.0 else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+
 # ─── Internal Helpers ─────────────────────────────────────────────────────────
 
 
@@ -237,6 +290,8 @@ def _build_node(row: dict, children_by_parent: dict[str, list[dict]]) -> TreeNod
         status=status,
         start_time=row.get("start_time"),
         end_time=row.get("end_time"),
+        cost=0.0,               # enriched by _enrich_costs() after tree build
+        duration_seconds=0.0,   # enriched by _enrich_durations() after tree build
         model=row.get("model", ""),
         inputs_json=row.get("inputs_json"),
         outputs_json=row.get("outputs_json"),
@@ -317,3 +372,115 @@ def _parse_json(raw: Optional[str]) -> dict:
         return result if isinstance(result, dict) else {}
     except (ValueError, TypeError):
         return {}
+
+
+def _parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
+    """Parse an ISO 8601 timestamp string into a datetime object.
+
+    Tries each format in _TIMESTAMP_FORMATS. Returns None on failure or
+    if the input is empty/None.
+    """
+    if not ts:
+        return None
+    for fmt in _TIMESTAMP_FORMATS:
+        try:
+            return datetime.strptime(ts, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _compute_own_duration(start_time: Optional[str], end_time: Optional[str]) -> float:
+    """Compute duration in seconds from a node's own start/end timestamps.
+
+    Returns 0.0 if either timestamp is missing or unparseable.
+    """
+    start = _parse_timestamp(start_time)
+    end = _parse_timestamp(end_time)
+    if start is None or end is None:
+        return 0.0
+    delta = (end - start).total_seconds()
+    return max(delta, 0.0)
+
+
+# ─── D4: Cost Aggregation ────────────────────────────────────────────────────
+
+
+def _enrich_costs(nodes: list["TreeNode"]) -> None:
+    """Post-order traversal to compute aggregated costs for each node (D4).
+
+    Leaf nodes: cost = own total_cost_usd from metadata_json.
+    Intermediate nodes: cost = sum of all children's costs.
+    Nodes without any cost data get 0.0 (never 0.01 placeholder).
+
+    Mutates nodes in place.
+    """
+    for node in nodes:
+        _enrich_costs(node.children)
+        own_cost = extract_node_cost(node.metadata_json)
+        children_cost = sum(child.cost for child in node.children)
+        # If this node has children, its aggregated cost is the children total.
+        # If it is a leaf, use its own cost. If both exist (rare), add them.
+        if node.children:
+            node.cost = children_cost + own_cost
+        else:
+            node.cost = own_cost
+
+
+# ─── D5: Wall-Clock Duration ─────────────────────────────────────────────────
+
+
+def _collect_time_bounds(
+    node: "TreeNode",
+) -> tuple[Optional[datetime], Optional[datetime]]:
+    """Collect the earliest start and latest end across a node and all descendants.
+
+    Returns (earliest_start, latest_end). Either may be None if no valid
+    timestamps exist in the subtree.
+    """
+    earliest: Optional[datetime] = _parse_timestamp(node.start_time)
+    latest: Optional[datetime] = _parse_timestamp(node.end_time)
+
+    for child in node.children:
+        child_earliest, child_latest = _collect_time_bounds(child)
+        if child_earliest is not None:
+            if earliest is None or child_earliest < earliest:
+                earliest = child_earliest
+        if child_latest is not None:
+            if latest is None or child_latest > latest:
+                latest = child_latest
+
+    return earliest, latest
+
+
+def _enrich_durations(nodes: list["TreeNode"]) -> None:
+    """Post-order traversal to compute wall-clock durations for each node (D5).
+
+    For each node:
+    1. Compute own duration from start_time/end_time.
+    2. If own duration is near-zero (< NEAR_ZERO_DURATION_THRESHOLD_SECONDS)
+       and the node has descendants, replace with the descendant time span
+       (earliest descendant start to latest descendant end).
+    3. This ensures phases that took minutes show real wall-clock minutes,
+       not the near-zero LangGraph dispatch latency.
+
+    Mutates nodes in place.
+    """
+    for node in nodes:
+        # Recurse first (post-order: children before parent)
+        _enrich_durations(node.children)
+
+        own_duration = _compute_own_duration(node.start_time, node.end_time)
+
+        if own_duration >= NEAR_ZERO_DURATION_THRESHOLD_SECONDS:
+            node.duration_seconds = own_duration
+        elif node.children:
+            # Near-zero own duration with children: use descendant time span
+            earliest, latest = _collect_time_bounds(node)
+            if earliest is not None and latest is not None:
+                span = (latest - earliest).total_seconds()
+                node.duration_seconds = max(span, 0.0)
+            else:
+                node.duration_seconds = own_duration
+        else:
+            node.duration_seconds = own_duration

@@ -1,6 +1,6 @@
 # tests/langgraph/web/test_execution_tree.py
 # Unit tests for the execution_tree helper module.
-# Design: docs/plans/2026-03-28-71-execution-history-redesign-design.md (D1, D2, D3)
+# Design: docs/plans/2026-03-28-71-execution-history-redesign-design.md (D1, D2, D3, D4, D5)
 
 """Tests for langgraph_pipeline.web.helpers.execution_tree.
 
@@ -9,6 +9,8 @@ Covers:
 - resolve_display_name(): three-tier fallback chain (D2)
 - classify_node_type(): node type classification
 - Deduplication by run_id (D3)
+- Cost aggregation from metadata (D4)
+- Wall-clock duration with near-zero replacement (D5)
 """
 
 import json
@@ -17,13 +19,21 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from langgraph_pipeline.web.helpers.execution_tree import (
+    COST_METADATA_KEY,
+    NEAR_ZERO_DURATION_THRESHOLD_SECONDS,
     TreeNode,
     build_tree,
     classify_node_type,
+    extract_node_cost,
     resolve_display_name,
+    _collect_time_bounds,
+    _compute_own_duration,
     _deduplicate_rows,
+    _enrich_costs,
+    _enrich_durations,
     _extract_status,
     _is_more_complete,
+    _parse_timestamp,
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -535,3 +545,508 @@ class TestGetFullTree:
         assert len(result) == 2
         assert result[0]["run_id"] == "child-1"
         assert result[1]["run_id"] == "grand-1"
+
+
+# ─── D4: Cost Aggregation tests ─────────────────────────────────────────────
+
+
+# Fixtures for cost tests using realistic-looking values (not round numbers)
+FIXTURE_COST_A = 0.3742
+FIXTURE_COST_B = 1.0891
+FIXTURE_COST_C = 0.0523
+
+
+class TestExtractNodeCost:
+    """Tests for extract_node_cost() — extracting cost from metadata_json."""
+
+    def test_valid_cost(self) -> None:
+        meta = json.dumps({COST_METADATA_KEY: FIXTURE_COST_A})
+        assert extract_node_cost(meta) == pytest.approx(FIXTURE_COST_A)
+
+    def test_no_cost_key(self) -> None:
+        meta = json.dumps({"other_field": "value"})
+        assert extract_node_cost(meta) == 0.0
+
+    def test_none_metadata(self) -> None:
+        assert extract_node_cost(None) == 0.0
+
+    def test_empty_string_metadata(self) -> None:
+        assert extract_node_cost("") == 0.0
+
+    def test_invalid_json(self) -> None:
+        assert extract_node_cost("not-json") == 0.0
+
+    def test_zero_cost(self) -> None:
+        meta = json.dumps({COST_METADATA_KEY: 0.0})
+        assert extract_node_cost(meta) == 0.0
+
+    def test_negative_cost_returns_zero(self) -> None:
+        """Negative costs are treated as absent (0.0)."""
+        meta = json.dumps({COST_METADATA_KEY: -0.5})
+        assert extract_node_cost(meta) == 0.0
+
+    def test_string_cost_parsed(self) -> None:
+        """String-formatted cost values are parsed to float."""
+        meta = json.dumps({COST_METADATA_KEY: "0.2345"})
+        assert extract_node_cost(meta) == pytest.approx(0.2345)
+
+    def test_non_numeric_cost_returns_zero(self) -> None:
+        meta = json.dumps({COST_METADATA_KEY: "not-a-number"})
+        assert extract_node_cost(meta) == 0.0
+
+    def test_cost_never_returns_placeholder(self) -> None:
+        """Confirm the function returns actual value, never 0.01 placeholder."""
+        meta_zero = json.dumps({})
+        meta_real = json.dumps({COST_METADATA_KEY: 2.5678})
+        assert extract_node_cost(meta_zero) == 0.0  # never 0.01
+        assert extract_node_cost(meta_real) == pytest.approx(2.5678)  # actual value
+
+
+class TestCostAggregation:
+    """Tests for _enrich_costs() — post-order cost aggregation (D4)."""
+
+    def _make_tree_node(
+        self,
+        run_id: str = "node-1",
+        cost_usd: float = 0.0,
+        children: list[TreeNode] | None = None,
+    ) -> TreeNode:
+        """Helper to build a TreeNode with specific cost metadata."""
+        meta = {}
+        if cost_usd > 0:
+            meta[COST_METADATA_KEY] = cost_usd
+        return TreeNode(
+            run_id=run_id,
+            parent_run_id=None,
+            name="test-node",
+            display_name="test-node",
+            node_type="graph_node",
+            status="success",
+            start_time="2026-03-28T10:00:00",
+            end_time="2026-03-28T10:05:00",
+            cost=0.0,
+            duration_seconds=0.0,
+            model="",
+            inputs_json=None,
+            outputs_json=None,
+            metadata_json=json.dumps(meta) if meta else "{}",
+            error=None,
+            created_at="2026-03-28T10:00:00",
+            children=children or [],
+        )
+
+    def test_leaf_node_gets_own_cost(self) -> None:
+        """A leaf node's cost comes from its own metadata_json."""
+        leaf = self._make_tree_node(cost_usd=FIXTURE_COST_A)
+        _enrich_costs([leaf])
+        assert leaf.cost == pytest.approx(FIXTURE_COST_A)
+
+    def test_leaf_without_cost_is_zero(self) -> None:
+        """A leaf with no cost data shows 0.0, not 0.01."""
+        leaf = self._make_tree_node(cost_usd=0.0)
+        _enrich_costs([leaf])
+        assert leaf.cost == 0.0
+
+    def test_parent_aggregates_children_costs(self) -> None:
+        """Parent cost = sum of all children costs."""
+        child_a = self._make_tree_node(run_id="child-a", cost_usd=FIXTURE_COST_A)
+        child_b = self._make_tree_node(run_id="child-b", cost_usd=FIXTURE_COST_B)
+        parent = self._make_tree_node(run_id="parent", children=[child_a, child_b])
+        _enrich_costs([parent])
+        expected = FIXTURE_COST_A + FIXTURE_COST_B
+        assert parent.cost == pytest.approx(expected)
+
+    def test_three_level_aggregation(self) -> None:
+        """Grandchild costs roll up through child to parent."""
+        grandchild = self._make_tree_node(run_id="gc", cost_usd=FIXTURE_COST_C)
+        child = self._make_tree_node(run_id="child", cost_usd=FIXTURE_COST_A, children=[grandchild])
+        parent = self._make_tree_node(run_id="parent", children=[child])
+        _enrich_costs([parent])
+        # grandchild.cost = FIXTURE_COST_C
+        assert grandchild.cost == pytest.approx(FIXTURE_COST_C)
+        # child.cost = own + grandchild = FIXTURE_COST_A + FIXTURE_COST_C
+        assert child.cost == pytest.approx(FIXTURE_COST_A + FIXTURE_COST_C)
+        # parent.cost = child.cost (parent has no own cost)
+        assert parent.cost == pytest.approx(FIXTURE_COST_A + FIXTURE_COST_C)
+
+    def test_no_placeholder_values(self) -> None:
+        """No node in the tree ever gets 0.01 as a cost (AC45)."""
+        child_no_cost = self._make_tree_node(run_id="c1")
+        child_with_cost = self._make_tree_node(run_id="c2", cost_usd=FIXTURE_COST_B)
+        parent = self._make_tree_node(run_id="parent", children=[child_no_cost, child_with_cost])
+        _enrich_costs([parent])
+        assert child_no_cost.cost == 0.0  # not 0.01
+        assert child_with_cost.cost == pytest.approx(FIXTURE_COST_B)
+        assert parent.cost == pytest.approx(FIXTURE_COST_B)
+
+    def test_multiple_top_level_nodes(self) -> None:
+        """Multiple top-level nodes are each enriched independently."""
+        node_a = self._make_tree_node(run_id="a", cost_usd=FIXTURE_COST_A)
+        node_b = self._make_tree_node(run_id="b", cost_usd=FIXTURE_COST_B)
+        _enrich_costs([node_a, node_b])
+        assert node_a.cost == pytest.approx(FIXTURE_COST_A)
+        assert node_b.cost == pytest.approx(FIXTURE_COST_B)
+
+
+class TestCostIntegrationInBuildTree:
+    """Tests that build_tree() produces trees with correct cost values (D4)."""
+
+    def test_build_tree_leaf_cost(self) -> None:
+        """Leaf nodes in build_tree output have their own cost from metadata."""
+        rows = [
+            _make_row(
+                run_id=FIXTURE_CHILD_A_ID,
+                parent_run_id=FIXTURE_ROOT_ID,
+                name="Read",
+                metadata={COST_METADATA_KEY: FIXTURE_COST_A},
+            ),
+        ]
+        result = build_tree(FIXTURE_ROOT_ID, rows)
+        assert len(result) == 1
+        assert result[0].cost == pytest.approx(FIXTURE_COST_A)
+
+    def test_build_tree_parent_aggregates(self) -> None:
+        """Parent nodes aggregate child costs in build_tree output."""
+        rows = [
+            _make_row(
+                run_id=FIXTURE_CHILD_A_ID,
+                parent_run_id=FIXTURE_ROOT_ID,
+                name="execute_plan",
+            ),
+            _make_row(
+                run_id=FIXTURE_GRANDCHILD_ID,
+                parent_run_id=FIXTURE_CHILD_A_ID,
+                name="Read",
+                metadata={COST_METADATA_KEY: FIXTURE_COST_B},
+            ),
+        ]
+        result = build_tree(FIXTURE_ROOT_ID, rows)
+        parent = result[0]
+        assert parent.cost == pytest.approx(FIXTURE_COST_B)
+        assert parent.children[0].cost == pytest.approx(FIXTURE_COST_B)
+
+    def test_build_tree_no_cost_nodes_show_zero(self) -> None:
+        """Nodes without cost data show 0.0, never 0.01 (AC5, AC45)."""
+        rows = [
+            _make_row(
+                run_id=FIXTURE_CHILD_A_ID,
+                parent_run_id=FIXTURE_ROOT_ID,
+                name="intake",
+            ),
+        ]
+        result = build_tree(FIXTURE_ROOT_ID, rows)
+        assert result[0].cost == 0.0
+
+
+# ─── D5: Duration Computation tests ─────────────────────────────────────────
+
+
+# Timestamps for duration tests: a 5-minute window
+FIXTURE_DURATION_START = "2026-03-28T10:00:00"
+FIXTURE_DURATION_END = "2026-03-28T10:05:00"
+FIXTURE_DURATION_SECONDS = 300.0  # 5 minutes
+
+# Near-zero dispatch: 0.01s apart
+FIXTURE_NEAR_ZERO_START = "2026-03-28T10:00:00.000000"
+FIXTURE_NEAR_ZERO_END = "2026-03-28T10:00:00.010000"
+FIXTURE_NEAR_ZERO_SECONDS = 0.01
+
+# Descendant spans: agent ran from 10:00:30 to 10:04:30
+FIXTURE_DESC_START = "2026-03-28T10:00:30"
+FIXTURE_DESC_END = "2026-03-28T10:04:30"
+FIXTURE_DESC_SPAN_SECONDS = 240.0  # 4 minutes
+
+
+class TestParseTimestamp:
+    """Tests for _parse_timestamp() helper."""
+
+    def test_standard_format(self) -> None:
+        result = _parse_timestamp("2026-03-28T10:00:00")
+        assert result is not None
+        assert result.hour == 10
+
+    def test_microsecond_format(self) -> None:
+        result = _parse_timestamp("2026-03-28T10:00:00.123456")
+        assert result is not None
+        assert result.microsecond == 123456
+
+    def test_none_returns_none(self) -> None:
+        assert _parse_timestamp(None) is None
+
+    def test_empty_returns_none(self) -> None:
+        assert _parse_timestamp("") is None
+
+    def test_invalid_returns_none(self) -> None:
+        assert _parse_timestamp("not-a-timestamp") is None
+
+
+class TestComputeOwnDuration:
+    """Tests for _compute_own_duration()."""
+
+    def test_valid_five_minute_duration(self) -> None:
+        result = _compute_own_duration(FIXTURE_DURATION_START, FIXTURE_DURATION_END)
+        assert result == pytest.approx(FIXTURE_DURATION_SECONDS)
+
+    def test_near_zero_duration(self) -> None:
+        result = _compute_own_duration(FIXTURE_NEAR_ZERO_START, FIXTURE_NEAR_ZERO_END)
+        assert result == pytest.approx(FIXTURE_NEAR_ZERO_SECONDS)
+
+    def test_missing_start(self) -> None:
+        assert _compute_own_duration(None, FIXTURE_DURATION_END) == 0.0
+
+    def test_missing_end(self) -> None:
+        assert _compute_own_duration(FIXTURE_DURATION_START, None) == 0.0
+
+    def test_both_missing(self) -> None:
+        assert _compute_own_duration(None, None) == 0.0
+
+    def test_negative_delta_returns_zero(self) -> None:
+        """If end < start (malformed data), return 0.0."""
+        result = _compute_own_duration(FIXTURE_DURATION_END, FIXTURE_DURATION_START)
+        assert result == 0.0
+
+
+class TestDurationEnrichment:
+    """Tests for _enrich_durations() — wall-clock duration with near-zero replacement (D5)."""
+
+    def _make_tree_node(
+        self,
+        run_id: str = "node-1",
+        start_time: str | None = FIXTURE_DURATION_START,
+        end_time: str | None = FIXTURE_DURATION_END,
+        children: list[TreeNode] | None = None,
+    ) -> TreeNode:
+        """Helper to build a TreeNode with specific timestamps."""
+        return TreeNode(
+            run_id=run_id,
+            parent_run_id=None,
+            name="test-node",
+            display_name="test-node",
+            node_type="graph_node",
+            status="success",
+            start_time=start_time,
+            end_time=end_time,
+            cost=0.0,
+            duration_seconds=0.0,
+            model="",
+            inputs_json=None,
+            outputs_json=None,
+            metadata_json="{}",
+            error=None,
+            created_at="2026-03-28T10:00:00",
+            children=children or [],
+        )
+
+    def test_leaf_with_valid_duration(self) -> None:
+        """A leaf node with good timestamps uses its own duration."""
+        leaf = self._make_tree_node(
+            start_time=FIXTURE_DURATION_START,
+            end_time=FIXTURE_DURATION_END,
+        )
+        _enrich_durations([leaf])
+        assert leaf.duration_seconds == pytest.approx(FIXTURE_DURATION_SECONDS)
+
+    def test_leaf_near_zero_stays_near_zero(self) -> None:
+        """A leaf with near-zero duration keeps it (no children to fall back to)."""
+        leaf = self._make_tree_node(
+            start_time=FIXTURE_NEAR_ZERO_START,
+            end_time=FIXTURE_NEAR_ZERO_END,
+        )
+        _enrich_durations([leaf])
+        assert leaf.duration_seconds == pytest.approx(FIXTURE_NEAR_ZERO_SECONDS)
+
+    def test_parent_near_zero_replaced_by_descendant_span(self) -> None:
+        """A parent with near-zero own duration gets the descendant time span (AC47, AC48)."""
+        child = self._make_tree_node(
+            run_id="child",
+            start_time=FIXTURE_DESC_START,
+            end_time=FIXTURE_DESC_END,
+        )
+        parent = self._make_tree_node(
+            run_id="parent",
+            start_time=FIXTURE_NEAR_ZERO_START,
+            end_time=FIXTURE_NEAR_ZERO_END,
+            children=[child],
+        )
+        _enrich_durations([parent])
+        # Parent should use descendant span, not its own 0.01s
+        # Earliest = parent near-zero start, latest = child end
+        # But since parent start is 10:00:00.000 and child end is 10:04:30,
+        # span = 270 seconds
+        assert parent.duration_seconds > NEAR_ZERO_DURATION_THRESHOLD_SECONDS
+        # Child keeps its own good duration
+        assert child.duration_seconds == pytest.approx(FIXTURE_DESC_SPAN_SECONDS)
+
+    def test_parent_valid_duration_not_replaced(self) -> None:
+        """A parent with >= 1.0s own duration keeps it unchanged."""
+        child = self._make_tree_node(
+            run_id="child",
+            start_time="2026-03-28T10:01:00",
+            end_time="2026-03-28T10:03:00",
+        )
+        parent = self._make_tree_node(
+            run_id="parent",
+            start_time=FIXTURE_DURATION_START,
+            end_time=FIXTURE_DURATION_END,
+            children=[child],
+        )
+        _enrich_durations([parent])
+        assert parent.duration_seconds == pytest.approx(FIXTURE_DURATION_SECONDS)
+
+    def test_multi_minute_phase_shows_real_minutes(self) -> None:
+        """A phase that took minutes shows real wall-clock duration (AC7, AC49)."""
+        # Phase dispatch: near-zero (0.01s)
+        # Child agent ran for 3 minutes
+        agent = self._make_tree_node(
+            run_id="agent",
+            start_time="2026-03-28T10:00:05",
+            end_time="2026-03-28T10:03:05",
+        )
+        phase = self._make_tree_node(
+            run_id="phase",
+            start_time=FIXTURE_NEAR_ZERO_START,
+            end_time=FIXTURE_NEAR_ZERO_END,
+            children=[agent],
+        )
+        _enrich_durations([phase])
+        # Phase should show ~3 minutes (180s), not 0.01s
+        # Bounds: earliest=phase.start (10:00:00.000), latest=agent.end (10:03:05)
+        assert phase.duration_seconds >= 180.0
+        assert phase.duration_seconds < 200.0
+
+    def test_no_timestamps_returns_zero(self) -> None:
+        """Node with no timestamps gets 0.0 duration."""
+        node = self._make_tree_node(start_time=None, end_time=None)
+        _enrich_durations([node])
+        assert node.duration_seconds == 0.0
+
+    def test_deep_tree_descendant_bounds(self) -> None:
+        """Descendant bounds collect from all levels, not just direct children."""
+        # grandchild ends latest
+        grandchild = self._make_tree_node(
+            run_id="gc",
+            start_time="2026-03-28T10:00:10",
+            end_time="2026-03-28T10:07:00",  # 7 minutes in
+        )
+        child = self._make_tree_node(
+            run_id="child",
+            start_time="2026-03-28T10:00:05",
+            end_time="2026-03-28T10:00:06",  # near-zero own
+            children=[grandchild],
+        )
+        root = self._make_tree_node(
+            run_id="root",
+            start_time=FIXTURE_NEAR_ZERO_START,
+            end_time=FIXTURE_NEAR_ZERO_END,
+            children=[child],
+        )
+        _enrich_durations([root])
+        # Root should span from its own start (10:00:00) to grandchild end (10:07:00)
+        assert root.duration_seconds == pytest.approx(420.0)  # 7 minutes
+
+
+class TestCollectTimeBounds:
+    """Tests for _collect_time_bounds() helper."""
+
+    def _make_node(
+        self,
+        start: str | None = None,
+        end: str | None = None,
+        children: list[TreeNode] | None = None,
+    ) -> TreeNode:
+        return TreeNode(
+            run_id="n",
+            parent_run_id=None,
+            name="n",
+            display_name="n",
+            node_type="graph_node",
+            status="success",
+            start_time=start,
+            end_time=end,
+            cost=0.0,
+            duration_seconds=0.0,
+            model="",
+            inputs_json=None,
+            outputs_json=None,
+            metadata_json="{}",
+            error=None,
+            created_at="",
+            children=children or [],
+        )
+
+    def test_single_node_with_timestamps(self) -> None:
+        node = self._make_node(start=FIXTURE_DURATION_START, end=FIXTURE_DURATION_END)
+        earliest, latest = _collect_time_bounds(node)
+        assert earliest is not None
+        assert latest is not None
+        assert earliest.hour == 10
+        assert latest.minute == 5
+
+    def test_single_node_no_timestamps(self) -> None:
+        node = self._make_node()
+        earliest, latest = _collect_time_bounds(node)
+        assert earliest is None
+        assert latest is None
+
+    def test_child_extends_bounds(self) -> None:
+        """Child with later end extends the latest bound."""
+        child = self._make_node(
+            start="2026-03-28T10:01:00",
+            end="2026-03-28T10:10:00",  # later than parent
+        )
+        parent = self._make_node(
+            start="2026-03-28T10:00:00",
+            end="2026-03-28T10:05:00",
+            children=[child],
+        )
+        earliest, latest = _collect_time_bounds(parent)
+        assert earliest is not None
+        assert latest is not None
+        # Earliest = parent start (10:00)
+        assert earliest.minute == 0
+        # Latest = child end (10:10)
+        assert latest.minute == 10
+
+
+class TestDurationIntegrationInBuildTree:
+    """Tests that build_tree() produces trees with correct duration values (D5)."""
+
+    def test_build_tree_leaf_duration(self) -> None:
+        """Leaf nodes in build_tree output have correct duration from timestamps."""
+        rows = [
+            _make_row(
+                run_id=FIXTURE_CHILD_A_ID,
+                parent_run_id=FIXTURE_ROOT_ID,
+                name="Read",
+                start_time=FIXTURE_DURATION_START,
+                end_time=FIXTURE_DURATION_END,
+            ),
+        ]
+        result = build_tree(FIXTURE_ROOT_ID, rows)
+        assert result[0].duration_seconds == pytest.approx(FIXTURE_DURATION_SECONDS)
+
+    def test_build_tree_near_zero_parent_replaced(self) -> None:
+        """Parent with near-zero dispatch time gets descendant span in build_tree."""
+        rows = [
+            _make_row(
+                run_id=FIXTURE_CHILD_A_ID,
+                parent_run_id=FIXTURE_ROOT_ID,
+                name="execute_plan",
+                start_time=FIXTURE_NEAR_ZERO_START,
+                end_time=FIXTURE_NEAR_ZERO_END,
+            ),
+            _make_row(
+                run_id=FIXTURE_GRANDCHILD_ID,
+                parent_run_id=FIXTURE_CHILD_A_ID,
+                name="coder-agent",
+                start_time=FIXTURE_DESC_START,
+                end_time=FIXTURE_DESC_END,
+            ),
+        ]
+        result = build_tree(FIXTURE_ROOT_ID, rows)
+        parent = result[0]
+        # Parent dispatch was 0.01s, but child ran 10:00:30-10:04:30
+        # Descendant span: parent start (10:00:00) to child end (10:04:30) = 270s
+        assert parent.duration_seconds > NEAR_ZERO_DURATION_THRESHOLD_SECONDS
+        # Child has its own valid duration: 240s
+        assert parent.children[0].duration_seconds == pytest.approx(FIXTURE_DESC_SPAN_SECONDS)
