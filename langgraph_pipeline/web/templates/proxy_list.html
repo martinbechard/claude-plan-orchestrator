@@ -42,9 +42,9 @@
       aria-label="Filter traces">
 
   <label>
-    Run name
+    Name
     <input type="search" name="slug" value="{{ slug | e }}"
-           placeholder="Substring match&hellip;" aria-label="Filter by run name substring">
+           placeholder="Substring match&hellip;" aria-label="Filter by name substring">
   </label>
 
   <label>
@@ -89,7 +89,7 @@
     <thead>
       <tr>
         <th scope="col">Trace ID</th>
-        <th scope="col">Run name</th>
+        <th scope="col">Item</th>
         <th scope="col">Start time</th>
         <th scope="col" style="text-align:right">Duration</th>
         <th scope="col" style="text-align:right">Cost</th>
@@ -124,6 +124,9 @@
                     onclick="navigator.clipboard.writeText('{{ run.run_id | e }}')">
               &#128203;
             </button>
+            {% if run.child_count %}
+            <br><span style="font-family:system-ui;font-size:10px;color:#9090b0;font-variant-numeric:tabular-nums;">{{ run.child_count }} spans</span>
+            {% endif %}
           {% else %}
             &mdash;
           {% endif %}
@@ -145,8 +148,8 @@
           {% endif %}
         </td>
 
-        <td style="text-align:right">{{ run.display_duration if run.display_duration else "&mdash;" | safe }}</td>
-        <td style="text-align:right">{{ run.display_cost if run.display_cost else "&mdash;" | safe }}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">{{ run.display_duration if run.display_duration else "&mdash;" | safe }}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">{{ run.display_cost if run.display_cost else "&mdash;" | safe }}</td>
         <td>{{ run.display_model | e if run.display_model else "&mdash;" | safe }}</td>
 
         <td>
