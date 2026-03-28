@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Update first 5 medium-priority design docs
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/64-update-medium-priority-design-docs.md
 
       Update the first 5 medium-priority docs per the audit corrections in docs/reports/design-doc-audit.md
@@ -30,6 +30,11 @@ sections:
     last_attempt: '2026-03-27T21:52:46.427795'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T21:57:25.691180'
+    result_message: 'Updated first 5 medium-priority design docs (11-15): removed
+      all plan-orchestrator.py references, updated to langgraph_pipeline/slack/ module
+      paths, stripped stale line numbers, updated keyword inference descriptions and
+      Modified Files tables'
 - id: '2'
   name: Update medium-priority design docs (batch 2)
   status: pending
