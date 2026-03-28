@@ -19,45 +19,48 @@ sections:
   - id: '1.1'
     name: Create artifact manifest module and wire into task runner
     agent: coder
-    status: pending
-    description: >-
-      Implement the work item: tmp/plans/.claimed/57-track-and-display-item-artifacts.md
+    status: completed
+    description: 'Implement the work item: tmp/plans/.claimed/57-track-and-display-item-artifacts.md
 
       Create langgraph_pipeline/shared/artifact_manifest.py with record_artifact(slug,
       path, action, task_id) and load_manifest(slug) functions. The manifest file
       lives at docs/reports/worker-output/<slug>/artifacts.json. Wire recording into
       task_runner.py so that after copy_worktree_artifacts returns files_copied, each
-      file is recorded in the manifest. See design:
-      docs/plans/2026-03-27-57-track-and-display-item-artifacts-design.md
+      file is recorded in the manifest. See design: docs/plans/2026-03-27-57-track-and-display-item-artifacts-design.md'
+    last_attempt: '2026-03-27T21:35:26.342415'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-27T21:38:18.037376'
+    result_message: 'Created langgraph_pipeline/shared/artifact_manifest.py with record_artifact
+      and load_manifest. Wired record_artifact into parallel.py (the actual copy_worktree_artifacts
+      call site) under _PLAN_LOCK after git add. Note: design doc says task_runner.py
+      but copy_worktree_artifacts is only called in parallel.py.'
   - id: '1.2'
     name: Enrich _collect_output_artifacts with manifest data, size, and content endpoint
     agent: coder
     status: pending
-    description: >-
-      Implement the work item: tmp/plans/.claimed/57-track-and-display-item-artifacts.md
+    description: 'Implement the work item: tmp/plans/.claimed/57-track-and-display-item-artifacts.md
 
       Enhance _collect_output_artifacts() in langgraph_pipeline/web/routes/item.py
-      to load the manifest via load_manifest(slug), merge manifest entries with
-      discovery results, and add file_size (bytes) and action (created/modified/discovered)
+      to load the manifest via load_manifest(slug), merge manifest entries with discovery
+      results, and add file_size (bytes) and action (created/modified/discovered)
       fields to each artifact dict. Add a new GET /item/<slug>/artifact-content endpoint
       that accepts a path query parameter, validates it is within the project root,
-      reads the file, and returns its content as text/plain. See design:
-      docs/plans/2026-03-27-57-track-and-display-item-artifacts-design.md
+      reads the file, and returns its content as text/plain. See design: docs/plans/2026-03-27-57-track-and-display-item-artifacts-design.md'
 - id: '2'
   name: 'Frontend: interactive artifact display with inline viewer'
   status: pending
   tasks:
   - id: '2.1'
-    name: Enhance Output Artifacts section with clickable paths and inline content viewer
+    name: Enhance Output Artifacts section with clickable paths and inline content
+      viewer
     agent: frontend-coder
     status: pending
-    description: >-
-      Implement the work item: tmp/plans/.claimed/57-track-and-display-item-artifacts.md
+    description: 'Implement the work item: tmp/plans/.claimed/57-track-and-display-item-artifacts.md
 
       Enhance the Output Artifacts section in langgraph_pipeline/web/templates/item.html
       to show file_size and action badge (created/modified) for each artifact, make
       artifact paths clickable, and add JS that fetches GET /item/<slug>/artifact-content?path=<path>
       on click. For text files (.md, .json, .txt, .yaml, .py, .ts, .html, .css, .log),
       display the content in a scrollable panel below the artifact entry. For other
-      file types, show the raw path for local access. See design:
-      docs/plans/2026-03-27-57-track-and-display-item-artifacts-design.md
+      file types, show the raw path for local access. See design: docs/plans/2026-03-27-57-track-and-display-item-artifacts-design.md'
