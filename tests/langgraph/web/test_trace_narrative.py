@@ -336,3 +336,122 @@ class TestExtractFileDetails:
         files_read, files_written, bash_commands = _extract_file_details([run])
         assert files_read == []
         assert bash_commands == []
+
+
+# ─── Duration computation (P11, P12 fixes) ────────────────────────────────────
+
+
+class TestDurationFromGrandchildren:
+    """Verify that near-zero and NULL-end_time spans are replaced with grandchild spans."""
+
+    def test_phase_uses_grandchildren_when_child_near_zero(self) -> None:
+        """P12: phase duration comes from grandchildren when child span is 0s."""
+        root = _make_run(run_id=FIXTURE_RUN_ID, metadata={})
+        child = _make_run(
+            run_id=FIXTURE_CHILD_ID,
+            name="execute_plan",
+            parent_run_id=FIXTURE_RUN_ID,
+            start_time="2026-03-27T10:00:00",
+            end_time="2026-03-27T10:00:00",  # 0s — recording artifact
+        )
+        grandchild = _make_run(
+            run_id=FIXTURE_GRAND_ID,
+            parent_run_id=FIXTURE_CHILD_ID,
+            start_time="2026-03-27T10:00:00",
+            end_time="2026-03-27T10:07:30",  # real: 7m 30s
+        )
+        view = build_execution_view(root, [child], {FIXTURE_CHILD_ID: [grandchild]})
+        assert view.phases[0].duration == "7m 30s"
+
+    def test_phase_falls_back_to_child_when_grandchildren_have_null_end(self) -> None:
+        """Phase falls back to child timestamps when all grandchildren have NULL end_time."""
+        root = _make_run(run_id=FIXTURE_RUN_ID, metadata={})
+        child = _make_run(
+            run_id=FIXTURE_CHILD_ID,
+            name="execute_plan",
+            parent_run_id=FIXTURE_RUN_ID,
+            start_time="2026-03-27T10:00:00",
+            end_time="2026-03-27T10:05:00",  # 5 minutes
+        )
+        grandchild = _make_run(
+            run_id=FIXTURE_GRAND_ID,
+            parent_run_id=FIXTURE_CHILD_ID,
+            start_time="2026-03-27T10:00:00",
+            end_time=None,  # still running — no span available
+        )
+        view = build_execution_view(root, [child], {FIXTURE_CHILD_ID: [grandchild]})
+        assert view.phases[0].duration == "5m 00s"
+
+    def test_phase_falls_back_to_child_when_no_grandchildren(self) -> None:
+        """Phase uses child timestamps when the phase has no grandchildren."""
+        root = _make_run(run_id=FIXTURE_RUN_ID, metadata={})
+        child = _make_run(
+            run_id=FIXTURE_CHILD_ID,
+            name="intake_task",
+            parent_run_id=FIXTURE_RUN_ID,
+            start_time="2026-03-27T10:00:00",
+            end_time="2026-03-27T10:02:00",  # 2 minutes
+        )
+        view = build_execution_view(root, [child], {})
+        assert view.phases[0].duration == "2m 00s"
+
+    def test_total_uses_grandchildren_when_children_have_null_end(self) -> None:
+        """P11: total duration falls back to grandchildren when child end_time is NULL."""
+        root = _make_run(
+            run_id=FIXTURE_RUN_ID,
+            start_time="2026-03-27T10:00:00",
+            end_time="2026-03-27T10:00:00",  # near-zero root
+            metadata={},
+        )
+        child = _make_run(
+            run_id=FIXTURE_CHILD_ID,
+            name="execute_plan",
+            parent_run_id=FIXTURE_RUN_ID,
+            start_time="2026-03-27T10:00:00",
+            end_time=None,  # NULL — child never recorded end
+        )
+        grandchild = _make_run(
+            run_id=FIXTURE_GRAND_ID,
+            parent_run_id=FIXTURE_CHILD_ID,
+            start_time="2026-03-27T10:00:00",
+            end_time="2026-03-27T10:05:00",  # real: 5 minutes
+        )
+        view = build_execution_view(root, [child], {FIXTURE_CHILD_ID: [grandchild]})
+        assert view.total_duration == "5m 00s"
+
+    def test_total_uses_grandchildren_when_children_near_zero(self) -> None:
+        """P11: total duration falls back to grandchildren when child span is near-zero."""
+        root = _make_run(
+            run_id=FIXTURE_RUN_ID,
+            start_time="2026-03-27T10:00:00",
+            end_time="2026-03-27T10:00:00",
+            metadata={},
+        )
+        child = _make_run(
+            run_id=FIXTURE_CHILD_ID,
+            name="execute_plan",
+            parent_run_id=FIXTURE_RUN_ID,
+            start_time="2026-03-27T10:00:00",
+            end_time="2026-03-27T10:00:00",  # 0s — recording artifact
+        )
+        grandchild = _make_run(
+            run_id=FIXTURE_GRAND_ID,
+            parent_run_id=FIXTURE_CHILD_ID,
+            start_time="2026-03-27T10:00:00",
+            end_time="2026-03-27T10:08:00",  # real: 8 minutes
+        )
+        view = build_execution_view(root, [child], {FIXTURE_CHILD_ID: [grandchild]})
+        assert view.total_duration == "8m 00s"
+
+    def test_total_uses_children_when_span_is_real(self) -> None:
+        """Total duration stays with children when the children span is >= 1s."""
+        root = _make_run(run_id=FIXTURE_RUN_ID, metadata={})
+        child = _make_run(
+            run_id=FIXTURE_CHILD_ID,
+            name="execute_plan",
+            parent_run_id=FIXTURE_RUN_ID,
+            start_time="2026-03-27T10:00:00",
+            end_time="2026-03-27T10:03:00",  # 3 minutes
+        )
+        view = build_execution_view(root, [child], {})
+        assert view.total_duration == "3m 00s"

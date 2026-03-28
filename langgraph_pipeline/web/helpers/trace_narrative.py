@@ -68,6 +68,11 @@ _DURATION_UNKNOWN = "—"
 # ago are treated as completed rather than still-running.
 _STATUS_STALE_THRESHOLD_MINUTES = 5
 
+# LangGraph records near-zero timestamps for graph-level node spans because the
+# SDK emits start/end events almost simultaneously.  Durations below this threshold
+# are treated as recording artifacts and replaced with grandchild-derived spans.
+_NEAR_ZERO_DURATION_S = 1.0
+
 # Maximum number of individual file paths or bash commands surfaced per phase.
 _MAX_FILE_DETAIL_ENTRIES = 20
 _MAX_BASH_COMMANDS = 10
@@ -161,10 +166,17 @@ def build_execution_view(
 
     phases.sort(key=_phase_sort_key)
 
-    # Total duration from child span (P11, P12); fall back to run timestamps
-    total_duration = _duration_from_children(children)
-    if total_duration == _DURATION_UNKNOWN:
-        total_duration = _format_duration(run.get("start_time"), run.get("end_time"))
+    # Total duration: prefer children span when real (>= 1s).  LangGraph root and
+    # node spans are often near-zero recording artifacts; grandchild (agent) spans
+    # carry the real elapsed time.  Fall back chain: children → grandchildren → root.
+    children_span_secs = _compute_child_span_secs(children)
+    if children_span_secs is not None and children_span_secs >= _NEAR_ZERO_DURATION_S:
+        total_duration = _duration_from_children(children)
+    else:
+        all_gc_flat = [gc for gcs in grandchildren.values() for gc in gcs]
+        total_duration = _duration_from_children(all_gc_flat)
+        if total_duration == _DURATION_UNKNOWN:
+            total_duration = _format_duration(run.get("start_time"), run.get("end_time"))
 
     # Cost: prefer root metadata; aggregate from descendants when absent (P4)
     total_cost = _extract_cost_display(meta)
@@ -193,7 +205,16 @@ def _build_phase_view(child: dict, grandchildren: list[dict]) -> PhaseView:
     phase_name = _classify_phase(run_name)
     agent = _extract_agent(child)
     status = _extract_status(child)
-    duration = _format_duration(child.get("start_time"), child.get("end_time"))
+
+    # Prefer grandchildren span for phase duration.  LangGraph node spans are
+    # recorded as near-zero because the SDK emits start/end almost simultaneously;
+    # the real work happens inside grandchild (agent) runs.
+    gc_span_secs = _compute_child_span_secs(grandchildren)
+    if gc_span_secs is not None and gc_span_secs >= _NEAR_ZERO_DURATION_S:
+        duration = _duration_from_children(grandchildren)
+    else:
+        duration = _format_duration(child.get("start_time"), child.get("end_time"))
+
     cost = _aggregate_cost_display([child] + grandchildren)
     tool_counts = _count_tools(child, grandchildren)
     activity_summary = _format_activity_summary(tool_counts)
@@ -244,6 +265,9 @@ def _build_merged_phase_view(
     earliest_start = min((s for s in starts if s), default=None)
     latest_end = max((e for e in ends if e), default=None)
     duration = _format_duration(earliest_start, latest_end)
+    # When all merged children have NULL end_time, fall back to grandchildren span.
+    if duration == _DURATION_UNKNOWN:
+        duration = _duration_from_children(all_grandchildren)
 
     cost = _aggregate_cost_display(children + all_grandchildren)
 
@@ -608,6 +632,22 @@ def _duration_from_children(children: list[dict]) -> str:
     if not starts or not ends:
         return _DURATION_UNKNOWN
     return _format_duration_from_datetimes(min(starts), max(ends))
+
+
+def _compute_child_span_secs(runs: list[dict]) -> Optional[float]:
+    """Return the span from earliest start to latest non-NULL end in seconds.
+
+    Returns None when either starts or non-NULL ends are entirely unavailable.
+    Runs with NULL end_time are excluded from the end computation so that a
+    single still-running child does not block the duration of completed ones.
+    """
+    valid_starts = [_parse_iso(r.get("start_time")) for r in runs]
+    valid_ends = [_parse_iso(r.get("end_time")) for r in runs]
+    starts = [s for s in valid_starts if s is not None]
+    ends = [e for e in valid_ends if e is not None]
+    if not starts or not ends:
+        return None
+    return (max(ends) - min(starts)).total_seconds()
 
 
 def _format_duration_from_datetimes(dt_start: datetime, dt_end: datetime) -> str:
