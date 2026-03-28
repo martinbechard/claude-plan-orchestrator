@@ -29,9 +29,24 @@ Complete this checklist before making any changes:
 2. Read `docs/ui-style-guide.md` — this is the canonical style reference for all
    UI work in this project. You MUST read it before touching any template or CSS.
 3. Read the design document or wireframes referenced in the task
-4. Read existing UI components to understand the design system
-5. Identify reusable components before creating new ones
-6. Understand the task's acceptance criteria from the YAML plan
+4. Read the USE CASES in the work item — understand what the user is trying to
+   accomplish, not just what HTML to produce. For each use case, trace the user
+   flow through your implementation and verify it works end-to-end.
+5. Read existing UI components to understand the design system
+6. Identify reusable components before creating new ones
+7. Understand the task's acceptance criteria from the YAML plan
+
+## Use Case Driven Development
+
+When the work item lists use cases, your implementation MUST solve each one.
+Before marking the task complete:
+
+1. For each use case, write in a comment HOW your implementation solves it
+   (which template section, which route, which data source).
+2. If a use case cannot be solved by your current changes alone, document
+   what's missing and flag it — do NOT silently skip it.
+3. Test each use case flow: can the user actually do what the use case
+   describes? If not, it's not done.
 
 ## Frontend Standards
 

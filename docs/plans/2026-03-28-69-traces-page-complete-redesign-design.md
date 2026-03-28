@@ -130,3 +130,31 @@ proxy_narrative.html  -- slug title, item link, worker output links
   the UI, not redesigning from scratch.
 - Keep the raw trace page (proxy_trace.html) untouched as the developer
   escape hatch. All changes go to proxy_list.html and proxy_narrative.html.
+
+
+## Acceptance Criteria
+
+- Does the traces list show work item slugs (not "LangGraph") for
+  every row? YES = pass, NO = fail
+- Is the "Item slug" redundant column removed? YES = pass, NO = fail
+- Does each row show the REAL duration (minutes, not 0.01s)?
+  YES = pass, NO = fail
+- Does each row show the REAL cost? YES = pass, NO = fail
+- Are duplicate start/end trace events merged into a single row?
+  YES = pass, NO = fail
+- Are "RUNNING" entries that are actually finished cleaned up or
+  correctly labeled? YES = pass, NO = fail
+- Does clicking a row show phases with real durations and costs?
+  YES = pass, NO = fail
+- Are duplicate phases (Planning x2, Execution x2, verify_fix x2)
+  merged? YES = pass, NO = fail
+- Does "verify_fix" show as "Verification" not "Unknown"?
+  YES = pass, NO = fail
+- Does each phase show what the agent actually did (files, commands)?
+  YES = pass, NO = fail
+- Is there a link from the trace detail to /item/<slug>?
+  YES = pass, NO = fail
+- Is there a link to worker output logs and validation results?
+  YES = pass, NO = fail
+- Is raw LangSmith data hidden by default, accessible via toggle?
+  YES = pass, NO = fail
