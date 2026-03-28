@@ -150,12 +150,19 @@ sections:
       execution, with an expand arrow to reveal individual runs. This requires both
       backend support (adding a grouping query mode to the proxy_list endpoint) and
       frontend template changes.'
-    status: in_progress
+    status: completed
     dependencies:
     - '3.1'
     last_attempt: '2026-03-28T11:33:24.775076'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-28T11:45:30.398827'
+    result_message: 'Added ''Group by item'' toggle to trace list. Backend: RunGroup
+      dataclass + _group_runs_by_slug() in routes/proxy.py; group=0|1 query param
+      on proxy_list endpoint. Frontend: toggle link preserving filters, grouped table
+      with expand/collapse JS (data-group/data-group-member), status_badge macro,
+      group state persisted in hidden form input and pagination URLs. 5 new tests
+      added. All 1504 tests pass.'
 - id: '4'
   name: Narrative page refinements
   status: pending
