@@ -104,9 +104,19 @@ The web server runs at http://localhost:7070. For each UI criterion:
 5. Clean up the test file after running
 
 For simple static content checks where a full browser is unnecessary, curl
-remains acceptable as a quick alternative:
+remains acceptable as a quick alternative. Because the web server may be
+mid-restart when a new route is first checked, apply one retry on 404:
 
-    curl -s http://localhost:7070/<path> | grep "<expected text>"
+    http_status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/<path>)
+    if [ "$http_status" = "404" ]; then
+        sleep 2
+        http_status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/<path>)
+    fi
+    if [ "$http_status" = "404" ]; then
+        echo "FAIL: route still 404 after retry"
+    else
+        curl -s http://localhost:7070/<path> | grep "<expected text>"
+    fi
 
 Only report WARN for criteria that genuinely require complex user interaction
 (multi-step form flows, drag-and-drop) that even Playwright cannot easily test.
