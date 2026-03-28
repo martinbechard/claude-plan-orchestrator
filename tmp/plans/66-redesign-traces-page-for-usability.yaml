@@ -1,50 +1,66 @@
 meta:
-  name: "Redesign traces page for usability"
-  source_item: "tmp/plans/.claimed/66-redesign-traces-page-for-usability.md"
-  design_doc: "docs/plans/2026-03-27-66-redesign-traces-page-for-usability-design.md"
+  name: Redesign traces page for usability
+  source_item: tmp/plans/.claimed/66-redesign-traces-page-for-usability.md
+  design_doc: docs/plans/2026-03-27-66-redesign-traces-page-for-usability-design.md
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
-
 sections:
-  - id: '1'
-    name: "Design competition"
+- id: '1'
+  name: Design competition
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Produce 3 design mockups for user selection
+    agent: frontend-coder
+    description: 'Run the design competition described in the work item: tmp/plans/.claimed/66-redesign-traces-page-for-usability.md
+      -- Create 3 HTML mockup files (vertical timeline, tabbed phases, swimlane diagram)
+      using the frontend-design skill. Place mockups in docs/plans/66-traces-mockups/
+      so the user can compare approaches and select a winner.'
+    status: completed
+    last_attempt: '2026-03-27T22:15:04.629771'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-27T22:23:38.834746'
+    result_message: 'Created 3 HTML mockups in docs/plans/66-traces-mockups/: 01-vertical-timeline.html
+      (phase cards on a colored spine, expandable), 02-tabbed-phases.html (one tab
+      per phase with dual-column detail panel), 03-swimlane.html (horizontal agent
+      lanes with click-to-expand detail panel). All use realistic sample data matching
+      the work item scenario.'
+- id: '2'
+  name: Data layer for item-centric trace view
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Build trace narrative helper module
+    agent: coder
+    description: 'Implement the data layer for the work item: tmp/plans/.claimed/66-redesign-traces-page-for-usability.md
+      -- Create langgraph_pipeline/web/helpers/trace_narrative.py with phase mapping,
+      agent activity summarization, cost/duration rollup, and artifact extraction.
+      See design doc: docs/plans/2026-03-27-66-redesign-traces-page-for-usability-design.md'
     status: pending
-    tasks:
-      - id: '1.1'
-        name: "Produce 3 design mockups for user selection"
-        agent: frontend-coder
-        description: "Run the design competition described in the work item: tmp/plans/.claimed/66-redesign-traces-page-for-usability.md -- Create 3 HTML mockup files (vertical timeline, tabbed phases, swimlane diagram) using the frontend-design skill. Place mockups in docs/plans/66-traces-mockups/ so the user can compare approaches and select a winner."
-        status: pending
-
-  - id: '2'
-    name: "Data layer for item-centric trace view"
+- id: '3'
+  name: UI implementation
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Build narrative template and route
+    agent: frontend-coder
+    description: 'Implement the UI for the work item: tmp/plans/.claimed/66-redesign-traces-page-for-usability.md
+      -- Create proxy_narrative.html template and GET /proxy/{run_id}/narrative endpoint
+      using the winning design from section 1. Wire the trace_narrative helper into
+      the route. See design doc: docs/plans/2026-03-27-66-redesign-traces-page-for-usability-design.md'
     status: pending
-    tasks:
-      - id: '2.1'
-        name: "Build trace narrative helper module"
-        agent: coder
-        description: "Implement the data layer for the work item: tmp/plans/.claimed/66-redesign-traces-page-for-usability.md -- Create langgraph_pipeline/web/helpers/trace_narrative.py with phase mapping, agent activity summarization, cost/duration rollup, and artifact extraction. See design doc: docs/plans/2026-03-27-66-redesign-traces-page-for-usability-design.md"
-        status: pending
-
-  - id: '3'
-    name: "UI implementation"
+  - id: '3.2'
+    name: Wire navigation between narrative and raw trace views
+    agent: frontend-coder
+    description: 'Complete navigation for the work item: tmp/plans/.claimed/66-redesign-traces-page-for-usability.md
+      -- Add ''Show raw trace'' toggle on narrative page, update proxy_list.html to
+      default-link to narrative view, add ''Show narrative'' link on existing proxy_trace.html.'
     status: pending
-    tasks:
-      - id: '3.1'
-        name: "Build narrative template and route"
-        agent: frontend-coder
-        description: "Implement the UI for the work item: tmp/plans/.claimed/66-redesign-traces-page-for-usability.md -- Create proxy_narrative.html template and GET /proxy/{run_id}/narrative endpoint using the winning design from section 1. Wire the trace_narrative helper into the route. See design doc: docs/plans/2026-03-27-66-redesign-traces-page-for-usability-design.md"
-        status: pending
-
-      - id: '3.2'
-        name: "Wire navigation between narrative and raw trace views"
-        agent: frontend-coder
-        description: "Complete navigation for the work item: tmp/plans/.claimed/66-redesign-traces-page-for-usability.md -- Add 'Show raw trace' toggle on narrative page, update proxy_list.html to default-link to narrative view, add 'Show narrative' link on existing proxy_trace.html."
-        status: pending
