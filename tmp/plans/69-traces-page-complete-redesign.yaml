@@ -56,7 +56,7 @@ sections:
   - id: '2.1'
     name: Redesign proxy_list.html for item-centric display
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/69-traces-page-complete-redesign.md
 
       Focus on the list page (proxy_list.html and proxy_list route in proxy.py): (1)
@@ -71,6 +71,14 @@ sections:
     last_attempt: '2026-03-28T00:20:53.977814'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-28T00:24:33.875922'
+    result_message: 'proxy_list.html redesigned for item-centric display: (1) Title
+      renamed to ''Execution History''. (2) ''Item slug'' column removed. (3) Expandable
+      detail/metadata JSON rows removed. (4) Run name column shows display_slug (resolved
+      slug from metadata, not raw ''LangGraph'' name). (5) Status badges updated to
+      use pre-computed display_status supporting completed/error/stale/running states.
+      (6) All rows already linked to /narrative — confirmed. Test updated to assert
+      display_slug. All 1444 tests pass.'
 - id: '3'
   name: Narrative page fixes
   status: pending
