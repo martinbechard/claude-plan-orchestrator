@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Fix duplicate phase merging, cost aggregation, and status correction
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/69-traces-page-complete-redesign.md
 
       Focus on data layer fixes in trace_narrative.py and proxy.py: (1) Merge duplicate
@@ -34,6 +34,17 @@ sections:
     last_attempt: '2026-03-28T00:11:14.633866'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-28T00:17:29.101947'
+    result_message: 'Data layer fixes implemented: (1) Duplicate phase merging — children
+      sharing the same phase_name are merged into one PhaseView with earliest start/latest
+      end for real duration. (2) Slug resolution — prefers metadata slug over run
+      name; scans children metadata as fallback; never exposes LangGraph as display_slug.
+      (3) Cost aggregation — sums costs from child+grandchild metadata when parent
+      has no cost field. (4) Status correction — ExecutionView.overall_status treats
+      runs as completed when all children ended >5 min ago; proxy.py display_status
+      uses 30-min time-based heuristic. (5) verify_fix and verify added to _PHASE_PATTERNS
+      as Verification; Verification added to _PHASE_ORDER. (6) Total duration computed
+      from first-child-start to last-child-end span. All 1444 tests pass.'
 - id: '2'
   name: List page redesign
   status: pending
