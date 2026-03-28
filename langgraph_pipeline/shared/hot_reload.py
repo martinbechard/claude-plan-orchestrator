@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 
 CODE_CHANGE_POLL_INTERVAL_SECONDS = 10
 
+# Path prefix that identifies web-only files.  Changes confined to this subtree
+# trigger a lightweight web server hot-restart instead of a full process restart.
+WEB_CHANGE_FILE_PREFIX = "langgraph_pipeline/web/"
+
 # All .py files under langgraph_pipeline/ plus the legacy wrapper script.
 HOT_RELOAD_WATCHED_FILES: list[str] = sorted(
     glob.glob("langgraph_pipeline/**/*.py", recursive=True)
@@ -60,6 +64,23 @@ def check_code_changed(baseline: dict[str, str]) -> bool:
     return current != baseline
 
 
+def _classify_changes(baseline: dict[str, str]) -> tuple[bool, bool]:
+    """Determine whether source files changed and whether the changes are web-only.
+
+    Returns:
+        A tuple ``(changed, web_only)`` where *web_only* is ``True`` only when
+        every changed file lives under ``langgraph_pipeline/web/``.
+    """
+    current = snapshot_source_hashes()
+    if current == baseline:
+        return False, False
+
+    all_paths = set(current) | set(baseline)
+    changed_paths = {p for p in all_paths if current.get(p) != baseline.get(p)}
+    web_only = all(p.startswith(WEB_CHANGE_FILE_PREFIX) for p in changed_paths)
+    return True, web_only
+
+
 # ─── Background monitor ───────────────────────────────────────────────────────
 
 
@@ -83,15 +104,36 @@ class CodeChangeMonitor(threading.Thread):
         self._stop_event.set()
 
     def run(self) -> None:
-        """Poll watched files until stopped or a change is detected."""
+        """Poll watched files until stopped or a pipeline-wide change is detected.
+
+        Web-only changes (files under ``langgraph_pipeline/web/``) trigger a
+        lightweight web server hot-restart and reset the baseline so monitoring
+        continues.  All other changes signal a full process restart via
+        ``restart_pending``.
+        """
         while not self._stop_event.is_set():
             time.sleep(self.poll_interval)
             if self._stop_event.is_set():
                 break
-            if check_code_changed(self._baseline):
+            changed, web_only = _classify_changes(self._baseline)
+            if not changed:
+                continue
+            if web_only:
+                logger.info("CodeChangeMonitor: web-only change detected, restarting web server")
+                self._trigger_web_restart()
+                self._baseline = snapshot_source_hashes()
+            else:
                 logger.info("CodeChangeMonitor: source change detected, signalling restart")
                 self.restart_pending.set()
                 break
+
+    def _trigger_web_restart(self) -> None:
+        """Call restart_web_server() using a lazy import to avoid circular imports."""
+        try:
+            from langgraph_pipeline.web.server import restart_web_server
+            restart_web_server()
+        except Exception as exc:
+            logger.error("CodeChangeMonitor: web server restart failed: %s", exc)
 
 
 # ─── Restart ──────────────────────────────────────────────────────────────────

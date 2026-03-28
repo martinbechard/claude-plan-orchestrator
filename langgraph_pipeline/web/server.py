@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 WEB_SERVER_DEFAULT_PORT = 7070
 WEB_SERVER_PORT_SCAN_MAX = 7170
+WEB_SERVER_RESTART_DRAIN_SECONDS = 2
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
@@ -468,3 +469,42 @@ def stop_web_server() -> None:
     _server = None
     _active_port = None
     logger.info("Web server stop signalled")
+
+
+def restart_web_server() -> None:
+    """Stop the current uvicorn instance, evict cached web modules, and restart.
+
+    Evicts all ``langgraph_pipeline.web.*`` sub-modules (except this one) from
+    ``sys.modules`` so that ``create_app()`` re-imports route files fresh and
+    picks up any new route definitions committed while the server was running.
+
+    Safe to call when the server is not running (logs a warning and returns).
+    """
+    import sys
+
+    port = _active_port
+    if port is None:
+        logger.warning("restart_web_server: web server is not running, skipping restart")
+        return
+
+    logger.info("restart_web_server: stopping web server on port=%d for hot-restart", port)
+    stop_web_server()
+
+    # Wait for the daemon thread to finish draining before rebinding the port.
+    thread = _server_thread
+    if thread is not None and thread.is_alive():
+        thread.join(timeout=WEB_SERVER_RESTART_DRAIN_SECONDS)
+
+    # Evict web route/proxy/dashboard modules so create_app() gets fresh imports.
+    # We intentionally keep this module (__name__) in sys.modules to preserve
+    # module-level globals (_server, _server_thread, _active_port).
+    evict_names = [
+        name for name in list(sys.modules.keys())
+        if name.startswith("langgraph_pipeline.web") and name != __name__
+    ]
+    for mod_name in evict_names:
+        sys.modules.pop(mod_name, None)
+    logger.debug("restart_web_server: evicted %d cached web modules", len(evict_names))
+
+    logger.info("restart_web_server: restarting web server on port=%d", port)
+    start_web_server(port=port)
