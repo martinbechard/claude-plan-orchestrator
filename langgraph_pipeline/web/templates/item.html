@@ -4,14 +4,15 @@
             original_request_html (optional), plan_tasks [{id, name, status}],
             completions, traces [{run_id, name, created_at}],
             output_files [filenames sorted newest-first],
-            output_artifacts [{path, source, display_name}],
+            output_artifacts [{path, source, display_name, file_size, action}],
             avg_velocity (int tok/min or None), last_trace (dict or None)
    Design: docs/plans/2026-03-26-06-work-item-detail-page-design.md
            docs/plans/2026-03-26-17-work-item-status-clarity-design.md
            docs/plans/2026-03-26-35-work-item-page-missing-requirements-from-backlog-file-design.md
            docs/plans/2026-03-26-43-capture-raw-worker-output-per-item-design.md
            docs/plans/2026-03-26-46-item-page-show-last-run-and-velocity-design.md
-           docs/plans/2026-03-27-56-item-page-show-output-artifacts-design.md #}
+           docs/plans/2026-03-27-56-item-page-show-output-artifacts-design.md
+           docs/plans/2026-03-27-57-track-and-display-item-artifacts-design.md #}
 {% extends "base.html" %}
 
 {% block title %}{{ slug }} — Plan Orchestrator{% endblock %}
@@ -762,7 +763,6 @@
     line-height: 1.5;
 }
 
-/* ── Output Artifacts section ─────────────────────────────────────────── */
 /* ── Output Artifacts ─────────────────────────────────────────────────── */
 .artifact-list {
     padding: 0.5rem 0;
@@ -772,11 +772,18 @@
     padding: 0.4rem 1.25rem;
     border-bottom: 1px solid #f0f4f8;
     display: flex;
-    align-items: baseline;
-    gap: 0.6rem;
+    flex-direction: column;
+    gap: 0.25rem;
 }
 
 .artifact-entry:last-child { border-bottom: none; }
+
+.artifact-entry-row {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
 
 .artifact-source-badge {
     font-size: 10px;
@@ -791,11 +798,83 @@
     letter-spacing: 0.04em;
 }
 
+.artifact-action-badge {
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 3px;
+    padding: 1px 5px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.artifact-action-created {
+    color: #166534;
+    background: #dcfce7;
+    border: 1px solid #bbf7d0;
+}
+
+.artifact-action-modified {
+    color: #92400e;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+}
+
+.artifact-size {
+    font-size: 11px;
+    color: #9ca3af;
+    flex-shrink: 0;
+}
+
 .artifact-path {
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
     font-size: 12px;
     color: #374151;
     word-break: break-all;
+}
+
+.artifact-path-link {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    font-size: 12px;
+    color: #3b6fcf;
+    word-break: break-all;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.artifact-path-link:hover { color: #1a3a8c; }
+
+.artifact-viewer {
+    margin-top: 0.25rem;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+}
+
+.artifact-viewer-pre {
+    margin: 0;
+    background: #1a1a2e;
+    padding: 0.75rem 1rem;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    font-size: 11px;
+    color: #e2e8f0;
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre;
+    line-height: 1.5;
+}
+
+.artifact-path-plain-notice {
+    font-size: 11px;
+    color: #6b7280;
+    font-style: italic;
+    padding: 0.4rem 0;
 }
 </style>
 {% endblock %}
@@ -981,11 +1060,43 @@
           {{ output_artifacts | length }} file{{ 's' if output_artifacts | length != 1 else '' }}
         </span>
       </div>
-      <div class="artifact-list">
+      <div class="artifact-list" data-slug="{{ slug }}">
         {% for artifact in output_artifacts %}
+        {# Determine if this is a viewable text file #}
+        {% set path_parts = artifact.path.rsplit('.', 1) %}
+        {% set is_text = path_parts|length > 1 and path_parts[1].lower() in ['md', 'json', 'txt', 'yaml', 'py', 'ts', 'html', 'css', 'log'] %}
         <div class="artifact-entry">
-          <span class="artifact-source-badge">{{ artifact.source }}</span>
-          <span class="artifact-path">{{ artifact.path }}</span>
+          <div class="artifact-entry-row">
+            <span class="artifact-source-badge">{{ artifact.source }}</span>
+            {% if artifact.action and artifact.action != "discovered" %}
+            <span class="artifact-action-badge artifact-action-{{ artifact.action }}"
+                  aria-label="Action: {{ artifact.action }}">{{ artifact.action }}</span>
+            {% endif %}
+            {% if artifact.file_size is not none %}
+            <span class="artifact-size" aria-label="File size">
+              {%- if artifact.file_size < 1024 -%}
+                {{ artifact.file_size }}&thinsp;B
+              {%- elif artifact.file_size < 1048576 -%}
+                {{ "%.1f"|format(artifact.file_size / 1024) }}&thinsp;KB
+              {%- else -%}
+                {{ "%.1f"|format(artifact.file_size / 1048576) }}&thinsp;MB
+              {%- endif -%}
+            </span>
+            {% endif %}
+            {% if is_text %}
+            <button class="artifact-path-link"
+                    data-artifact-path="{{ artifact.path }}"
+                    aria-expanded="false"
+                    aria-label="Toggle inline view: {{ artifact.display_name }}">{{ artifact.path }}</button>
+            {% else %}
+            <span class="artifact-path">{{ artifact.path }}</span>
+            {% endif %}
+          </div>
+          {% if is_text %}
+          <div class="artifact-viewer" hidden aria-live="polite">
+            <pre class="artifact-viewer-pre" aria-label="Content of {{ artifact.display_name }}">Loading&hellip;</pre>
+          </div>
+          {% endif %}
         </div>
         {% endfor %}
       </div>
@@ -1198,5 +1309,41 @@ document.querySelectorAll('.output-preview-details').forEach(function (el) {
             .catch(function () { pre.textContent = 'Failed to load log content.'; });
     });
 });
+
+(function () {
+    var artifactList = document.querySelector('.artifact-list[data-slug]');
+    if (!artifactList) { return; }
+    var slug = artifactList.dataset.slug;
+
+    artifactList.querySelectorAll('.artifact-path-link').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var entry = btn.closest('.artifact-entry');
+            var viewer = entry.querySelector('.artifact-viewer');
+            var pre = viewer.querySelector('pre');
+            var expanded = btn.getAttribute('aria-expanded') === 'true';
+
+            if (expanded) {
+                viewer.hidden = true;
+                btn.setAttribute('aria-expanded', 'false');
+                return;
+            }
+
+            viewer.hidden = false;
+            btn.setAttribute('aria-expanded', 'true');
+
+            if (pre.dataset.loaded) { return; }
+            pre.dataset.loaded = '1';
+            pre.textContent = 'Loading\u2026';
+            var url = '/item/' + encodeURIComponent(slug) + '/artifact-content?path=' + encodeURIComponent(btn.dataset.artifactPath);
+            fetch(url)
+                .then(function (r) {
+                    if (!r.ok) { throw new Error('HTTP ' + r.status); }
+                    return r.text();
+                })
+                .then(function (t) { pre.textContent = t; })
+                .catch(function (err) { pre.textContent = 'Failed to load content: ' + err.message; });
+        });
+    });
+}());
 </script>
 {% endblock %}
