@@ -111,7 +111,7 @@ Links to design doc, validation results, worker output, git commits
 - Is raw LangSmith data hidden by default, accessible via toggle?
   YES = pass, NO = fail
 
-## LangSmith Trace: c5e3c8c4-fe94-4b1a-be08-c37ba7ceccef
+
 
 
 ## 5 Whys Analysis
