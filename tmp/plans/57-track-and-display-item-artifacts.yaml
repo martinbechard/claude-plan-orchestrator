@@ -51,18 +51,18 @@ sections:
       fields to each artifact dict. Add a new GET /item/<slug>/artifact-content endpoint
       that accepts a path query parameter, validates it is within the project root,
       reads the file, and returns its content as text/plain. See design: docs/plans/2026-03-27-57-track-and-display-item-artifacts-design.md'
-    last_attempt: '2026-03-27T21:48:13.365144'
-    attempts: 2
-    model_used: opus
-    completed_at: '2026-03-27T21:49:27.696025'
-    result_message: Verified existing implementation of _collect_output_artifacts()
-      with manifest merge, file_size, and action fields. Verified artifact-content
-      endpoint with path traversal protection. Added manifest-only entries (step 5)
-      so files in manifest but not found by discovery are included. All 101 item-related
-      tests pass.
+    last_attempt: '2026-03-27T21:42:49.607849'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-27T21:45:48.388551'
+    result_message: 'item.py fully implements task: _collect_output_artifacts loads
+      manifest via load_manifest(slug), merges manifest entries, adds file_size and
+      action fields. GET /item/{slug}/artifact-content endpoint serves file content
+      with path-traversal protection. All 1409 tests pass.'
     validation_attempts: 1
-    validation_findings: 'Validator ''validator'' failed to execute: No status file
-      written by Claude'
+    validation_findings: All requirements met. _collect_output_artifacts loads manifest,
+      merges with discovery, adds file_size and action fields. New artifact-content
+      endpoint with path-traversal protection. Build passes, 1409 tests pass (no regressions).
 - id: '2'
   name: 'Frontend: interactive artifact display with inline viewer'
   status: pending
@@ -71,7 +71,7 @@ sections:
     name: Enhance Output Artifacts section with clickable paths and inline content
       viewer
     agent: frontend-coder
-    status: pending
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/57-track-and-display-item-artifacts.md
 
       Enhance the Output Artifacts section in langgraph_pipeline/web/templates/item.html
@@ -80,3 +80,13 @@ sections:
       on click. For text files (.md, .json, .txt, .yaml, .py, .ts, .html, .css, .log),
       display the content in a scrollable panel below the artifact entry. For other
       file types, show the raw path for local access. See design: docs/plans/2026-03-27-57-track-and-display-item-artifacts-design.md'
+    last_attempt: '2026-03-27T21:48:40.056780'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-27T21:51:44.850243'
+    result_message: 'Enhanced Output Artifacts section in item.html: added file_size
+      display (B/KB/MB), action badge (created/modified, green/amber), clickable paths
+      for text files (.md, .json, .txt, .yaml, .py, .ts, .html, .css, .log) with JS
+      fetch of /item/<slug>/artifact-content on click and scrollable inline viewer
+      panel. Non-text files show plain path. Toggle hides/shows viewer; content cached
+      after first load. Committed as dda8f9ae.'
