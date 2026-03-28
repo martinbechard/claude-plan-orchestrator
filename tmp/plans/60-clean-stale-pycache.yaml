@@ -19,12 +19,15 @@ sections:
   - id: '1.1'
     name: Create cleanup script and run it to remove orphaned .pyc files
     agent: coder
-    status: pending
-    description: >
-      Implement the work item: tmp/plans/.claimed/60-clean-stale-pycache.md
+    status: in_progress
+    description: 'Implement the work item: tmp/plans/.claimed/60-clean-stale-pycache.md
 
-      Create scripts/clean_pycache.py that walks all __pycache__/ directories,
-      identifies .pyc files whose source .py no longer exists, deletes them,
-      and removes any empty __pycache__/ dirs. Run the script to perform the
-      cleanup. Verify .gitignore already contains __pycache__/.
-      See design: docs/plans/2026-03-27-60-clean-stale-pycache-design.md
+      Create scripts/clean_pycache.py that walks all __pycache__/ directories, identifies
+      .pyc files whose source .py no longer exists, deletes them, and removes any
+      empty __pycache__/ dirs. Run the script to perform the cleanup. Verify .gitignore
+      already contains __pycache__/. See design: docs/plans/2026-03-27-60-clean-stale-pycache-design.md
+
+      '
+    last_attempt: '2026-03-27T21:46:44.900014'
+    attempts: 1
+    model_used: sonnet
