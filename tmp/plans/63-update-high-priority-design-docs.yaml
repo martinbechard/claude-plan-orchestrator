@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Fix plan-orchestrator.py references in 4 spec-aware validator design docs
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/63-update-high-priority-design-docs.md
 
       Update the 4 spec-aware validator design docs per the high-priority corrections
@@ -30,6 +30,13 @@ sections:
     last_attempt: '2026-03-27T21:52:17.617579'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T21:57:11.996610'
+    result_message: 'Updated 4 spec-aware validator design docs: replaced all scripts/plan-orchestrator.py
+      references with langgraph_pipeline/executor/nodes/validator.py, updated function
+      names (build_validation_prompt -> _build_validator_prompt), updated test paths
+      to tests/langgraph/executor/nodes/test_validator.py, removed CompletionTracker/auto_pipeline.py
+      test refs (feature never implemented), and removed specific line number references
+      (62-63, 377-378, 412, 1765).'
 - id: '2'
   name: Update cost and tool-call design docs (3 files)
   status: pending
