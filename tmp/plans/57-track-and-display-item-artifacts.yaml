@@ -51,14 +51,14 @@ sections:
       fields to each artifact dict. Add a new GET /item/<slug>/artifact-content endpoint
       that accepts a path query parameter, validates it is within the project root,
       reads the file, and returns its content as text/plain. See design: docs/plans/2026-03-27-57-track-and-display-item-artifacts-design.md'
-    last_attempt: '2026-03-27T21:41:21.787076'
+    last_attempt: '2026-03-27T21:42:49.607849'
     attempts: 1
     model_used: sonnet
-    completed_at: '2026-03-27T21:44:21.442075'
-    result_message: Enhanced _collect_output_artifacts() to load manifest via load_manifest(slug),
-      merge entries with discovery results, and add file_size and action fields. Added
-      GET /item/{slug}/artifact-content endpoint with project-root path traversal
-      protection.
+    completed_at: '2026-03-27T21:45:48.388551'
+    result_message: 'item.py fully implements task: _collect_output_artifacts loads
+      manifest via load_manifest(slug), merges manifest entries, adds file_size and
+      action fields. GET /item/{slug}/artifact-content endpoint serves file content
+      with path-traversal protection. All 1409 tests pass.'
 - id: '2'
   name: 'Frontend: interactive artifact display with inline viewer'
   status: pending
