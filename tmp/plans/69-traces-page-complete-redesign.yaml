@@ -89,7 +89,7 @@ sections:
   - id: '3.1'
     name: Fix narrative page title, links, and phase details
     agent: frontend-coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/69-traces-page-complete-redesign.md
 
       Focus on the narrative detail page (proxy_narrative.html and narrative route):
@@ -104,3 +104,13 @@ sections:
     last_attempt: '2026-03-28T01:17:00.989973'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-28T01:25:25.848510'
+    result_message: 'Narrative page fixes implemented: (1) Display resolved item slug
+      as page title instead of ''LangGraph'' — uses view.item_slug, falls back to
+      run.display_slug, never exposes ''LangGraph''. (2) Added /item/{slug} link in
+      narrative header. (3) Added worker output log detection from logs/ directory,
+      shown in header card. (4) Expanded phase cards to show files read, files written,
+      and bash commands extracted from tool call data. (5) ''Show raw trace'' toggle
+      is now prominent with a border button style. (6) Duplicate phases are merged
+      and show real durations/costs (from task 1.1 data layer). (7) Added _extract_file_details()
+      function with 7 unit tests. All 1452 tests pass, 0 regressions.'
