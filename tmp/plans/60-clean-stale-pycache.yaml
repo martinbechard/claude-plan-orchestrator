@@ -1,0 +1,40 @@
+meta:
+  name: 60-clean-stale-pycache
+  source_item: tmp/plans/.claimed/60-clean-stale-pycache.md
+  plan_doc: docs/plans/2026-03-27-60-clean-stale-pycache-design.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - frontend-coder
+    - e2e-test-agent
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Clean stale pycache files and add cleanup script
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Create cleanup script and run it to remove orphaned .pyc files
+    agent: coder
+    status: completed
+    description: 'Implement the work item: tmp/plans/.claimed/60-clean-stale-pycache.md
+
+      Create scripts/clean_pycache.py that walks all __pycache__/ directories, identifies
+      .pyc files whose source .py no longer exists, deletes them, and removes any
+      empty __pycache__/ dirs. Run the script to perform the cleanup. Verify .gitignore
+      already contains __pycache__/. See design: docs/plans/2026-03-27-60-clean-stale-pycache-design.md
+
+      '
+    last_attempt: '2026-03-27T21:46:44.900014'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-27T21:48:11.280689'
+    result_message: Created scripts/clean_pycache.py; ran it to delete 14 orphaned
+      .pyc files across tests/, langgraph_pipeline/shared/, and scripts/. Confirmed
+      .gitignore already contains __pycache__/. Committed.
+    validation_attempts: 1
+    validation_findings: Script created correctly, all orphaned .pyc files cleaned,
+      .gitignore verified, all 1409 tests pass.
