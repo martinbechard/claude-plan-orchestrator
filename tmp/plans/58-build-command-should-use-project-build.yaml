@@ -19,12 +19,10 @@ sections:
   - id: '1.1'
     name: Replace build_command in orchestrator config with compileall
     agent: coder
-    status: completed
+    status: in_progress
     description: "Implement the work item: tmp/plans/.claimed/58-build-command-should-use-project-build.md\n\
       \ \nReplace the build_command in .claude/orchestrator-config.yaml with a compileall-based\
       \ command that recursively checks all .py files. See design: docs/plans/2026-03-27-58-build-command-should-use-project-build-design.md"
     last_attempt: '2026-03-27T21:46:13.166329'
     attempts: 1
     model_used: sonnet
-    completed_at: '2026-03-27T21:46:48.348367'
-    result_message: 'PASS: All good'

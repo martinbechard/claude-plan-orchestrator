@@ -34,3 +34,11 @@ Single script task:
 - Delete only orphaned .pyc files, not all caches, to avoid forcing unnecessary
   recompilation.
 - Remove empty __pycache__/ dirs after cleanup for tidiness.
+
+
+## Acceptance Criteria
+
+- Are there zero .pyc files in tests/__pycache__/ that reference
+  non-existent .py source files? YES = pass, NO = fail
+- Is there a .gitignore entry for __pycache__/?
+  YES = pass, NO = fail

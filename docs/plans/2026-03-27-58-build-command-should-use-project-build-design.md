@@ -43,3 +43,13 @@ The compileall module:
    complete syntax validation.
 
 3. Single-line command: Keeps the YAML config simple and readable.
+
+
+## Acceptance Criteria
+
+- Does the build command check ALL .py files under langgraph_pipeline/?
+  YES = pass, NO = fail
+- Does it work without listing specific file paths?
+  YES = pass, NO = fail
+- Does it fail if any .py file has a syntax error?
+  YES = pass, NO = fail
