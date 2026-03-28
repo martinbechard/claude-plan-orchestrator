@@ -19,7 +19,7 @@ injected as context.
 
 ```
 Part 1 Flow:
-  plan-orchestrator
+  pipeline executor (executor subgraph)
       |
       v
   ux-designer (Opus) -- produces design brief
@@ -43,8 +43,8 @@ Part 2 Flow:
   Returns status: "suspended" in task-status.json
       |
       v
-  plan-orchestrator marks task as "suspended"
-  auto-pipeline skips suspended items
+  pipeline executor marks task as "suspended"
+  pipeline scan node skips suspended items
       |
       v
   Slack background poller detects threaded reply
@@ -52,7 +52,7 @@ Part 2 Flow:
   Clears suspension state
       |
       v
-  auto-pipeline picks up item on next cycle
+  pipeline scan node picks up item on next cycle
   Opus receives answer as injected context
 ```
 
@@ -67,8 +67,8 @@ Part 2 Flow:
 | File | Change |
 |------|--------|
 | .claude/agents/ux-designer.md | Rewrite as Opus orchestrator with loop logic |
-| scripts/plan-orchestrator.py | Add suspension handling, new task status, Slack question routing |
-| scripts/auto-pipeline.py | Add suspended item state, skip logic, reinstatement |
+| langgraph_pipeline/executor/nodes/task_runner.py | Add suspension handling, new task status, Slack question routing |
+| langgraph_pipeline/pipeline/nodes/scan.py | Add suspended item state, skip logic, reinstatement |
 
 ## Design Decisions
 
@@ -150,17 +150,17 @@ threading to scope replies to the correct question -- no manual ID scheme needed
 ### 6. Task Status: "suspended"
 
 A new task status value "suspended" is added alongside pending/in_progress/
-completed/failed/skipped. When plan-orchestrator encounters a "suspended" status
+completed/failed/skipped. When the executor subgraph encounters a "suspended" status
 in the task-status.json written by the ux-designer agent, it preserves the task
-in its current state and exits cleanly. The auto-pipeline treats the entire
+in its current state and exits cleanly. The pipeline scan node treats the entire
 work item as suspended until the question is answered.
 
 ### 7. Implementation Phasing
 
 Part 1 (Opus/Sonnet loop) and Part 2 (Slack suspension) are implemented in
 separate phases with independent tests. Part 1 is self-contained within the
-agent definitions and plan-orchestrator's task execution. Part 2 requires
-changes to the auto-pipeline state machine and Slack message handling.
+agent definitions and executor subgraph task execution. Part 2 requires
+changes to the pipeline scan node state machine and Slack message handling.
 
 ## Constants
 

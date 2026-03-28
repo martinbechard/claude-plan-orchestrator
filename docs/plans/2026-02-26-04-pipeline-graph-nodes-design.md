@@ -4,7 +4,7 @@
 
 Replace the procedural main_loop() in auto-pipeline.py with a LangGraph StateGraph
 containing five core nodes (scan_backlog, intake_analyze, create_plan, verify_symptoms,
-archive) plus an execute_plan subprocess bridge. Uses SqliteSaver for crash recovery.
+archive) plus an execute_plan node that invokes the executor subgraph in-process. Uses SqliteSaver for crash recovery.
 
 ## Architecture
 
@@ -31,7 +31,7 @@ scan_backlog --> [has_items?]
 - langgraph_pipeline/pipeline/nodes/scan.py - scan_backlog node
 - langgraph_pipeline/pipeline/nodes/intake.py - intake_analyze node (with throttle + dedup)
 - langgraph_pipeline/pipeline/nodes/plan_creation.py - create_plan node
-- langgraph_pipeline/pipeline/nodes/execute_plan.py - Subprocess bridge to plan-orchestrator.py
+- langgraph_pipeline/pipeline/nodes/execute_plan.py - Invokes executor subgraph in-process
 - langgraph_pipeline/pipeline/nodes/verification.py - verify_symptoms node
 - langgraph_pipeline/pipeline/nodes/archival.py - archive node
 - tests/langgraph/pipeline/test_state.py - State schema tests
@@ -61,10 +61,10 @@ The backlog creation throttle (.claude/plans/.backlog-creation-throttle.json) li
 disk, NOT in graph state. This ensures the throttle survives graph checkpoint restarts
 and process crashes. The intake node reads/writes this file directly.
 
-### Subprocess Bridge Pattern
-execute_plan spawns plan-orchestrator.py as a subprocess (matching current
-auto-pipeline.py behavior). It captures exit code, stdout, and cost/token data from
-the result JSON event. This is a temporary bridge replaced by feature 05.
+### In-Process Executor Pattern
+execute_plan invokes the executor subgraph in-process. It maps PipelineState fields
+to TaskState, runs the executor subgraph via graph.invoke(), and maps cost and token
+data back to PipelineState on completion.
 
 ### Checkpointing
 SqliteSaver at .claude/pipeline-state.db with thread_id "pipeline-main". On restart,

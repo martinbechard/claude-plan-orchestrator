@@ -95,21 +95,19 @@ for debugging. This is configured via environment variable
 - None (all changes in existing files)
 
 ### Modified files
-- `scripts/plan-orchestrator.py`:
+- `langgraph_pipeline/shared/claude_cli.py`:
   - Add AGENT_PERMISSION_PROFILES dict mapping agent names to profiles
   - Add `build_permission_flags(agent_name)` function
-  - Modify `run_claude_task()` to use permission flags
-  - Modify `run_parallel_task()` to use permission flags
-  - Modify `send_notification()` to use permission flags
-  - Modify `SlackQuestionHandler._call_claude_print()` to use permission flags
+  - Modify `call_claude()` to use permission flags
   - Add logging for which profile is applied
 
-- `scripts/auto-pipeline.py`:
-  - Add similar permission profile support
-  - Modify 3 Claude launch points (idea intake, plan creation, verification)
-  - Each pipeline function maps to an appropriate profile
+- `langgraph_pipeline/executor/nodes/task_runner.py`:
+  - Modify Claude launch to use permission flags from `build_permission_flags()`
 
-- `tests/test_plan_orchestrator.py`:
+- `langgraph_pipeline/pipeline/nodes/intake.py` and `plan_creation.py`:
+  - Modify Claude launch points to use appropriate permission profiles
+
+- `tests/langgraph/executor/test_task_runner.py`:
   - Add tests for `build_permission_flags()` function
   - Add tests for profile selection logic
   - Add tests for sandbox enable/disable toggle

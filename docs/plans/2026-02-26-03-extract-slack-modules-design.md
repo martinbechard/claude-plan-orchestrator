@@ -2,9 +2,9 @@
 
 ## Overview
 
-Decompose the monolithic SlackNotifier class (~2,000 lines, plan-orchestrator.py lines 3623-5655)
-into four focused modules under langgraph_pipeline/slack/. A facade class in __init__.py
-preserves backward compatibility so both scripts can migrate incrementally.
+Decompose the monolithic SlackNotifier class into four focused modules under
+langgraph_pipeline/slack/. A facade class in __init__.py re-exports from the
+submodules to preserve a single import surface.
 
 ## Architecture
 
@@ -20,30 +20,23 @@ langgraph_pipeline/slack/
 ## Module Boundaries
 
 ### identity.py (~200 lines)
-Extracted from: plan-orchestrator.py top-level (AgentIdentity class at line 1559,
-load_agent_identity at line 1586) and SlackNotifier methods set_identity, _as_role,
-_sign_text.
-
 Key types:
 - AgentIdentity dataclass (project name, agent name map)
 - load_agent_identity(config) factory
 - SigningMixin or standalone functions for _sign_text, _as_role
 
 ### notifier.py (~400 lines)
-Extracted from: SlackNotifier __init__, is_enabled, _post_message, _post_message_get_ts,
-_build_status_block, _truncate_for_slack, _get_notifications_channel_id,
-get_type_channel_id, send_status, send_defect, send_idea, process_agent_messages,
-_should_notify, MESSAGE_ROUTING_PROMPT constant (A5 hint).
-
 Owns: Slack API HTTP calls, channel name caching, message block formatting.
 
-### poller.py (~400 lines)
-Extracted from: SlackNotifier poll_messages, _discover_channels, _get_channel_role,
-_load_last_read_all, _save_last_read_all, start_background_polling, stop_background_polling,
-_prune_message_tracking, _handle_polled_messages, _route_message_via_llm,
-_execute_routed_action, create_backlog_item, handle_control_command.
+Key API: is_enabled, _post_message, _post_message_get_ts, _build_status_block,
+_truncate_for_slack, _get_notifications_channel_id, get_type_channel_id,
+send_status, send_defect, send_idea, process_agent_messages, _should_notify.
+Constant: MESSAGE_ROUTING_PROMPT (A5 hint).
 
-Safety layers ported from v1.8.0:
+### poller.py (~400 lines)
+Owns: inbound message polling, channel discovery, backlog item creation,
+      and four safety layers:
+
 - A1: Chain detection (_is_chain_loop_artifact, _load/_save_intake_history, _record_intake_history)
 - A2: Self-reply window tracking (_self_reply_window dict)
 - A3: BOT_NOTIFICATION_PATTERN regex filter
@@ -51,20 +44,12 @@ Safety layers ported from v1.8.0:
   _load/_save_backlog_throttle, _check_backlog_throttle, _record_backlog_creation)
 
 ### suspension.py (~200 lines)
-Extracted from: SlackNotifier send_question, post_suspension_question,
-check_suspension_reply, _check_all_suspensions, answer_question,
-_answer_question_inner, _run_intake_analysis, _run_intake_analysis_inner,
-_parse_intake_response. Plus IntakeState dataclass (line 1291).
-
 Owns: human-in-the-loop question/answer flows, 5-Whys intake analysis.
 
-## Migration Strategy
-
-1. Create modules with extracted logic (phases 1-2)
-2. Create SlackNotifier facade in __init__.py that delegates to submodule instances
-3. Update plan-orchestrator.py imports to use langgraph_pipeline.slack
-4. Update auto-pipeline.py imports, removing the importlib.util hack
-5. Each module gets its own test file with mocked Slack API calls
+Key API: send_question, post_suspension_question, check_suspension_reply,
+_check_all_suspensions, answer_question, _answer_question_inner,
+_run_intake_analysis, _parse_intake_response.
+Type: IntakeState dataclass.
 
 ## Key Decisions
 

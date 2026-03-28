@@ -60,7 +60,6 @@ scripts/run-pipeline.py (CLI entry point)
 - langgraph_pipeline/pipeline/nodes/execute_plan.py -- already runs executor
   subgraph in-process
 - scripts/auto-pipeline.py -- legacy v1 runtime, untouched
-- scripts/plan-orchestrator.py -- legacy v1 runtime, untouched
 
 ## Design Decisions
 
