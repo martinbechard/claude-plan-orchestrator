@@ -12,7 +12,7 @@ architectural value. Move them to docs/plans/archive/ to reduce noise.
 - Does docs/plans/ only contain KEEP and UPDATE docs after archiving?
   YES = pass, NO = fail
 
-## LangSmith Trace: f5267658-8199-47a1-b933-ee0f666d4f0f
+
 
 
 ## 5 Whys Analysis
