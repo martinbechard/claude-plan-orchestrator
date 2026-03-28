@@ -291,7 +291,7 @@ sections:
       start the timer when the initial stage indicates the item is active (D6).
 
       '
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -309,3 +309,10 @@ sections:
     last_attempt: '2026-03-28T18:52:08.609862'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-28T18:58:40.079363'
+    result_message: Replaced meta http-equiv refresh with JS selective DOM updates.
+      Removed meta refresh tag (D1). Added data-dynamic attributes to 10 dynamic elements
+      (D3). Implemented JS setInterval fetch loop at 10s that updates only data-dynamic
+      elements (D4). Static sections never touched, preserving details/summary state
+      (D5). Timer only starts on active stages, stops on terminal states (D6). All
+      223 web tests pass.
