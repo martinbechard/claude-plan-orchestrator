@@ -379,7 +379,7 @@ sections:
       Include unit tests for the JSON API endpoint.
 
       '
-    status: in_progress
+    status: completed
     target_acs:
     - AC11
     - AC12
@@ -403,6 +403,13 @@ sections:
     last_attempt: '2026-03-28T19:04:39.019941'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-28T19:11:10.578171'
+    result_message: 'Created execution history API endpoint (D6): GET /execution-history/{run_id}
+      HTML page shell and GET /api/execution-tree/{run_id} JSON API returning full
+      recursive tree with per-node run_id, name, display_name, node_type, status,
+      duration, cost, model, token_count, inputs_json, outputs_json, metadata_json,
+      children[]. Added TreeNode.to_dict() and extract_token_count() to execution_tree.py.
+      Mounted router in server.py. 15 unit tests all passing, 1647 total tests green.'
 - id: '2'
   name: Remove Old Traces Page and Update Entry Points
   status: pending
