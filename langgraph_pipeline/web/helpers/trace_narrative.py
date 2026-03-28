@@ -1,6 +1,6 @@
 # langgraph_pipeline/web/helpers/trace_narrative.py
 # Maps raw trace rows to an item-centric execution narrative view model.
-# Design: docs/plans/2026-03-27-66-redesign-traces-page-for-usability-design.md
+# Design: docs/plans/2026-03-28-69-traces-page-complete-redesign-design.md
 
 """Build ExecutionView from raw TracingProxy run dicts.
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 # Maps run name substrings (lower-cased) to canonical phase labels.
-# Checked in order; first match wins.
+# Checked in order; first match wins.  More-specific patterns must come first.
 _PHASE_PATTERNS: list[tuple[str, str]] = [
     ("intake", "Intake"),
     ("execute_plan", "Execution"),
@@ -28,10 +28,19 @@ _PHASE_PATTERNS: list[tuple[str, str]] = [
     ("plan", "Planning"),
     ("validate", "Validation"),
     ("verification", "Validation"),
+    ("verify_fix", "Verification"),
+    ("verify", "Verification"),
     ("archive", "Archival"),
 ]
 
-_PHASE_ORDER: list[str] = ["Intake", "Planning", "Execution", "Validation", "Archival"]
+_PHASE_ORDER: list[str] = [
+    "Intake",
+    "Planning",
+    "Execution",
+    "Validation",
+    "Verification",
+    "Archival",
+]
 
 _UNKNOWN_PHASE = "Unknown"
 
@@ -54,6 +63,10 @@ _DURATION_MINUTE_THRESHOLD = 60
 _DURATION_SECONDS_FORMAT = "{:.2f}s"
 _DURATION_MINUTES_FORMAT = "{}m {:02d}s"
 _DURATION_UNKNOWN = "—"
+
+# Runs with no end_time but whose children all ended more than this many minutes
+# ago are treated as completed rather than still-running.
+_STATUS_STALE_THRESHOLD_MINUTES = 5
 
 
 # ─── Data Types ───────────────────────────────────────────────────────────────
@@ -90,6 +103,7 @@ class ExecutionView:
     total_duration: str
     total_cost: str
     phases: list[PhaseView]
+    overall_status: str = "unknown"  # "completed" | "running" | "error" | "unknown"
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
@@ -108,28 +122,57 @@ def build_execution_view(
         grandchildren: Maps child run_id -> list of grandchild run dicts.
 
     Returns:
-        ExecutionView with phases ordered by pipeline stage.
+        ExecutionView with merged phases ordered by pipeline stage.
     """
     meta = _parse_json(run.get("metadata_json"))
-    item_slug = meta.get("slug") or meta.get("item_slug") or run.get("name", "")
+    item_slug = meta.get("slug") or meta.get("item_slug") or ""
 
-    phases: list[PhaseView] = []
+    # Fallback: scan children metadata if root has no slug or only "LangGraph"
+    if not item_slug or item_slug == "LangGraph":
+        item_slug = _scan_children_for_slug(children) or run.get("name", "")
+
+    # Group children by phase name to merge duplicates (P3, P13)
+    phase_groups: dict[str, dict] = {}
     for child in children:
         child_id = child.get("run_id", "")
         child_grandchildren = grandchildren.get(child_id, [])
-        phase = _build_phase_view(child, child_grandchildren)
+        phase_name = _classify_phase(child.get("name", ""))
+        if phase_name not in phase_groups:
+            phase_groups[phase_name] = {"children": [], "grandchildren": []}
+        phase_groups[phase_name]["children"].append(child)
+        phase_groups[phase_name]["grandchildren"].extend(child_grandchildren)
+
+    phases: list[PhaseView] = []
+    for phase_name, group in phase_groups.items():
+        group_children = group["children"]
+        group_grandchildren = group["grandchildren"]
+        if len(group_children) == 1:
+            phase = _build_phase_view(group_children[0], group_grandchildren)
+        else:
+            phase = _build_merged_phase_view(phase_name, group_children, group_grandchildren)
         phases.append(phase)
 
     phases.sort(key=_phase_sort_key)
 
-    total_duration = _format_duration(run.get("start_time"), run.get("end_time"))
+    # Total duration from child span (P11, P12); fall back to run timestamps
+    total_duration = _duration_from_children(children)
+    if total_duration == _DURATION_UNKNOWN:
+        total_duration = _format_duration(run.get("start_time"), run.get("end_time"))
+
+    # Cost: prefer root metadata; aggregate from descendants when absent (P4)
     total_cost = _extract_cost_display(meta)
+    if not total_cost:
+        all_gc = [gc for gcs in grandchildren.values() for gc in gcs]
+        total_cost = _aggregate_cost_display(children + all_gc)
+
+    overall_status = _compute_overall_status(run, children)
 
     return ExecutionView(
         item_slug=item_slug,
         total_duration=total_duration,
         total_cost=total_cost,
         phases=phases,
+        overall_status=overall_status,
     )
 
 
@@ -144,7 +187,7 @@ def _build_phase_view(child: dict, grandchildren: list[dict]) -> PhaseView:
     agent = _extract_agent(child)
     status = _extract_status(child)
     duration = _format_duration(child.get("start_time"), child.get("end_time"))
-    cost = _extract_cost_display(_parse_json(child.get("metadata_json")))
+    cost = _aggregate_cost_display([child] + grandchildren)
     tool_counts = _count_tools(child, grandchildren)
     activity_summary = _format_activity_summary(tool_counts)
     artifacts = _extract_artifacts(child, grandchildren)
@@ -152,6 +195,59 @@ def _build_phase_view(child: dict, grandchildren: list[dict]) -> PhaseView:
     return PhaseView(
         phase_name=phase_name,
         run_name=run_name,
+        run_id=run_id,
+        agent=agent,
+        status=status,
+        duration=duration,
+        cost=cost,
+        activity_summary=activity_summary,
+        artifacts=artifacts,
+    )
+
+
+def _build_merged_phase_view(
+    phase_name: str,
+    children: list[dict],
+    all_grandchildren: list[dict],
+) -> PhaseView:
+    """Merge multiple child runs with the same phase name into one PhaseView.
+
+    Uses earliest start_time and latest end_time to compute real duration.
+    Costs and tool counts are summed across all children and grandchildren.
+    """
+    sorted_children = sorted(children, key=lambda c: c.get("start_time") or "")
+    primary = sorted_children[0]
+    run_id = primary.get("run_id", "")
+    agent = _extract_agent(primary)
+
+    statuses = [_extract_status(c) for c in children]
+    if "error" in statuses:
+        status = "error"
+    elif "running" in statuses:
+        status = "running"
+    else:
+        status = "success"
+
+    starts = [c.get("start_time") for c in children]
+    ends = [c.get("end_time") for c in children]
+    earliest_start = min((s for s in starts if s), default=None)
+    latest_end = max((e for e in ends if e), default=None)
+    duration = _format_duration(earliest_start, latest_end)
+
+    cost = _aggregate_cost_display(children + all_grandchildren)
+
+    tool_counts: dict[str, int] = {}
+    for run in children + all_grandchildren:
+        _accumulate_tool_counts(run, tool_counts)
+    activity_summary = _format_activity_summary(tool_counts)
+
+    # Treat non-primary children as extra grandchildren for artifact scanning
+    other_children = [c for c in children if c is not primary]
+    artifacts = _extract_artifacts(primary, other_children + all_grandchildren)
+
+    return PhaseView(
+        phase_name=phase_name,
+        run_name=phase_name,
         run_id=run_id,
         agent=agent,
         status=status,
@@ -392,12 +488,45 @@ def _artifact_label(path: str) -> str:
 # ─── Formatting helpers ───────────────────────────────────────────────────────
 
 
-def _format_duration(start: Optional[str], end: Optional[str]) -> str:
-    """Return a human-readable duration string from ISO-8601 timestamps."""
-    dt_start = _parse_iso(start)
-    dt_end = _parse_iso(end)
-    if dt_start is None or dt_end is None:
+def _scan_children_for_slug(children: list[dict]) -> str:
+    """Return the first non-empty, non-LangGraph slug found in children metadata."""
+    for child in children:
+        meta = _parse_json(child.get("metadata_json"))
+        slug = meta.get("slug") or meta.get("item_slug") or ""
+        if slug and slug != "LangGraph":
+            return slug
+    return ""
+
+
+def _aggregate_cost_display(runs: list[dict]) -> str:
+    """Sum cost values from all run metadata dicts; return formatted string or empty."""
+    total = 0.0
+    found = False
+    for run in runs:
+        meta = _parse_json(run.get("metadata_json"))
+        cost = meta.get("cost") or meta.get("total_cost")
+        if cost is not None:
+            try:
+                total += float(cost)
+                found = True
+            except (TypeError, ValueError):
+                pass
+    return _COST_DISPLAY_FORMAT.format(total) if found else ""
+
+
+def _duration_from_children(children: list[dict]) -> str:
+    """Compute total duration as the span from first child start to last child end."""
+    valid_starts = [_parse_iso(c.get("start_time")) for c in children]
+    valid_ends = [_parse_iso(c.get("end_time")) for c in children]
+    starts = [s for s in valid_starts if s is not None]
+    ends = [e for e in valid_ends if e is not None]
+    if not starts or not ends:
         return _DURATION_UNKNOWN
+    return _format_duration_from_datetimes(min(starts), max(ends))
+
+
+def _format_duration_from_datetimes(dt_start: datetime, dt_end: datetime) -> str:
+    """Return a human-readable duration string from two datetime objects."""
     delta = (dt_end - dt_start).total_seconds()
     if delta < 0:
         return _DURATION_UNKNOWN
@@ -406,6 +535,43 @@ def _format_duration(start: Optional[str], end: Optional[str]) -> str:
     minutes = int(delta // 60)
     seconds = int(delta % 60)
     return _DURATION_MINUTES_FORMAT.format(minutes, seconds)
+
+
+def _compute_overall_status(run: dict, children: list[dict]) -> str:
+    """Return corrected run status, treating stale running runs as completed.
+
+    A run is considered completed when all its children have ended and the
+    most recent child end_time is more than _STATUS_STALE_THRESHOLD_MINUTES ago.
+    """
+    if run.get("error"):
+        return "error"
+    if run.get("end_time"):
+        return "completed"
+    if not children:
+        return "running" if run.get("start_time") else "unknown"
+
+    child_ends = [_parse_iso(c.get("end_time")) for c in children]
+    if any(e is None for e in child_ends):
+        return "running"
+
+    valid_ends = [e for e in child_ends if e is not None]
+    if valid_ends:
+        latest_end = max(valid_ends)
+        elapsed_minutes = (
+            (datetime.now(timezone.utc) - latest_end).total_seconds() / 60
+        )
+        if elapsed_minutes > _STATUS_STALE_THRESHOLD_MINUTES:
+            return "completed"
+    return "running"
+
+
+def _format_duration(start: Optional[str], end: Optional[str]) -> str:
+    """Return a human-readable duration string from ISO-8601 timestamps."""
+    dt_start = _parse_iso(start)
+    dt_end = _parse_iso(end)
+    if dt_start is None or dt_end is None:
+        return _DURATION_UNKNOWN
+    return _format_duration_from_datetimes(dt_start, dt_end)
 
 
 def _extract_cost_display(meta: dict) -> str:

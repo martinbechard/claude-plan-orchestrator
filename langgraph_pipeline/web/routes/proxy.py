@@ -33,6 +33,10 @@ _TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 
 HTTP_NOT_FOUND = 404
 
+# Runs with no end_time whose start_time is older than this many minutes are
+# shown as "stale" rather than "running" on the list page.
+_STALE_RUN_THRESHOLD_MINUTES = 30
+
 # ─── Jinja2 Setup ─────────────────────────────────────────────────────────────
 
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
@@ -117,10 +121,31 @@ def _compute_elapsed(child: dict, root_start: datetime) -> dict:
     return child
 
 
+def _compute_display_status(run: dict) -> str:
+    """Return display status string, correcting stale RUNNING runs.
+
+    Without children data, uses a time-based heuristic: runs with no end_time
+    that started more than _STALE_RUN_THRESHOLD_MINUTES ago are labeled "stale".
+    """
+    if run.get("error"):
+        return "error"
+    if run.get("end_time"):
+        return "completed"
+    start = _parse_iso(run.get("start_time"))
+    if start:
+        elapsed_minutes = (
+            (datetime.now(timezone.utc) - start).total_seconds() / 60
+        )
+        if elapsed_minutes > _STALE_RUN_THRESHOLD_MINUTES:
+            return "stale"
+    return "running"
+
+
 def _enrich_run(run: dict) -> dict:
     """Add pre-computed display fields to a run dict for template rendering.
 
-    Adds: display_duration, display_slug, display_model, display_cost.
+    Adds: display_duration, display_slug, display_model, display_cost, display_status.
+    Never exposes "LangGraph" as the display slug; prefers metadata slug.
     """
     run = dict(run)
     run["display_duration"] = _format_duration(run.get("start_time"), run.get("end_time"))
@@ -132,10 +157,14 @@ def _enrich_run(run: dict) -> dict:
         except (ValueError, TypeError):
             meta = {}
 
-    run["display_slug"] = meta.get("slug") or meta.get("item_slug") or ""
+    raw_name = run.get("name", "")
+    meta_slug = meta.get("slug") or meta.get("item_slug") or ""
+    run["display_slug"] = meta_slug or (raw_name if raw_name != "LangGraph" else "")
+
     run["display_model"] = run.get("model") or ""
     cost = meta.get("cost") or meta.get("total_cost")
     run["display_cost"] = f"${float(cost):.4f}" if cost is not None else ""
+    run["display_status"] = _compute_display_status(run)
     return run
 
 
