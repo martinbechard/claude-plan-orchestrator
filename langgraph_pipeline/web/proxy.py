@@ -196,6 +196,34 @@ FROM (
 WHERE rn = 1
 """
 
+_CHILD_SLUGS_BATCH_SQL_TEMPLATE = """
+WITH slug_candidates AS (
+    SELECT
+        parent_run_id,
+        COALESCE(
+            json_extract(metadata_json, '$.item_slug'),
+            json_extract(metadata_json, '$.slug')
+        ) AS resolved_slug
+    FROM traces
+    WHERE parent_run_id IN ({placeholders})
+      AND COALESCE(
+              json_extract(metadata_json, '$.item_slug'),
+              json_extract(metadata_json, '$.slug')
+          ) IS NOT NULL
+)
+SELECT parent_run_id, resolved_slug
+FROM (
+    SELECT
+        parent_run_id,
+        resolved_slug,
+        ROW_NUMBER() OVER (
+            PARTITION BY parent_run_id ORDER BY resolved_slug ASC
+        ) AS rn
+    FROM slug_candidates
+)
+WHERE rn = 1
+"""
+
 
 # ─── Cost Data Types ──────────────────────────────────────────────────────────
 
@@ -1093,6 +1121,32 @@ class TracingProxy:
         with self._connect() as conn:
             rows = conn.execute(sql, run_ids).fetchall()
         return {row["parent_run_id"]: row["model"] for row in rows}
+
+    def get_child_slugs_batch(self, run_ids: list[str]) -> dict[str, str]:
+        """Resolve the work-item slug for a batch of root runs by scanning child metadata.
+
+        For each run_id, inspects direct children for item_slug or slug fields in
+        metadata_json.  item_slug takes precedence over slug when both are present.
+        When multiple children carry different slug values, the alphabetically first
+        is returned for determinism.  Uses a single SQL query for the batch.
+
+        This is used to backfill display slugs for root runs named 'LangGraph' (the
+        LangGraph SDK default) or other runs whose root metadata carries no slug.
+
+        Args:
+            run_ids: List of root run_ids whose children to inspect.
+
+        Returns:
+            Dict mapping each parent run_id to the resolved slug string.
+            Run_ids with no children bearing a slug are absent from the result.
+        """
+        if not run_ids:
+            return {}
+        placeholders = ",".join("?" for _ in run_ids)
+        sql = _CHILD_SLUGS_BATCH_SQL_TEMPLATE.format(placeholders=placeholders)
+        with self._connect() as conn:
+            rows = conn.execute(sql, run_ids).fetchall()
+        return {row["parent_run_id"]: row["resolved_slug"] for row in rows}
 
     # ─── Cost Analysis Queries ────────────────────────────────────────────────
 

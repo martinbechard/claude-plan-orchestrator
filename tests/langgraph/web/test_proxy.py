@@ -1829,3 +1829,159 @@ def test_get_child_models_batch_multiple_parents(proxy):
     assert len(result) == 2
     assert result[MODEL_PARENT_A] == "claude-opus-4-6"
     assert result[MODEL_PARENT_B] == "claude-haiku-4-5"
+
+
+# ─── get_child_slugs_batch Tests ─────────────────────────────────────────────
+
+
+SLUG_PARENT_A = "slug-parent-a"
+SLUG_PARENT_B = "slug-parent-b"
+SLUG_CHILD_A1 = "slug-child-a1"
+SLUG_CHILD_A2 = "slug-child-a2"
+SLUG_CHILD_B1 = "slug-child-b1"
+
+
+def test_get_child_slugs_batch_empty_input(proxy):
+    """get_child_slugs_batch([]) returns an empty dict without querying the DB."""
+    result = proxy.get_child_slugs_batch([])
+    assert result == {}
+
+
+def test_get_child_slugs_batch_no_slug_in_children(proxy):
+    """Parent run_id with children that have no slug metadata is absent from result."""
+    proxy.record_run(
+        run_id=SLUG_PARENT_A,
+        parent_run_id=None,
+        name="LangGraph",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T09:00:00",
+        end_time="2026-03-28T09:00:01",
+    )
+    proxy.record_run(
+        run_id=SLUG_CHILD_A1,
+        parent_run_id=SLUG_PARENT_A,
+        name="child-no-slug",
+        inputs=None, outputs=None,
+        metadata={"model": "claude-sonnet-4-6"},
+        error=None,
+        start_time="2026-03-28T09:00:10",
+        end_time="2026-03-28T09:05:00",
+    )
+    result = proxy.get_child_slugs_batch([SLUG_PARENT_A])
+    assert SLUG_PARENT_A not in result
+
+
+def test_get_child_slugs_batch_item_slug_field(proxy):
+    """Returns item_slug from child metadata when present."""
+    proxy.record_run(
+        run_id=SLUG_PARENT_A,
+        parent_run_id=None,
+        name="LangGraph",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T09:00:00",
+        end_time="2026-03-28T09:00:01",
+    )
+    proxy.record_run(
+        run_id=SLUG_CHILD_A1,
+        parent_run_id=SLUG_PARENT_A,
+        name="executor",
+        inputs=None, outputs=None,
+        metadata={"item_slug": "42-fix-timeout-bug"},
+        error=None,
+        start_time="2026-03-28T09:00:10",
+        end_time="2026-03-28T09:05:00",
+    )
+    result = proxy.get_child_slugs_batch([SLUG_PARENT_A])
+    assert result[SLUG_PARENT_A] == "42-fix-timeout-bug"
+
+
+def test_get_child_slugs_batch_slug_field_fallback(proxy):
+    """Returns slug field from child metadata when item_slug is absent."""
+    proxy.record_run(
+        run_id=SLUG_PARENT_A,
+        parent_run_id=None,
+        name="LangGraph",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T09:00:00",
+        end_time="2026-03-28T09:00:01",
+    )
+    proxy.record_run(
+        run_id=SLUG_CHILD_A1,
+        parent_run_id=SLUG_PARENT_A,
+        name="executor",
+        inputs=None, outputs=None,
+        metadata={"slug": "17-add-dark-mode"},
+        error=None,
+        start_time="2026-03-28T09:00:10",
+        end_time="2026-03-28T09:05:00",
+    )
+    result = proxy.get_child_slugs_batch([SLUG_PARENT_A])
+    assert result[SLUG_PARENT_A] == "17-add-dark-mode"
+
+
+def test_get_child_slugs_batch_item_slug_beats_slug(proxy):
+    """item_slug takes precedence over slug when both fields are present in metadata."""
+    proxy.record_run(
+        run_id=SLUG_PARENT_A,
+        parent_run_id=None,
+        name="LangGraph",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T09:00:00",
+        end_time="2026-03-28T09:00:01",
+    )
+    proxy.record_run(
+        run_id=SLUG_CHILD_A1,
+        parent_run_id=SLUG_PARENT_A,
+        name="executor",
+        inputs=None, outputs=None,
+        metadata={"item_slug": "05-real-slug", "slug": "99-stale-slug"},
+        error=None,
+        start_time="2026-03-28T09:00:10",
+        end_time="2026-03-28T09:05:00",
+    )
+    result = proxy.get_child_slugs_batch([SLUG_PARENT_A])
+    assert result[SLUG_PARENT_A] == "05-real-slug"
+
+
+def test_get_child_slugs_batch_multiple_parents(proxy):
+    """Returns resolved slugs for two independent parent runs in one batch call."""
+    proxy.record_run(
+        run_id=SLUG_PARENT_A,
+        parent_run_id=None,
+        name="LangGraph",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T09:00:00",
+        end_time="2026-03-28T09:00:01",
+    )
+    proxy.record_run(
+        run_id=SLUG_CHILD_A1,
+        parent_run_id=SLUG_PARENT_A,
+        name="executor",
+        inputs=None, outputs=None,
+        metadata={"item_slug": "11-feature-alpha"},
+        error=None,
+        start_time="2026-03-28T09:00:10",
+        end_time="2026-03-28T09:05:00",
+    )
+    proxy.record_run(
+        run_id=SLUG_PARENT_B,
+        parent_run_id=None,
+        name="LangGraph",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T10:00:00",
+        end_time="2026-03-28T10:00:01",
+    )
+    proxy.record_run(
+        run_id=SLUG_CHILD_B1,
+        parent_run_id=SLUG_PARENT_B,
+        name="executor",
+        inputs=None, outputs=None,
+        metadata={"item_slug": "22-feature-beta"},
+        error=None,
+        start_time="2026-03-28T10:00:10",
+        end_time="2026-03-28T10:08:00",
+    )
+    result = proxy.get_child_slugs_batch([SLUG_PARENT_A, SLUG_PARENT_B])
+    assert len(result) == 2
+    assert result[SLUG_PARENT_A] == "11-feature-alpha"
+    assert result[SLUG_PARENT_B] == "22-feature-beta"
