@@ -64,10 +64,17 @@ sections:
       or has no slug in metadata, resolves the slug by scanning child run metadata_json
       for slug or item_slug fields. Return a dict of run_id -> resolved_slug for a
       batch of run_ids.'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-28T11:08:06.551900'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-28T11:11:31.322499'
+    result_message: Added _CHILD_SLUGS_BATCH_SQL_TEMPLATE constant and get_child_slugs_batch
+      method to TracingProxy. Scans direct children's metadata_json for item_slug
+      (preferred) or slug fields, returning one resolved slug per parent run_id using
+      a CTE + ROW_NUMBER window query. 6 tests covering empty input, no-slug children,
+      item_slug field, slug fallback, item_slug vs slug precedence, and multi-parent
+      batch. All 1473 tests pass.
 - id: '2'
   name: Integrate child aggregation into list endpoint
   status: pending
