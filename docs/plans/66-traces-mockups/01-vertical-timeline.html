@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Traces — Vertical Timeline Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:           #1a1a2e;
+      --bg-page:        #f5f7fa;
+      --bg-surface:     #ffffff;
+      --bg-subtle:      #f8fafc;
+      --border:         #e2e8f0;
+      --blue:           #3b6fcf;
+      --blue-hover:     #2d5ab8;
+      --blue-light:     #eff4ff;
+      --text-primary:   #1a1a2e;
+      --text-secondary: #374151;
+      --text-muted:     #6b7280;
+      --text-faint:     #9090b0;
+      --green-live:     #10b981;
+      --red-dead:       #ef4444;
+      --amber:          #f59e0b;
+
+      /* Phase palette */
+      --phase-intake:   #6366f1;
+      --phase-plan:     #0891b2;
+      --phase-validate: #059669;
+      --phase-execute:  #d97706;
+      --phase-code-val: #7c3aed;
+      --phase-archive:  #64748b;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      background: var(--bg-page);
+      color: var(--text-primary);
+    }
+
+    /* ── Nav ────────────────────────────────────────────────────────── */
+    nav {
+      height: 48px;
+      background: var(--navy);
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0 1.5rem;
+    }
+    .brand {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: #e8e8f0;
+      margin-right: 1.5rem;
+    }
+    nav a {
+      font-size: 13px;
+      color: #9090b0;
+      text-decoration: none;
+      padding: 0.25rem 0.625rem;
+      border-radius: 4px;
+      transition: background 0.15s, color 0.15s;
+    }
+    nav a:hover { background: rgba(255,255,255,0.07); color: #e8e8f0; }
+    nav a.active {
+      color: #e8e8f0;
+      background: rgba(126,184,247,0.22);
+      box-shadow: 0 0 0 1px rgba(126,184,247,0.3);
+      font-weight: 500;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    main {
+      max-width: 1200px;
+      margin: 1.5rem auto;
+      padding: 0 1.5rem;
+    }
+
+    /* ── Badges ──────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .badge-success { background: #d1fae5; color: #065f46; }
+    .badge-error   { background: #fee2e2; color: #991b1b; }
+    .badge-unknown { background: #f3f4f6; color: #6b7280; }
+
+    /* ── Detail header ───────────────────────────────────────────────── */
+    .detail-header {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      align-items: center;
+    }
+    .run-name { font-size: 16px; font-weight: 600; flex: 1 1 100%; display: flex; align-items: center; gap: 0.75rem; }
+    .detail-meta { font-size: 12px; color: #555; }
+    .detail-meta span { display: block; font-size: 13px; font-weight: 500; color: var(--text-primary); }
+
+    /* ── Mockup label ────────────────────────────────────────────────── */
+    .mockup-label {
+      background: linear-gradient(135deg, var(--navy) 0%, #2d2d52 100%);
+      color: #e8e8f0;
+      padding: 0.5rem 1.25rem;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .mockup-label strong { font-family: 'Crimson Pro', Georgia, serif; font-size: 18px; letter-spacing: 0.03em; }
+
+    /* ── Raw trace toggle ────────────────────────────────────────────── */
+    .raw-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 13px;
+      color: var(--blue);
+      cursor: pointer;
+      padding: 0.25rem 0.625rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg-surface);
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+    .raw-toggle:hover { background: var(--blue-light); }
+
+    /* ── Timeline spine ──────────────────────────────────────────────── */
+    .timeline {
+      position: relative;
+      padding-left: 40px;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 16px;
+      top: 8px;
+      bottom: 8px;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--phase-intake), var(--phase-plan), var(--phase-validate), var(--phase-execute), var(--phase-execute), var(--phase-code-val), var(--phase-archive));
+      border-radius: 1px;
+    }
+
+    /* ── Phase card ──────────────────────────────────────────────────── */
+    .phase-card {
+      position: relative;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+      transition: box-shadow 0.2s;
+    }
+    .phase-card:hover { box-shadow: 0 4px 12px rgba(26,26,46,0.08); }
+
+    /* Phase dot on the spine */
+    .phase-dot {
+      position: absolute;
+      left: -32px;
+      top: 18px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid var(--bg-page);
+      box-shadow: 0 0 0 1px currentColor;
+    }
+
+    /* Colored left stripe */
+    .phase-stripe {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      border-radius: 8px 0 0 8px;
+    }
+
+    .phase-header {
+      padding: 0.75rem 1rem 0.75rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      cursor: pointer;
+      user-select: none;
+    }
+    .phase-header:hover { background: var(--bg-subtle); }
+
+    .phase-number {
+      font-family: 'Crimson Pro', Georgia, serif;
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text-faint);
+      line-height: 1;
+      min-width: 28px;
+    }
+
+    .phase-title-group { flex: 1; }
+    .phase-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .phase-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .phase-meta {
+      display: flex;
+      gap: 1.25rem;
+      align-items: center;
+    }
+    .phase-stat {
+      text-align: right;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .phase-stat strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .chevron {
+      font-size: 11px;
+      color: var(--text-faint);
+      transition: transform 0.2s;
+    }
+    .phase-card.open .chevron { transform: rotate(90deg); }
+
+    /* ── Phase body ──────────────────────────────────────────────────── */
+    .phase-body {
+      display: none;
+      padding: 0 1.25rem 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .phase-card.open .phase-body { display: block; }
+
+    /* Agent activity summary */
+    .agent-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .agent-row:last-child { border-bottom: none; }
+
+    .agent-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .agent-info { flex: 1; }
+    .agent-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .agent-model { font-size: 11px; color: var(--text-muted); }
+
+    .activity-pills {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: 0.4rem;
+    }
+    .activity-pill {
+      font-size: 11px;
+      padding: 1px 8px;
+      border-radius: 10px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+    .activity-pill.read   { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+    .activity-pill.write  { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+    .activity-pill.bash   { background: #faf5ff; border-color: #e9d5ff; color: #6d28d9; }
+    .activity-pill.commit { background: #fff7ed; border-color: #fed7aa; color: #92400e; }
+
+    /* Prompt expand toggle */
+    .prompt-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 12px;
+      color: var(--blue);
+      cursor: pointer;
+      margin-top: 0.5rem;
+      background: none;
+      border: none;
+      padding: 0;
+      text-decoration: none;
+    }
+    .prompt-toggle:hover { text-decoration: underline; }
+
+    .prompt-block {
+      display: none;
+      margin-top: 0.5rem;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+    .prompt-block.open { display: block; }
+    .prompt-header {
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .prompt-pre {
+      padding: 0.75rem 1rem;
+      font-size: 11px;
+      font-family: monospace;
+      white-space: pre-wrap;
+      color: var(--text-secondary);
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    /* Artifacts */
+    .artifacts { margin-top: 0.75rem; }
+    .artifacts-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+    }
+    .artifact-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .artifact-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 12px;
+      color: var(--blue);
+      text-decoration: none;
+    }
+    .artifact-link:hover { text-decoration: underline; }
+    .artifact-icon { font-size: 13px; }
+
+    /* ── Back link ─────────────────────────────────────────────────── */
+    .back-link {
+      display: inline-block;
+      font-size: 13px;
+      color: var(--blue);
+      text-decoration: none;
+      margin-bottom: 1rem;
+    }
+    .back-link:hover { text-decoration: underline; }
+
+    /* ── Header actions ──────────────────────────────────────────────── */
+    .header-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<nav aria-label="Main navigation">
+  <span class="brand">Plan Orchestrator</span>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/analysis">Cost Analysis</a>
+  <a href="/completions">Completions</a>
+  <a href="/queue">Queue</a>
+  <a href="/proxy" class="active" aria-current="page">Traces</a>
+  <a href="/sessions">Session History</a>
+</nav>
+
+<main>
+
+  <p><a href="/proxy" class="back-link">&larr; Back to traces</a></p>
+
+  <!-- Mockup label -->
+  <div class="mockup-label">
+    <span>Design Mockup A &mdash; <strong>Vertical Timeline</strong></span>
+    <span style="font-size:12px; opacity:0.7;">Phases as expandable cards in a vertical scroll</span>
+  </div>
+
+  <!-- Header card -->
+  <div class="detail-header">
+    <div class="run-name">
+      Fix trace timeline duplicate labels &amp; elapsed time
+      <span class="badge badge-success">Completed</span>
+      <span class="badge" style="background:#dbeafe;color:#1e40af;">Defect</span>
+    </div>
+
+    <div class="detail-meta">
+      Started
+      <span>2026-03-25 14:23</span>
+    </div>
+    <div class="detail-meta">
+      Finished
+      <span>2026-03-25 16:47</span>
+    </div>
+    <div class="detail-meta">
+      Total duration
+      <span>2h 24m</span>
+    </div>
+    <div class="detail-meta">
+      Total cost
+      <span>$0.83</span>
+    </div>
+    <div class="detail-meta">
+      Phases
+      <span>6 of 6 completed</span>
+    </div>
+    <div class="detail-meta" style="margin-left:auto;">
+      <a href="#" class="raw-toggle">&#128270; Show raw trace</a>
+    </div>
+  </div>
+
+  <!-- Timeline -->
+  <div class="timeline">
+
+    <!-- 1. Intake -->
+    <div class="phase-card open" id="phase-1">
+      <div class="phase-stripe" style="background: var(--phase-intake);"></div>
+      <div class="phase-dot" style="color: var(--phase-intake); background: var(--phase-intake);"></div>
+      <div class="phase-header" onclick="togglePhase('phase-1')">
+        <span class="phase-number">01</span>
+        <div class="phase-title-group">
+          <div class="phase-title">Intake</div>
+          <div class="phase-subtitle">Analyzed work item, produced 5 Whys</div>
+        </div>
+        <div class="phase-meta">
+          <div class="phase-stat"><strong>8m 14s</strong>Duration</div>
+          <div class="phase-stat"><strong>$0.04</strong>Cost</div>
+          <div class="phase-stat"><span class="badge badge-success">Pass</span></div>
+        </div>
+        <span class="chevron">&#9654;</span>
+      </div>
+      <div class="phase-body">
+        <div class="agent-row">
+          <div class="agent-icon" style="background:#eef2ff; color: var(--phase-intake);">&#129302;</div>
+          <div class="agent-info">
+            <div class="agent-name">intake-agent</div>
+            <div class="agent-model">claude-opus-4-6 &middot; 14,203 tokens</div>
+            <div class="activity-pills">
+              <span class="activity-pill read">Read 6 files</span>
+              <span class="activity-pill bash">Ran 2 commands</span>
+              <span class="activity-pill write">Wrote 5 Whys analysis</span>
+            </div>
+            <button class="prompt-toggle" onclick="togglePrompt('prompt-intake')">&#9656; Show prompt &amp; response</button>
+            <div class="prompt-block" id="prompt-intake">
+              <div class="prompt-header">Prompt sent to agent</div>
+              <pre class="prompt-pre">You are an intake agent. Analyze the following work item and produce a 5 Whys root cause analysis.
+
+Work item: "Fix trace timeline duplicate labels"
+Type: defect
+Priority: medium
+
+Read the work item file and any referenced design docs, then append your analysis...</pre>
+              <div class="prompt-header" style="border-top:1px solid var(--border);">Response received</div>
+              <pre class="prompt-pre">## 5 Whys Analysis
+
+Title: Fix trace timeline duplicate labels and elapsed time display
+Clarity: 4
+
+1. Why do duplicate labels appear? Because the Gantt SVG renders both a text
+   element for child runs AND a separate label in the legend section, resulting
+   in the same run name appearing twice when the bar is narrow...
+
+[Appended to work item file]</pre>
+            </div>
+          </div>
+        </div>
+        <div class="artifacts">
+          <div class="artifacts-title">Outputs</div>
+          <div class="artifact-list">
+            <a href="#" class="artifact-link"><span class="artifact-icon">&#128196;</span>docs/defect-backlog/64-trace-timeline-duplicates.md (updated with 5 Whys)</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Planning -->
+    <div class="phase-card" id="phase-2">
+      <div class="phase-stripe" style="background: var(--phase-plan);"></div>
+      <div class="phase-dot" style="color: var(--phase-plan); background: var(--phase-plan);"></div>
+      <div class="phase-header" onclick="togglePhase('phase-2')">
+        <span class="phase-number">02</span>
+        <div class="phase-title-group">
+          <div class="phase-title">Planning</div>
+          <div class="phase-subtitle">Created design doc and YAML execution plan</div>
+        </div>
+        <div class="phase-meta">
+          <div class="phase-stat"><strong>17m 02s</strong>Duration</div>
+          <div class="phase-stat"><strong>$0.12</strong>Cost</div>
+          <div class="phase-stat"><span class="badge badge-success">Pass</span></div>
+        </div>
+        <span class="chevron">&#9654;</span>
+      </div>
+      <div class="phase-body">
+        <div class="agent-row">
+          <div class="agent-icon" style="background:#e0f2fe; color: var(--phase-plan);">&#128196;</div>
+          <div class="agent-info">
+            <div class="agent-name">planner</div>
+            <div class="agent-model">claude-opus-4-6 &middot; 28,441 tokens</div>
+            <div class="activity-pills">
+              <span class="activity-pill read">Read 8 files</span>
+              <span class="activity-pill write">Wrote design doc</span>
+              <span class="activity-pill write">Wrote YAML plan (3 tasks)</span>
+            </div>
+            <button class="prompt-toggle" onclick="togglePrompt('prompt-plan')">&#9656; Show prompt &amp; response</button>
+            <div class="prompt-block" id="prompt-plan">
+              <div class="prompt-header">Prompt sent to agent</div>
+              <pre class="prompt-pre">You are a planning agent. Based on the completed 5 Whys analysis, create a detailed design document and YAML execution plan for resolving this defect...</pre>
+            </div>
+          </div>
+        </div>
+        <div class="artifacts">
+          <div class="artifacts-title">Outputs</div>
+          <div class="artifact-list">
+            <a href="#" class="artifact-link"><span class="artifact-icon">&#128196;</span>docs/plans/2026-03-26-04-timeline-duplicate-labels-design.md</a>
+            <a href="#" class="artifact-link"><span class="artifact-icon">&#128196;</span>tmp/plans/04-timeline-duplicate-labels.yaml (3 tasks)</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Design Validation -->
+    <div class="phase-card" id="phase-3">
+      <div class="phase-stripe" style="background: var(--phase-validate);"></div>
+      <div class="phase-dot" style="color: var(--phase-validate); background: var(--phase-validate);"></div>
+      <div class="phase-header" onclick="togglePhase('phase-3')">
+        <span class="phase-number">03</span>
+        <div class="phase-title-group">
+          <div class="phase-title">Design Validation</div>
+          <div class="phase-subtitle">Verified design doc satisfies acceptance criteria</div>
+        </div>
+        <div class="phase-meta">
+          <div class="phase-stat"><strong>4m 37s</strong>Duration</div>
+          <div class="phase-stat"><strong>$0.02</strong>Cost</div>
+          <div class="phase-stat"><span class="badge badge-success">Pass</span></div>
+        </div>
+        <span class="chevron">&#9654;</span>
+      </div>
+      <div class="phase-body">
+        <div class="agent-row">
+          <div class="agent-icon" style="background:#d1fae5; color: var(--phase-validate);">&#10003;</div>
+          <div class="agent-info">
+            <div class="agent-name">validator</div>
+            <div class="agent-model">claude-sonnet-4-6 &middot; 8,102 tokens</div>
+            <div class="activity-pills">
+              <span class="activity-pill read">Read design doc</span>
+              <span class="activity-pill read">Read work item</span>
+            </div>
+            <button class="prompt-toggle" onclick="togglePrompt('prompt-dv')">&#9656; Show prompt &amp; response</button>
+            <div class="prompt-block" id="prompt-dv">
+              <div class="prompt-header">Response received</div>
+              <pre class="prompt-pre">PASS — All 3 acceptance criteria satisfied:
+✓ Design addresses duplicate label root cause (separate label/bar rendering paths)
+✓ Elapsed time format macro included in design spec
+✓ Backward-compatible change (no data model changes required)</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Task Execution 1.1 -->
+    <div class="phase-card" id="phase-4">
+      <div class="phase-stripe" style="background: var(--phase-execute);"></div>
+      <div class="phase-dot" style="color: var(--phase-execute); background: var(--phase-execute);"></div>
+      <div class="phase-header" onclick="togglePhase('phase-4')">
+        <span class="phase-number">04</span>
+        <div class="phase-title-group">
+          <div class="phase-title">Task Execution &mdash; 1.1 &amp; 1.2</div>
+          <div class="phase-subtitle">Fixed SVG label duplication; added elapsed-time bars</div>
+        </div>
+        <div class="phase-meta">
+          <div class="phase-stat"><strong>52m 18s</strong>Duration</div>
+          <div class="phase-stat"><strong>$0.37</strong>Cost</div>
+          <div class="phase-stat"><span class="badge badge-success">Pass</span></div>
+        </div>
+        <span class="chevron">&#9654;</span>
+      </div>
+      <div class="phase-body">
+
+        <!-- Sub-task 1.1 -->
+        <div class="agent-row">
+          <div class="agent-icon" style="background:#fff7ed; color: var(--phase-execute);">&#128736;</div>
+          <div class="agent-info">
+            <div class="agent-name">coder &mdash; Task 1.1: Fix duplicate labels</div>
+            <div class="agent-model">claude-sonnet-4-6 &middot; 32,891 tokens &middot; 26m 09s</div>
+            <div class="activity-pills">
+              <span class="activity-pill read">Read 4 files</span>
+              <span class="activity-pill write">Edited proxy_trace.html</span>
+              <span class="activity-pill write">Edited style.css</span>
+              <span class="activity-pill bash">Ran 12 bash commands</span>
+              <span class="activity-pill commit">1 commit</span>
+            </div>
+            <button class="prompt-toggle" onclick="togglePrompt('prompt-t1')">&#9656; Show prompt &amp; response</button>
+            <div class="prompt-block" id="prompt-t1">
+              <div class="prompt-header">Prompt sent to agent</div>
+              <pre class="prompt-pre">Implement task 1.1 from plan 04-timeline-duplicate-labels.yaml:
+"Remove duplicate run-name labels from Gantt SVG by consolidating the label
+rendering path. Labels should appear once per row in the left column only.
+Remove the redundant inline text elements that duplicate the legend."</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub-task 1.2 -->
+        <div class="agent-row">
+          <div class="agent-icon" style="background:#fff7ed; color: var(--phase-execute);">&#128736;</div>
+          <div class="agent-info">
+            <div class="agent-name">coder &mdash; Task 1.2: Add elapsed-time display</div>
+            <div class="agent-model">claude-sonnet-4-6 &middot; 28,044 tokens &middot; 26m 09s</div>
+            <div class="activity-pills">
+              <span class="activity-pill read">Read 3 files</span>
+              <span class="activity-pill write">Edited proxy_trace.html</span>
+              <span class="activity-pill bash">Ran 8 bash commands</span>
+              <span class="activity-pill commit">1 commit</span>
+            </div>
+            <button class="prompt-toggle" onclick="togglePrompt('prompt-t2')">&#9656; Show prompt &amp; response</button>
+            <div class="prompt-block" id="prompt-t2">
+              <div class="prompt-header">Prompt sent to agent</div>
+              <pre class="prompt-pre">Implement task 1.2 from plan 04-timeline-duplicate-labels.yaml:
+"Add elapsed-time offset labels (+ms, +s, +Nm Ns format) to each bar in
+the Gantt chart, shown in the bar interior when width permits, or as a
+tooltip otherwise."</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="artifacts">
+          <div class="artifacts-title">Outputs</div>
+          <div class="artifact-list">
+            <a href="#" class="artifact-link"><span class="artifact-icon">&#128196;</span>langgraph_pipeline/web/templates/proxy_trace.html (modified)</a>
+            <a href="#" class="artifact-link"><span class="artifact-icon">&#128196;</span>langgraph_pipeline/web/static/style.css (modified)</a>
+            <a href="#" class="artifact-link"><span class="artifact-icon">&#128279;</span>git: 2 commits (a4f3c1d, b8e9f2a)</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Code Validation -->
+    <div class="phase-card" id="phase-5">
+      <div class="phase-stripe" style="background: var(--phase-code-val);"></div>
+      <div class="phase-dot" style="color: var(--phase-code-val); background: var(--phase-code-val);"></div>
+      <div class="phase-header" onclick="togglePhase('phase-5')">
+        <span class="phase-number">05</span>
+        <div class="phase-title-group">
+          <div class="phase-title">Code Validation</div>
+          <div class="phase-subtitle">Playwright smoke tests; visual regression check</div>
+        </div>
+        <div class="phase-meta">
+          <div class="phase-stat"><strong>11m 03s</strong>Duration</div>
+          <div class="phase-stat"><strong>$0.07</strong>Cost</div>
+          <div class="phase-stat"><span class="badge badge-success">Pass</span></div>
+        </div>
+        <span class="chevron">&#9654;</span>
+      </div>
+      <div class="phase-body">
+        <div class="agent-row">
+          <div class="agent-icon" style="background:#f5f3ff; color: var(--phase-code-val);">&#9989;</div>
+          <div class="agent-info">
+            <div class="agent-name">validator</div>
+            <div class="agent-model">claude-sonnet-4-6 &middot; 9,830 tokens</div>
+            <div class="activity-pills">
+              <span class="activity-pill bash">SMOKE01: 5/5 passed</span>
+              <span class="activity-pill bash">pytest: 47/47 passed</span>
+            </div>
+            <button class="prompt-toggle" onclick="togglePrompt('prompt-cv')">&#9656; Show validation output</button>
+            <div class="prompt-block" id="prompt-cv">
+              <div class="prompt-header">Validation result</div>
+              <pre class="prompt-pre">PASS
+
+✓ Smoke test SMOKE01-critical-paths: 5/5
+✓ pytest tests/ -v: 47/47 (0 failures, 0 warnings)
+
+Acceptance criteria:
+✓ Duplicate labels no longer appear in the Gantt SVG
+✓ Elapsed-time offsets display in +ms / +s / +Nm Ns format
+✓ No regression in existing trace functionality</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. Archival -->
+    <div class="phase-card" id="phase-6">
+      <div class="phase-stripe" style="background: var(--phase-archive);"></div>
+      <div class="phase-dot" style="color: var(--phase-archive); background: var(--phase-archive);"></div>
+      <div class="phase-header" onclick="togglePhase('phase-6')">
+        <span class="phase-number">06</span>
+        <div class="phase-title-group">
+          <div class="phase-title">Archival</div>
+          <div class="phase-subtitle">Work item moved to completed-backlog</div>
+        </div>
+        <div class="phase-meta">
+          <div class="phase-stat"><strong>1m 48s</strong>Duration</div>
+          <div class="phase-stat"><strong>$0.01</strong>Cost</div>
+          <div class="phase-stat"><span class="badge badge-success">Archived</span></div>
+        </div>
+        <span class="chevron">&#9654;</span>
+      </div>
+      <div class="phase-body">
+        <div class="agent-row">
+          <div class="agent-icon" style="background:#f8fafc; color: var(--phase-archive);">&#128230;</div>
+          <div class="agent-info">
+            <div class="agent-name">auto-pipeline</div>
+            <div class="agent-model">System process &middot; no LLM</div>
+            <div class="activity-pills">
+              <span class="activity-pill write">Moved to completed-backlog</span>
+              <span class="activity-pill write">Cleaned plan YAML</span>
+              <span class="activity-pill commit">1 commit</span>
+            </div>
+          </div>
+        </div>
+        <div class="artifacts">
+          <div class="artifacts-title">Final artifacts</div>
+          <div class="artifact-list">
+            <a href="#" class="artifact-link"><span class="artifact-icon">&#9989;</span>docs/completed-backlog/64-trace-timeline-duplicates.md</a>
+            <a href="#" class="artifact-link"><span class="artifact-icon">&#128279;</span>git: final commit c4c71b26</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- .timeline -->
+
+</main>
+
+<script>
+  function togglePhase(id) {
+    const card = document.getElementById(id);
+    card.classList.toggle('open');
+  }
+  function togglePrompt(id) {
+    const block = document.getElementById(id);
+    block.classList.toggle('open');
+    const btn = block.previousElementSibling;
+    if (block.classList.contains('open')) {
+      btn.textContent = btn.textContent.replace('▶', '▼').replace('Show', 'Hide');
+    } else {
+      btn.textContent = btn.textContent.replace('▼', '▶').replace('Hide', 'Show');
+    }
+  }
+</script>
+</body>
+</html>

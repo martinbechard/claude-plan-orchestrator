@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Traces — Swimlane Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:           #1a1a2e;
+      --bg-page:        #f5f7fa;
+      --bg-surface:     #ffffff;
+      --bg-subtle:      #f8fafc;
+      --border:         #e2e8f0;
+      --blue:           #3b6fcf;
+      --text-primary:   #1a1a2e;
+      --text-secondary: #374151;
+      --text-muted:     #6b7280;
+      --text-faint:     #9090b0;
+
+      /* Agent lane colors */
+      --lane-intake:    #6366f1;
+      --lane-planner:   #0891b2;
+      --lane-validator: #059669;
+      --lane-coder:     #d97706;
+      --lane-system:    #64748b;
+
+      /* Agent lane bg colors (10% opacity via inline backgrounds) */
+    }
+
+    body {
+      font-family: 'Outfit', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      background: var(--bg-page);
+      color: var(--text-primary);
+    }
+
+    /* ── Nav ────────────────────────────────────────────────────────── */
+    nav {
+      height: 48px;
+      background: var(--navy);
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0 1.5rem;
+    }
+    .brand { font-size: 15px; font-weight: 700; letter-spacing: 0.02em; color: #e8e8f0; margin-right: 1.5rem; font-family: 'Space Mono', monospace; }
+    nav a {
+      font-size: 13px; color: #9090b0; text-decoration: none;
+      padding: 0.25rem 0.625rem; border-radius: 4px;
+      transition: background 0.15s, color 0.15s;
+    }
+    nav a:hover { background: rgba(255,255,255,0.07); color: #e8e8f0; }
+    nav a.active {
+      color: #e8e8f0; background: rgba(126,184,247,0.22);
+      box-shadow: 0 0 0 1px rgba(126,184,247,0.3); font-weight: 600;
+    }
+
+    main { max-width: 1200px; margin: 1.5rem auto; padding: 0 1.5rem; }
+
+    .back-link { display: inline-block; font-size: 13px; color: var(--blue); text-decoration: none; margin-bottom: 1rem; }
+    .back-link:hover { text-decoration: underline; }
+
+    /* ── Mockup label ────────────────────────────────────────────────── */
+    .mockup-label {
+      background: linear-gradient(135deg, #0c0f1a 0%, #1e293b 100%);
+      color: #e8e8f0;
+      padding: 0.5rem 1.25rem;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: 'Space Mono', monospace;
+    }
+
+    /* ── Badges ──────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-block; padding: 1px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .badge-success { background: #d1fae5; color: #065f46; }
+    .badge-error   { background: #fee2e2; color: #991b1b; }
+    .badge-unknown { background: #f3f4f6; color: #6b7280; }
+
+    /* ── Detail header ───────────────────────────────────────────────── */
+    .detail-header {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+      display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center;
+    }
+    .run-name { font-size: 16px; font-weight: 700; flex: 1 1 100%; display: flex; align-items: center; gap: 0.75rem; }
+    .detail-meta { font-size: 12px; color: #555; }
+    .detail-meta span { display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); font-family: 'Space Mono', monospace; }
+
+    .raw-toggle {
+      display: inline-flex; align-items: center; gap: 0.5rem; font-size: 12px; color: var(--blue);
+      cursor: pointer; padding: 0.25rem 0.625rem; border: 1px solid var(--border);
+      border-radius: 4px; background: var(--bg-surface); text-decoration: none;
+    }
+    .raw-toggle:hover { background: #eff4ff; }
+
+    /* ── Swimlane chart ──────────────────────────────────────────────── */
+    .swimlane-wrap {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+    }
+
+    .swimlane-time-header {
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      background: var(--navy);
+      height: 36px;
+      padding: 0;
+    }
+    .lane-label-col {
+      width: 120px;
+      flex-shrink: 0;
+      padding: 0 0.75rem;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #6b7280;
+    }
+    .time-axis {
+      flex: 1;
+      position: relative;
+      height: 36px;
+    }
+    .time-tick {
+      position: absolute;
+      top: 0;
+      height: 36px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .time-tick-line {
+      width: 1px;
+      height: 8px;
+      background: #334155;
+      margin-top: 18px;
+    }
+    .time-tick-label {
+      font-size: 10px;
+      font-family: 'Space Mono', monospace;
+      color: #64748b;
+      margin-top: 2px;
+      white-space: nowrap;
+    }
+
+    /* Lane row */
+    .lane-row {
+      display: flex;
+      align-items: stretch;
+      border-bottom: 1px solid var(--border);
+      min-height: 68px;
+    }
+    .lane-row:last-child { border-bottom: none; }
+
+    .lane-label {
+      width: 120px;
+      flex-shrink: 0;
+      padding: 0.5rem 0.75rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0.2rem;
+      border-right: 1px solid var(--border);
+    }
+    .lane-agent-name {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+    .lane-agent-role {
+      font-size: 10px;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .lane-color-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 4px;
+      flex-shrink: 0;
+    }
+
+    .lane-chart {
+      flex: 1;
+      position: relative;
+      padding: 8px 0;
+    }
+
+    /* Grid lines inside the lane */
+    .lane-grid-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: #f1f5f9;
+    }
+
+    /* Activity block */
+    .activity-block {
+      position: absolute;
+      top: 10px;
+      height: 44px;
+      border-radius: 5px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 0 8px;
+      cursor: pointer;
+      overflow: hidden;
+      transition: filter 0.15s, transform 0.1s;
+      border: 1px solid rgba(0,0,0,0.1);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .activity-block:hover {
+      filter: brightness(1.05);
+      transform: translateY(-1px);
+      z-index: 10;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    .activity-block-name {
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.2;
+    }
+    .activity-block-meta {
+      font-size: 10px;
+      font-family: 'Space Mono', monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      opacity: 0.8;
+      margin-top: 1px;
+    }
+
+    /* Phase dividers (vertical bands) */
+    .phase-band {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      opacity: 0.04;
+      pointer-events: none;
+    }
+
+    /* ── Phase legend ────────────────────────────────────────────────── */
+    .phase-legend {
+      display: flex;
+      gap: 0;
+      padding: 0;
+      border-top: 1px solid var(--border);
+      background: var(--bg-subtle);
+    }
+    .phase-legend-item {
+      flex: 1;
+      padding: 0.4rem 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+      border-right: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .phase-legend-item:last-child { border-right: none; }
+    .phase-legend-item:hover { background: var(--bg-subtle); filter: brightness(0.97); }
+    .phase-legend-item.selected { background: #fff; }
+    .phase-legend-name {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .phase-legend-meta {
+      font-size: 10px;
+      font-family: 'Space Mono', monospace;
+      color: var(--text-faint);
+    }
+
+    /* ── Detail panel ────────────────────────────────────────────────── */
+    .detail-panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .detail-panel-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem 1.25rem;
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--border);
+    }
+    .detail-panel-title {
+      font-size: 15px;
+      font-weight: 700;
+      flex: 1;
+    }
+    .detail-panel-body {
+      padding: 1rem 1.25rem;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .detail-section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .activity-list { display: flex; flex-direction: column; gap: 0.35rem; }
+    .activity-item {
+      display: flex; align-items: flex-start; gap: 0.5rem; font-size: 12px;
+    }
+    .activity-chip {
+      padding: 1px 6px; border-radius: 4px;
+      font-size: 10px; font-weight: 700; font-family: 'Space Mono', monospace;
+      flex-shrink: 0; margin-top: 2px;
+    }
+    .chip-read   { background: #eff6ff; color: #1d4ed8; }
+    .chip-write  { background: #f0fdf4; color: #166534; }
+    .chip-bash   { background: #faf5ff; color: #6d28d9; }
+    .chip-commit { background: #fff7ed; color: #92400e; }
+
+    .artifact-list { display: flex; flex-direction: column; gap: 0.35rem; }
+    .artifact-link {
+      display: flex; align-items: flex-start; gap: 0.4rem;
+      font-size: 12px; color: var(--blue); text-decoration: none; line-height: 1.3;
+    }
+    .artifact-link:hover { text-decoration: underline; }
+
+    .prompt-toggle-btn {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      font-size: 12px; color: var(--blue); cursor: pointer; padding: 0;
+      border: none; background: none; font-family: 'Outfit', sans-serif;
+    }
+    .prompt-toggle-btn:hover { text-decoration: underline; }
+    .prompt-pre-block {
+      display: none;
+      margin-top: 0.5rem;
+      font-size: 11px; font-family: 'Space Mono', monospace;
+      white-space: pre-wrap; color: #a5f3fc;
+      background: var(--navy); padding: 0.75rem; border-radius: 4px;
+      max-height: 160px; overflow-y: auto;
+    }
+    .prompt-pre-block.visible { display: block; }
+
+    /* Pointer from selected block to detail panel */
+    .selection-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 2rem;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+<nav aria-label="Main navigation">
+  <span class="brand">Plan Orchestrator</span>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/analysis">Cost Analysis</a>
+  <a href="/completions">Completions</a>
+  <a href="/queue">Queue</a>
+  <a href="/proxy" class="active" aria-current="page">Traces</a>
+  <a href="/sessions">Session History</a>
+</nav>
+
+<main>
+
+  <p><a href="/proxy" class="back-link">&larr; Back to traces</a></p>
+
+  <div class="mockup-label">
+    <span>Design Mockup C &mdash; SWIMLANE DIAGRAM</span>
+    <span style="font-size:11px; opacity:0.6;">Horizontal lanes per agent; time left-to-right; click any block for details</span>
+  </div>
+
+  <!-- Header card -->
+  <div class="detail-header">
+    <div class="run-name">
+      Fix trace timeline duplicate labels &amp; elapsed time
+      <span class="badge badge-success">Completed</span>
+      <span class="badge" style="background:#dbeafe;color:#1e40af;">Defect</span>
+      <a href="#" class="raw-toggle" style="margin-left:auto;">&#128270; Raw trace</a>
+    </div>
+    <div class="detail-meta">Started<span>14:23:07</span></div>
+    <div class="detail-meta">Finished<span>16:47:29</span></div>
+    <div class="detail-meta">Duration<span>2h 24m</span></div>
+    <div class="detail-meta">Total cost<span>$0.83</span></div>
+    <div class="detail-meta">Agents<span>5 agents, 6 phases</span></div>
+  </div>
+
+  <!-- Swimlane chart -->
+  <div class="swimlane-wrap" role="img" aria-label="Swimlane diagram of agent activity over time">
+
+    <!-- Time axis header -->
+    <div class="swimlane-time-header">
+      <div class="lane-label-col" style="color:#475569;">AGENT</div>
+      <div class="time-axis" id="time-axis">
+        <!-- Tick marks are rendered by JS below -->
+      </div>
+    </div>
+
+    <!-- Lane: intake-agent -->
+    <div class="lane-row">
+      <div class="lane-label">
+        <span class="lane-agent-name" style="color:var(--lane-intake);">
+          <span class="lane-color-dot" style="background:var(--lane-intake);"></span>intake
+        </span>
+        <span class="lane-agent-role">Intake Agent</span>
+      </div>
+      <div class="lane-chart" id="lane-intake">
+        <!-- blocks rendered by JS -->
+      </div>
+    </div>
+
+    <!-- Lane: planner -->
+    <div class="lane-row">
+      <div class="lane-label">
+        <span class="lane-agent-name" style="color:var(--lane-planner);">
+          <span class="lane-color-dot" style="background:var(--lane-planner);"></span>planner
+        </span>
+        <span class="lane-agent-role">Planner</span>
+      </div>
+      <div class="lane-chart" id="lane-planner">
+      </div>
+    </div>
+
+    <!-- Lane: validator -->
+    <div class="lane-row">
+      <div class="lane-label">
+        <span class="lane-agent-name" style="color:var(--lane-validator);">
+          <span class="lane-color-dot" style="background:var(--lane-validator);"></span>validator
+        </span>
+        <span class="lane-agent-role">Validator</span>
+      </div>
+      <div class="lane-chart" id="lane-validator">
+      </div>
+    </div>
+
+    <!-- Lane: coder -->
+    <div class="lane-row">
+      <div class="lane-label">
+        <span class="lane-agent-name" style="color:var(--lane-coder);">
+          <span class="lane-color-dot" style="background:var(--lane-coder);"></span>coder
+        </span>
+        <span class="lane-agent-role">Coder</span>
+      </div>
+      <div class="lane-chart" id="lane-coder">
+      </div>
+    </div>
+
+    <!-- Lane: system -->
+    <div class="lane-row">
+      <div class="lane-label">
+        <span class="lane-agent-name" style="color:var(--lane-system);">
+          <span class="lane-color-dot" style="background:var(--lane-system);"></span>pipeline
+        </span>
+        <span class="lane-agent-role">Auto-pipeline</span>
+      </div>
+      <div class="lane-chart" id="lane-system">
+      </div>
+    </div>
+
+    <!-- Phase legend / selector -->
+    <div class="phase-legend" role="list" aria-label="Pipeline phases">
+      <div class="phase-legend-item" role="listitem" style="border-top: 3px solid var(--lane-intake);">
+        <span class="phase-legend-name" style="color:var(--lane-intake);">Intake</span>
+        <span class="phase-legend-meta">8m 14s · $0.04</span>
+      </div>
+      <div class="phase-legend-item" role="listitem" style="border-top: 3px solid var(--lane-planner);">
+        <span class="phase-legend-name" style="color:var(--lane-planner);">Planning</span>
+        <span class="phase-legend-meta">17m 02s · $0.12</span>
+      </div>
+      <div class="phase-legend-item" role="listitem" style="border-top: 3px solid var(--lane-validator);">
+        <span class="phase-legend-name" style="color:var(--lane-validator);">Design Val.</span>
+        <span class="phase-legend-meta">4m 37s · $0.02</span>
+      </div>
+      <div class="phase-legend-item" role="listitem" style="border-top: 3px solid var(--lane-coder);">
+        <span class="phase-legend-name" style="color:var(--lane-coder);">Execution</span>
+        <span class="phase-legend-meta">52m 18s · $0.37</span>
+      </div>
+      <div class="phase-legend-item" role="listitem" style="border-top: 3px solid var(--lane-validator);">
+        <span class="phase-legend-name" style="color:var(--lane-validator);">Code Val.</span>
+        <span class="phase-legend-meta">11m 03s · $0.07</span>
+      </div>
+      <div class="phase-legend-item" role="listitem" style="border-top: 3px solid var(--lane-system);">
+        <span class="phase-legend-name" style="color:var(--lane-system);">Archival</span>
+        <span class="phase-legend-meta">1m 48s · $0.01</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail panel — updates on block click -->
+  <div class="detail-panel" id="detail-panel">
+    <div id="detail-panel-inner">
+      <div class="selection-hint">
+        &#9757; Click any activity block above to see details — agent actions, prompts, and artifacts
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  /* ── Data model ──────────────────────────────────────────────────── */
+  /* All times in minutes from run start (14:23:07) */
+  const TOTAL_MIN = 144; /* 2h 24m */
+
+  const BLOCKS = [
+    {
+      id: 'b-intake',
+      lane: 'intake',
+      color: '#6366f1',
+      textColor: '#fff',
+      start: 0,
+      dur: 8.24,
+      name: 'Intake analysis',
+      meta: '14,203 tok · $0.04',
+      phase: 'Intake',
+      agent: 'intake-agent',
+      model: 'claude-opus-4-6',
+      activity: [
+        { type: 'read',  text: 'Read work item + 5 design docs' },
+        { type: 'bash',  text: 'Ran 2 bash commands (git log, grep)' },
+        { type: 'write', text: 'Appended 5 Whys to work item file' },
+      ],
+      artifacts: [
+        { icon: '📄', label: 'docs/defect-backlog/64-trace-timeline-duplicates.md (updated)' }
+      ],
+      prompt: 'You are an intake agent. Analyze the following work item and produce a 5 Whys root cause analysis appended to the work item file.\n\nWork item: docs/defect-backlog/64-trace-timeline-duplicates.md\nType: defect | Priority: medium\n\nRead the file, review related design docs...',
+      response: '## 5 Whys Analysis\n\nTitle: Fix trace timeline duplicate labels and elapsed time\nClarity: 4\n\n1. Why do duplicate labels appear? The SVG Gantt renders a <text> for the label column AND the bar has inner text when wide enough — bar text was kept even when a separate label column exists.\n\n[Written to file successfully]',
+    },
+    {
+      id: 'b-plan',
+      lane: 'planner',
+      color: '#0891b2',
+      textColor: '#fff',
+      start: 8.24,
+      dur: 17.04,
+      name: 'Create design + plan',
+      meta: '28,441 tok · $0.12',
+      phase: 'Planning',
+      agent: 'planner',
+      model: 'claude-opus-4-6',
+      activity: [
+        { type: 'read',  text: 'Read 8 files (work item, design docs, template, style.css)' },
+        { type: 'write', text: 'Wrote design document (3 sections, 5 AC)' },
+        { type: 'write', text: 'Wrote YAML execution plan (3 tasks)' },
+      ],
+      artifacts: [
+        { icon: '📄', label: 'docs/plans/2026-03-26-04-timeline-duplicate-labels-design.md' },
+        { icon: '📄', label: 'tmp/plans/04-timeline-duplicate-labels.yaml (3 tasks)' },
+      ],
+      prompt: 'Based on the 5 Whys analysis, create a design doc and YAML plan.\nWork item: docs/defect-backlog/64-trace-timeline-duplicates.md\nDesign doc path: docs/plans/2026-03-26-04-timeline-...',
+      response: 'Design document written to docs/plans/2026-03-26-04-...\nYAML plan written to tmp/plans/04-timeline-duplicate-labels.yaml\n\nPlan contains 3 tasks:\n  1.1 — Fix duplicate label rendering in SVG Gantt\n  1.2 — Add elapsed-time offset labels\n  1.3 — Update test suite',
+    },
+    {
+      id: 'b-dv',
+      lane: 'validator',
+      color: '#059669',
+      textColor: '#fff',
+      start: 25.28,
+      dur: 4.62,
+      name: 'Design validation',
+      meta: '8,102 tok · $0.02',
+      phase: 'Design Val.',
+      agent: 'validator',
+      model: 'claude-sonnet-4-6',
+      activity: [
+        { type: 'read', text: 'Read design doc against work item AC (3 criteria)' },
+      ],
+      artifacts: [],
+      prompt: 'Validate the design document against the work item acceptance criteria.',
+      response: 'PASS — All 3 acceptance criteria satisfied.\n✓ Root cause addressed\n✓ fmt_elapsed() macro specified\n✓ Backward-compatible (template-only change)',
+    },
+    {
+      id: 'b-code1',
+      lane: 'coder',
+      color: '#d97706',
+      textColor: '#fff',
+      start: 29.9,
+      dur: 26.15,
+      name: 'Task 1.1: Fix labels',
+      meta: '32,891 tok · $0.18',
+      phase: 'Execution',
+      agent: 'coder',
+      model: 'claude-sonnet-4-6',
+      activity: [
+        { type: 'read',   text: 'Read 4 files (design, template, style, base)' },
+        { type: 'write',  text: 'Edited proxy_trace.html — remove redundant bar text' },
+        { type: 'write',  text: 'Edited style.css — add .gantt-label class' },
+        { type: 'bash',   text: 'Ran 12 bash commands (build, grep, verify)' },
+        { type: 'commit', text: 'Commit a4f3c1d: fix duplicate Gantt labels' },
+      ],
+      artifacts: [
+        { icon: '📄', label: 'proxy_trace.html (+34 -18 lines)' },
+        { icon: '📄', label: 'style.css (+6 lines)' },
+        { icon: '🔗', label: 'git commit a4f3c1d' },
+      ],
+      prompt: 'Implement task 1.1 from plan 04-timeline-duplicate-labels.yaml:\n"Remove duplicate run-name labels from Gantt SVG by consolidating the\nlabel rendering path. Labels should appear once per row in the left\ncolumn only. Remove the redundant inline text elements."',
+      response: 'Fixed duplicate labels in proxy_trace.html by removing the inner <text> elements inside SVG bars. Labels now render exclusively in the left label column.\n\nEdited style.css: added .gantt-label utility.\nBuild passes. Committed as a4f3c1d.',
+    },
+    {
+      id: 'b-code2',
+      lane: 'coder',
+      color: '#b45309',
+      textColor: '#fff',
+      start: 56.05,
+      dur: 26.15,
+      name: 'Task 1.2: Elapsed time',
+      meta: '28,044 tok · $0.19',
+      phase: 'Execution',
+      agent: 'coder',
+      model: 'claude-sonnet-4-6',
+      activity: [
+        { type: 'read',   text: 'Read 3 files' },
+        { type: 'write',  text: 'Added fmt_elapsed() macro + elapsed offsets to bars' },
+        { type: 'bash',   text: 'Ran 8 bash commands' },
+        { type: 'commit', text: 'Commit b8e9f2a: add elapsed-time offset labels' },
+      ],
+      artifacts: [
+        { icon: '📄', label: 'proxy_trace.html (+28 -4 lines)' },
+        { icon: '🔗', label: 'git commit b8e9f2a' },
+      ],
+      prompt: 'Implement task 1.2 from plan 04-timeline-duplicate-labels.yaml:\n"Add elapsed-time offset labels (+ms, +s, +Nm Ns format) to each bar in\nthe Gantt chart, shown in bar interior when width permits."',
+      response: 'Added fmt_elapsed() macro producing:\n  offset < 1s  → +342ms\n  offset < 60s → +12s\n  offset >= 60s → +1m 04s\n\nLabels appear inside bars when bar_w >= 40px. Build passes. Committed b8e9f2a.',
+    },
+    {
+      id: 'b-cv',
+      lane: 'validator',
+      color: '#7c3aed',
+      textColor: '#fff',
+      start: 82.2,
+      dur: 11.05,
+      name: 'Code validation',
+      meta: '9,830 tok · $0.07',
+      phase: 'Code Val.',
+      agent: 'validator',
+      model: 'claude-sonnet-4-6',
+      activity: [
+        { type: 'bash', text: 'SMOKE01: 5/5 passed' },
+        { type: 'bash', text: 'pytest tests/: 47/47 passed' },
+      ],
+      artifacts: [],
+      prompt: 'Run validation for defect 64. Check SMOKE01 and pytest tests/.',
+      response: 'PASS\n\n✓ SMOKE01-critical-paths: 5/5\n✓ pytest tests/ -v: 47/47 (0 failures)\n✓ No duplicate labels in Gantt SVG\n✓ Elapsed offsets render correctly',
+    },
+    {
+      id: 'b-archive',
+      lane: 'system',
+      color: '#64748b',
+      textColor: '#fff',
+      start: 93.25,
+      dur: 1.8,
+      name: 'Archive item',
+      meta: 'system · $0.01',
+      phase: 'Archival',
+      agent: 'auto-pipeline',
+      model: 'System (no LLM)',
+      activity: [
+        { type: 'write',  text: 'Moved to docs/completed-backlog/' },
+        { type: 'write',  text: 'Cleaned tmp/plans/ YAML' },
+        { type: 'commit', text: 'Commit c4c71b26: archive defect 64' },
+      ],
+      artifacts: [
+        { icon: '✅', label: 'docs/completed-backlog/64-trace-timeline-duplicates.md' },
+        { icon: '🔗', label: 'git commit c4c71b26' },
+      ],
+      prompt: null,
+      response: null,
+    },
+  ];
+
+  /* ── Render time-axis ticks ──────────────────────────────────────── */
+  const N_TICKS = 8;
+  const timeAxis = document.getElementById('time-axis');
+  for (let i = 0; i <= N_TICKS; i++) {
+    const pct = (i / N_TICKS) * 100;
+    const minutes = (i / N_TICKS) * TOTAL_MIN;
+    const h = Math.floor(minutes / 60);
+    const m = Math.floor(minutes % 60);
+    const label = h > 0 ? `${h}h${m.toString().padStart(2,'0')}m` : `+${m}m`;
+    const tick = document.createElement('div');
+    tick.className = 'time-tick';
+    tick.style.left = pct + '%';
+    tick.innerHTML = `<div class="time-tick-line"></div><div class="time-tick-label">${label}</div>`;
+    timeAxis.appendChild(tick);
+  }
+
+  /* ── Render grid lines in each lane ─────────────────────────────── */
+  ['intake','planner','validator','coder','system'].forEach(laneId => {
+    const lane = document.getElementById('lane-' + laneId);
+    for (let i = 1; i < N_TICKS; i++) {
+      const line = document.createElement('div');
+      line.className = 'lane-grid-line';
+      line.style.left = ((i / N_TICKS) * 100) + '%';
+      lane.appendChild(line);
+    }
+  });
+
+  /* ── Render activity blocks ─────────────────────────────────────── */
+  BLOCKS.forEach(block => {
+    const lane = document.getElementById('lane-' + block.lane);
+    if (!lane) return;
+
+    const leftPct = (block.start / TOTAL_MIN) * 100;
+    const widthPct = (block.dur / TOTAL_MIN) * 100;
+
+    const el = document.createElement('div');
+    el.className = 'activity-block';
+    el.id = block.id;
+    el.style.left = leftPct + '%';
+    el.style.width = Math.max(widthPct, 3) + '%';
+    el.style.background = block.color;
+    el.style.color = block.textColor;
+    el.setAttribute('role', 'button');
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('aria-label', block.name + ' — ' + block.meta);
+
+    el.innerHTML = `
+      <div class="activity-block-name">${block.name}</div>
+      <div class="activity-block-meta">${block.meta}</div>
+    `;
+
+    el.addEventListener('click', () => showDetail(block.id));
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') showDetail(block.id); });
+    lane.appendChild(el);
+  });
+
+  /* ── Chip type map ───────────────────────────────────────────────── */
+  const CHIP = {
+    read:   ['chip-read',   'R'],
+    write:  ['chip-write',  'W'],
+    bash:   ['chip-bash',   '$'],
+    commit: ['chip-commit', '↑'],
+  };
+
+  /* ── Show detail panel ───────────────────────────────────────────── */
+  function showDetail(blockId) {
+    const block = BLOCKS.find(b => b.id === blockId);
+    if (!block) return;
+
+    /* Highlight selected block */
+    document.querySelectorAll('.activity-block').forEach(el => {
+      el.style.outline = el.id === blockId ? '2px solid #fff' : 'none';
+      el.style.zIndex = el.id === blockId ? '20' : '';
+    });
+
+    const activityHtml = block.activity.map(a => {
+      const [cls, ltr] = CHIP[a.type] || ['', '?'];
+      return `<div class="activity-item">
+        <span class="activity-chip ${cls}">${ltr}</span>
+        <span>${a.text}</span>
+      </div>`;
+    }).join('');
+
+    const artifactsHtml = block.artifacts.length
+      ? block.artifacts.map(art => `
+        <a href="#" class="artifact-link"><span>${art.icon}</span><span>${art.label}</span></a>
+      `).join('')
+      : '<span style="font-size:12px;color:var(--text-faint);">No output artifacts</span>';
+
+    const promptSection = block.prompt ? `
+      <button class="prompt-toggle-btn" onclick="togglePromptBlock('pb-prompt-${blockId}', this)">
+        &#9656; Show prompt sent to agent
+      </button>
+      <pre class="prompt-pre-block" id="pb-prompt-${blockId}">${escHtml(block.prompt)}</pre>
+    ` : '';
+
+    const responseSection = block.response ? `
+      <button class="prompt-toggle-btn" onclick="togglePromptBlock('pb-response-${blockId}', this)" style="margin-top:0.4rem;">
+        &#9656; Show response received
+      </button>
+      <pre class="prompt-pre-block" id="pb-response-${blockId}">${escHtml(block.response)}</pre>
+    ` : '';
+
+    document.getElementById('detail-panel-inner').innerHTML = `
+      <div class="detail-panel-header">
+        <div style="width:10px;height:10px;border-radius:50%;background:${block.color};flex-shrink:0;"></div>
+        <div class="detail-panel-title">${block.phase} &mdash; ${block.name}</div>
+        <span class="badge badge-success">Pass</span>
+      </div>
+      <div class="detail-panel-body">
+        <div style="display:flex;gap:2rem;margin-bottom:1rem;flex-wrap:wrap;">
+          <div class="detail-meta">Agent<span style="font-family:monospace;font-size:12px;">${block.agent}</span></div>
+          <div class="detail-meta">Model<span style="font-family:monospace;font-size:12px;">${block.model}</span></div>
+          <div class="detail-meta">Duration<span>${Math.floor(block.dur)}m ${Math.round((block.dur % 1) * 60)}s</span></div>
+          <div class="detail-meta">Cost<span>${block.meta.split('·')[1].trim()}</span></div>
+        </div>
+        <div class="detail-grid">
+          <div>
+            <div class="detail-section-title">Agent activity</div>
+            <div class="activity-list">${activityHtml}</div>
+            <div style="margin-top:0.75rem;">
+              ${promptSection}
+              ${responseSection}
+            </div>
+          </div>
+          <div>
+            <div class="detail-section-title">Output artifacts</div>
+            <div class="artifact-list">${artifactsHtml}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function togglePromptBlock(id, btn) {
+    const el = document.getElementById(id);
+    el.classList.toggle('visible');
+    const arrow = btn.textContent.includes('▶') ? '▼' : '▶';
+    btn.textContent = btn.textContent.replace(/[▶▼]/, arrow).replace('Show', el.classList.contains('visible') ? 'Hide' : 'Show');
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  /* Show intake block by default */
+  showDetail('b-intake');
+</script>
+</body>
+</html>

@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Traces — Tabbed Phases Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:           #1a1a2e;
+      --bg-page:        #f5f7fa;
+      --bg-surface:     #ffffff;
+      --bg-subtle:      #f8fafc;
+      --border:         #e2e8f0;
+      --blue:           #3b6fcf;
+      --blue-hover:     #2d5ab8;
+      --blue-light:     #eff4ff;
+      --text-primary:   #1a1a2e;
+      --text-secondary: #374151;
+      --text-muted:     #6b7280;
+      --text-faint:     #9090b0;
+
+      --phase-intake:   #6366f1;
+      --phase-plan:     #0891b2;
+      --phase-validate: #059669;
+      --phase-execute:  #d97706;
+      --phase-code-val: #7c3aed;
+      --phase-archive:  #64748b;
+    }
+
+    body {
+      font-family: 'Nunito', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      background: var(--bg-page);
+      color: var(--text-primary);
+    }
+
+    /* ── Nav ────────────────────────────────────────────────────────── */
+    nav {
+      height: 48px;
+      background: var(--navy);
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0 1.5rem;
+    }
+    .brand { font-size: 15px; font-weight: 700; letter-spacing: 0.02em; color: #e8e8f0; margin-right: 1.5rem; }
+    nav a {
+      font-size: 13px; color: #9090b0; text-decoration: none;
+      padding: 0.25rem 0.625rem; border-radius: 4px;
+      transition: background 0.15s, color 0.15s;
+    }
+    nav a:hover { background: rgba(255,255,255,0.07); color: #e8e8f0; }
+    nav a.active {
+      color: #e8e8f0; background: rgba(126,184,247,0.22);
+      box-shadow: 0 0 0 1px rgba(126,184,247,0.3); font-weight: 600;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    main { max-width: 1200px; margin: 1.5rem auto; padding: 0 1.5rem; }
+
+    .back-link { display: inline-block; font-size: 13px; color: var(--blue); text-decoration: none; margin-bottom: 1rem; }
+    .back-link:hover { text-decoration: underline; }
+
+    /* ── Mockup label ────────────────────────────────────────────────── */
+    .mockup-label {
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      color: #e8e8f0;
+      padding: 0.5rem 1.25rem;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .mockup-label strong { font-family: 'JetBrains Mono', monospace; font-size: 15px; }
+
+    /* ── Badges ──────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-block; padding: 1px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .badge-success { background: #d1fae5; color: #065f46; }
+    .badge-error   { background: #fee2e2; color: #991b1b; }
+    .badge-unknown { background: #f3f4f6; color: #6b7280; }
+
+    /* ── Detail header ───────────────────────────────────────────────── */
+    .detail-header {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1.25rem;
+      display: flex; flex-wrap: wrap; gap: 1.5rem; align-items: center;
+    }
+    .run-name { font-size: 16px; font-weight: 700; flex: 1 1 100%; display: flex; align-items: center; gap: 0.75rem; }
+    .detail-meta { font-size: 12px; color: #555; }
+    .detail-meta span { display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+    /* ── Phase progress bar ──────────────────────────────────────────── */
+    .phase-progress {
+      display: flex;
+      gap: 0;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 0;
+      height: 6px;
+    }
+    .phase-progress-seg {
+      flex: 1;
+      height: 6px;
+    }
+
+    /* ── Tab bar ─────────────────────────────────────────────────────── */
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px 8px 0 0;
+      overflow: hidden;
+      border-bottom: none;
+    }
+    .tab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0.625rem 0.5rem 0.5rem;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: background 0.15s;
+      position: relative;
+      gap: 0.2rem;
+      text-decoration: none;
+      color: var(--text-muted);
+    }
+    .tab:hover { background: var(--bg-subtle); }
+    .tab.active {
+      background: #fff;
+      border-bottom-color: currentColor;
+      color: var(--text-primary);
+    }
+    .tab-icon { font-size: 16px; line-height: 1; }
+    .tab-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .tab-duration { font-size: 10px; font-family: 'JetBrains Mono', monospace; opacity: 0.7; }
+    .tab-status-dot {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10b981;
+    }
+    .tab-status-dot.error { background: #ef4444; }
+
+    /* Tab content panel */
+    .tab-panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+      padding: 1.25rem;
+    }
+    .tab-panel.hidden { display: none; }
+
+    /* ── Panel layout ────────────────────────────────────────────────── */
+    .panel-grid {
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      gap: 1.25rem;
+    }
+    .panel-main { display: flex; flex-direction: column; gap: 1rem; }
+    .panel-sidebar { display: flex; flex-direction: column; gap: 1rem; }
+
+    /* Phase summary strip */
+    .phase-summary-strip {
+      display: flex;
+      gap: 1.5rem;
+      padding: 0.75rem 1rem;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      align-items: center;
+    }
+    .strip-label { font-size: 12px; color: var(--text-muted); }
+    .strip-value { font-size: 14px; font-weight: 700; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; }
+
+    /* Section heading */
+    .section-heading {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    /* Agent card */
+    .agent-card {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .agent-card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.625rem 0.875rem;
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--border);
+    }
+    .agent-avatar {
+      width: 28px; height: 28px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; flex-shrink: 0;
+    }
+    .agent-card-name { font-size: 13px; font-weight: 700; }
+    .agent-card-model { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+    .agent-card-body { padding: 0.875rem; display: flex; flex-direction: column; gap: 0.75rem; }
+
+    /* Activity list */
+    .activity-list { display: flex; flex-direction: column; gap: 0.4rem; }
+    .activity-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      font-size: 13px;
+    }
+    .activity-icon {
+      width: 20px; height: 20px; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; flex-shrink: 0; margin-top: 1px;
+    }
+    .activity-icon.read  { background: #eff6ff; color: #1d4ed8; }
+    .activity-icon.write { background: #f0fdf4; color: #166534; }
+    .activity-icon.bash  { background: #faf5ff; color: #6d28d9; }
+    .activity-icon.commit { background: #fff7ed; color: #92400e; }
+
+    .activity-text { color: var(--text-secondary); line-height: 1.4; }
+    .activity-detail { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-top: 1px; }
+
+    /* Prompt accordion */
+    .prompt-accordion {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .prompt-accordion-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 0.875rem;
+      background: var(--bg-subtle);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      user-select: none;
+    }
+    .prompt-accordion-header:hover { background: #f0f0f8; }
+    .prompt-accordion-body {
+      display: none;
+      padding: 0.75rem;
+    }
+    .prompt-accordion.open .prompt-accordion-body { display: block; }
+    .prompt-accordion.open .prompt-chevron { transform: rotate(90deg); }
+    .prompt-chevron { font-size: 10px; transition: transform 0.2s; }
+    .prompt-pre {
+      font-size: 11px; font-family: 'JetBrains Mono', monospace;
+      white-space: pre-wrap; color: var(--text-secondary);
+      max-height: 180px; overflow-y: auto;
+      background: var(--navy);
+      color: #a5f3fc;
+      padding: 0.75rem;
+      border-radius: 4px;
+    }
+
+    /* Sidebar boxes */
+    .sidebar-box {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .sidebar-box-header {
+      padding: 0.5rem 0.875rem;
+      background: var(--bg-subtle);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-secondary);
+    }
+    .sidebar-box-body { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
+
+    .artifact-link {
+      display: flex; align-items: flex-start; gap: 0.5rem;
+      font-size: 12px; color: var(--blue); text-decoration: none;
+      line-height: 1.3;
+    }
+    .artifact-link:hover { text-decoration: underline; }
+    .artifact-icon { flex-shrink: 0; margin-top: 1px; }
+
+    /* Raw trace toggle */
+    .raw-toggle {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      font-size: 13px; color: var(--blue); cursor: pointer;
+      padding: 0.25rem 0.625rem; border: 1px solid var(--border);
+      border-radius: 4px; background: var(--bg-surface); text-decoration: none;
+      transition: background 0.15s;
+    }
+    .raw-toggle:hover { background: var(--blue-light); }
+
+    /* Token stat boxes in sidebar */
+    .token-row {
+      display: flex; justify-content: space-between;
+      font-size: 12px; padding: 0.2rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .token-row:last-child { border-bottom: none; }
+    .token-key { color: var(--text-muted); }
+    .token-val { font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--text-primary); }
+  </style>
+</head>
+<body>
+
+<nav aria-label="Main navigation">
+  <span class="brand">Plan Orchestrator</span>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/analysis">Cost Analysis</a>
+  <a href="/completions">Completions</a>
+  <a href="/queue">Queue</a>
+  <a href="/proxy" class="active" aria-current="page">Traces</a>
+  <a href="/sessions">Session History</a>
+</nav>
+
+<main>
+
+  <p><a href="/proxy" class="back-link">&larr; Back to traces</a></p>
+
+  <div class="mockup-label">
+    <span>Design Mockup B &mdash; <strong>Tabbed Phases</strong></span>
+    <span style="font-size:12px; opacity:0.7;">One tab per pipeline phase, focused activity panel</span>
+  </div>
+
+  <!-- Header card -->
+  <div class="detail-header">
+    <div class="run-name">
+      Fix trace timeline duplicate labels &amp; elapsed time
+      <span class="badge badge-success">Completed</span>
+      <span class="badge" style="background:#dbeafe;color:#1e40af;">Defect</span>
+      <a href="#" class="raw-toggle" style="margin-left:auto; font-size:12px;">&#128270; Show raw trace</a>
+    </div>
+
+    <div class="detail-meta">
+      Started<span>2026-03-25 14:23</span>
+    </div>
+    <div class="detail-meta">
+      Finished<span>2026-03-25 16:47</span>
+    </div>
+    <div class="detail-meta">
+      Total duration<span>2h 24m</span>
+    </div>
+    <div class="detail-meta">
+      Total cost<span>$0.83</span>
+    </div>
+    <div class="detail-meta">
+      Phases<span>6 / 6</span>
+    </div>
+  </div>
+
+  <!-- Phase mini-progress -->
+  <div class="phase-progress" style="margin-bottom:0; border-radius: 4px 4px 0 0; height:4px;">
+    <div class="phase-progress-seg" style="background:var(--phase-intake); flex:0.056;"></div>
+    <div class="phase-progress-seg" style="background:var(--phase-plan); flex:0.118;"></div>
+    <div class="phase-progress-seg" style="background:var(--phase-validate); flex:0.032;"></div>
+    <div class="phase-progress-seg" style="background:var(--phase-execute); flex:0.363;"></div>
+    <div class="phase-progress-seg" style="background:var(--phase-code-val); flex:0.077;"></div>
+    <div class="phase-progress-seg" style="background:var(--phase-archive); flex:0.013;"></div>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar" role="tablist" aria-label="Pipeline phases">
+
+    <a class="tab active" role="tab" aria-selected="true"
+       style="color: var(--phase-intake);" onclick="selectTab(0); return false;" href="#">
+      <div class="tab-status-dot"></div>
+      <span class="tab-icon">&#128221;</span>
+      <span class="tab-name">Intake</span>
+      <span class="tab-duration">8m 14s</span>
+    </a>
+
+    <a class="tab" role="tab" aria-selected="false"
+       style="color: var(--phase-plan);" onclick="selectTab(1); return false;" href="#">
+      <div class="tab-status-dot"></div>
+      <span class="tab-icon">&#128196;</span>
+      <span class="tab-name">Planning</span>
+      <span class="tab-duration">17m 02s</span>
+    </a>
+
+    <a class="tab" role="tab" aria-selected="false"
+       style="color: var(--phase-validate);" onclick="selectTab(2); return false;" href="#">
+      <div class="tab-status-dot"></div>
+      <span class="tab-icon">&#10003;</span>
+      <span class="tab-name">Design Val.</span>
+      <span class="tab-duration">4m 37s</span>
+    </a>
+
+    <a class="tab" role="tab" aria-selected="false"
+       style="color: var(--phase-execute);" onclick="selectTab(3); return false;" href="#">
+      <div class="tab-status-dot"></div>
+      <span class="tab-icon">&#128736;</span>
+      <span class="tab-name">Execution</span>
+      <span class="tab-duration">52m 18s</span>
+    </a>
+
+    <a class="tab" role="tab" aria-selected="false"
+       style="color: var(--phase-code-val);" onclick="selectTab(4); return false;" href="#">
+      <div class="tab-status-dot"></div>
+      <span class="tab-icon">&#9989;</span>
+      <span class="tab-name">Code Val.</span>
+      <span class="tab-duration">11m 03s</span>
+    </a>
+
+    <a class="tab" role="tab" aria-selected="false"
+       style="color: var(--phase-archive);" onclick="selectTab(5); return false;" href="#">
+      <div class="tab-status-dot"></div>
+      <span class="tab-icon">&#128230;</span>
+      <span class="tab-name">Archival</span>
+      <span class="tab-duration">1m 48s</span>
+    </a>
+
+  </div>
+
+  <!-- ══ Tab Panel 0: Intake ═════════════════════════════════════════ -->
+  <div class="tab-panel" id="panel-0" role="tabpanel">
+    <div class="phase-summary-strip">
+      <div>
+        <div class="strip-label">Duration</div>
+        <div class="strip-value">8m 14s</div>
+      </div>
+      <div>
+        <div class="strip-label">Cost</div>
+        <div class="strip-value">$0.04</div>
+      </div>
+      <div>
+        <div class="strip-label">Tokens</div>
+        <div class="strip-value">14,203</div>
+      </div>
+      <div>
+        <div class="strip-label">Outcome</div>
+        <div><span class="badge badge-success">Pass</span></div>
+      </div>
+    </div>
+
+    <div style="margin-top:1rem;" class="panel-grid">
+      <div class="panel-main">
+        <div class="section-heading">Agent activity</div>
+        <div class="agent-card">
+          <div class="agent-card-header">
+            <div class="agent-avatar" style="background:#eef2ff; color: var(--phase-intake);">&#129302;</div>
+            <div>
+              <div class="agent-card-name">intake-agent</div>
+              <div class="agent-card-model">claude-opus-4-6</div>
+            </div>
+          </div>
+          <div class="agent-card-body">
+            <div class="activity-list">
+              <div class="activity-item">
+                <div class="activity-icon read">R</div>
+                <div>
+                  <div class="activity-text">Read work item file</div>
+                  <div class="activity-detail">docs/defect-backlog/64-trace-timeline-duplicates.md</div>
+                </div>
+              </div>
+              <div class="activity-item">
+                <div class="activity-icon read">R</div>
+                <div>
+                  <div class="activity-text">Read 3 referenced design docs</div>
+                  <div class="activity-detail">docs/plans/2026-03-25-14-langsmith-tracing-proxy-design.md, ...</div>
+                </div>
+              </div>
+              <div class="activity-item">
+                <div class="activity-icon read">R</div>
+                <div>
+                  <div class="activity-text">Read existing trace template</div>
+                  <div class="activity-detail">langgraph_pipeline/web/templates/proxy_trace.html</div>
+                </div>
+              </div>
+              <div class="activity-item">
+                <div class="activity-icon bash">$</div>
+                <div>
+                  <div class="activity-text">Ran 2 bash commands</div>
+                  <div class="activity-detail">git log --oneline -5 &nbsp;&middot;&nbsp; grep -n "label" proxy_trace.html</div>
+                </div>
+              </div>
+              <div class="activity-item">
+                <div class="activity-icon write">W</div>
+                <div>
+                  <div class="activity-text">Appended 5 Whys analysis to work item</div>
+                  <div class="activity-detail">docs/defect-backlog/64-trace-timeline-duplicates.md (+82 lines)</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-heading" style="margin-top:0.5rem;">Prompts &amp; responses</div>
+            <div class="prompt-accordion" id="pa-intake-1">
+              <div class="prompt-accordion-header" onclick="toggleAccordion('pa-intake-1')">
+                <span>Prompt sent to intake-agent</span>
+                <span class="prompt-chevron">&#9654;</span>
+              </div>
+              <div class="prompt-accordion-body">
+                <pre class="prompt-pre">You are an intake agent. Analyze the following work item and produce a
+5 Whys root cause analysis appended to the work item file.
+
+Work item path: docs/defect-backlog/64-trace-timeline-duplicates.md
+Type: defect | Priority: medium
+
+Read the file, review related design docs, then write the 5 Whys section
+directly into the work item file. Rate clarity 1-5.</pre>
+              </div>
+            </div>
+            <div class="prompt-accordion" id="pa-intake-2">
+              <div class="prompt-accordion-header" onclick="toggleAccordion('pa-intake-2')">
+                <span>Response received</span>
+                <span class="prompt-chevron">&#9654;</span>
+              </div>
+              <div class="prompt-accordion-body">
+                <pre class="prompt-pre">## 5 Whys Analysis
+
+Title: Fix trace timeline duplicate labels and elapsed time
+Clarity: 4
+
+1. Why do duplicate labels appear? The SVG Gantt renders a &lt;text&gt; for the
+   label column AND the bar has an inner text when wide enough — but bar
+   text was inadvertently kept even when a separate label column exists.
+
+2. Why is there no elapsed-time display? The design spec defined
+   fmt_elapsed() but the SVG bar labels only show duration, not the
+   offset since the run started.
+
+[Written to file]</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-sidebar">
+        <div class="sidebar-box">
+          <div class="sidebar-box-header">Token breakdown</div>
+          <div class="sidebar-box-body">
+            <div class="token-row"><span class="token-key">Input</span><span class="token-val">12,847</span></div>
+            <div class="token-row"><span class="token-key">Output</span><span class="token-val">1,356</span></div>
+            <div class="token-row"><span class="token-key">Total</span><span class="token-val">14,203</span></div>
+          </div>
+        </div>
+
+        <div class="sidebar-box">
+          <div class="sidebar-box-header">Output artifacts</div>
+          <div class="sidebar-box-body">
+            <a href="#" class="artifact-link">
+              <span class="artifact-icon">&#128196;</span>
+              <span>64-trace-timeline-duplicates.md (updated)</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="sidebar-box">
+          <div class="sidebar-box-header">Files read</div>
+          <div class="sidebar-box-body" style="font-size:11px; font-family:'JetBrains Mono', monospace; color: var(--text-muted); gap:0.25rem;">
+            <div>docs/defect-backlog/64-...</div>
+            <div>docs/plans/2026-03-25-14-...</div>
+            <div>langgraph_pipeline/web/...</div>
+            <div>docs/ui-style-guide.md</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Tab Panel 1: Planning ═══════════════════════════════════════ -->
+  <div class="tab-panel hidden" id="panel-1" role="tabpanel">
+    <div class="phase-summary-strip">
+      <div><div class="strip-label">Duration</div><div class="strip-value">17m 02s</div></div>
+      <div><div class="strip-label">Cost</div><div class="strip-value">$0.12</div></div>
+      <div><div class="strip-label">Tokens</div><div class="strip-value">28,441</div></div>
+      <div><div class="strip-label">Outcome</div><div><span class="badge badge-success">Pass</span></div></div>
+    </div>
+    <div style="margin-top:1rem;" class="panel-grid">
+      <div class="panel-main">
+        <div class="section-heading">Agent activity</div>
+        <div class="agent-card">
+          <div class="agent-card-header">
+            <div class="agent-avatar" style="background:#e0f2fe; color: var(--phase-plan);">&#128196;</div>
+            <div>
+              <div class="agent-card-name">planner</div>
+              <div class="agent-card-model">claude-opus-4-6</div>
+            </div>
+          </div>
+          <div class="agent-card-body">
+            <div class="activity-list">
+              <div class="activity-item">
+                <div class="activity-icon read">R</div>
+                <div><div class="activity-text">Read 8 files</div>
+                <div class="activity-detail">Work item, 5 design docs, existing template, style.css</div></div>
+              </div>
+              <div class="activity-item">
+                <div class="activity-icon write">W</div>
+                <div><div class="activity-text">Wrote design document (3 sections, 5 AC)</div>
+                <div class="activity-detail">docs/plans/2026-03-26-04-timeline-duplicate-labels-design.md</div></div>
+              </div>
+              <div class="activity-item">
+                <div class="activity-icon write">W</div>
+                <div><div class="activity-text">Wrote YAML execution plan (3 tasks)</div>
+                <div class="activity-detail">tmp/plans/04-timeline-duplicate-labels.yaml</div></div>
+              </div>
+            </div>
+            <div class="section-heading" style="margin-top:0.5rem;">Prompts &amp; responses</div>
+            <div class="prompt-accordion" id="pa-plan-1">
+              <div class="prompt-accordion-header" onclick="toggleAccordion('pa-plan-1')">
+                <span>Prompt sent to planner</span>
+                <span class="prompt-chevron">&#9654;</span>
+              </div>
+              <div class="prompt-accordion-body">
+                <pre class="prompt-pre">Based on the 5 Whys analysis, create a design doc and YAML plan.
+Work item: docs/defect-backlog/64-trace-timeline-duplicates.md
+Design doc path: docs/plans/2026-03-26-04-timeline-...
+Plan YAML path: tmp/plans/04-timeline-duplicate-labels.yaml</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-sidebar">
+        <div class="sidebar-box">
+          <div class="sidebar-box-header">Output artifacts</div>
+          <div class="sidebar-box-body">
+            <a href="#" class="artifact-link"><span class="artifact-icon">&#128196;</span><span>2026-03-26-04-timeline-duplicate-labels-design.md</span></a>
+            <a href="#" class="artifact-link"><span class="artifact-icon">&#128196;</span><span>04-timeline-duplicate-labels.yaml (3 tasks)</span></a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Tab Panel 2: Design Validation ═════════════════════════════ -->
+  <div class="tab-panel hidden" id="panel-2" role="tabpanel">
+    <div class="phase-summary-strip">
+      <div><div class="strip-label">Duration</div><div class="strip-value">4m 37s</div></div>
+      <div><div class="strip-label">Cost</div><div class="strip-value">$0.02</div></div>
+      <div><div class="strip-label">Outcome</div><div><span class="badge badge-success">Pass — 3/3 criteria</span></div></div>
+    </div>
+    <div style="margin-top:1rem; padding:1rem; background:var(--bg-subtle); border:1px solid var(--border); border-radius:6px;">
+      <div class="section-heading" style="margin-bottom:0.75rem;">Acceptance criteria verified</div>
+      <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:13px;">
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <span style="color:#059669;font-weight:700;">&#10003;</span>
+          Design addresses duplicate label root cause (separate label/bar rendering paths)
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <span style="color:#059669;font-weight:700;">&#10003;</span>
+          Elapsed time format macro included in design spec
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <span style="color:#059669;font-weight:700;">&#10003;</span>
+          Backward-compatible (no data model changes)
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:0.75rem;">
+      <div class="prompt-accordion" id="pa-dv-1">
+        <div class="prompt-accordion-header" onclick="toggleAccordion('pa-dv-1')">
+          <span>Validator response</span>
+          <span class="prompt-chevron">&#9654;</span>
+        </div>
+        <div class="prompt-accordion-body">
+          <pre class="prompt-pre">PASS — All 3 acceptance criteria satisfied.
+
+✓ Root cause addressed: consolidated label rendering in SVG left column
+✓ fmt_elapsed() macro specified with +ms / +s / +Nm Ns format
+✓ Template-only change; no migration required</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Tab Panel 3: Execution ═════════════════════════════════════ -->
+  <div class="tab-panel hidden" id="panel-3" role="tabpanel">
+    <div class="phase-summary-strip">
+      <div><div class="strip-label">Duration</div><div class="strip-value">52m 18s</div></div>
+      <div><div class="strip-label">Cost</div><div class="strip-value">$0.37</div></div>
+      <div><div class="strip-label">Tasks</div><div class="strip-value">2 / 2</div></div>
+      <div><div class="strip-label">Outcome</div><div><span class="badge badge-success">Pass</span></div></div>
+    </div>
+    <div style="margin-top:1rem;" class="panel-grid">
+      <div class="panel-main">
+        <div class="section-heading">Task 1.1 — Fix duplicate labels</div>
+        <div class="agent-card" style="margin-bottom:1rem;">
+          <div class="agent-card-header">
+            <div class="agent-avatar" style="background:#fff7ed; color:var(--phase-execute);">&#128736;</div>
+            <div>
+              <div class="agent-card-name">coder &nbsp;&middot;&nbsp; 26m 09s &nbsp;&middot;&nbsp; $0.18</div>
+              <div class="agent-card-model">claude-sonnet-4-6 &nbsp;&middot;&nbsp; 32,891 tokens</div>
+            </div>
+          </div>
+          <div class="agent-card-body">
+            <div class="activity-list">
+              <div class="activity-item"><div class="activity-icon read">R</div><div><div class="activity-text">Read 4 files</div><div class="activity-detail">design doc, proxy_trace.html, style.css, base.html</div></div></div>
+              <div class="activity-item"><div class="activity-icon write">W</div><div><div class="activity-text">Edited proxy_trace.html — removed redundant bar text elements</div></div></div>
+              <div class="activity-item"><div class="activity-icon write">W</div><div><div class="activity-text">Edited style.css — added .gantt-label utility class</div></div></div>
+              <div class="activity-item"><div class="activity-icon bash">$</div><div><div class="activity-text">Ran 12 bash commands</div><div class="activity-detail">build checks, grep for duplicate pattern, pnpm run build</div></div></div>
+              <div class="activity-item"><div class="activity-icon commit">&#9670;</div><div><div class="activity-text">Committed: fix duplicate Gantt labels in proxy_trace.html</div><div class="activity-detail">a4f3c1d</div></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="section-heading">Task 1.2 — Add elapsed-time display</div>
+        <div class="agent-card">
+          <div class="agent-card-header">
+            <div class="agent-avatar" style="background:#fff7ed; color:var(--phase-execute);">&#128736;</div>
+            <div>
+              <div class="agent-card-name">coder &nbsp;&middot;&nbsp; 26m 09s &nbsp;&middot;&nbsp; $0.19</div>
+              <div class="agent-card-model">claude-sonnet-4-6 &nbsp;&middot;&nbsp; 28,044 tokens</div>
+            </div>
+          </div>
+          <div class="agent-card-body">
+            <div class="activity-list">
+              <div class="activity-item"><div class="activity-icon read">R</div><div><div class="activity-text">Read 3 files</div></div></div>
+              <div class="activity-item"><div class="activity-icon write">W</div><div><div class="activity-text">Edited proxy_trace.html — added fmt_elapsed() macro + offsets</div></div></div>
+              <div class="activity-item"><div class="activity-icon bash">$</div><div><div class="activity-text">Ran 8 bash commands</div></div></div>
+              <div class="activity-item"><div class="activity-icon commit">&#9670;</div><div><div class="activity-text">Committed: add elapsed-time offset labels to Gantt bars</div><div class="activity-detail">b8e9f2a</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-sidebar">
+        <div class="sidebar-box">
+          <div class="sidebar-box-header">Commits</div>
+          <div class="sidebar-box-body">
+            <a href="#" class="artifact-link"><span class="artifact-icon">&#9670;</span><span>a4f3c1d — fix duplicate labels</span></a>
+            <a href="#" class="artifact-link"><span class="artifact-icon">&#9670;</span><span>b8e9f2a — add elapsed offsets</span></a>
+          </div>
+        </div>
+        <div class="sidebar-box">
+          <div class="sidebar-box-header">Files changed</div>
+          <div class="sidebar-box-body" style="font-size:11px; font-family:'JetBrains Mono', monospace; color:var(--text-muted); gap:0.25rem;">
+            <div>proxy_trace.html (+34 -18)</div>
+            <div>style.css (+6 -0)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Tab Panel 4: Code Validation ══════════════════════════════ -->
+  <div class="tab-panel hidden" id="panel-4" role="tabpanel">
+    <div class="phase-summary-strip">
+      <div><div class="strip-label">Duration</div><div class="strip-value">11m 03s</div></div>
+      <div><div class="strip-label">Cost</div><div class="strip-value">$0.07</div></div>
+      <div><div class="strip-label">Outcome</div><div><span class="badge badge-success">Pass</span></div></div>
+    </div>
+    <div style="margin-top:1rem; padding:1rem; background:var(--bg-subtle); border:1px solid var(--border); border-radius:6px;">
+      <div class="section-heading" style="margin-bottom:0.75rem;">Test results</div>
+      <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:13px;">
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <span style="color:#059669;font-weight:700;">&#10003;</span>
+          SMOKE01-critical-paths: 5 / 5 passed
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <span style="color:#059669;font-weight:700;">&#10003;</span>
+          pytest tests/ -v: 47 / 47 passed (0 failures)
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <span style="color:#059669;font-weight:700;">&#10003;</span>
+          No duplicate labels in rendered Gantt SVG
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <span style="color:#059669;font-weight:700;">&#10003;</span>
+          Elapsed offsets render: +342ms, +12s, +1m 04s
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Tab Panel 5: Archival ══════════════════════════════════════ -->
+  <div class="tab-panel hidden" id="panel-5" role="tabpanel">
+    <div class="phase-summary-strip">
+      <div><div class="strip-label">Duration</div><div class="strip-value">1m 48s</div></div>
+      <div><div class="strip-label">Cost</div><div class="strip-value">$0.01</div></div>
+      <div><div class="strip-label">Outcome</div><div><span class="badge badge-success">Archived</span></div></div>
+    </div>
+    <div style="margin-top:1rem;" class="panel-grid">
+      <div class="panel-main">
+        <div class="section-heading">Actions taken</div>
+        <div style="display:flex;flex-direction:column;gap:0.4rem;">
+          <div class="activity-item">
+            <div class="activity-icon write">W</div>
+            <div><div class="activity-text">Moved work item to completed-backlog</div>
+            <div class="activity-detail">docs/completed-backlog/64-trace-timeline-duplicates.md</div></div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-icon write">W</div>
+            <div><div class="activity-text">Archived plan YAML (status: completed)</div>
+            <div class="activity-detail">tmp/plans/.completed/04-timeline-duplicate-labels.yaml</div></div>
+          </div>
+          <div class="activity-item">
+            <div class="activity-icon commit">&#9670;</div>
+            <div><div class="activity-text">Final archival commit</div>
+            <div class="activity-detail">c4c71b26 — chore: archive defect 64-trace-timeline-duplicates</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-sidebar">
+        <div class="sidebar-box">
+          <div class="sidebar-box-header">Final artifacts</div>
+          <div class="sidebar-box-body">
+            <a href="#" class="artifact-link"><span class="artifact-icon">&#9989;</span><span>completed-backlog/64-trace-timeline-duplicates.md</span></a>
+            <a href="#" class="artifact-link"><span class="artifact-icon">&#9670;</span><span>c4c71b26</span></a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  const TABS = 6;
+  function selectTab(idx) {
+    for (let i = 0; i < TABS; i++) {
+      const tab = document.querySelectorAll('.tab')[i];
+      const panel = document.getElementById('panel-' + i);
+      if (i === idx) {
+        tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
+        panel.classList.remove('hidden');
+      } else {
+        tab.classList.remove('active');
+        tab.setAttribute('aria-selected', 'false');
+        panel.classList.add('hidden');
+      }
+    }
+  }
+  function toggleAccordion(id) {
+    document.getElementById(id).classList.toggle('open');
+  }
+</script>
+</body>
+</html>
