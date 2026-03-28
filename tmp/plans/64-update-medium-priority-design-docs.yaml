@@ -42,7 +42,7 @@ sections:
   - id: '2.1'
     name: Update remaining 5 medium-priority design docs
     agent: coder
-    status: pending
+    status: in_progress
     description: 'Implement the work item: tmp/plans/.claimed/64-update-medium-priority-design-docs.md
 
       Update the remaining 5 medium-priority docs per the audit corrections in docs/reports/design-doc-audit.md
@@ -50,3 +50,6 @@ sections:
       2026-02-18-16-least-privilege-agent-sandboxing-design.md, 2026-02-26-03-extract-slack-modules-design.md,
       2026-02-26-04-pipeline-graph-nodes-design.md, 2026-02-26-20-unified-langgraph-runner-design.md.
       See design doc: docs/plans/2026-03-27-64-update-medium-priority-design-docs-design.md'
+    last_attempt: '2026-03-27T22:01:00.078444'
+    attempts: 1
+    model_used: sonnet
