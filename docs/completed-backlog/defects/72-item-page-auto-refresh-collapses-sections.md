@@ -6,7 +6,7 @@ The page should only refresh the dynamic parts (status badge, cost, duration, wo
 
 The current implementation is a full-page meta refresh in the HTML head. Replace it with a JavaScript fetch that updates only the dynamic elements and leaves the rest of the DOM (including details/summary open state) intact.
 
-## LangSmith Trace: 68c7cb88-2ff7-4888-9dfa-9dc53df2a9c4
+
 
 
 ## 5 Whys Analysis
