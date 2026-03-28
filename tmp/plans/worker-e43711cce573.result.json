@@ -1,0 +1,10 @@
+{
+  "success": false,
+  "item_path": "tmp/plans/.claimed/71-execution-history-redesign.md",
+  "cost_usd": 0.0,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "duration_s": 0.06672108295606449,
+  "message": "Unhandled exception: Received no input for __start__",
+  "verification_notes": null
+}
