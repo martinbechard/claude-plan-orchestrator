@@ -2,154 +2,177 @@
 
 Source: tmp/plans/.claimed/71-execution-history-redesign.md
 Requirements: docs/plans/2026-03-28-71-execution-history-redesign-requirements.md
-Date: 2026-03-28
+Prototype: prototype_traces/ (3 screens)
 
 ## Architecture Overview
 
-This redesign replaces the standalone Traces page with an integrated execution
-history accessible from the Completions page. The architecture has three layers:
+Replace the standalone Traces page (/proxy, /proxy/{run_id}, /proxy/{run_id}/narrative)
+with an integrated execution history view accessible from the Completions page. The new
+view renders a full recursive execution tree with a detail side panel and deep-dive modal.
 
-1. **Data Layer** (TracingProxy): Recursive tree fetch, real cost aggregation,
-   wall-clock duration, slug resolution, deduplication -- all via SQLite
-   recursive CTEs in proxy.py.
+### Current Architecture (being replaced)
 
-2. **View Model Layer** (trace_narrative.py): Transforms flat DB rows into a
-   recursive tree structure (TreeNode) with computed metrics at every level.
-   Replaces the current 2-level (children + grandchildren) model with unlimited
-   depth.
+- Routes: /proxy (list), /proxy/{run_id} (detail), /proxy/{run_id}/narrative
+- Templates: proxy_list.html, proxy_trace.html, proxy_narrative.html
+- Helper: trace_narrative.py (build_execution_view with 2-level depth: children + grandchildren)
+- Nav link: "Traces" in base.html
 
-3. **Presentation Layer** (templates + JS): Tree view with expand/collapse,
-   detail side panel, deep-dive prompt/response view. The Completions page
-   gets trace links; the standalone Traces nav entry is removed.
+### New Architecture
 
-### Key Files
+- Route: GET /execution-history/{run_id} (HTML page with recursive tree + side panel)
+- Route: GET /api/execution-tree/{run_id} (JSON API returning full recursive tree)
+- Template: execution_history.html (tree view + side panel + deep-dive modal)
+- Helper: execution_tree.py (recursive tree builder with no depth limit)
+- Completions trace links updated to point to /execution-history/{run_id}
+- Old /proxy routes and templates removed
+- "Traces" nav link removed from base.html
 
-| File | Role |
-|---|---|
-| langgraph_pipeline/web/proxy.py | TracingProxy: new get_full_subtree(), upgraded time spans |
-| langgraph_pipeline/web/helpers/trace_narrative.py | Recursive TreeNode model, replaces 2-level ExecutionView |
-| langgraph_pipeline/web/routes/proxy.py | Execution history route, slug resolution, dedup |
-| langgraph_pipeline/web/templates/execution_history.html | New: recursive tree + side panel + deep-dive |
-| langgraph_pipeline/web/templates/completions.html | Trace link update |
-| langgraph_pipeline/web/templates/base.html | Nav bar: remove standalone Traces link |
-| langgraph_pipeline/web/static/execution_history.js | New: tree expand/collapse, panel switching, lazy load |
+### Data Flow
 
-### Prototype Reference
-
-Three prototype screens in prototype_traces/ show the target UX:
-- Screen 1: Completions page with Trace column links
-- Screen 2: Recursive tree view with side panel (agents, tool calls)
-- Screen 3: Deep-dive prompt/response inspection (side-by-side panels)
+1. User clicks trace link on Completions page
+2. Browser navigates to /execution-history/{run_id}
+3. Server renders page shell with loading state
+4. Client JS fetches /api/execution-tree/{run_id}
+5. API returns full recursive tree as JSON with computed cost/duration
+6. Client renders tree in left panel, detail in right panel
+7. Clicking tree nodes updates the side panel
+8. "Deep Dive" button on agent nodes opens the side-by-side modal
 
 ---
 
 ## Design Decisions
 
-### D1: Recursive Full-Subtree Fetch via Single Recursive CTE
+### D1: Recursive Tree Fetch with No Depth Limit
 
-Addresses: P1, FR1
-Satisfies: AC1, AC2, AC18, AC19, AC20, AC21, AC22, AC23, AC24, AC25
-Approach: Add a get_full_subtree(run_id) method to TracingProxy that uses a
-single WITH RECURSIVE CTE to fetch all descendants of a root run in one query.
-Returns flat rows with parent_run_id linkage. Python code assembles rows into a
-tree structure (dict with children list). No depth limit -- the CTE recurses
-until no more children exist. This replaces the current get_children_batch +
-get_children pattern that only goes 1-2 levels deep.
-Files: langgraph_pipeline/web/proxy.py
+Addresses: P1, UC2
+Satisfies: AC1, AC2, AC3, AC11, AC12, AC13, AC14, AC15, AC16
+Approach: Add a get_full_tree() method to TracingProxy that recursively fetches all
+descendants of a run_id using iterative breadth-first traversal with
+get_children_batch(). Returns a nested tree structure where each node contains
+its children. No depth limit -- traversal continues until no more children exist.
+The tree structure mirrors pipeline execution: graph nodes > executor subgraph >
+agent sessions > tool calls > nested sub-tool-calls.
+Files:
+- Modify: langgraph_pipeline/web/proxy.py (add get_full_tree method)
+- Create: langgraph_pipeline/web/helpers/execution_tree.py (tree builder + node types)
+- Create: tests/langgraph/web/helpers/test_execution_tree.py
 
-### D2: Real Cost Aggregation -- Eliminate Placeholders
+### D2: Three-Tier Name Resolution
 
-Addresses: P2, FR2
-Satisfies: AC3, AC4, AC26, AC27, AC28
-Approach: Leverage the existing get_child_costs_batch() recursive CTE which
-already traverses the full subtree. Ensure every node in the tree displays
-aggregated cost from its descendants. Filter out zero-cost nodes (where
-total_cost_usd is 0.0 or absent) from aggregation so placeholders like 0.01
-never appear. The view model layer computes display cost at each tree level
-by summing descendant costs.
-Files: langgraph_pipeline/web/proxy.py, langgraph_pipeline/web/helpers/trace_narrative.py
+Addresses: FR3
+Satisfies: AC37, AC38, AC39, AC40
+Approach: Implement a resolve_display_name() function with three-tier fallback:
+(1) span metadata slug/item_slug field, (2) child span metadata scan,
+(3) run_id prefix extraction. Applied during tree construction so no node
+ever displays "LangGraph". The existing _scan_children_for_slug pattern in
+trace_narrative.py serves as the template; the new implementation extends it
+to work with the recursive tree nodes.
+Files:
+- Create: langgraph_pipeline/web/helpers/execution_tree.py (resolve_display_name function)
 
-### D3: Wall-Clock Duration via Recursive Descendant Time Spans
-
-Addresses: P3, FR3
-Satisfies: AC5, AC29, AC30, AC31
-Approach: Upgrade get_child_time_spans_batch() from a direct-children-only
-query to a recursive CTE that finds MIN(start_time) and MAX(end_time) across
-the full descendant subtree. This mirrors how get_child_costs_batch() already
-works recursively. Near-zero durations from root span timestamps are replaced
-with the computed wall-clock duration. The existing _NEAR_ZERO_DURATION_S
-threshold (1.0s) is used to detect dispatch-only timestamps.
-Files: langgraph_pipeline/web/proxy.py, langgraph_pipeline/web/helpers/trace_narrative.py
-
-### D4: Item Slug Resolution -- Never Display "LangGraph"
+### D3: UI-Level Deduplication
 
 Addresses: FR4
-Satisfies: AC32, AC33, AC34, AC35
-Approach: Multi-tier resolution strategy applied at the view model layer:
-(1) Extract item_slug from metadata_json if present.
-(2) Fall back to existing _CHILD_SLUGS_BATCH_SQL child span metadata lookup.
-(3) Fall back to run_id prefix (first 8 chars) as last resort.
-A display-layer guard ensures the string "LangGraph" is never rendered as an
-item name -- any occurrence is replaced via the resolution chain. This uses
-the existing resolve_child_slugs_batch() infrastructure.
-Files: langgraph_pipeline/web/helpers/trace_narrative.py, langgraph_pipeline/web/routes/proxy.py
+Satisfies: AC41, AC42
+Approach: During tree construction, deduplicate nodes by run_id. If multiple rows
+exist for the same run_id (start/end events), keep only the most complete row
+(the one with end_time populated, or the latest created_at). This is a belt-and-
+suspenders approach on top of the existing DB-level INSERT OR REPLACE.
+Files:
+- Create: langgraph_pipeline/web/helpers/execution_tree.py (dedup logic in tree builder)
 
-### D5: UI-Layer Deduplication of Start/End Events
+### D4: Real Cost Aggregation via Recursive CTE
 
-Addresses: FR5
-Satisfies: AC36, AC37
-Approach: The DB already uses INSERT OR REPLACE on run_id to prevent storage
-duplicates. Add a UI-layer safety net: when building the tree, group nodes by
-run_id and keep only the most complete row (the one with end_time if both
-exist). This prevents any display of duplicate start/end events.
-Files: langgraph_pipeline/web/helpers/trace_narrative.py
+Addresses: P2, FR5
+Satisfies: AC4, AC5, AC43, AC44, AC45, AC46
+Approach: Use the existing get_child_costs_batch() recursive CTE to compute real
+cost for each subtree root. During tree construction, attach aggregated cost to
+each intermediate node. Leaf nodes display their own cost from metadata_json.
+Nodes with no recorded cost display zero or "---" (never 0.01 placeholder).
+Files:
+- Create: langgraph_pipeline/web/helpers/execution_tree.py (cost aggregation in tree builder)
 
-### D6: Completions Page as Sole Entry Point (UI Design Competition)
+### D5: Real Wall-Clock Duration from Descendant Time Spans
 
-Addresses: UC1
-Satisfies: AC6, AC7, AC8
-Approach: Phase 0 design competition determines the exact UI treatment. The
-winning design will specify how trace links appear on completions rows and
-how the execution history page is navigated to. The base.html nav bar removes
-the standalone "Traces" link. Every completed row with a run_id gets a
-visible trace link.
-Files: langgraph_pipeline/web/templates/completions.html, langgraph_pipeline/web/templates/base.html
+Addresses: P3, FR6
+Satisfies: AC6, AC7, AC47, AC48, AC49
+Approach: Use the existing get_child_time_spans_batch() to compute real wall-clock
+duration for phase-level nodes. For nodes whose own duration is near-zero
+(< 1.0s), replace with the earliest-descendant-start to latest-descendant-end
+span. This ensures phases that took minutes show real minutes, not 0.01s.
+Files:
+- Create: langgraph_pipeline/web/helpers/execution_tree.py (duration computation in tree builder)
 
-### D7: Recursive Tree UI with Expand/Collapse (UI Design Competition)
+### D6: Execution History API Endpoint
 
-Addresses: UC2
-Satisfies: AC9, AC10, AC11
-Approach: Phase 0 design competition determines the tree rendering approach.
-Options include: fully server-rendered nested HTML with JS toggle, lazy-loaded
-AJAX expansion, or client-side tree from JSON API. The winning design must
-support unlimited depth with no artificial cutoff. Each node is independently
-expandable/collapsible.
-Files: new template (execution_history.html), new JS (execution_history.js)
+Addresses: UC2, UC3, UC5, UC6
+Satisfies: AC11-AC16, AC17-AC21, AC25-AC32
+Approach: Create a JSON API endpoint GET /api/execution-tree/{run_id} that returns
+the full recursive tree as a JSON response. Each tree node includes: run_id, name,
+display_name, node_type (graph_node | agent | tool_call | subgraph), status,
+duration, cost, model, token_count, inputs_json, outputs_json, metadata_json,
+children[]. The frontend uses this to render tree, side panel, and raw data toggle.
+Files:
+- Create: langgraph_pipeline/web/routes/execution_history.py (API endpoint)
+- Modify: langgraph_pipeline/web/server.py (mount new router)
+- Create: tests/langgraph/web/routes/test_execution_history.py
 
-### D8: Node Detail Side Panel with Metrics and Metadata (UI Design Competition)
+### D7: Remove Old Traces Page
 
-Addresses: UC3, FR6, FR7, FR8
-Satisfies: AC12, AC13, AC14, AC38, AC39, AC40, AC41, AC42, AC43, AC44, AC45, AC46, AC47, AC48, AC49, AC50
-Approach: Phase 0 design competition determines panel layout and content
-rendering. The panel content varies by node type:
-- Graph nodes: state inputs/outputs
-- Agent nodes: prompt and response
-- Tool call nodes: input and result (file path, command, etc.)
-Metrics (latency, tokens, cost, model) shown conditionally -- omitted when
-absent. Observability metadata (validator verdicts, pipeline decisions,
-subprocess exit codes, plan state snapshots) displayed in structured format.
-Raw JSON toggle hidden by default, reveals full trace data when enabled.
-Files: new template (execution_history.html), new JS
+Addresses: FR1, FR2
+Satisfies: AC33, AC34, AC35, AC36
+Approach: Remove the /proxy routes, templates, and navigation link. The standalone
+Traces page is eliminated. Update completions trace links from /proxy?trace_id=X
+to /execution-history/X. Remove the "Traces" nav link from base.html. The
+Completions page becomes the sole entry point for execution history.
+Files:
+- Modify: langgraph_pipeline/web/templates/base.html (remove Traces nav link)
+- Modify: langgraph_pipeline/web/templates/completions.html (update trace links)
+- Modify: langgraph_pipeline/web/server.py (remove proxy_router include)
+- Delete or deprecate: langgraph_pipeline/web/routes/proxy.py
+- Delete or deprecate: langgraph_pipeline/web/templates/proxy_list.html
+- Delete or deprecate: langgraph_pipeline/web/templates/proxy_trace.html
+- Delete or deprecate: langgraph_pipeline/web/templates/proxy_narrative.html
+- Delete or deprecate: langgraph_pipeline/web/helpers/trace_narrative.py
 
-### D9: Deep-Dive Prompt/Response Inspection (UI Design Competition)
+### D8: Execution History Page with Tree View and Side Panel (UI - Design Competition)
+
+Addresses: UC1, UC2, UC3
+Satisfies: AC8, AC9, AC10, AC11-AC16, AC17-AC21
+Approach: Subject to Phase 0 design competition. Three competing designs will
+propose the tree view layout, side panel interaction, and navigation flow.
+The winning design will be implemented in the execution_history.html template
+and associated JS/CSS. Key UI elements: collapsible tree with expand/collapse
+icons, node-type badges (phase/agent/tool), side panel with tabbed content
+(details/prompt-response/metadata), and contextual metrics display.
+Files:
+- Create: langgraph_pipeline/web/templates/execution_history.html
+- Create or modify: langgraph_pipeline/web/static/execution_history.js
+- Create or modify: langgraph_pipeline/web/static/style.css (additions)
+
+### D9: Deep-Dive Prompt/Response View (UI - Design Competition)
 
 Addresses: UC4
-Satisfies: AC15, AC16, AC17
-Approach: Phase 0 design competition determines the layout. Target: side-by-side
-scrollable panels showing system prompt (left) and agent response (right).
-Both panels independently scrollable. Latency and token metrics displayed
-above or below the panels. Can be a modal overlay or a dedicated sub-page.
-Files: new template (execution_history.html or dedicated deep_dive.html)
+Satisfies: AC22, AC23, AC24
+Approach: Subject to Phase 0 design competition. The deep-dive view shows system
+prompt and agent response side-by-side in scrollable panels with latency and token
+metrics. Implemented as a modal overlay triggered from agent nodes in the tree.
+Each panel is independently scrollable. Latency and token counts displayed in a
+metrics bar between or above the panels.
+Files:
+- Create: langgraph_pipeline/web/templates/execution_history.html (modal section)
+
+### D10: Observability Metadata Surfacing and Raw Data Toggle (UI - Design Competition)
+
+Addresses: UC5, UC6
+Satisfies: AC25-AC32
+Approach: Subject to Phase 0 design competition. Structured observability metadata
+(validator verdicts, pipeline decisions, subprocess exit codes, plan state snapshots)
+is extracted from metadata_json and displayed in a dedicated section of the side
+panel. A "Show Raw Data" toggle (hidden by default) reveals the full JSON for
+debugging. The toggle is per-node and remembers state during the session.
+Files:
+- Create: langgraph_pipeline/web/templates/execution_history.html (metadata section)
 
 ---
 
@@ -157,53 +180,52 @@ Files: new template (execution_history.html or dedicated deep_dive.html)
 
 | AC | Design Decision(s) | Approach |
 |---|---|---|
-| AC1 | D1 | Recursive CTE fetches all depths; tree displays depth 3+ |
-| AC2 | D1 | Tool calls (Read, Edit, Bash, etc.) visible as descendants in tree |
-| AC3 | D2 | All phases use aggregated cost from recursive CTE, not placeholders |
-| AC4 | D2 | Zero-cost placeholders filtered out of aggregation |
-| AC5 | D3 | Recursive descendant time spans replace near-zero root timestamps |
-| AC6 | D6 | Completions row trace link opens execution history |
-| AC7 | D6 | Standalone Traces page removed; Completions is sole entry point |
-| AC8 | D6 | Every completed row with run_id displays trace link |
-| AC9 | D7 | Tree nodes expandable/collapsible at any depth |
-| AC10 | D7 | Full navigation from pipeline node to leaf tool call |
-| AC11 | D7 | No artificial depth limit in tree rendering |
-| AC12 | D8 | Side panel shows state inputs/outputs for graph nodes |
-| AC13 | D8 | Side panel shows prompt/response for agent nodes |
-| AC14 | D8 | Side panel shows input/result for tool call nodes |
-| AC15 | D9 | Side-by-side system prompt and agent response |
-| AC16 | D9 | Both panels independently scrollable |
-| AC17 | D9 | Latency and token metrics in deep-dive view |
-| AC18 | D1 | Top-level pipeline graph nodes (intake, requirements, etc.) in tree |
-| AC19 | D1 | Executor subgraph nodes under execution |
-| AC20 | D1 | Claude CLI sessions under task running |
-| AC21 | D1 | Individual tool calls under each agent |
-| AC22 | D1 | Nested sub-tool-calls within Skill invocations |
-| AC23 | D1 | Recursive fetch has no hardcoded depth limit |
-| AC24 | D1 | Full recursive tree of everything pipeline did |
-| AC25 | D1 | Tree extends to leaf tool calls without intermediate cutoff |
-| AC26 | D2 | Phase cost aggregated from all subtree descendants |
-| AC27 | D2 | Uses existing recursive CTE from TracingProxy |
-| AC28 | D2 | Zero-cost placeholders excluded from aggregation |
-| AC29 | D3 | Duration from earliest descendant start to latest end |
-| AC30 | D3 | Uses TracingProxy child time span infrastructure (upgraded to recursive) |
-| AC31 | D3 | Near-zero root timestamps replaced with wall-clock durations |
-| AC32 | D4 | Slug resolved from metadata when available |
-| AC33 | D4 | Falls back to child span metadata lookup |
-| AC34 | D4 | Falls back to run_id prefix as last resort |
-| AC35 | D4 | "LangGraph" never appears as item name |
-| AC36 | D5 | At most one row per run_id in tree |
-| AC37 | D5 | No visible duplicate start/end events |
-| AC38 | D8 | Latency displayed when timing data available |
-| AC39 | D8 | Token count displayed when token data available |
-| AC40 | D8 | Cost displayed when cost data available |
-| AC41 | D8 | Model name displayed when model data available |
-| AC42 | D8 | Missing metrics omitted gracefully |
-| AC43 | D8 | Validator verdicts in readable format |
-| AC44 | D8 | Pipeline decisions displayed |
-| AC45 | D8 | Subprocess exit codes displayed |
-| AC46 | D8 | Plan state snapshots displayed |
-| AC47 | D8 | Metadata in structured form, not raw JSON |
-| AC48 | D8 | Raw trace toggle hidden by default |
-| AC49 | D8 | Toggle reveals full raw JSON |
-| AC50 | D8 | Toggle can be disabled to re-hide |
+| AC1 | D1 | Recursive tree fetch with no depth limit via iterative BFS |
+| AC2 | D1 | Tool calls visible at any depth in the recursive tree |
+| AC3 | D1 | Nested sub-tool-calls traversed recursively |
+| AC4 | D4 | Real cost from metadata_json, no placeholders |
+| AC5 | D4 | Zero or absent display for nodes without cost data |
+| AC6 | D5 | Duration from descendant time spans, not own timestamps |
+| AC7 | D5 | Phase duration shows real wall-clock minutes |
+| AC8 | D8 | Trace link on each completions row |
+| AC9 | D8 | Trace link opens execution history for specific item |
+| AC10 | D8 | Existing slug, outcome, cost, duration, velocity preserved |
+| AC11 | D1, D8 | Tree shows top-level pipeline graph nodes |
+| AC12 | D1, D8 | Tree shows executor subgraph nodes under execution |
+| AC13 | D1, D8 | Tree shows agent sessions under task running |
+| AC14 | D1, D8 | Tree shows tool calls under agents |
+| AC15 | D1, D8 | Tree shows nested sub-tool-calls |
+| AC16 | D1, D8 | No depth cutoff on tree navigation |
+| AC17 | D6, D8 | Agent node shows prompt/response in side panel |
+| AC18 | D6, D8 | Tool call node shows input/result in side panel |
+| AC19 | D6, D8 | Graph node shows state inputs/outputs in side panel |
+| AC20 | D6, D8 | Latency, token count, cost, model displayed per node |
+| AC21 | D8 | Side panel updates on node selection |
+| AC22 | D9 | Deep-dive shows prompt and response side-by-side |
+| AC23 | D9 | Both panels independently scrollable |
+| AC24 | D9 | Latency and token metrics in deep-dive view |
+| AC25 | D10 | Validator verdicts displayed from metadata |
+| AC26 | D10 | Pipeline decisions displayed from metadata |
+| AC27 | D10 | Subprocess exit codes displayed from metadata |
+| AC28 | D10 | Plan state snapshots displayed from metadata |
+| AC29 | D10 | Metadata visible without opening raw JSON |
+| AC30 | D10 | Raw trace data toggle present |
+| AC31 | D10 | Toggle hidden by default |
+| AC32 | D10 | Toggle reveals full raw trace data |
+| AC33 | D7 | Standalone Traces page removed |
+| AC34 | D7 | No nav link or route to old Traces page |
+| AC35 | D7 | Completions page is sole execution history entry point |
+| AC36 | D7 | No alternative routes for execution history |
+| AC37 | D2 | "LangGraph" never displayed as item name |
+| AC38 | D2 | Name resolution uses span metadata first |
+| AC39 | D2 | Fallback to child span metadata lookup |
+| AC40 | D2 | Final fallback to run_id prefix |
+| AC41 | D3 | One row per span, no duplicates |
+| AC42 | D3 | Deduplication enforced at UI rendering level |
+| AC43 | D4 | Phase cost aggregated from all descendants |
+| AC44 | D4 | Cost uses recursive CTE from TracingProxy |
+| AC45 | D4 | Zero placeholder or dummy cost values |
+| AC46 | D4 | Aggregation includes all tree levels |
+| AC47 | D5 | Duration from earliest descendant start to latest end |
+| AC48 | D5 | Own near-zero timestamps not used for phase duration |
+| AC49 | D5 | Multi-minute phases show correct wall-clock duration |
