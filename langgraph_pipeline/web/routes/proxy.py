@@ -64,6 +64,21 @@ class ChildAggregation:
     model: Optional[str]
     slug: Optional[str]
 
+
+@dataclass
+class RunGroup:
+    """A group of runs sharing the same display_slug for grouped list view.
+
+    Members are ordered most-recent-first (created_at DESC) because list_runs
+    returns rows in that order. The summary is the first member — the most
+    recent run for this slug.
+    """
+
+    display_slug: str
+    summary: dict  # most recent run — shown in the collapsed group row
+    members: list[dict]  # all runs in the group
+
+
 # ─── Jinja2 Setup ─────────────────────────────────────────────────────────────
 
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
@@ -255,6 +270,39 @@ def _find_worker_logs(slug: str) -> list[str]:
     )
 
 
+def _group_runs_by_slug(runs: list[dict]) -> list[RunGroup]:
+    """Group enriched runs by display_slug for the grouped list view.
+
+    Runs arrive ordered by created_at DESC. Within each group the first run
+    becomes the summary (most recent execution). Runs whose display_slug is
+    empty each form their own single-run group keyed by run_id, keeping them
+    individually visible.
+
+    Args:
+        runs: Enriched run dicts with display_slug set by _enrich_run.
+
+    Returns:
+        List of RunGroup objects ordered by most recent summary run.
+    """
+    seen: dict[str, RunGroup] = {}
+    order: list[str] = []
+
+    for run in runs:
+        slug = run.get("display_slug") or ""
+        key = slug if slug else (run.get("run_id") or str(id(run)))
+        if key not in seen:
+            seen[key] = RunGroup(
+                display_slug=slug,
+                summary=run,
+                members=[run],
+            )
+            order.append(key)
+        else:
+            seen[key].members.append(run)
+
+    return [seen[k] for k in order]
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 
@@ -267,6 +315,7 @@ def proxy_list(
     date_from: str = Query(default=""),
     date_to: str = Query(default=""),
     trace_id: str = Query(default=""),
+    group: int = Query(default=0, ge=0, le=1),
 ) -> HTMLResponse:
     """Render the paginated trace list with optional filters.
 
@@ -278,6 +327,7 @@ def proxy_list(
         date_from: Optional ISO date lower bound for created_at.
         date_to: Optional ISO date upper bound for created_at.
         trace_id: Optional run_id prefix filter.
+        group: When 1, collapse runs with the same display_slug into groups.
 
     Returns:
         Rendered proxy_list.html template.
@@ -327,11 +377,16 @@ def proxy_list(
     )
     total_pages = max(1, math.ceil(total_count / PAGE_SIZE_DEFAULT))
 
+    groups = _group_runs_by_slug(runs) if group else []
+
     return templates.TemplateResponse(
         request,
         "proxy_list.html",
         {
             "runs": runs,
+            "groups": groups,
+            "grouped": bool(group),
+            "group": group,
             "page": page,
             "total_pages": total_pages,
             "slug": slug,

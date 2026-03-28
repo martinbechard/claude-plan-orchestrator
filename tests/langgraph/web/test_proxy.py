@@ -15,8 +15,10 @@ import langgraph_pipeline.web.proxy as proxy_module
 from langgraph_pipeline.web.proxy import ChildTimeSpan, DailyTotal, Session, TracingProxy, get_proxy, init_proxy
 from langgraph_pipeline.web.routes.proxy import (
     ChildAggregation,
+    RunGroup,
     _compute_elapsed,
     _enrich_run,
+    _group_runs_by_slug,
     _parse_iso,
 )
 from langgraph_pipeline.web.server import create_app
@@ -2261,3 +2263,95 @@ def test_proxy_list_integrates_child_aggregation(enabled_client):
 
     # Child-resolved slug should appear in the list
     assert "55-real-slug" in html
+
+
+# ─── _group_runs_by_slug ──────────────────────────────────────────────────────
+
+
+def test_group_runs_by_slug_empty_input():
+    """_group_runs_by_slug returns an empty list when given no runs."""
+    assert _group_runs_by_slug([]) == []
+
+
+def test_group_runs_by_slug_groups_identical_slugs():
+    """Runs sharing the same display_slug are collapsed into one RunGroup.
+
+    The first run (most recent, given DESC ordering from list_runs) becomes
+    the group summary.
+    """
+    runs = [
+        {"run_id": "a", "display_slug": "my-feature"},
+        {"run_id": "b", "display_slug": "my-feature"},
+        {"run_id": "c", "display_slug": "other-item"},
+    ]
+    groups = _group_runs_by_slug(runs)
+
+    assert len(groups) == 2
+    assert groups[0].display_slug == "my-feature"
+    assert len(groups[0].members) == 2
+    assert groups[0].summary["run_id"] == "a"
+    assert groups[1].display_slug == "other-item"
+    assert len(groups[1].members) == 1
+    assert groups[1].summary["run_id"] == "c"
+
+
+def test_group_runs_by_slug_empty_slug_makes_individual_groups():
+    """Runs with no display_slug each form their own single-run group.
+
+    This prevents unrelated anonymous runs from being merged together.
+    """
+    runs = [
+        {"run_id": "x", "display_slug": ""},
+        {"run_id": "y", "display_slug": ""},
+    ]
+    groups = _group_runs_by_slug(runs)
+
+    assert len(groups) == 2
+    assert groups[0].summary["run_id"] == "x"
+    assert groups[1].summary["run_id"] == "y"
+
+
+def test_group_runs_by_slug_preserves_order():
+    """Groups appear in the order of their first (most recent) run."""
+    runs = [
+        {"run_id": "1", "display_slug": "alpha"},
+        {"run_id": "2", "display_slug": "beta"},
+        {"run_id": "3", "display_slug": "alpha"},
+    ]
+    groups = _group_runs_by_slug(runs)
+
+    assert [g.display_slug for g in groups] == ["alpha", "beta"]
+    assert len(groups[0].members) == 2
+
+
+def test_proxy_list_grouped_endpoint(enabled_client):
+    """GET /proxy?group=1 collapses same-slug runs into a grouped table.
+
+    Two root runs sharing the same display slug must appear as one summary row
+    with a run count badge and an expand button.
+    """
+    proxy = get_proxy()
+    assert proxy is not None
+
+    test_slug = "grp-endpoint-item"
+    for run_id in ["grp-ep-root-a", "grp-ep-root-b"]:
+        proxy.record_run(
+            run_id=run_id,
+            parent_run_id=None,
+            name=test_slug,
+            inputs=None,
+            outputs=None,
+            metadata={"slug": test_slug},
+            error=None,
+            start_time="2026-03-28T12:00:00",
+            end_time="2026-03-28T12:05:00",
+        )
+
+    response = enabled_client.get("/proxy?group=1")
+    assert response.status_code == 200
+    html = response.text
+
+    assert test_slug in html
+    assert "2 runs" in html
+    assert 'data-group="' in html
+    assert "expand-btn" in html
