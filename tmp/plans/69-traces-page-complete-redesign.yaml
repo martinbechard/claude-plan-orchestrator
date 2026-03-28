@@ -108,6 +108,11 @@ sections:
       root column empty), and slug (when root is LangGraph or empty). proxy_list now
       calls all four batch methods in one pass. Added 11 targeted tests. All 1484
       tests pass.
+    validation_attempts: 1
+    validation_findings: All task 2.1 requirements met. ChildAggregation dataclass
+      added; _enrich_run updated to use child-derived duration, cost, model, and slug;
+      proxy_list calls all four batch methods in one pass. 11 targeted tests added.
+      All 1484 tests pass. Build clean.
 - id: '3'
   name: List page UI improvements
   status: pending
@@ -120,9 +125,12 @@ sections:
       list template correctly displays the enriched duration (real minutes), cost,
       and model values from the updated _enrich_run data. Verify the template renders
       correctly with the new data fields.'
-    status: pending
+    status: in_progress
     dependencies:
     - '2.1'
+    last_attempt: '2026-03-28T11:24:41.742865'
+    attempts: 1
+    model_used: sonnet
   - id: '3.2'
     name: Add work item grouping toggle to trace list
     agent: frontend-coder
