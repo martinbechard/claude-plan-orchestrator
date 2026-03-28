@@ -41,7 +41,7 @@ Add an "Artifacts" section showing:
   and any report files created by the item?
   YES = pass, NO = fail
 
-## LangSmith Trace: 5f0cff6b-d6e5-4df8-bb97-238c85114803
+
 
 
 ## 5 Whys Analysis
