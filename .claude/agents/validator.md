@@ -23,11 +23,28 @@ Do NOT fix issues -- only observe, test, and report.
 
 ## Validation Steps
 
+### Step 0: Baseline Check
+Before evaluating the current changes, establish what was already broken:
+1. Run `git stash` to temporarily revert uncommitted changes
+2. Run the build command. Record if it PASSES or FAILS (this is the baseline)
+3. Run the test command. Record pass/fail count (this is the baseline)
+4. Run `git stash pop` to restore the changes
+
+If the baseline already fails, those failures are PRE-EXISTING and must NOT
+be counted against the current task. Only NEW failures (present after changes
+but absent in the baseline) count as regressions.
+
 ### Step 1: Build
-Run the build command from the prompt. Failure = FAIL.
+Run the build command from the prompt.
+- If it fails AND the baseline also failed with the same error = WARN (pre-existing)
+- If it fails AND the baseline passed = FAIL (regression introduced by this task)
+- If it passes = PASS
 
 ### Step 2: Unit Tests
-Run the test command from the prompt. Failure = FAIL.
+Run the test command from the prompt.
+- If tests fail AND the same tests failed in the baseline = WARN (pre-existing)
+- If tests fail AND they passed in the baseline = FAIL (regression)
+- If all tests pass = PASS
 
 ### Step 3: E2E Test
 If the work item or task references a test file (tests/*.spec.ts):
