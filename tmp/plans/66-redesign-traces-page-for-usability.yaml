@@ -80,10 +80,21 @@ sections:
       phase cards, activity pills, artifacts) and GET /proxy/{run_id}/narrative endpoint
       wired to build_execution_view(). Route registered before /proxy/{run_id} for
       correct FastAPI dispatch. All 1444 tests pass.
+    validation_attempts: 1
+    validation_findings: Narrative route and template implemented correctly. All 1444
+      tests pass (no regressions). All 5 acceptance criteria satisfied.
   - id: '3.2'
     name: Wire navigation between narrative and raw trace views
     agent: frontend-coder
     description: 'Complete navigation for the work item: tmp/plans/.claimed/66-redesign-traces-page-for-usability.md
       -- Add ''Show raw trace'' toggle on narrative page, update proxy_list.html to
       default-link to narrative view, add ''Show narrative'' link on existing proxy_trace.html.'
-    status: pending
+    status: completed
+    last_attempt: '2026-03-27T22:39:57.028767'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-27T22:41:07.617533'
+    result_message: 'Wired navigation between narrative and raw trace views: proxy_list.html
+      now defaults run-name and detail links to /narrative; proxy_trace.html has a
+      ''Show narrative'' toggle button. The narrative page already had the ''Show
+      raw trace'' toggle from task 3.1.'
