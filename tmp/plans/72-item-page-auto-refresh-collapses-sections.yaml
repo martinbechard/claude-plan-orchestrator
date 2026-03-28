@@ -1,0 +1,164 @@
+meta:
+  name: 72-item-page-auto-refresh-collapses-sections
+  source_item: tmp/plans/.claimed/72-item-page-auto-refresh-collapses-sections.md
+  requirements_path: docs/plans/2026-03-28-72-item-page-auto-refresh-collapses-sections-requirements.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '0'
+  name: UI Design Competition
+  status: pending
+  tasks:
+  - id: '0.1'
+    name: Systems design for selective refresh mechanism
+    agent: systems-designer
+    parallel_group: design-phase0
+    description: >
+      Produce an architecture design for replacing the full-page meta refresh with
+      a selective JS fetch mechanism, covering P1, FR1, FR2 from work item:
+      tmp/plans/.claimed/72-item-page-auto-refresh-collapses-sections.md
+      Design doc: docs/plans/2026-03-28-72-item-page-auto-refresh-collapses-sections-design.md
+      Requirements: docs/plans/2026-03-28-72-item-page-auto-refresh-collapses-sections-requirements.md
+      Focus on: JSON endpoint data model (which fields are dynamic vs static),
+      API boundary design for GET /item/{slug}/dynamic, data flow from existing
+      helper functions to JSON response, and how the JS client consumes the response.
+    status: pending
+    target_acs:
+    - AC1
+    - AC2
+    - AC3
+    - AC4
+    - AC5
+    - AC6
+    - AC7
+    - AC8
+  - id: '0.2'
+    name: UX design for selective refresh mechanism
+    agent: ux-designer
+    parallel_group: design-phase0
+    description: >
+      Produce a UX design for the selective refresh mechanism, covering P1, FR1, FR2
+      from work item: tmp/plans/.claimed/72-item-page-auto-refresh-collapses-sections.md
+      Design doc: docs/plans/2026-03-28-72-item-page-auto-refresh-collapses-sections-design.md
+      Requirements: docs/plans/2026-03-28-72-item-page-auto-refresh-collapses-sections-requirements.md
+      Focus on: which DOM elements are dynamic vs static, interaction preservation
+      (details/summary state), refresh indicator UX (should the user see a loading
+      indicator?), graceful degradation if JS fetch fails, and accessibility of
+      live-updating content (aria-live regions).
+    status: pending
+    target_acs:
+    - AC1
+    - AC2
+    - AC3
+    - AC4
+    - AC5
+    - AC6
+    - AC7
+    - AC8
+  - id: '0.3'
+    name: Frontend design for selective refresh mechanism
+    agent: frontend-coder
+    parallel_group: design-phase0
+    description: >
+      Produce a frontend implementation design for the selective refresh mechanism,
+      covering P1, FR1, FR2 from work item:
+      tmp/plans/.claimed/72-item-page-auto-refresh-collapses-sections.md
+      Design doc: docs/plans/2026-03-28-72-item-page-auto-refresh-collapses-sections-design.md
+      Requirements: docs/plans/2026-03-28-72-item-page-auto-refresh-collapses-sections-requirements.md
+      Focus on: concrete JS implementation (setInterval vs setTimeout, fetch error
+      handling, DOM update strategy), data-attribute naming for dynamic elements,
+      HTML template changes needed, and how to handle the active-worker banner
+      (show/hide based on JSON response).
+    status: pending
+    target_acs:
+    - AC1
+    - AC2
+    - AC3
+    - AC4
+    - AC5
+    - AC6
+    - AC7
+    - AC8
+  - id: '0.4'
+    name: Judge UI design competition
+    agent: design-judge
+    dependencies:
+    - '0.1'
+    - '0.2'
+    - '0.3'
+    description: >
+      Evaluate the three competing designs for the selective refresh mechanism.
+      Score each against P1, FR1, FR2 acceptance criteria from work item:
+      tmp/plans/.claimed/72-item-page-auto-refresh-collapses-sections.md
+      Requirements: docs/plans/2026-03-28-72-item-page-auto-refresh-collapses-sections-requirements.md
+      Select the winner with written rationale.
+    status: pending
+    target_acs:
+    - AC1
+    - AC2
+    - AC3
+    - AC4
+    - AC5
+    - AC6
+    - AC7
+    - AC8
+  - id: '0.5'
+    name: Bridge winning design to implementation tasks
+    agent: planner
+    dependencies:
+    - '0.4'
+    description: >
+      Read the winning design from the design competition (task 0.4) and extend
+      this YAML plan with concrete implementation tasks. Work item:
+      tmp/plans/.claimed/72-item-page-auto-refresh-collapses-sections.md
+      Requirements: docs/plans/2026-03-28-72-item-page-auto-refresh-collapses-sections-requirements.md
+      Design: docs/plans/2026-03-28-72-item-page-auto-refresh-collapses-sections-design.md
+      The new tasks should cover D1, D2, D3, D4, D5 and address P1, FR1, FR2.
+      Implementation depends on the design competition output.
+    status: pending
+- id: '1'
+  name: Implement selective refresh mechanism
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add JSON endpoint and replace meta refresh with JS fetch
+    agent: coder
+    dependencies:
+    - '0.5'
+    description: >
+      Implement D1, D2, D3, D4, D5 for requirements P1, FR1, FR2 from work item:
+      tmp/plans/.claimed/72-item-page-auto-refresh-collapses-sections.md
+      Design: docs/plans/2026-03-28-72-item-page-auto-refresh-collapses-sections-design.md
+
+      (1) Server: Add GET /item/{slug}/dynamic endpoint to item.py returning JSON
+      with pipeline_stage, active_worker, total_cost_usd, total_duration_s,
+      total_tokens, avg_velocity, plan_tasks, validation_results. Reuse existing
+      helper functions.
+
+      (2) Template: Remove meta http-equiv refresh tag from extra_head block.
+      Add data-dynamic attributes to dynamic elements (cost, tokens, duration,
+      velocity, status badge, worker banner, plan task list, validation results).
+
+      (3) JS: Add setInterval that fetches the JSON endpoint every 10 seconds
+      and updates only data-dynamic elements. Stop the interval when
+      pipeline_stage is "completed" or "unknown". Preserve all details/summary
+      open/closed state by never touching static content sections.
+
+      Include unit tests for the new JSON endpoint.
+    status: pending
+    target_acs:
+    - AC1
+    - AC2
+    - AC3
+    - AC4
+    - AC5
+    - AC6
+    - AC7
+    - AC8
