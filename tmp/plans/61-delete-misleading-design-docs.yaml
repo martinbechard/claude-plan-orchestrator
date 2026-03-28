@@ -1,0 +1,28 @@
+meta:
+  name: 61-delete-misleading-design-docs
+  source_item: tmp/plans/.claimed/61-delete-misleading-design-docs.md
+  plan_doc: docs/plans/2026-03-27-61-delete-misleading-design-docs-design.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - frontend-coder
+    - e2e-test-agent
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Delete misleading design documents
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Delete all 10 DELETE-classified design docs
+    agent: coder
+    status: pending
+    description: 'Implement the work item: tmp/plans/.claimed/61-delete-misleading-design-docs.md
+
+      Delete the 10 design documents classified as DELETE in the audit report
+      (docs/reports/design-doc-audit.md). All files are in docs/plans/. See
+      the design doc for the complete file list:
+      docs/plans/2026-03-27-61-delete-misleading-design-docs-design.md'
