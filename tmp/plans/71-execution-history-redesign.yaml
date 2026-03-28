@@ -1,0 +1,292 @@
+meta:
+  name: "71-execution-history-redesign"
+  source_item: "tmp/plans/.claimed/71-execution-history-redesign.md"
+  requirements_path: "docs/plans/2026-03-28-71-execution-history-redesign-requirements.md"
+  validation:
+    enabled: true
+    run_after:
+      - coder
+      - e2e-test-agent
+      - frontend-coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+
+sections:
+  # ── Phase 0: UI Design Competition ──────────────────────────────────────
+  # UC1, UC2, UC3, UC4, FR6, FR7, FR8 are UI requirements.
+  # Three competing designs run in parallel, then a judge selects the winner,
+  # then a planner bridges the winning design into implementation tasks.
+
+  - id: '0'
+    name: "UI Design Competition"
+    status: pending
+    tasks:
+      - id: '0.1'
+        name: "Systems design for execution history UI"
+        agent: systems-designer
+        parallel_group: design-phase0
+        description: >
+          Produce an architecture and data-model design for the execution history
+          UI redesign covering UC1, UC2, UC3, UC4, FR6, FR7, FR8 from work item:
+          tmp/plans/.claimed/71-execution-history-redesign.md
+          Design doc: docs/plans/2026-03-28-71-execution-history-redesign-design.md
+          Prototype reference: prototype_traces/ (3 screens).
+          Focus on component hierarchy, data flow from TracingProxy to templates,
+          API boundaries for tree fetch / node detail / deep-dive endpoints.
+        status: pending
+        target_acs:
+          - AC6
+          - AC7
+          - AC8
+          - AC9
+          - AC10
+          - AC11
+          - AC12
+          - AC13
+          - AC14
+          - AC15
+          - AC16
+          - AC17
+          - AC38
+          - AC39
+          - AC40
+          - AC41
+          - AC42
+          - AC43
+          - AC44
+          - AC45
+          - AC46
+          - AC47
+          - AC48
+          - AC49
+          - AC50
+
+      - id: '0.2'
+        name: "UX design for execution history UI"
+        agent: ux-designer
+        parallel_group: design-phase0
+        description: >
+          Produce a UX design for the execution history UI redesign covering
+          UC1, UC2, UC3, UC4, FR6, FR7, FR8 from work item:
+          tmp/plans/.claimed/71-execution-history-redesign.md
+          Design doc: docs/plans/2026-03-28-71-execution-history-redesign-design.md
+          Prototype reference: prototype_traces/ (3 screens).
+          Focus on user flows, interaction patterns (expand/collapse, panel
+          switching, deep-dive modal), information hierarchy, accessibility.
+        status: pending
+        target_acs:
+          - AC6
+          - AC7
+          - AC8
+          - AC9
+          - AC10
+          - AC11
+          - AC12
+          - AC13
+          - AC14
+          - AC15
+          - AC16
+          - AC17
+          - AC38
+          - AC39
+          - AC40
+          - AC41
+          - AC42
+          - AC43
+          - AC44
+          - AC45
+          - AC46
+          - AC47
+          - AC48
+          - AC49
+          - AC50
+
+      - id: '0.3'
+        name: "Frontend design for execution history UI"
+        agent: frontend-coder
+        parallel_group: design-phase0
+        description: >
+          Produce a frontend implementation design for the execution history UI
+          redesign covering UC1, UC2, UC3, UC4, FR6, FR7, FR8 from work item:
+          tmp/plans/.claimed/71-execution-history-redesign.md
+          Design doc: docs/plans/2026-03-28-71-execution-history-redesign-design.md
+          Prototype reference: prototype_traces/ (3 screens).
+          Focus on HTML/CSS/JS implementation strategy: Jinja2 template structure,
+          vanilla JS tree rendering, CSS layout for split-pane and deep-dive.
+        status: pending
+        target_acs:
+          - AC6
+          - AC7
+          - AC8
+          - AC9
+          - AC10
+          - AC11
+          - AC12
+          - AC13
+          - AC14
+          - AC15
+          - AC16
+          - AC17
+          - AC38
+          - AC39
+          - AC40
+          - AC41
+          - AC42
+          - AC43
+          - AC44
+          - AC45
+          - AC46
+          - AC47
+          - AC48
+          - AC49
+          - AC50
+
+      - id: '0.4'
+        name: "Judge UI design competition"
+        agent: design-judge
+        dependencies:
+          - '0.1'
+          - '0.2'
+          - '0.3'
+        description: >
+          Evaluate the three competing UI designs for execution history redesign.
+          Score each against UC1, UC2, UC3, UC4, FR6, FR7, FR8 acceptance criteria
+          from work item: tmp/plans/.claimed/71-execution-history-redesign.md
+          Requirements: docs/plans/2026-03-28-71-execution-history-redesign-requirements.md
+          Select the winner with written rationale.
+        status: pending
+        target_acs:
+          - AC6
+          - AC7
+          - AC8
+          - AC9
+          - AC10
+          - AC11
+
+      - id: '0.5'
+        name: "Bridge winning design to implementation tasks"
+        agent: planner
+        dependencies:
+          - '0.4'
+        description: >
+          Read the winning UI design from the design competition (task 0.4) and
+          extend this YAML plan with concrete frontend implementation tasks.
+          Work item: tmp/plans/.claimed/71-execution-history-redesign.md
+          Requirements: docs/plans/2026-03-28-71-execution-history-redesign-requirements.md
+          Design: docs/plans/2026-03-28-71-execution-history-redesign-design.md
+          The new tasks should cover D6, D7, D8, D9 and address UC1-UC4, FR6-FR8.
+          Frontend tasks depend on backend sections 1-3 being complete.
+        status: pending
+
+  # ── Section 1: Backend — Recursive Tree Infrastructure ──────────────────
+  # P1, FR1: Full recursive tree fetch with no depth limit.
+
+  - id: '1'
+    name: "Recursive tree infrastructure"
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: "Implement recursive full-subtree fetch and tree model"
+        agent: coder
+        description: >
+          Implement D1 for requirements P1, FR1 from work item:
+          tmp/plans/.claimed/71-execution-history-redesign.md
+          Design: docs/plans/2026-03-28-71-execution-history-redesign-design.md
+
+          Add get_full_subtree(run_id) to TracingProxy in proxy.py using a
+          WITH RECURSIVE CTE to fetch all descendants in one query. Return flat
+          rows with parent_run_id linkage. Add a Python helper to assemble
+          flat rows into a nested tree dict structure (TreeNode with children).
+
+          Rework trace_narrative.py to accept the full recursive tree instead
+          of the current 2-level (children + grandchildren) model. The new
+          build_execution_tree() replaces build_execution_view(). Include unit
+          tests for the recursive fetch and tree assembly.
+        status: pending
+        target_acs:
+          - AC1
+          - AC2
+          - AC18
+          - AC19
+          - AC20
+          - AC21
+          - AC22
+          - AC23
+          - AC24
+          - AC25
+
+  # ── Section 2: Backend — Real Cost & Duration ───────────────────────────
+  # P2, P3, FR2, FR3: Eliminate placeholder costs, fix wall-clock duration.
+
+  - id: '2'
+    name: "Real cost aggregation and wall-clock duration"
+    status: pending
+    tasks:
+      - id: '2.1'
+        name: "Implement real cost aggregation and recursive wall-clock duration"
+        agent: coder
+        description: >
+          Implement D2, D3 for requirements P2, P3, FR2, FR3 from work item:
+          tmp/plans/.claimed/71-execution-history-redesign.md
+          Design: docs/plans/2026-03-28-71-execution-history-redesign-design.md
+
+          (1) Cost: Ensure the tree model uses get_child_costs_batch() recursive
+          CTE to compute aggregated cost at every node. Filter zero-cost
+          placeholders (0.0 or absent total_cost_usd) from aggregation so 0.01
+          placeholders never appear.
+
+          (2) Duration: Upgrade _CHILD_TIME_SPANS_BATCH_SQL_TEMPLATE to use a
+          WITH RECURSIVE CTE (like _CHILD_COSTS_BATCH_SQL_TEMPLATE) so it
+          computes MIN(start_time)/MAX(end_time) across the full descendant
+          subtree, not just direct children. Replace near-zero root timestamps
+          with the computed wall-clock durations using _NEAR_ZERO_DURATION_S.
+
+          Include unit tests for both the upgraded SQL and the view model cost/
+          duration computation.
+        status: pending
+        target_acs:
+          - AC3
+          - AC4
+          - AC5
+          - AC26
+          - AC27
+          - AC28
+          - AC29
+          - AC30
+          - AC31
+
+  # ── Section 3: Backend — Data Quality ───────────────────────────────────
+  # FR4, FR5: Slug resolution, deduplication.
+
+  - id: '3'
+    name: "Slug resolution and deduplication"
+    status: pending
+    tasks:
+      - id: '3.1'
+        name: "Implement slug resolution and UI-layer deduplication"
+        agent: coder
+        description: >
+          Implement D4, D5 for requirements FR4, FR5 from work item:
+          tmp/plans/.claimed/71-execution-history-redesign.md
+          Design: docs/plans/2026-03-28-71-execution-history-redesign-design.md
+
+          (1) Slug resolution (D4): In the tree model layer, apply multi-tier
+          resolution: metadata item_slug -> child span metadata lookup via
+          existing resolve_child_slugs_batch() -> run_id prefix fallback.
+          Ensure "LangGraph" is never displayed as an item name.
+
+          (2) Deduplication (D5): When assembling the tree from flat rows,
+          group by run_id and keep only the most complete row (prefer the one
+          with end_time). This is a UI-layer safety net atop the existing DB
+          INSERT OR REPLACE.
+
+          Include unit tests for slug resolution tiers and dedup logic.
+        status: pending
+        target_acs:
+          - AC32
+          - AC33
+          - AC34
+          - AC35
+          - AC36
+          - AC37
