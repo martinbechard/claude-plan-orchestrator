@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Move all ARCHIVE-classified docs to docs/plans/archive/
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/62-archive-126-completed-design-docs.md
 
       Create docs/plans/archive/ directory. Parse docs/reports/design-doc-audit.md
@@ -31,3 +31,7 @@ sections:
     last_attempt: '2026-03-27T21:51:59.057993'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T21:53:40.494624'
+    result_message: All 124 ARCHIVE-classified design docs moved to docs/plans/archive/
+      via git mv. Work was already committed in a previous session (commit 5f7b162b).
+      docs/plans/ now contains only KEEP, UPDATE, and new plan docs.
