@@ -24,6 +24,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
+from langgraph_pipeline.web.helpers.trace_narrative import build_execution_view
 from langgraph_pipeline.web.proxy import PAGE_SIZE_DEFAULT, get_proxy
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -206,6 +207,47 @@ def proxy_list(
             "date_from": date_from,
             "date_to": date_to,
             "trace_id": trace_id,
+        },
+    )
+
+
+@router.get("/proxy/{run_id}/narrative", response_class=HTMLResponse)
+def proxy_narrative(request: Request, run_id: str) -> HTMLResponse:
+    """Render the item-centric execution narrative page for a pipeline run.
+
+    Args:
+        request: Starlette request (required by Jinja2TemplateResponse).
+        run_id: Identifier of the root run to display.
+
+    Returns:
+        Rendered proxy_narrative.html template with ExecutionView data.
+
+    Raises:
+        HTTPException: 404 when the proxy is disabled or run not found.
+    """
+    proxy = get_proxy()
+    if proxy is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail="Proxy not enabled")
+
+    run = proxy.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=HTTP_NOT_FOUND, detail=f"Run not found: {run_id}")
+
+    children = proxy.get_children(run_id)
+    child_ids = [c["run_id"] for c in children if c.get("run_id")]
+    grandchild_counts = proxy.count_children_batch(child_ids)
+    grandchildren = proxy.get_children_batch(
+        [cid for cid in child_ids if grandchild_counts.get(cid, 0) > 0]
+    )
+
+    view = build_execution_view(run, children, grandchildren)
+
+    return templates.TemplateResponse(
+        request,
+        "proxy_narrative.html",
+        {
+            "run": _enrich_run(run),
+            "view": view,
         },
     )
 
