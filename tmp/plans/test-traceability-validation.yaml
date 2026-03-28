@@ -1,0 +1,56 @@
+meta:
+  name: "test-traceability-validation"
+  source_item: "tmp/plans/.claimed/test-traceability-validation.md"
+  requirements_path: "docs/plans/2026-03-28-test-traceability-validation-requirements.md"
+  validation:
+    enabled: true
+    run_after:
+      - coder
+      - e2e-test-agent
+      - frontend-coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+
+sections:
+  - id: '1'
+    name: Root run backfill and startup integration
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: Implement backfill_root_run_slugs and auto-startup call
+        agent: coder
+        description: "Implement D1 and D2 for requirements P1, FR1 from work item: tmp/plans/.claimed/test-traceability-validation.md — Add a backfill_root_run_slugs() method to TracingProxy in proxy.py that queries root runs where name='LangGraph', resolves correct slugs from child span metadata using the existing _CHILD_SLUGS_BATCH_SQL pattern, and updates name + metadata_json. Call this method during init_proxy() in server.py. Include unit tests in tests/langgraph/web/test_proxy_backfill.py."
+        status: pending
+        target_acs:
+          - AC1
+          - AC2
+          - AC3
+          - AC10
+          - AC11
+          - AC13
+
+  - id: '2'
+    name: Executor trace metadata and backfill
+    status: pending
+    tasks:
+      - id: '2.1'
+        name: Add item_slug to executor trace metadata
+        agent: coder
+        description: "Implement D3 for requirement P3 from work item: tmp/plans/.claimed/test-traceability-validation.md — In task_runner.py, add item_slug (derived from plan_data.meta.source_item) to the metadata dict passed to emit_tool_call_traces(). Include unit tests in tests/langgraph/executor/nodes/test_task_runner_trace_metadata.py."
+        status: pending
+        target_acs:
+          - AC6
+          - AC7
+
+      - id: '2.2'
+        name: Implement backfill_executor_slugs and startup call
+        agent: coder
+        description: "Implement D4 and D2 for requirements P3, FR1 from work item: tmp/plans/.claimed/test-traceability-validation.md — Add a backfill_executor_slugs() method to TracingProxy that updates child runs lacking item_slug in metadata by resolving from parent run data. Call this method during init_proxy() after root backfill. Add tests to tests/langgraph/web/test_proxy_backfill.py."
+        status: pending
+        dependencies:
+          - '1.1'
+        target_acs:
+          - AC6
+          - AC7
+          - AC12
