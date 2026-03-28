@@ -64,3 +64,17 @@ output_tokens=50 (the known fake data pattern) to catch future test insertions.
    migrating or recreating the table
 3. **Validation focus** -- since the wiring exists, the task is primarily
    verification and cleanup, not new feature development
+
+
+## Acceptance Criteria (question form)
+
+- After running one real work item, does the cost_tasks table contain a row
+  with that item's slug and cost > $0.00? YES = pass, NO = fail
+- Does the /analysis page show the real item slug (not "12-test-item")?
+  YES = pass, NO = fail
+- Is the web server URL configured automatically without requiring manual
+  env var setup? YES = pass, NO = fail
+- Are there zero rows in cost_tasks with item_slug="12-test-item"?
+  YES = pass, NO = fail
+- Does the cost value shown on /analysis match the cost in the completions
+  table for the same item (within rounding)? YES = pass, NO = fail

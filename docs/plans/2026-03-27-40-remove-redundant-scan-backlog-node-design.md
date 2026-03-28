@@ -44,3 +44,16 @@ CLI pre-scans item -> graph starts at intake_analyze -> ...
    to either the CLI loop or a conditional on intake_analyze.
 4. Test updates: Tests that relied on scan_backlog being a graph node get updated
    to either pre-scan or call scan_backlog directly.
+
+
+## Acceptance Criteria
+
+- Is scan_backlog removed from the graph node list in graph.py?
+  YES = pass, NO = fail
+- Does the graph entry point start at intake_analyze?
+  YES = pass, NO = fail
+- Do traces for a normal pipeline run show no scan_backlog entry?
+  YES = pass, NO = fail
+- Do all existing tests pass? YES = pass, NO = fail
+- Does the scan_backlog function still exist and work when called directly?
+  YES = pass, NO = fail

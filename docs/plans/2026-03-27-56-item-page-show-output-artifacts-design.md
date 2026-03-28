@@ -55,3 +55,14 @@ The artifact list is assembled from four sources, in this order:
   cluttering the page when the list is long.
 - Do not make paths clickable links since this is a local tool; plain file
   paths are sufficient and the user can open them in their editor.
+
+
+## Acceptance Criteria
+
+- Does the item page show a list of output artifacts?
+  YES = pass, NO = fail
+- Does the list include files committed by the item (from git)?
+  YES = pass, NO = fail
+- Can the user find docs/reports/design-doc-audit.md from the
+  01-audit-design-docs-for-validity item page?
+  YES = pass, NO = fail

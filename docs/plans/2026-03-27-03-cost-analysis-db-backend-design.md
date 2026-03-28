@@ -43,3 +43,13 @@ end-to-end flow works with real data and fixing any remaining gaps.
    is satisfied by the LangGraph pipeline nodes calling _post_cost_to_api()
 3. **JSON fallback**: CostLogReader.load_all() already tries DB first, falls back to
    JSON file glob - needs verification that fallback path still works
+
+
+## Acceptance Criteria
+
+- `POST /api/cost` stores a row in `cost_tasks`
+- `plan-orchestrator.py` calls `POST /api/cost` instead of writing JSON when
+  `LANGCHAIN_ENDPOINT` is set to localhost
+- `/analysis` displays real data after at least one worker completes
+- Existing JSON file fallback still works when web server is not running
+- All existing tests pass

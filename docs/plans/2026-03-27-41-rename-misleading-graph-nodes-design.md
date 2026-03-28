@@ -42,3 +42,13 @@ and comments to match the current code.
 - README.md
 - design/architecture/langgraph-pipeline-architecture.md
 - langgraph_pipeline/pipeline/nodes/scan.py
+
+
+## Acceptance Criteria
+
+- Is verify_symptoms renamed to verify_fix in graph.py, the node function,
+  trace metadata, and all references? YES = pass, NO = fail
+- Do traces for a defect run show "verify_fix" instead of "verify_symptoms"?
+  YES = pass, NO = fail
+- Do all tests pass after the rename? YES = pass, NO = fail
+- Are the edge function names updated consistently? YES = pass, NO = fail

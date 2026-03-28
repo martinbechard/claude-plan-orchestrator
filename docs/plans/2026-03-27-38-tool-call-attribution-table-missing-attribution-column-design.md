@@ -33,3 +33,13 @@ The Tool Call Cost Attribution feature spans three layers:
 - **Exclusion of zero-byte calls**: Tool calls returning no data get no cost
   attribution and are excluded from the table.
 - **Column header "Est. $"**: Short, clear header indicating estimated dollar cost.
+
+
+## Acceptance Criteria
+
+- Does the Tool Call Cost Attribution table have a column showing the
+  estimated cost per tool call in dollars? YES = pass, NO = fail
+- Is the attribution calculated (e.g. proportional to result size relative
+  to parent agent cost)? YES = pass, NO = fail
+- Does the column header clearly say "Est. Cost" or similar?
+  YES = pass, NO = fail

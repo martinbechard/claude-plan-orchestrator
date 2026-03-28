@@ -35,3 +35,13 @@ the raw backlog file content.
   by inspecting code paths and verifying rendered output logic.
 - If any criterion fails, the coder agent will fix the specific gap rather than
   rewriting the entire feature.
+
+
+## Acceptance Criteria
+
+- Does /item/34-remove-tilde-cost-prefix-third-attempt show the acceptance
+  criteria from the backlog .md file? YES = pass, NO = fail
+- When a design doc exists, does it take priority over the backlog file?
+  YES = pass, NO = fail
+- When neither exists, does it show "No requirements document found"?
+  YES = pass, NO = fail

@@ -34,3 +34,13 @@ link remains correct.
 - Expand .gitignore section with all transient files from the backlog item
 - Add complete dependency list (required + optional) to step 1
 - Add a first-run checklist section after step 7
+
+
+## Acceptance Criteria
+
+- Does the README contain a setup section with .gitignore entries?
+  YES = pass, NO = fail
+- Does it list all directories that need to be created?
+  YES = pass, NO = fail
+- Can a new user follow the README to set up the orchestrator from scratch
+  without asking questions? YES = pass, NO = fail

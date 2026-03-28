@@ -66,3 +66,16 @@ it should create and run Playwright tests to verify UI criteria programmatically
 1. Set up Playwright infrastructure (config, dependencies, directory structure)
 2. Create the e2e-test-agent definition
 3. Update the validator agent to delegate UI criteria to e2e testing
+
+
+## Acceptance Criteria
+
+- Does an e2e-test-agent exist that can create Playwright tests?
+  YES = pass, NO = fail
+- When the validator encounters a UI criterion, does it create and run
+  an e2e test instead of reporting "cannot verify"?
+  YES = pass, NO = fail
+- Does the e2e test actually navigate to the page and check the criterion?
+  YES = pass, NO = fail
+- Are test results included in the validation findings?
+  YES = pass, NO = fail

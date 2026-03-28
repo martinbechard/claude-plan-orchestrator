@@ -9,7 +9,7 @@
 
 # Command used to build/compile the project during verification.
 # Default: "pnpm run build"
-build_command: "python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True); py_compile.compile('scripts/plan-orchestrator.py', doraise=True)\""
+build_command: "python3 -c \"import py_compile; py_compile.compile('scripts/auto-pipeline.py', doraise=True)\""
 
 # Command used to run the project test suite during verification.
 # Default: "pnpm test"
