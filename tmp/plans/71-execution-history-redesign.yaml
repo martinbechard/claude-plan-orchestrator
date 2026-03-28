@@ -277,7 +277,7 @@ sections:
       and dedup logic.
 
       '
-    status: pending
+    status: in_progress
     target_acs:
     - AC1
     - AC2
@@ -294,6 +294,9 @@ sections:
     - AC40
     - AC41
     - AC42
+    last_attempt: '2026-03-28T18:43:38.083285'
+    attempts: 1
+    model_used: opus
   - id: '1.2'
     name: Implement real cost aggregation and wall-clock duration
     agent: coder

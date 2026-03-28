@@ -241,10 +241,13 @@ sections:
       new endpoint.
 
       '
-    status: pending
+    status: in_progress
     target_acs:
     - AC6
     - AC10
+    last_attempt: '2026-03-28T18:44:37.778381'
+    attempts: 1
+    model_used: opus
 - id: '2'
   name: Frontend - Selective Refresh Mechanism
   status: pending
