@@ -127,7 +127,7 @@
         </td>
 
         <td class="name">
-          <a href="/proxy/{{ run.run_id | e }}">{{ run.name | e }}</a>
+          <a href="/proxy/{{ run.run_id | e }}/narrative">{{ run.name | e }}</a>
         </td>
 
         <td>
@@ -165,9 +165,9 @@
           <details>
             <summary>
               Details ({{ run.child_count }} child run{{ "s" if run.child_count != 1 else "" }}) &mdash;
-              <a href="/proxy/{{ run.run_id | e }}"
-                 aria-label="Open full trace for {{ run.name | e }}">
-                open full trace &rarr;
+              <a href="/proxy/{{ run.run_id | e }}/narrative"
+                 aria-label="Open narrative for {{ run.name | e }}">
+                open narrative &rarr;
               </a>
             </summary>
             <div style="padding:6px 0 2px;">

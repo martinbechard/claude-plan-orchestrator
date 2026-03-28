@@ -16,10 +16,16 @@
 
 {% block content %}
 
-{# ── Back link ──────────────────────────────────────────────────────────── #}
-<p style="margin-bottom:1rem;">
-  <a href="/proxy" aria-label="Back to trace list">&larr; Back to traces</a>
-</p>
+{# ── Back link + narrative toggle ──────────────────────────────────────── #}
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.75rem;">
+  <a href="/proxy" aria-label="Back to trace list" style="font-size:13px;">&larr; Back to traces</a>
+  <a href="/proxy/{{ run.run_id }}/narrative"
+     style="display:inline-flex; align-items:center; gap:0.4rem; font-size:13px; color:#3b6fcf; padding:0.25rem 0.625rem; border:1px solid #e2e8f0; border-radius:4px; background:#fff; text-decoration:none;"
+     onmouseover="this.style.background='#eff4ff'" onmouseout="this.style.background='#fff'"
+     aria-label="Switch to narrative view">
+    &#128220; Show narrative
+  </a>
+</div>
 
 {# ── Status badge helpers ───────────────────────────────────────────────── #}
 {% if run.error %}
