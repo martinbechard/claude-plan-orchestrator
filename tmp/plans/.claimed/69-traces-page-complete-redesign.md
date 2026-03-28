@@ -147,3 +147,34 @@ acceptance criteria below.
   YES = pass, NO = fail
 
 ## LangSmith Trace: c23cc522-8782-4be2-8951-077f51f710d7
+
+
+## 5 Whys Analysis
+
+**Title:** Traces page exposes infrastructure telemetry instead of work-item execution narrative
+
+**Clarity:** 4/5 
+(Excellent problem documentation with specific examples and acceptance criteria; root user need is implied rather than explicitly stated)
+
+**5 Whys:**
+
+1. **Why is the Traces page fundamentally broken for users?**
+   Because it displays raw LangSmith infrastructure data (node names like "LangGraph", duplicate start/end events, system metadata) instead of processed information users actually need like work item slugs, real execution durations, and cost per phase.
+
+2. **Why is raw infrastructure data being shown instead of processed user-meaningful information?**
+   Because the Traces feature was built as a direct proxy into the pipeline's internal tracing system rather than as a user-facing feature that translates technical trace events into execution history aligned with work items and their lifecycle phases.
+
+3. **Why was it designed as an infrastructure window rather than a user-facing execution narrative tool?**
+   Because the team's starting point was "expose the traces the system generates" (addressing a debugging/monitoring need) rather than "help users understand what happened to their work items" (addressing a user comprehension need).
+
+4. **Why wasn't the user need the starting point for design?**
+   Because there's no clear feedback loop connecting what users actually need to comprehend with how the visibility feature is architected. The feature was built from the system perspective ("here's what we trace") rather than the user goal perspective ("here's what I need to know").
+
+5. **Why is there a structural gap between what the system tracks internally and what users need to see?**
+   Because execution visibility is currently treated as **infrastructure instrumentation exposure** (showing what the system did technically) rather than as a **user-facing work narrative** (showing the full journey of a work item from intake through validation with real costs, decisions, and actions taken by the agent).
+
+**Root Need:** 
+Users need a coherent, item-centric **execution narrative** — not raw infrastructure telemetry — that shows the complete lifecycle of a work item execution (intake → planning → execution → validation → archive) with real durations, costs per phase, agent actions, and outcomes so they can understand what happened, why, at what cost, and whether to trust the results.
+
+**Summary:** 
+The feature treats traces as internal debugging artifacts to expose rather than as a user story to tell about their work item's journey.

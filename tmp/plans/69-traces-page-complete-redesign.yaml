@@ -1,74 +1,74 @@
 meta:
-  name: "Traces page complete redesign"
-  source_item: "tmp/plans/.claimed/69-traces-page-complete-redesign.md"
-  design_doc: "docs/plans/2026-03-28-69-traces-page-complete-redesign-design.md"
+  name: Traces page complete redesign
+  source_item: tmp/plans/.claimed/69-traces-page-complete-redesign.md
+  design_doc: docs/plans/2026-03-28-69-traces-page-complete-redesign-design.md
   validation:
     enabled: true
     run_after:
-      - coder
-      - e2e-test-agent
-      - frontend-coder
+    - coder
+    - e2e-test-agent
+    - frontend-coder
     validators:
-      - validator
+    - validator
     max_validation_attempts: 2
-
 sections:
-  - id: '1'
-    name: "Data layer fixes"
+- id: '1'
+  name: Data layer fixes
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Fix duplicate phase merging, cost aggregation, and status correction
+    agent: coder
+    status: in_progress
+    description: 'Implement the work item: tmp/plans/.claimed/69-traces-page-complete-redesign.md
+
+      Focus on data layer fixes in trace_narrative.py and proxy.py: (1) Merge duplicate
+      start/end trace events into single phases with real durations. (2) Fix item
+      slug resolution to prefer metadata slug over raw "LangGraph" run name. (3) Aggregate
+      costs from children/grandchildren when parent has no cost. (4) Correct RUNNING
+      status for runs whose children have all ended. (5) Add "verify_fix" and "verify"
+      to _PHASE_PATTERNS as "Verification". (6) Compute real total duration from child
+      span rather than root timestamps. Design: docs/plans/2026-03-28-69-traces-page-complete-redesign-design.md
+
+      '
+    last_attempt: '2026-03-28T00:11:14.633866'
+    attempts: 1
+    model_used: sonnet
+- id: '2'
+  name: List page redesign
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Redesign proxy_list.html for item-centric display
+    agent: frontend-coder
     status: pending
-    tasks:
-      - id: '1.1'
-        name: "Fix duplicate phase merging, cost aggregation, and status correction"
-        agent: coder
-        status: pending
-        description: >
-          Implement the work item: tmp/plans/.claimed/69-traces-page-complete-redesign.md
+    description: 'Implement the work item: tmp/plans/.claimed/69-traces-page-complete-redesign.md
 
-          Focus on data layer fixes in trace_narrative.py and proxy.py:
-          (1) Merge duplicate start/end trace events into single phases with real durations.
-          (2) Fix item slug resolution to prefer metadata slug over raw "LangGraph" run name.
-          (3) Aggregate costs from children/grandchildren when parent has no cost.
-          (4) Correct RUNNING status for runs whose children have all ended.
-          (5) Add "verify_fix" and "verify" to _PHASE_PATTERNS as "Verification".
-          (6) Compute real total duration from child span rather than root timestamps.
-          Design: docs/plans/2026-03-28-69-traces-page-complete-redesign-design.md
+      Focus on the list page (proxy_list.html and proxy_list route in proxy.py): (1)
+      Rename title from "LangSmith Traces" to "Execution History". (2) Remove the
+      redundant "Item slug" column. (3) Remove the collapsed detail/metadata JSON
+      rows under each entry. (4) Ensure run name column shows resolved slug (from
+      data layer fixes in 1.1). (5) Update status badges to use corrected status logic.
+      (6) Ensure every row links to the narrative page, not the raw trace page. Design:
+      docs/plans/2026-03-28-69-traces-page-complete-redesign-design.md
 
-  - id: '2'
-    name: "List page redesign"
+      '
+- id: '3'
+  name: Narrative page fixes
+  status: pending
+  tasks:
+  - id: '3.1'
+    name: Fix narrative page title, links, and phase details
+    agent: frontend-coder
     status: pending
-    tasks:
-      - id: '2.1'
-        name: "Redesign proxy_list.html for item-centric display"
-        agent: frontend-coder
-        status: pending
-        description: >
-          Implement the work item: tmp/plans/.claimed/69-traces-page-complete-redesign.md
+    description: 'Implement the work item: tmp/plans/.claimed/69-traces-page-complete-redesign.md
 
-          Focus on the list page (proxy_list.html and proxy_list route in proxy.py):
-          (1) Rename title from "LangSmith Traces" to "Execution History".
-          (2) Remove the redundant "Item slug" column.
-          (3) Remove the collapsed detail/metadata JSON rows under each entry.
-          (4) Ensure run name column shows resolved slug (from data layer fixes in 1.1).
-          (5) Update status badges to use corrected status logic.
-          (6) Ensure every row links to the narrative page, not the raw trace page.
-          Design: docs/plans/2026-03-28-69-traces-page-complete-redesign-design.md
+      Focus on the narrative detail page (proxy_narrative.html and narrative route):
+      (1) Display resolved item slug as page title instead of "LangGraph". (2) Add
+      a link to /item/{slug} from the narrative header. (3) Add links to worker output
+      logs and validation results in phase artifacts. (4) Expand phase cards to show
+      files read/written and bash commands. (5) Ensure "Show raw trace" toggle is
+      prominent but not the default view. (6) Verify duplicate phases are merged and
+      show real durations/costs. Design: docs/plans/2026-03-28-69-traces-page-complete-redesign-design.md
 
-  - id: '3'
-    name: "Narrative page fixes"
-    status: pending
-    tasks:
-      - id: '3.1'
-        name: "Fix narrative page title, links, and phase details"
-        agent: frontend-coder
-        status: pending
-        description: >
-          Implement the work item: tmp/plans/.claimed/69-traces-page-complete-redesign.md
-
-          Focus on the narrative detail page (proxy_narrative.html and narrative route):
-          (1) Display resolved item slug as page title instead of "LangGraph".
-          (2) Add a link to /item/{slug} from the narrative header.
-          (3) Add links to worker output logs and validation results in phase artifacts.
-          (4) Expand phase cards to show files read/written and bash commands.
-          (5) Ensure "Show raw trace" toggle is prominent but not the default view.
-          (6) Verify duplicate phases are merged and show real durations/costs.
-          Design: docs/plans/2026-03-28-69-traces-page-complete-redesign-design.md
+      '
