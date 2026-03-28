@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Add web server restart and wire into CodeChangeMonitor
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/67-pipeline-auto-restart-on-code-changes.md
       — Add restart_web_server() to web/server.py that stops, reloads the app module,
       and restarts uvicorn. Extend CodeChangeMonitor in shared/hot_reload.py to classify
@@ -28,6 +28,12 @@ sections:
     last_attempt: '2026-03-27T23:50:48.498905'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T23:54:30.351270'
+    result_message: Added restart_web_server() to web/server.py (stops uvicorn, evicts
+      web route modules from sys.modules, restarts on same port). Extended CodeChangeMonitor
+      in shared/hot_reload.py with _classify_changes() to distinguish web-only vs
+      pipeline-wide changes, calling web restart for web-only changes and continuing
+      to monitor. All 1444 tests pass.
 - id: '2'
   name: Validator 404 retry
   status: pending
