@@ -152,6 +152,50 @@ _CHILD_TIME_SPANS_BATCH_SQL_TEMPLATE = """
     GROUP BY parent_run_id
 """
 
+_CHILD_COSTS_BATCH_SQL_TEMPLATE = """
+WITH RECURSIVE subtree(root_id, run_id) AS (
+    SELECT run_id, run_id FROM traces WHERE run_id IN ({placeholders})
+    UNION ALL
+    SELECT s.root_id, t.run_id
+    FROM   traces t
+    INNER JOIN subtree s ON t.parent_run_id = s.run_id
+)
+SELECT
+    s.root_id AS parent_run_id,
+    COALESCE(SUM(json_extract(t.metadata_json, '$.total_cost_usd')), 0.0) AS total_cost_usd
+FROM   traces t
+INNER JOIN subtree s ON t.run_id = s.run_id
+WHERE  s.root_id != t.run_id
+  AND  json_extract(t.metadata_json, '$.total_cost_usd') IS NOT NULL
+GROUP BY s.root_id
+"""
+
+_CHILD_MODELS_BATCH_SQL_TEMPLATE = """
+WITH model_counts AS (
+    SELECT
+        parent_run_id,
+        COALESCE(NULLIF(model, ''), json_extract(metadata_json, '$.model')) AS model,
+        COUNT(*) AS cnt
+    FROM traces
+    WHERE parent_run_id IN ({placeholders})
+      AND COALESCE(NULLIF(model, ''), json_extract(metadata_json, '$.model')) IS NOT NULL
+      AND COALESCE(NULLIF(model, ''), json_extract(metadata_json, '$.model')) != ''
+    GROUP BY parent_run_id,
+             COALESCE(NULLIF(model, ''), json_extract(metadata_json, '$.model'))
+)
+SELECT parent_run_id, model
+FROM (
+    SELECT
+        parent_run_id,
+        model,
+        ROW_NUMBER() OVER (
+            PARTITION BY parent_run_id ORDER BY cnt DESC, model ASC
+        ) AS rn
+    FROM model_counts
+)
+WHERE rn = 1
+"""
+
 
 # ─── Cost Data Types ──────────────────────────────────────────────────────────
 
@@ -1003,6 +1047,52 @@ class TracingProxy:
             )
             for row in rows
         }
+
+    def get_child_costs_batch(self, run_ids: list[str]) -> dict[str, float]:
+        """Return the summed cost from metadata_json across children and grandchildren.
+
+        Uses a recursive CTE to traverse the full subtree of each parent run_id,
+        summing total_cost_usd values from metadata_json. Only descendant rows that
+        carry a total_cost_usd field contribute to the sum; the root run itself is
+        excluded. A single SQL query handles the entire batch.
+
+        Args:
+            run_ids: List of root run_ids whose subtrees to aggregate.
+
+        Returns:
+            Dict mapping each parent run_id to the total cost of its subtree.
+            Run_ids with no cost-carrying descendants are absent from the result.
+        """
+        if not run_ids:
+            return {}
+        placeholders = ",".join("?" for _ in run_ids)
+        sql = _CHILD_COSTS_BATCH_SQL_TEMPLATE.format(placeholders=placeholders)
+        with self._connect() as conn:
+            rows = conn.execute(sql, run_ids).fetchall()
+        return {row["parent_run_id"]: row["total_cost_usd"] for row in rows}
+
+    def get_child_models_batch(self, run_ids: list[str]) -> dict[str, str]:
+        """Return the most common non-empty model among direct children for each parent.
+
+        Counts model occurrences across direct children (rows whose parent_run_id is
+        in run_ids). The model value is taken from the model column, falling back to
+        metadata_json $.model. When multiple models tie in frequency, the
+        alphabetically first is selected. Uses a single SQL query for the batch.
+
+        Args:
+            run_ids: List of root run_ids whose children to inspect.
+
+        Returns:
+            Dict mapping each parent run_id to the most common child model string.
+            Run_ids with no children bearing a non-empty model are absent from the result.
+        """
+        if not run_ids:
+            return {}
+        placeholders = ",".join("?" for _ in run_ids)
+        sql = _CHILD_MODELS_BATCH_SQL_TEMPLATE.format(placeholders=placeholders)
+        with self._connect() as conn:
+            rows = conn.execute(sql, run_ids).fetchall()
+        return {row["parent_run_id"]: row["model"] for row in rows}
 
     # ─── Cost Analysis Queries ────────────────────────────────────────────────
 

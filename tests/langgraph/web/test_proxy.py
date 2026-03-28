@@ -1511,3 +1511,321 @@ def test_get_child_time_spans_batch_null_end_time(proxy):
     span = result[CHILD_SPAN_PARENT_A]
     assert span.earliest_start == "2026-03-28T09:01:00"
     assert span.latest_end is None
+
+
+# ─── get_child_costs_batch Tests ─────────────────────────────────────────────
+
+COST_PARENT_A = "cost-parent-a"
+COST_PARENT_B = "cost-parent-b"
+COST_CHILD_A1 = "cost-child-a1"
+COST_CHILD_A2 = "cost-child-a2"
+COST_GRANDCHILD_A1 = "cost-grandchild-a1"
+COST_CHILD_B1 = "cost-child-b1"
+
+
+def test_get_child_costs_batch_empty_input(proxy):
+    """get_child_costs_batch([]) returns an empty dict without querying the DB."""
+    result = proxy.get_child_costs_batch([])
+    assert result == {}
+
+
+def test_get_child_costs_batch_no_cost_data(proxy):
+    """Parent with children that have no total_cost_usd is absent from the result."""
+    proxy.record_run(
+        run_id=COST_PARENT_A,
+        parent_run_id=None,
+        name="root-run",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T10:00:00",
+        end_time="2026-03-28T10:00:01",
+    )
+    proxy.record_run(
+        run_id=COST_CHILD_A1,
+        parent_run_id=COST_PARENT_A,
+        name="child-no-cost",
+        inputs=None, outputs=None,
+        metadata={"other_field": "value"},
+        error=None,
+        start_time="2026-03-28T10:01:00",
+        end_time="2026-03-28T10:02:00",
+    )
+    result = proxy.get_child_costs_batch([COST_PARENT_A])
+    assert COST_PARENT_A not in result
+
+
+def test_get_child_costs_batch_direct_children(proxy):
+    """Sums total_cost_usd from direct children of the parent."""
+    proxy.record_run(
+        run_id=COST_PARENT_A,
+        parent_run_id=None,
+        name="root-run",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T10:00:00",
+        end_time="2026-03-28T10:00:01",
+    )
+    proxy.record_run(
+        run_id=COST_CHILD_A1,
+        parent_run_id=COST_PARENT_A,
+        name="execute-task",
+        inputs=None, outputs=None,
+        metadata={"total_cost_usd": 1.25},
+        error=None,
+        start_time="2026-03-28T10:01:00",
+        end_time="2026-03-28T10:03:00",
+    )
+    proxy.record_run(
+        run_id=COST_CHILD_A2,
+        parent_run_id=COST_PARENT_A,
+        name="validate-task",
+        inputs=None, outputs=None,
+        metadata={"total_cost_usd": 0.75},
+        error=None,
+        start_time="2026-03-28T10:03:30",
+        end_time="2026-03-28T10:05:00",
+    )
+    result = proxy.get_child_costs_batch([COST_PARENT_A])
+    assert COST_PARENT_A in result
+    assert abs(result[COST_PARENT_A] - 2.0) < 1e-9
+
+
+def test_get_child_costs_batch_includes_grandchildren(proxy):
+    """Recursively sums cost from grandchildren as well as direct children."""
+    proxy.record_run(
+        run_id=COST_PARENT_A,
+        parent_run_id=None,
+        name="root-run",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T10:00:00",
+        end_time="2026-03-28T10:00:01",
+    )
+    proxy.record_run(
+        run_id=COST_CHILD_A1,
+        parent_run_id=COST_PARENT_A,
+        name="child-with-cost",
+        inputs=None, outputs=None,
+        metadata={"total_cost_usd": 0.50},
+        error=None,
+        start_time="2026-03-28T10:01:00",
+        end_time="2026-03-28T10:02:00",
+    )
+    proxy.record_run(
+        run_id=COST_GRANDCHILD_A1,
+        parent_run_id=COST_CHILD_A1,
+        name="grandchild-with-cost",
+        inputs=None, outputs=None,
+        metadata={"total_cost_usd": 0.30},
+        error=None,
+        start_time="2026-03-28T10:01:10",
+        end_time="2026-03-28T10:01:50",
+    )
+    result = proxy.get_child_costs_batch([COST_PARENT_A])
+    assert COST_PARENT_A in result
+    assert abs(result[COST_PARENT_A] - 0.80) < 1e-9
+
+
+def test_get_child_costs_batch_multiple_parents(proxy):
+    """Returns correct costs for two parents in a single batch query."""
+    proxy.record_run(
+        run_id=COST_PARENT_A,
+        parent_run_id=None,
+        name="root-a",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T08:00:00",
+        end_time="2026-03-28T08:00:01",
+    )
+    proxy.record_run(
+        run_id=COST_CHILD_A1,
+        parent_run_id=COST_PARENT_A,
+        name="child-a1",
+        inputs=None, outputs=None,
+        metadata={"total_cost_usd": 3.10},
+        error=None,
+        start_time="2026-03-28T08:01:00",
+        end_time="2026-03-28T08:10:00",
+    )
+    proxy.record_run(
+        run_id=COST_PARENT_B,
+        parent_run_id=None,
+        name="root-b",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T09:00:00",
+        end_time="2026-03-28T09:00:01",
+    )
+    proxy.record_run(
+        run_id=COST_CHILD_B1,
+        parent_run_id=COST_PARENT_B,
+        name="child-b1",
+        inputs=None, outputs=None,
+        metadata={"total_cost_usd": 1.40},
+        error=None,
+        start_time="2026-03-28T09:01:00",
+        end_time="2026-03-28T09:05:00",
+    )
+    result = proxy.get_child_costs_batch([COST_PARENT_A, COST_PARENT_B])
+    assert len(result) == 2
+    assert abs(result[COST_PARENT_A] - 3.10) < 1e-9
+    assert abs(result[COST_PARENT_B] - 1.40) < 1e-9
+
+
+# ─── get_child_models_batch Tests ────────────────────────────────────────────
+
+MODEL_PARENT_A = "model-parent-a"
+MODEL_PARENT_B = "model-parent-b"
+MODEL_CHILD_A1 = "model-child-a1"
+MODEL_CHILD_A2 = "model-child-a2"
+MODEL_CHILD_A3 = "model-child-a3"
+MODEL_CHILD_B1 = "model-child-b1"
+
+
+def test_get_child_models_batch_empty_input(proxy):
+    """get_child_models_batch([]) returns an empty dict without querying the DB."""
+    result = proxy.get_child_models_batch([])
+    assert result == {}
+
+
+def test_get_child_models_batch_no_model_children(proxy):
+    """Parent whose children have no model value is absent from the result."""
+    proxy.record_run(
+        run_id=MODEL_PARENT_A,
+        parent_run_id=None,
+        name="root-run",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T10:00:00",
+        end_time="2026-03-28T10:00:01",
+    )
+    proxy.record_run(
+        run_id=MODEL_CHILD_A1,
+        parent_run_id=MODEL_PARENT_A,
+        name="child-no-model",
+        inputs=None, outputs=None, metadata={}, error=None,
+        start_time="2026-03-28T10:01:00",
+        end_time="2026-03-28T10:02:00",
+    )
+    result = proxy.get_child_models_batch([MODEL_PARENT_A])
+    assert MODEL_PARENT_A not in result
+
+
+def test_get_child_models_batch_most_common_model(proxy):
+    """Returns the model that appears most frequently among direct children."""
+    proxy.record_run(
+        run_id=MODEL_PARENT_A,
+        parent_run_id=None,
+        name="root-run",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T10:00:00",
+        end_time="2026-03-28T10:00:01",
+    )
+    # Two children with "claude-sonnet-4-6", one with "claude-haiku-4-5"
+    proxy.record_run(
+        run_id=MODEL_CHILD_A1,
+        parent_run_id=MODEL_PARENT_A,
+        name="child-1",
+        inputs=None, outputs=None,
+        metadata={"model": "claude-sonnet-4-6"},
+        error=None,
+        start_time="2026-03-28T10:01:00",
+        end_time="2026-03-28T10:02:00",
+    )
+    proxy.record_run(
+        run_id=MODEL_CHILD_A2,
+        parent_run_id=MODEL_PARENT_A,
+        name="child-2",
+        inputs=None, outputs=None,
+        metadata={"model": "claude-haiku-4-5"},
+        error=None,
+        start_time="2026-03-28T10:02:00",
+        end_time="2026-03-28T10:03:00",
+    )
+    proxy.record_run(
+        run_id=MODEL_CHILD_A3,
+        parent_run_id=MODEL_PARENT_A,
+        name="child-3",
+        inputs=None, outputs=None,
+        metadata={"model": "claude-sonnet-4-6"},
+        error=None,
+        start_time="2026-03-28T10:03:00",
+        end_time="2026-03-28T10:04:00",
+    )
+    result = proxy.get_child_models_batch([MODEL_PARENT_A])
+    assert MODEL_PARENT_A in result
+    assert result[MODEL_PARENT_A] == "claude-sonnet-4-6"
+
+
+def test_get_child_models_batch_tie_broken_alphabetically(proxy):
+    """When two models appear equally often, the alphabetically first is returned."""
+    proxy.record_run(
+        run_id=MODEL_PARENT_A,
+        parent_run_id=None,
+        name="root-run",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T10:00:00",
+        end_time="2026-03-28T10:00:01",
+    )
+    proxy.record_run(
+        run_id=MODEL_CHILD_A1,
+        parent_run_id=MODEL_PARENT_A,
+        name="child-1",
+        inputs=None, outputs=None,
+        metadata={"model": "claude-sonnet-4-6"},
+        error=None,
+        start_time="2026-03-28T10:01:00",
+        end_time="2026-03-28T10:02:00",
+    )
+    proxy.record_run(
+        run_id=MODEL_CHILD_A2,
+        parent_run_id=MODEL_PARENT_A,
+        name="child-2",
+        inputs=None, outputs=None,
+        metadata={"model": "claude-haiku-4-5"},
+        error=None,
+        start_time="2026-03-28T10:02:00",
+        end_time="2026-03-28T10:03:00",
+    )
+    result = proxy.get_child_models_batch([MODEL_PARENT_A])
+    assert MODEL_PARENT_A in result
+    # "claude-haiku-4-5" comes before "claude-sonnet-4-6" alphabetically
+    assert result[MODEL_PARENT_A] == "claude-haiku-4-5"
+
+
+def test_get_child_models_batch_multiple_parents(proxy):
+    """Returns correct model for two parents in a single batch query."""
+    proxy.record_run(
+        run_id=MODEL_PARENT_A,
+        parent_run_id=None,
+        name="root-a",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T08:00:00",
+        end_time="2026-03-28T08:00:01",
+    )
+    proxy.record_run(
+        run_id=MODEL_CHILD_A1,
+        parent_run_id=MODEL_PARENT_A,
+        name="child-a",
+        inputs=None, outputs=None,
+        metadata={"model": "claude-opus-4-6"},
+        error=None,
+        start_time="2026-03-28T08:01:00",
+        end_time="2026-03-28T08:10:00",
+    )
+    proxy.record_run(
+        run_id=MODEL_PARENT_B,
+        parent_run_id=None,
+        name="root-b",
+        inputs=None, outputs=None, metadata=None, error=None,
+        start_time="2026-03-28T09:00:00",
+        end_time="2026-03-28T09:00:01",
+    )
+    proxy.record_run(
+        run_id=MODEL_CHILD_B1,
+        parent_run_id=MODEL_PARENT_B,
+        name="child-b",
+        inputs=None, outputs=None,
+        metadata={"model": "claude-haiku-4-5"},
+        error=None,
+        start_time="2026-03-28T09:01:00",
+        end_time="2026-03-28T09:05:00",
+    )
+    result = proxy.get_child_models_batch([MODEL_PARENT_A, MODEL_PARENT_B])
+    assert len(result) == 2
+    assert result[MODEL_PARENT_A] == "claude-opus-4-6"
+    assert result[MODEL_PARENT_B] == "claude-haiku-4-5"
