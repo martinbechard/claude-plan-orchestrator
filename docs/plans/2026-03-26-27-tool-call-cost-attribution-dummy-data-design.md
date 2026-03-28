@@ -80,7 +80,7 @@ page renders cleanly from real data.
 ## Design Decisions
 
 - `result_bytes` is computed as `len(json.dumps(content))` — mirrors what
-  `plan-orchestrator.py` does in `_extract_tool_calls_from_json_output()`.
+  `langgraph_pipeline/shared/claude_cli.py` does in `stream_json_output()`.
 - POST is fire-and-forget; a logging warning on failure is sufficient — cost recording
   is observability, not correctness.
 - `item_type` is derived from `source_item` path: contains "defect" → "defect", else

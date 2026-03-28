@@ -10,16 +10,16 @@ This is a single-pass analysis task. A coder agent reads all JSON files under
 a ranked Slack report to `orchestrator-notifications`. No files are created or
 modified beyond the Slack message.
 
-The agent uses the existing `SlackNotifier` class in `scripts/plan-orchestrator.py`
-(imported via `sys.path`) and the SLACK_BOT_TOKEN / channel IDs available in the
-environment, consistent with how the orchestrator itself posts notifications.
+The agent uses the existing `SlackNotifier` class in
+`langgraph_pipeline/slack/notifier.py` and the SLACK_BOT_TOKEN / channel IDs available
+in the environment, consistent with how the orchestrator itself posts notifications.
 
 ## Key Files
 
 | File | Role |
 |------|------|
 | `docs/reports/execution-costs/*.json` | Input data — one file per pipeline item |
-| `scripts/plan-orchestrator.py` | Source of `SlackNotifier` for Slack posting |
+| `langgraph_pipeline/slack/notifier.py` | Source of `SlackNotifier` for Slack posting |
 
 No files are created or modified as part of this task.
 
@@ -62,8 +62,8 @@ Slack message posted to `orchestrator-notifications`:
 
 - **In-memory aggregation only**: the JSON files are small enough to load entirely;
   no intermediate files needed.
-- **SlackNotifier reuse**: importing from plan-orchestrator.py avoids duplicating
-  Slack API logic. The agent can also fall back to a direct `requests` call if the
-  import path is unavailable.
+- **SlackNotifier reuse**: importing from `langgraph_pipeline.slack.notifier` avoids
+  duplicating Slack API logic. The agent can also fall back to a direct `requests`
+  call if the import path is unavailable.
 - **Graceful empty-data handling**: if `docs/reports/execution-costs/` is empty or
   absent, the agent posts a short "no data yet" message rather than failing.

@@ -14,7 +14,7 @@ expand/collapse and column sorting.
 ## Cost Log JSON Schema
 
 Files are written by `write_execution_cost_log()` in
-`scripts/plan-orchestrator.py`. Each file at
+`langgraph_pipeline/shared/cost_log.py`. Each file at
 `docs/reports/execution-costs/<item_slug>.json` has the shape:
 
 ```json
@@ -41,7 +41,7 @@ Files are written by `write_execution_cost_log()` in
 
 Note: the field is `duration_s` (seconds), not `duration_ms` as mentioned in
 the backlog item's Requirements section. The authoritative schema is the writer
-in `plan-orchestrator.py`.
+in `langgraph_pipeline/shared/cost_log.py`.
 
 ## Architecture
 
