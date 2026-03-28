@@ -19,7 +19,11 @@ sections:
   - id: '1.1'
     name: Delete all 10 DELETE-classified design docs
     agent: coder
+<<<<<<< Updated upstream
     status: completed
+=======
+    status: in_progress
+>>>>>>> Stashed changes
     description: 'Implement the work item: tmp/plans/.claimed/61-delete-misleading-design-docs.md
 
       Delete the 10 design documents classified as DELETE in the audit report (docs/reports/design-doc-audit.md).
@@ -28,6 +32,9 @@ sections:
     last_attempt: '2026-03-27T21:52:04.869265'
     attempts: 1
     model_used: sonnet
+<<<<<<< Updated upstream
     completed_at: '2026-03-27T21:52:50.093220'
     result_message: Deleted all 10 DELETE-classified design docs from docs/plans/
       via git rm and committed (956 lines removed, commit 3c6bc94b)
+=======
+>>>>>>> Stashed changes

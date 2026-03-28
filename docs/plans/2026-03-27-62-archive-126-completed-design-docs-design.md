@@ -27,3 +27,11 @@ folder so only KEEP and UPDATE docs remain visible.
   of the exact count
 - Do not touch DELETE, KEEP, or UPDATE docs in this task (those are separate work items)
 - A single task handles this since it is one atomic operation with no code changes
+
+
+## Acceptance Criteria
+
+- Is docs/plans/archive/ created with all 126 ARCHIVE-classified docs?
+  YES = pass, NO = fail
+- Does docs/plans/ only contain KEEP and UPDATE docs after archiving?
+  YES = pass, NO = fail

@@ -38,3 +38,11 @@ references remain while keeping the architectural intent of each document intact
 
 Updates should reflect current steady-state architecture. No "was X, now Y"
 comparative language. Write as if the langgraph_pipeline always existed.
+
+
+## Acceptance Criteria
+
+- Are all 7 high-priority UPDATE docs corrected per the audit?
+  YES = pass, NO = fail
+- Do the updated docs reference langgraph_pipeline/ paths instead of
+  plan-orchestrator.py? YES = pass, NO = fail
