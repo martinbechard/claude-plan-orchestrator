@@ -14,7 +14,7 @@ corrections listed in docs/reports/design-doc-audit.md under
 - Do the updated docs reference langgraph_pipeline/ paths instead of
   plan-orchestrator.py? YES = pass, NO = fail
 
-## LangSmith Trace: 71af6dd7-a3bc-47e3-8629-07142429bffd
+
 
 
 ## 5 Whys Analysis
