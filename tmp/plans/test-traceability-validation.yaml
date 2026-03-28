@@ -1,0 +1,188 @@
+meta:
+  name: "test-traceability-validation"
+  source_item: "tmp/plans/.claimed/test-traceability-validation.md"
+  requirements_path: "docs/plans/2026-03-28-test-traceability-validation-requirements.md"
+  design_path: "docs/plans/2026-03-28-test-traceability-validation-design.md"
+  validation:
+    enabled: true
+    run_after:
+      - coder
+      - e2e-test-agent
+      - frontend-coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+
+sections:
+  - id: '1'
+    name: "Phase 0: Trace page visual distinguishability design competition"
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: "Systems design for trace row distinguishability"
+        agent: systems-designer
+        parallel_group: p0-trace-ui
+        target_acs:
+          - AC11
+          - AC14
+        description: >
+          Design an approach for P4 (D6) from work item:
+          tmp/plans/.claimed/test-traceability-validation.md —
+          After data-layer backfills correct slugs (P1/P3), the traces page
+          needs rows to be visually distinguishable even when trace ID prefixes
+          collide (AC14). Design a data-model and component architecture for
+          improved trace row identification. Consider: longer trace ID display,
+          slug-based row grouping improvements, distinguishability signals.
+          Reference design: docs/plans/2026-03-28-test-traceability-validation-design.md
+        status: pending
+
+      - id: '1.2'
+        name: "UX design for trace row distinguishability"
+        agent: ux-designer
+        parallel_group: p0-trace-ui
+        target_acs:
+          - AC11
+          - AC14
+        description: >
+          Design an approach for P4 (D6) from work item:
+          tmp/plans/.claimed/test-traceability-validation.md —
+          After data-layer backfills correct slugs (P1/P3), the traces page
+          needs rows to be visually distinguishable even when trace ID prefixes
+          collide (AC14). Design a UX approach for improved trace row
+          identification focusing on user workflow and scannability. Consider:
+          color-coding per slug, visual grouping, timestamp formatting,
+          row hover/focus states.
+          Reference design: docs/plans/2026-03-28-test-traceability-validation-design.md
+        status: pending
+
+      - id: '1.3'
+        name: "Frontend design for trace row distinguishability"
+        agent: frontend-coder
+        parallel_group: p0-trace-ui
+        target_acs:
+          - AC11
+          - AC14
+        description: >
+          Design an approach for P4 (D6) from work item:
+          tmp/plans/.claimed/test-traceability-validation.md —
+          After data-layer backfills correct slugs (P1/P3), the traces page
+          needs rows to be visually distinguishable even when trace ID prefixes
+          collide (AC14). Design a frontend implementation approach focusing
+          on template changes to proxy_list.html, CSS improvements, and
+          any needed route/helper changes.
+          Reference design: docs/plans/2026-03-28-test-traceability-validation-design.md
+        status: pending
+
+      - id: '1.4'
+        name: "Judge trace page design competition"
+        agent: design-judge
+        target_acs:
+          - AC11
+          - AC14
+        dependencies:
+          - '1.1'
+          - '1.2'
+          - '1.3'
+        description: >
+          Judge the Phase 0 design competition for P4 (D6) from work item:
+          tmp/plans/.claimed/test-traceability-validation.md —
+          Evaluate the three design proposals (tasks 1.1, 1.2, 1.3) for trace
+          row visual distinguishability. Score against AC11 (users can identify
+          work items) and AC14 (rows distinguishable with identical trace ID
+          prefixes). Select the winner and write rationale.
+          Requirements: docs/plans/2026-03-28-test-traceability-validation-requirements.md
+        status: pending
+
+      - id: '1.5'
+        name: "Plan P4 implementation from winning design"
+        agent: planner
+        target_acs:
+          - AC11
+          - AC12
+          - AC13
+          - AC14
+          - AC15
+          - AC16
+        dependencies:
+          - '1.4'
+        description: >
+          Extend this YAML plan with implementation tasks for P4 (D6) from
+          work item: tmp/plans/.claimed/test-traceability-validation.md —
+          Read the winning design from the Phase 0 competition (task 1.4),
+          then create implementation section(s) with coder/frontend-coder
+          tasks. Implementation tasks should depend on tasks 2.1, 2.2, 3.1
+          (data-layer fixes) since the UI improvements build on correct slug
+          data.
+          Requirements: docs/plans/2026-03-28-test-traceability-validation-requirements.md
+          Design: docs/plans/2026-03-28-test-traceability-validation-design.md
+        status: pending
+
+  - id: '2'
+    name: "Root run backfill and forward fix verification"
+    status: pending
+    tasks:
+      - id: '2.1'
+        name: "Backfill LangGraph-named root runs with correct item_slug"
+        agent: coder
+        target_acs:
+          - AC1
+          - AC2
+          - AC3
+          - AC4
+        description: >
+          Implement P1 (D1, D2) from work item:
+          tmp/plans/.claimed/test-traceability-validation.md —
+          Add backfill_root_run_slugs() to TracingProxy in
+          langgraph_pipeline/web/proxy.py that: (1) queries root runs where
+          name='LangGraph' and parent_run_id IS NULL, (2) resolves correct
+          slug from child span metadata using the _CHILD_SLUGS_BATCH_SQL
+          pattern, (3) updates root run name and metadata_json.item_slug.
+          Call this method during init_proxy() for auto-backfill on startup.
+          Write unit tests in tests/langgraph/web/test_proxy_backfill.py.
+          Requirements: docs/plans/2026-03-28-test-traceability-validation-requirements.md
+          Design: docs/plans/2026-03-28-test-traceability-validation-design.md
+        status: pending
+
+      - id: '2.2'
+        name: "Regression tests for root run naming"
+        agent: coder
+        target_acs:
+          - AC5
+          - AC6
+          - AC7
+        description: >
+          Implement P2 (D3) from work item:
+          tmp/plans/.claimed/test-traceability-validation.md —
+          Write regression tests in tests/langgraph/shared/test_langsmith_naming.py
+          that mock RunTree and verify: (1) create_root_run passes item_slug
+          as the name parameter, (2) finalize_root_run passes item_slug as name
+          (falling back to "root" only when empty), (3) neither function allows
+          the SDK default "LangGraph" name to be used.
+          Requirements: docs/plans/2026-03-28-test-traceability-validation-requirements.md
+          Design: docs/plans/2026-03-28-test-traceability-validation-design.md
+        status: pending
+
+  - id: '3'
+    name: "Executor subgraph trace metadata enrichment"
+    status: pending
+    tasks:
+      - id: '3.1'
+        name: "Add item_slug to executor traces and backfill existing"
+        agent: coder
+        target_acs:
+          - AC8
+          - AC9
+          - AC10
+        description: >
+          Implement P3 (D4, D5) from work item:
+          tmp/plans/.claimed/test-traceability-validation.md —
+          (1) In langgraph_pipeline/executor/nodes/task_runner.py, add
+          item_slug to the metadata dict passed to emit_tool_call_traces()
+          (derive from plan_data.meta.source_item, same as _finalize_tool_calls).
+          (2) Add backfill_executor_slugs() to TracingProxy that resolves
+          item_slug for child runs from their parent run name/metadata,
+          called after root backfill on startup.
+          (3) Write tests for both changes.
+          Requirements: docs/plans/2026-03-28-test-traceability-validation-requirements.md
+          Design: docs/plans/2026-03-28-test-traceability-validation-design.md
+        status: pending
