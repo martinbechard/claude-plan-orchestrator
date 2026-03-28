@@ -351,6 +351,12 @@ sections:
       Cost uses post-order traversal to aggregate leaf costs from metadata_json total_cost_usd.
       Duration replaces near-zero dispatch timestamps with descendant time spans.
       42 new tests added (87 total), all 1632 tests pass.
+    validation_attempts: 1
+    validation_findings: D4 (cost aggregation) and D5 (wall-clock duration) fully
+      implemented with 87 tests passing. All 1632 tests pass with no regressions.
+      Cost uses in-memory post-order traversal (functionally equivalent to CTE since
+      full tree is already fetched). No placeholder values (0.01) in code logic. Near-zero
+      duration replacement works correctly for phase-level nodes.
   - id: '1.3'
     name: Create execution history API endpoint
     agent: coder
@@ -373,7 +379,7 @@ sections:
       Include unit tests for the JSON API endpoint.
 
       '
-    status: pending
+    status: in_progress
     target_acs:
     - AC11
     - AC12
@@ -394,6 +400,9 @@ sections:
     - AC30
     - AC31
     - AC32
+    last_attempt: '2026-03-28T19:04:39.019941'
+    attempts: 1
+    model_used: opus
 - id: '2'
   name: Remove Old Traces Page and Update Entry Points
   status: pending
