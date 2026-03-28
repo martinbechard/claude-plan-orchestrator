@@ -42,7 +42,7 @@ sections:
   - id: '2.1'
     name: Update remaining 5 medium-priority design docs
     agent: coder
-    status: in_progress
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/64-update-medium-priority-design-docs.md
 
       Update the remaining 5 medium-priority docs per the audit corrections in docs/reports/design-doc-audit.md
@@ -53,3 +53,11 @@ sections:
     last_attempt: '2026-03-27T22:01:00.078444'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-27T22:06:36.399841'
+    result_message: 'Updated remaining 5 medium-priority design docs: removed plan-orchestrator.py
+      refs from ux-designer loop (flow diagrams, Key Files table, Design Decisions),
+      least-privilege sandboxing (Modified files updated to langgraph_pipeline paths),
+      extract-slack-modules (removed migration-era line numbers and Extracted-from
+      notes), pipeline-graph-nodes (execute_plan description updated to in-process
+      executor), and unified-runner (plan-orchestrator.py removed from Unchanged Files
+      section)'
