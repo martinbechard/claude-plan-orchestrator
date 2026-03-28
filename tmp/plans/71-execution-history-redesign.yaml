@@ -329,7 +329,7 @@ sections:
       (near-zero replacement).
 
       '
-    status: in_progress
+    status: completed
     target_acs:
     - AC4
     - AC5
@@ -345,6 +345,12 @@ sections:
     last_attempt: '2026-03-28T18:53:38.414551'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-28T19:01:02.045444'
+    result_message: Implemented D4 (real cost aggregation) and D5 (wall-clock duration)
+      in execution_tree.py. TreeNode now includes cost and duration_seconds fields.
+      Cost uses post-order traversal to aggregate leaf costs from metadata_json total_cost_usd.
+      Duration replaces near-zero dispatch timestamps with descendant time spans.
+      42 new tests added (87 total), all 1632 tests pass.
   - id: '1.3'
     name: Create execution history API endpoint
     agent: coder
