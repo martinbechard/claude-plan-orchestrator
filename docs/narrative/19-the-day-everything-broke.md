@@ -1,6 +1,6 @@
 # Chapter 19: The Day Everything Broke
 
-**Period:** 2026-03-26 to 2026-03-27
+**Period:** 2026-03-26 to 2026-03-28
 **Scope:** Pipeline observability, quality gates, and the hunt for why nothing actually works
 
 ## The Illusion of Completion
@@ -75,3 +75,56 @@ The fix: centralized quota detection in `call_claude` that sets a global flag, r
 5. **Short-term fixes become permanent.** Every "we'll fix it properly later" hack from this day is still in the codebase because we stopped doing that and started fixing things properly.
 
 6. **If you found it, fix it.** An audit that identifies 10 issues but only creates items for 7 of them means 3 issues will never be fixed. The cost of creating an item is zero. The cost of ignoring a known problem is unbounded.
+
+## Day Two: The Quality Reckoning
+
+### The Quota Catastrophe (Again)
+
+We queued 48 items for review and went to sleep. Quota ran out. In 60 seconds, 28 items were archived as "success" with $0 cost and 10-second durations. The workers couldn't reach Claude, got empty responses, and the pipeline happily archived everything as complete. Again.
+
+The fix this time was centralized: `call_claude` itself detects quota keywords in the response, sets a global `_quota_exhausted` flag, and POSTs to `/api/quota-exhausted` to tell the supervisor. The supervisor stops dispatching new workers and enters a 5-minute probe loop until quota recovers. Workers check `is_quota_exhausted()` and report failure instead of success.
+
+### The Validator That Couldn't See
+
+Every UI acceptance criterion got the same verdict: "cannot verify at validation time — requires runtime confirmation." The validator was giving up on every check that required looking at a web page. But the web server was running right there at localhost:7070.
+
+First fix: tell the validator to use `curl` to check page content. Then the proper fix: update the validator prompt to write Playwright e2e tests for UI criteria, run them against the live server, and include the test results in the findings.
+
+We also discovered that WARN verdicts were being recorded as SUCCESS in completions — the worker never checked the validation verdict before writing its result. Fixed by propagating `last_validation_verdict` from the executor subgraph through the pipeline state to the worker.
+
+### The Baseline Problem
+
+Every single validation was getting WARN because the build command referenced `scripts/plan-orchestrator.py` which had been deleted weeks ago. The validator dutifully reported this as a failure, even though it had nothing to do with the current item. Five of six WARN items had all acceptance criteria met — the WARN was solely from this stale config.
+
+The short-term fix was to remove the stale reference. The long-term fix: the validator now runs a baseline check before evaluating changes. It stashes the current changes, runs build + tests to establish what was already broken, then restores and runs again. Only NEW failures count as regressions. Pre-existing failures are WARN, not FAIL.
+
+### The Traces Page That Nobody Could Use
+
+Two days of intense pipeline work, and the one page that should show what happened — the Traces page — was completely useless. Looking at it in a browser revealed the full horror:
+
+- The first four rows all said "LangGraph" with identical trace ID prefixes. The user literally could not tell which work item any trace belonged to.
+- The "Item slug" column repeated "LangGraph" — redundant with the run name, both useless.
+- Duration showed 0.01 seconds for runs that took minutes (duplicate start/end trace events).
+- Cost showed "—" for everything. Model showed "—" for most entries.
+- Expanding a row showed "Metadata JSON" — a raw developer dump.
+- The narrative view showed 8 phases all with 0.00s duration, duplicate entries for Planning and Execution, and "Unknown" labels for verification steps.
+
+The requirements were rewritten from scratch: 17 specific problems documented from the live page, 6 user-centric use cases, and 13 binary acceptance criteria. A design competition with auto-judging was specified.
+
+### Design Competitions Done Right
+
+The old design competition process (Phase 0 from the early chapters) had been lost in the LangGraph migration. We rebuilt it properly:
+
+1. The planner produces 3 design approaches, each explaining how every use case from the requirements is solved step by step.
+2. A ux-reviewer agent (Opus) auto-judges all 3 approaches, scoring them against use cases and acceptance criteria, and selects a winner with written rationale.
+3. The design validator (Opus) runs AFTER the judge picks, verifying the winning design has solid acceptance criteria and every use case addressed.
+4. If the validator fails, the design is revised before implementation begins.
+5. The frontend-coder must trace each use case through the implementation and verify it works end-to-end.
+
+### Never Ship the Workaround
+
+The most important lesson emerged from a simple exchange about the build command. After fixing the immediate problem (removing the stale reference), we were about to move on. But the right fix was a baseline check — and "we'll come back to it later" is a lie. We never come back.
+
+This became a rule: never implement a short-term fix. Always do the proper fix. If the proper fix is too large, log it as high priority — but don't ship the workaround. Every hack from this session that we let slide would have become permanent technical debt.
+
+Similarly: if an audit finds 10 problems, create items for all 10. The cost of creating an item is zero. Saying "not worth it" for 3 of them means those 3 never get fixed. If it was worth finding, it's worth fixing.

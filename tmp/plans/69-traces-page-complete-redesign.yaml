@@ -79,6 +79,9 @@ sections:
       use pre-computed display_status supporting completed/error/stale/running states.
       (6) All rows already linked to /narrative — confirmed. Test updated to assert
       display_slug. All 1444 tests pass.'
+    validation_attempts: 1
+    validation_findings: All 6 list-page requirements implemented. Build clean, 1444
+      tests pass, no regressions.
 - id: '3'
   name: Narrative page fixes
   status: pending
