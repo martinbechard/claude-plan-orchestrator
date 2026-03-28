@@ -196,6 +196,10 @@ sections:
       have NULL end_time; updated build_execution_view to use grandchildren as intermediate
       fallback when children span is near-zero or unavailable. Added 6 targeted tests.
       All 1510 tests pass.'
+    validation_attempts: 1
+    validation_findings: All requirements met. Build passes, 1513 tests pass (8 more
+      than baseline of 1505), all implementation elements verified in trace_narrative.py,
+      6 targeted P11/P12 tests added and passing.
   - id: '4.2'
     name: Ensure narrative phases show real agent activity detail
     agent: coder
@@ -204,6 +208,9 @@ sections:
       did, not just a generic ''PASS'' label. Verify that activity_summary, files_read,
       files_written, and bash_commands are populated from tool call data in grandchild
       runs. Fix any extraction logic gaps in _extract_file_details or _count_tools.'
-    status: pending
+    status: in_progress
     dependencies:
     - '4.1'
+    last_attempt: '2026-03-28T12:05:59.602785'
+    attempts: 1
+    model_used: sonnet
