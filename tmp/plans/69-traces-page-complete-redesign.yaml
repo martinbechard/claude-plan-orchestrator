@@ -163,6 +163,13 @@ sections:
       with expand/collapse JS (data-group/data-group-member), status_badge macro,
       group state persisted in hidden form input and pagination URLs. 5 new tests
       added. All 1504 tests pass.'
+    validation_attempts: 1
+    validation_findings: Task 3.2 P8 implementation is correct and complete. All 5
+      new grouping tests pass (1504 total, +5 from baseline 1499). WARN because 3
+      of 13 work-item acceptance criteria remain partially unmet — narrative page
+      accuracy (criteria 7 and 10) depends on pending tasks 4.1/4.2, and worker-log
+      display shows filenames but not clickable links (criterion 12). Plugin version
+      not bumped since 2026-03-26 despite multiple new features.
 - id: '4'
   name: Narrative page refinements
   status: pending
@@ -175,9 +182,12 @@ sections:
       durations use child-span computation (_duration_from_children and _build_merged_phase_view).
       Fix any edge cases where durations still show 0.01s or incorrect values, such
       as when some children have NULL end_time.'
-    status: pending
+    status: in_progress
     dependencies:
     - '2.1'
+    last_attempt: '2026-03-28T11:53:20.183492'
+    attempts: 1
+    model_used: sonnet
   - id: '4.2'
     name: Ensure narrative phases show real agent activity detail
     agent: coder
