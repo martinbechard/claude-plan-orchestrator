@@ -23,10 +23,16 @@ sections:
       earliest child start_time and latest child end_time for each parent. This enables
       computing real pipeline duration (minutes, not 0.01s) for list view rows. Use
       a single SQL query with GROUP BY parent_run_id for efficiency.'
-    status: in_progress
+    status: completed
     last_attempt: '2026-03-28T10:50:47.286724'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-28T10:55:13.375685'
+    result_message: Added ChildTimeSpan dataclass and get_child_time_spans_batch method
+      to TracingProxy. Uses a single GROUP BY SQL query via _CHILD_TIME_SPANS_BATCH_SQL_TEMPLATE
+      to return earliest child start_time and latest child end_time per parent run_id.
+      Added 5 tests covering empty input, no-children case, single parent, multiple
+      parents batch, and NULL end_time handling. All 1457 tests pass.
   - id: '1.2'
     name: Add batch child cost and model aggregation to TracingProxy
     agent: coder
