@@ -34,6 +34,8 @@ sections:
       in shared/hot_reload.py with _classify_changes() to distinguish web-only vs
       pipeline-wide changes, calling web restart for web-only changes and continuing
       to monitor. All 1444 tests pass.
+    validation_attempts: 1
+    validation_findings: 'PASS: All good'
 - id: '2'
   name: Validator 404 retry
   status: pending
@@ -41,8 +43,16 @@ sections:
   - id: '2.1'
     name: Add 404 retry logic to validator HTTP checks
     agent: coder
-    status: pending
+    status: completed
     description: 'Implement the work item: tmp/plans/.claimed/67-pipeline-auto-restart-on-code-changes.md
       — Add retry-on-404 logic to the validator''s HTTP/curl checks. When a route
       check returns 404, wait 2-3 seconds and retry once before reporting failure.
       See design: docs/plans/2026-03-27-67-pipeline-auto-restart-on-code-changes-design.md'
+    last_attempt: '2026-03-27T23:57:53.147774'
+    attempts: 1
+    model_used: sonnet
+    completed_at: '2026-03-28T00:00:31.773666'
+    result_message: Added 404 retry logic to validator agent curl checks in .claude/agents/validator.md.
+      When a curl check returns 404, the agent waits 2 seconds and retries once before
+      reporting failure. Uses curl -w "%{http_code}" to capture HTTP status separately.
+      All 60 validator tests pass.
