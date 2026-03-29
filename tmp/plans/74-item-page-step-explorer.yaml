@@ -174,7 +174,7 @@ sections:
   - id: '1.1'
     name: Create stage data model and build_stages() function
     agent: coder
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -199,6 +199,12 @@ sections:
     last_attempt: '2026-03-29T13:26:19.476047'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-29T13:31:47.789804'
+    result_message: Added ArtifactInfo and StageInfo TypedDicts, STAGE_ORDER constant,
+      _format_timestamp(), _make_artifact(), build_stages() with full three-pass algorithm
+      (artifact discovery + status matrix + completion timestamps), and _compute_stage_statuses()
+      with full 9-state pipeline matrix. Verification stage omitted for features.
+      Raw input labeled 'User Request'. All 1617 tests pass.
   - id: '1.2'
     name: Add stage status computation and extend /dynamic endpoint
     agent: coder
