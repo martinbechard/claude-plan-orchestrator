@@ -162,7 +162,7 @@ sections:
   - id: '1.1'
     name: Add verified status to TaskStatus and create effective_status helper
     agent: coder
-    status: pending
+    status: in_progress
     target_acs:
     - AC1
     - AC2
@@ -177,6 +177,9 @@ sections:
       Requirements: docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md
 
       '
+    last_attempt: '2026-03-28T20:49:13.884707'
+    attempts: 1
+    model_used: opus
   - id: '1.2'
     name: Update task runner and validator for completed-to-verified transitions
     agent: coder
