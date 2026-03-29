@@ -216,7 +216,7 @@ sections:
     agent: coder
     dependencies:
     - '1.1'
-    status: in_progress
+    status: completed
     target_acs:
     - AC7
     - AC10
@@ -238,12 +238,13 @@ sections:
     last_attempt: '2026-03-29T13:46:37.197588'
     attempts: 2
     model_used: opus
-    completed_at: '2026-03-29T13:40:09.473045'
-    result_message: 'Wired build_stages() into item_dynamic() (adds lightweight stages
-      summary array to /dynamic JSON response: id, status, completion_ts, completion_epoch,
-      artifact_count) and item_detail() (passes stages list to Jinja2 template context).
-      Updated test to expect new ''stages'' key and mock build_stages/_detect_item_type.
-      All 1617 tests pass.'
+    completed_at: '2026-03-29T13:56:28.271969'
+    result_message: Replaced flat left-column cards with step explorer accordion in
+      item.html. Each stage renders name, status badge (not_started/in_progress/done),
+      completion timestamp, and artifact count. Artifacts nested under stages with
+      individual timestamps. Content loaded on-demand via AJAX on stage expand (AC13/AC14).
+      localStorage persists collapse state. /dynamic polling updates stage statuses
+      live via window._stepExplorer bridge. All 1617 tests pass.
     validation_attempts: 1
     validation_findings: Backend wiring (build_stages wired to /dynamic and item_detail)
       is correctly implemented and all 1617 tests pass. However, all 9 target ACs
