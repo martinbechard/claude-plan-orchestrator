@@ -230,7 +230,7 @@ sections:
     agent: coder
     dependencies:
     - '1.1'
-    status: in_progress
+    status: completed
     target_acs:
     - AC5
     - AC6
@@ -245,6 +245,11 @@ sections:
     last_attempt: '2026-03-28T21:08:09.055488'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-28T21:12:48.034598'
+    result_message: 'Implemented D4: removed completed from TERMINAL_STATUSES in task_selector.py
+      and parallel.py, replaced with effective_status()-based dependency resolution.
+      completed tasks awaiting validation now block dependents; legacy completed tasks
+      promoted via backward-compat. 12 new tests, 1602 total passing.'
   - id: '2.2'
     name: Update progress counting and pipeline scan for verified status
     agent: coder
