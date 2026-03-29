@@ -1,0 +1,186 @@
+meta:
+  name: 74-item-page-step-explorer
+  source_item: tmp/plans/.claimed/74-item-page-step-explorer.md
+  requirements_path: docs/plans/2026-03-29-74-item-page-step-explorer-requirements.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '0'
+  name: 'Phase 0: Step Explorer UI Design Competition'
+  status: pending
+  tasks:
+  - id: '0.1'
+    name: Systems design for step-based artifact explorer
+    agent: systems-designer
+    parallel_group: design-phase0
+    status: pending
+    target_acs:
+    - AC1
+    - AC2
+    - AC5
+    - AC6
+    - AC14
+    - AC20
+    description: >
+      Produce a systems/architecture design for restructuring the item detail page
+      from a flat two-column layout into a stage-based step explorer. Implements
+      P1, P2, FR1, FR2, FR4 per D1, D2, D5 from work item:
+      tmp/plans/.claimed/74-item-page-step-explorer.md
+      Design: docs/plans/2026-03-29-74-item-page-step-explorer-design.md
+      Requirements: docs/plans/2026-03-29-74-item-page-step-explorer-requirements.md
+      Focus on: StageInfo/ArtifactInfo data model, build_stages() function that maps
+      existing artifact discovery to six ordered stages, stage status computation from
+      pipeline_stage, /dynamic endpoint extension for live stage updates, and
+      on-demand content loading architecture via existing artifact-content endpoint.
+  - id: '0.2'
+    name: UX design for step-based artifact explorer
+    agent: ux-designer
+    parallel_group: design-phase0
+    status: pending
+    target_acs:
+    - AC1
+    - AC2
+    - AC4
+    - AC5
+    - AC14
+    - AC22
+    description: >
+      Produce a UX design for the step-based artifact explorer accordion. Implements
+      P1, P2, FR1, FR2, UC1 per D1, D2, D4 from work item:
+      tmp/plans/.claimed/74-item-page-step-explorer.md
+      Design: docs/plans/2026-03-29-74-item-page-step-explorer-design.md
+      Requirements: docs/plans/2026-03-29-74-item-page-step-explorer-requirements.md
+      Focus on: stage section visual hierarchy with status badges (not_started /
+      in_progress / done), collapse/expand interaction patterns, timestamp placement
+      for stages and artifacts, loading indicators for on-demand content, default
+      expand behavior (most recent active stage open), responsive layout, and
+      accessibility (keyboard navigation, ARIA attributes, screen reader support).
+  - id: '0.3'
+    name: Frontend design for step-based artifact explorer
+    agent: frontend-coder
+    parallel_group: design-phase0
+    status: pending
+    target_acs:
+    - AC1
+    - AC4
+    - AC5
+    - AC20
+    - AC22
+    - AC23
+    description: >
+      Produce a frontend implementation design for the step-based artifact explorer.
+      Implements P1, P2, FR1, UC1, FR4 per D1, D4, D5 from work item:
+      tmp/plans/.claimed/74-item-page-step-explorer.md
+      Design: docs/plans/2026-03-29-74-item-page-step-explorer-design.md
+      Requirements: docs/plans/2026-03-29-74-item-page-step-explorer-requirements.md
+      Focus on: HTML structure for accordion stages using vanilla JS (no framework),
+      CSS classes for stage states and transitions, localStorage persistence for
+      collapse state, AJAX content fetching with caching in JS Map, integration
+      with existing /dynamic polling for live stage status updates, and how to
+      restructure item.html from the current two-column layout. Preserve the
+      existing vanilla JS + Jinja2 stack.
+  - id: '0.4'
+    name: Judge step explorer UI design competition
+    agent: design-judge
+    dependencies:
+    - '0.1'
+    - '0.2'
+    - '0.3'
+    status: pending
+    target_acs:
+    - AC1
+    - AC2
+    - AC4
+    - AC5
+    - AC14
+    - AC20
+    - AC22
+    description: >
+      Evaluate the three competing designs for the step-based artifact explorer.
+      Score each against acceptance criteria from work item:
+      tmp/plans/.claimed/74-item-page-step-explorer.md
+      Requirements: docs/plans/2026-03-29-74-item-page-step-explorer-requirements.md
+      Design: docs/plans/2026-03-29-74-item-page-step-explorer-design.md
+      Key criteria: stage organization (AC5, AC6), visual hierarchy (AC2),
+      collapsibility and persistence (AC4, AC22, AC23), status indicators (AC14),
+      on-demand loading (AC20, AC21), accessibility, and implementation feasibility
+      with existing vanilla JS + Jinja2 stack. Select the winner with written rationale.
+  - id: '0.5'
+    name: Bridge winning design to implementation tasks
+    agent: planner
+    dependencies:
+    - '0.4'
+    status: pending
+    description: >
+      Read the winning UI design from the design competition (task 0.4) and extend
+      this YAML plan with concrete frontend implementation tasks for the step explorer.
+      Work item: tmp/plans/.claimed/74-item-page-step-explorer.md
+      Requirements: docs/plans/2026-03-29-74-item-page-step-explorer-requirements.md
+      Design: docs/plans/2026-03-29-74-item-page-step-explorer-design.md
+      New frontend tasks should address D4, D5, D6 and target AC1-AC6, AC14, AC20-AC25.
+      Frontend tasks depend on section 1 (task 1.2) being complete since they need the
+      backend stage data model and API in place. Also add any testing tasks needed.
+- id: '1'
+  name: 'Backend: Stage Data Model and API'
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Create stage data model and build_stages() function
+    agent: coder
+    status: pending
+    target_acs:
+    - AC1
+    - AC5
+    - AC6
+    - AC7
+    - AC8
+    - AC9
+    - AC10
+    - AC11
+    - AC12
+    - AC13
+    - AC24
+    - AC25
+    description: >
+      Implement P1, FR1, FR5 per D1, D6 from work item:
+      tmp/plans/.claimed/74-item-page-step-explorer.md
+      Design: docs/plans/2026-03-29-74-item-page-step-explorer-design.md
+      Requirements: docs/plans/2026-03-29-74-item-page-step-explorer-requirements.md
+      Create StageInfo and ArtifactInfo TypedDicts in item.py. Implement build_stages()
+      that maps existing artifact discovery (raw request, clause register, five whys,
+      structured requirements, design doc, plan YAML, output files, validation results,
+      verification report, completion records) into six ordered stages. Omit
+      Verification stage for feature items. Label the raw request artifact as
+      "User Request" (not "Raw Input"). Include file mtime timestamps for each artifact.
+  - id: '1.2'
+    name: Add stage status computation and extend /dynamic endpoint
+    agent: coder
+    dependencies:
+    - '1.1'
+    status: pending
+    target_acs:
+    - AC2
+    - AC3
+    - AC14
+    - AC15
+    - AC16
+    - AC17
+    - AC18
+    - AC19
+    description: >
+      Implement FR2, FR3 per D2, D3 from work item:
+      tmp/plans/.claimed/74-item-page-step-explorer.md
+      Design: docs/plans/2026-03-29-74-item-page-step-explorer-design.md
+      Requirements: docs/plans/2026-03-29-74-item-page-step-explorer-requirements.md
+      Add status computation to each stage (not_started / in_progress / done) based on
+      pipeline_stage and artifact presence. Add completion timestamps (latest artifact
+      mtime when done, absent when not done). Extend the /item/{slug}/dynamic endpoint
+      to include stages array with status and timestamps for live polling updates.
+      Pass stages to the Jinja2 template context in item_detail().
