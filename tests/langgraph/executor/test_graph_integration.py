@@ -210,7 +210,8 @@ class TestExecutorGraphTwoSequentialTasks:
 
         updated = yaml.safe_load(plan_file.read_text())
         tasks = updated["sections"][0]["tasks"]
-        assert all(t["status"] == "completed" for t in tasks)
+        # D3: validator advances completed -> verified (validation disabled = not applicable)
+        assert all(t["status"] == "verified" for t in tasks)
 
 
 class TestExecutorGraphSingleTask:

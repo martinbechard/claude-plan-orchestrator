@@ -28,7 +28,7 @@ from langgraph_pipeline.shared.langsmith import add_trace_metadata
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 PENDING_STATUS = "pending"
-TERMINAL_STATUSES = frozenset({"completed", "failed", "skipped"})
+TERMINAL_STATUSES = frozenset({"completed", "verified", "failed", "skipped"})
 
 # Pattern to extract model from agent frontmatter (e.g. "model: sonnet")
 _AGENT_MODEL_PATTERN = re.compile(r"^model:\s*(\S+)", re.MULTILINE)

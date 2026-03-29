@@ -68,7 +68,7 @@ MODEL_TIER_TO_CLI_NAME: dict[str, str] = {
 }
 
 # Terminal statuses used for dependency resolution
-_TERMINAL_STATUSES = frozenset({"completed", "failed", "skipped"})
+_TERMINAL_STATUSES = frozenset({"completed", "verified", "failed", "skipped"})
 
 # Thread-safe lock serialising plan YAML reads/writes and git index staging
 # from concurrently executing parallel branches.

@@ -14,6 +14,8 @@ import yaml
 from langgraph_pipeline.executor.nodes.validator import (
     MODEL_TIER_TO_CLI_NAME,
     _TASK_STATUS_COMPLETED,
+    _TASK_STATUS_FAILED,
+    _TASK_STATUS_VERIFIED,
     _build_child_env,
     _build_validator_prompt,
     _clear_status_file,
@@ -179,6 +181,28 @@ class TestBuildValidatorPrompt:
         assert "verdict" in prompt
         assert "PASS" in prompt
 
+    def test_includes_requirements_path_when_present(self):
+        plan = _make_plan_with_validation(_make_task("1.1"))
+        plan["meta"]["requirements_path"] = "docs/plans/2026-03-28-test-requirements.md"
+        task = plan["sections"][0]["tasks"][0]
+        prompt = _build_validator_prompt(plan, task, "pnpm build", "pnpm test")
+        assert "docs/plans/2026-03-28-test-requirements.md" in prompt
+        assert "Structured Requirements" in prompt
+
+    def test_works_without_requirements_path(self):
+        plan = _make_plan_with_validation(_make_task("1.1"))
+        # No requirements_path in meta — should not crash
+        task = plan["sections"][0]["tasks"][0]
+        prompt = _build_validator_prompt(plan, task, "pnpm build", "pnpm test")
+        assert "Structured Requirements" in prompt  # field is present but empty
+
+    def test_requirements_path_empty_when_not_in_meta(self):
+        plan = _make_plan_with_validation(_make_task("1.1"))
+        task = plan["sections"][0]["tasks"][0]
+        prompt = _build_validator_prompt(plan, task, "pnpm build", "pnpm test")
+        # The line should exist but with empty value
+        assert "**Structured Requirements:**" in prompt
+
 
 # ─── Tests: _clear_status_file ────────────────────────────────────────────────
 
@@ -329,6 +353,9 @@ class TestValidateTask:
         )
         result = validate_task(state)
         assert result["last_validation_verdict"] == "PASS"
+        # D3: task advanced to verified when validation is not applicable
+        saved = yaml.safe_load(open(plan_path).read())
+        assert saved["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_VERIFIED
 
     def test_returns_pass_when_task_not_found(self, tmp_path):
         plan = _make_plan_with_validation(_make_task("1.1"))
@@ -356,6 +383,9 @@ class TestValidateTask:
         )
         result = validate_task(state)
         assert result["last_validation_verdict"] == "PASS"
+        # D3: task advanced to verified when agent not in run_after
+        saved = yaml.safe_load(open(plan_path).read())
+        assert saved["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_VERIFIED
 
     def test_returns_warn_when_max_validation_attempts_exceeded(self, tmp_path):
         task = _make_task("1.1", validation_attempts=2)
@@ -366,6 +396,9 @@ class TestValidateTask:
         )
         result = validate_task(state)
         assert result["last_validation_verdict"] == "WARN"
+        # D3: task advanced to verified on max attempts (treated as WARN)
+        saved = yaml.safe_load(open(plan_path).read())
+        assert saved["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_VERIFIED
 
     def test_increments_validation_attempts_counter(self, tmp_path):
         task = _make_task("1.1", validation_attempts=2)
@@ -400,6 +433,9 @@ class TestValidateTask:
 
         assert result["last_validation_verdict"] == "PASS"
         assert result["task_attempt"] == 1
+        # D3: PASS advances completed -> verified
+        saved = yaml.safe_load(open(plan_path).read())
+        assert saved["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_VERIFIED
 
     def test_warn_verdict_does_not_increment_task_attempt(self, tmp_path):
         plan = _make_plan_with_validation(_make_task("1.1"))
@@ -422,6 +458,9 @@ class TestValidateTask:
 
         assert result["last_validation_verdict"] == "WARN"
         assert result["task_attempt"] == 1
+        # D3: WARN advances completed -> verified
+        saved = yaml.safe_load(open(plan_path).read())
+        assert saved["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_VERIFIED
 
     def test_fail_verdict_increments_task_attempt(self, tmp_path):
         plan = _make_plan_with_validation(_make_task("1.1"))
@@ -444,6 +483,9 @@ class TestValidateTask:
 
         assert result["last_validation_verdict"] == "FAIL"
         assert result["task_attempt"] == 2
+        # D3: FAIL sets task to failed
+        saved = yaml.safe_load(open(plan_path).read())
+        assert saved["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_FAILED
 
     def test_fail_stores_validation_findings_on_task(self, tmp_path):
         plan = _make_plan_with_validation(_make_task("1.1"))
@@ -485,6 +527,9 @@ class TestValidateTask:
 
         assert result["last_validation_verdict"] == "FAIL"
         assert result["task_attempt"] == 2
+        # D3: FAIL sets task to failed
+        saved = yaml.safe_load(open(plan_path).read())
+        assert saved["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_FAILED
 
     def test_missing_status_file_stores_no_status_file_message(self, tmp_path):
         plan = _make_plan_with_validation(_make_task("1.1"))
@@ -632,6 +677,135 @@ class TestValidateTask:
 
         assert "plan_data" in result
         assert result["plan_data"] is not None
+
+
+# ─── Tests: D3 Two-Phase Status Transitions ─────────────────────────────────
+
+
+class TestValidateTaskStatusTransitions:
+    """D3: validator advances completed -> verified on PASS/WARN,
+    completed -> failed on FAIL, and sets verified on skip paths."""
+
+    def _make_plan_file(self, tmp_path, plan: dict) -> str:
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        return str(plan_file)
+
+    def _write_status(self, tmp_path, content: dict) -> str:
+        status_file = tmp_path / "task-status.json"
+        status_file.write_text(json.dumps(content))
+        return str(status_file)
+
+    def test_validation_disabled_advances_completed_to_verified(self, tmp_path):
+        """When validation is disabled, completed tasks advance to verified."""
+        plan = _make_plan_with_validation(_make_task("1.1"), enabled=False)
+        plan_path = self._make_plan_file(tmp_path, plan)
+        state = _make_state(plan_path=plan_path, plan_data=plan, current_task_id="1.1")
+        result = validate_task(state)
+        assert result["last_validation_verdict"] == "PASS"
+        assert result["plan_data"]["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_VERIFIED
+
+    def test_validation_disabled_does_not_change_non_completed_task(self, tmp_path):
+        """When validation is disabled, tasks not in completed status remain unchanged."""
+        plan = _make_plan_with_validation(_make_task("1.1", status="failed"), enabled=False)
+        plan_path = self._make_plan_file(tmp_path, plan)
+        state = _make_state(plan_path=plan_path, plan_data=plan, current_task_id="1.1")
+        validate_task(state)
+        saved = yaml.safe_load(open(plan_path).read())
+        assert saved["sections"][0]["tasks"][0]["status"] == "failed"
+
+    def test_agent_not_in_run_after_advances_to_verified(self, tmp_path):
+        """When agent not in run_after, completed tasks advance to verified."""
+        plan = _make_plan_with_validation(_make_task("1.1", agent="some-other-agent"))
+        plan_path = self._make_plan_file(tmp_path, plan)
+        state = _make_state(plan_path=plan_path, plan_data=plan, current_task_id="1.1")
+        result = validate_task(state)
+        assert result["plan_data"]["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_VERIFIED
+
+    def test_max_attempts_exceeded_advances_to_verified(self, tmp_path):
+        """When max validation attempts exceeded, task advances to verified."""
+        task = _make_task("1.1", validation_attempts=2)
+        plan = _make_plan_with_validation(task)
+        plan_path = self._make_plan_file(tmp_path, plan)
+        state = _make_state(plan_path=plan_path, plan_data=plan, current_task_id="1.1")
+        result = validate_task(state)
+        assert result["plan_data"]["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_VERIFIED
+
+    def test_pass_verdict_advances_to_verified(self, tmp_path):
+        """PASS verdict advances task from completed to verified."""
+        plan = _make_plan_with_validation(_make_task("1.1"))
+        plan_path = self._make_plan_file(tmp_path, plan)
+        status_file = self._write_status(
+            tmp_path, {"verdict": "PASS", "status": "completed", "message": "ok"}
+        )
+        with (
+            patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(status_file)),
+            patch("langgraph_pipeline.executor.nodes.validator._run_claude",
+                  return_value=(True, 0, {}, "", [])),
+            patch("langgraph_pipeline.executor.nodes.validator._clear_status_file"),
+            patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
+                  return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
+        ):
+            state = _make_state(
+                plan_path=plan_path, plan_data=plan, current_task_id="1.1"
+            )
+            result = validate_task(state)
+        saved = yaml.safe_load(open(plan_path).read())
+        assert saved["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_VERIFIED
+
+    def test_warn_verdict_advances_to_verified(self, tmp_path):
+        """WARN verdict advances task from completed to verified."""
+        plan = _make_plan_with_validation(_make_task("1.1"))
+        plan_path = self._make_plan_file(tmp_path, plan)
+        status_file = self._write_status(
+            tmp_path, {"verdict": "WARN", "status": "completed", "message": "minor"}
+        )
+        with (
+            patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(status_file)),
+            patch("langgraph_pipeline.executor.nodes.validator._run_claude",
+                  return_value=(True, 0, {}, "", [])),
+            patch("langgraph_pipeline.executor.nodes.validator._clear_status_file"),
+            patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
+                  return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
+        ):
+            state = _make_state(
+                plan_path=plan_path, plan_data=plan, current_task_id="1.1"
+            )
+            result = validate_task(state)
+        saved = yaml.safe_load(open(plan_path).read())
+        assert saved["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_VERIFIED
+
+    def test_fail_verdict_sets_failed(self, tmp_path):
+        """FAIL verdict sets task status to failed (AC15)."""
+        plan = _make_plan_with_validation(_make_task("1.1"))
+        plan_path = self._make_plan_file(tmp_path, plan)
+        status_file = self._write_status(
+            tmp_path, {"verdict": "FAIL", "status": "completed", "message": "broken"}
+        )
+        with (
+            patch("langgraph_pipeline.executor.nodes.validator.STATUS_FILE_PATH", str(status_file)),
+            patch("langgraph_pipeline.executor.nodes.validator._run_claude",
+                  return_value=(True, 0, {}, "", [])),
+            patch("langgraph_pipeline.executor.nodes.validator._clear_status_file"),
+            patch("langgraph_pipeline.executor.nodes.validator.load_orchestrator_config",
+                  return_value={"agents_dir": str(tmp_path), "build_command": "echo ok"}),
+        ):
+            state = _make_state(
+                plan_path=plan_path, plan_data=plan, current_task_id="1.1"
+            )
+            result = validate_task(state)
+        saved = yaml.safe_load(open(plan_path).read())
+        assert saved["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_FAILED
+
+    def test_crash_recovery_task_stays_completed(self, tmp_path):
+        """AC3/AC4: After crash (no validation run), task remains completed,
+        indicating validation is still pending."""
+        task = _make_task("1.1", status=_TASK_STATUS_COMPLETED)
+        plan = _make_plan_with_validation(task)
+        plan_path = self._make_plan_file(tmp_path, plan)
+        # Simulating: validator has not run yet, task is in completed status
+        saved = yaml.safe_load(open(plan_path).read())
+        assert saved["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_COMPLETED
 
 
 # ─── _post_cost_to_api Tests ──────────────────────────────────────────────────

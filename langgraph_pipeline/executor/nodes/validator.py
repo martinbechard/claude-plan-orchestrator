@@ -1,6 +1,7 @@
 # langgraph_pipeline/executor/nodes/validator.py
 # validate_task LangGraph node: runs post-task validation via Claude CLI.
 # Design: docs/plans/2026-02-26-05-task-execution-subgraph-design.md
+# Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md
 
 """validate_task node for the executor StateGraph.
 
@@ -54,8 +55,10 @@ MODEL_TIER_TO_CLI_NAME: dict[str, str] = {
 VALIDATOR_MODEL_FLOOR = "sonnet"
 MODEL_TIER_ORDER = ("haiku", "sonnet", "opus")
 
-# Task status that qualifies for validation
+# Task status values for lifecycle transitions (D3: two-phase completion)
 _TASK_STATUS_COMPLETED = "completed"
+_TASK_STATUS_VERIFIED = "verified"
+_TASK_STATUS_FAILED = "failed"
 
 # ─── Plan Helpers ─────────────────────────────────────────────────────────────
 
@@ -109,8 +112,10 @@ def _build_validator_prompt(
     test_command: str,
 ) -> str:
     """Build the prompt string for the validator agent."""
-    work_item = plan_data.get("meta", {}).get("source_item", "")
-    plan_doc = plan_data.get("meta", {}).get("plan_doc", "")
+    meta = plan_data.get("meta", {})
+    work_item = meta.get("source_item", "")
+    plan_doc = meta.get("plan_doc", "")
+    requirements_path = meta.get("requirements_path", "")
     result_message = task.get("result_message", "No result message available")
     return (
         f"Validate task {task['id']} from the implementation plan.\n\n"
@@ -120,6 +125,7 @@ def _build_validator_prompt(
         f"- **Description:** {task.get('description', 'No description')}\n"
         f"- **Plan Document:** {plan_doc}\n"
         f"- **Work Item:** {work_item}\n"
+        f"- **Structured Requirements:** {requirements_path}\n"
         f"- **Result Message:** {result_message}\n\n"
         "## Validation Commands\n"
         f"- **Build Command:** {build_command}\n"
@@ -340,6 +346,15 @@ def _save_validation_result(plan_data: dict, task_id: str, verdict: str, status_
         result_path = output_dir / f"validation-{task_id.replace('.', '-')}-{ts}.json"
         with open(result_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2)
+
+        # Also write to per-item workspace if it exists
+        from langgraph_pipeline.shared.paths import workspace_path as ws_path_fn
+        ws_val_dir = ws_path_fn(slug) / "validation"
+        if ws_val_dir.parent.exists():
+            ws_val_dir.mkdir(parents=True, exist_ok=True)
+            ws_result_path = ws_val_dir / f"validation-{task_id.replace('.', '-')}-{ts}.json"
+            with open(ws_result_path, "w", encoding="utf-8") as f:
+                json.dump(result, f, indent=2)
     except Exception as exc:
         _logger.warning("Failed to save validation result: %s", exc)
 
@@ -422,14 +437,19 @@ def _build_verification_notes(verdict: str, status_dict: Optional[dict]) -> Opti
 def validate_task(state: TaskState) -> dict:
     """LangGraph node: validate a completed task via the configured validator agent.
 
+    Implements D3 (two-phase task completion) from the three-state lifecycle design.
+    Advances task status: completed -> verified on PASS/WARN, completed -> failed on FAIL.
+    When validation is skipped (disabled, agent not in run_after), advances directly to
+    verified since validation is not applicable.
+
     Sequence:
-    1. Skip validation when disabled, task not found, task not completed, agent
-       not in run_after list, or max_validation_attempts exceeded.
-    2. Clear the status file so stale task_runner output cannot pollute verdict.
-    3. Build a prompt and spawn Claude CLI with the validator agent.
-    4. Parse the PASS/WARN/FAIL verdict from the written status file.
-    5. On FAIL: store validation_findings on the task dict and increment task_attempt.
-    6. Persist the plan YAML and return updated state.
+    1. Skip validation when task not found or not completed.
+    2. If validation disabled or agent not in run_after: advance to verified, return.
+    3. Clear the status file so stale task_runner output cannot pollute verdict.
+    4. Build a prompt and spawn Claude CLI with the validator agent.
+    5. Parse the PASS/WARN/FAIL verdict from the written status file.
+    6. PASS/WARN: advance to verified. FAIL: set failed and increment task_attempt.
+    7. Persist the plan YAML and return updated state.
 
     Returns a partial state dict with last_validation_verdict, plan_data,
     task_attempt, and updated cost accumulators.
@@ -451,11 +471,16 @@ def validate_task(state: TaskState) -> dict:
     )
 
     validation_config = plan_data.get("meta", {}).get("validation", {})
+    task = _find_task_by_id(plan_data, task_id)
+
+    # D3: When validation is not applicable, advance completed tasks to verified
     if not validation_config.get("enabled", False):
         print(f"[validate_task] Validation disabled; skipping task {task_id!r}")
-        return {"last_validation_verdict": "PASS"}
+        if task is not None and task.get("status") == _TASK_STATUS_COMPLETED:
+            task["status"] = _TASK_STATUS_VERIFIED
+            _save_plan_yaml(plan_path, plan_data)
+        return {"last_validation_verdict": "PASS", "plan_data": plan_data}
 
-    task = _find_task_by_id(plan_data, task_id)
     if task is None:
         print(f"[validate_task] Task {task_id!r} not found in plan_data; skipping")
         return {"last_validation_verdict": "PASS"}
@@ -468,7 +493,9 @@ def validate_task(state: TaskState) -> dict:
     agent_name = task.get("agent", "coder")
     if run_after and agent_name not in run_after:
         print(f"[validate_task] Agent {agent_name!r} not in run_after; skipping task {task_id!r}")
-        return {"last_validation_verdict": "PASS"}
+        task["status"] = _TASK_STATUS_VERIFIED
+        _save_plan_yaml(plan_path, plan_data)
+        return {"last_validation_verdict": "PASS", "plan_data": plan_data}
 
     max_validation_attempts = int(validation_config.get("max_validation_attempts", 2))
     validation_attempts = (task.get("validation_attempts") or 0) + 1
@@ -479,6 +506,7 @@ def validate_task(state: TaskState) -> dict:
             f"[validate_task] Max validation attempts ({max_validation_attempts}) reached "
             f"for task {task_id!r}; treating as WARN"
         )
+        task["status"] = _TASK_STATUS_VERIFIED
         _save_plan_yaml(plan_path, plan_data)
         return {"last_validation_verdict": "WARN", "plan_data": plan_data}
 
@@ -523,6 +551,12 @@ def validate_task(state: TaskState) -> dict:
 
     # Save validation results to per-item output for the work item page
     _save_validation_result(plan_data, task_id, verdict, status_dict)
+
+    # D3: Two-phase status transitions based on verdict
+    if verdict in ("PASS", "WARN"):
+        task["status"] = _TASK_STATUS_VERIFIED
+    else:
+        task["status"] = _TASK_STATUS_FAILED
 
     verification_notes = _build_verification_notes(verdict, status_dict)
     new_task_attempt = task_attempt + 1 if verdict == "FAIL" else task_attempt
