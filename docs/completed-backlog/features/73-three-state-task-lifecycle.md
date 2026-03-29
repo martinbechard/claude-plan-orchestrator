@@ -20,7 +20,7 @@ This ambiguity surfaced during crash recovery: task 1.3 of item 71 had status "c
 - Dashboard task progress counts should show verified tasks as done.
 - Existing plans with "completed" tasks (no validation configured) should be treated as "verified" for backward compatibility during the transition.
 
-## LangSmith Trace: 598c1fd6-0545-4f27-9ba8-a977050d828e
+
 
 
 ## 5 Whys Analysis
