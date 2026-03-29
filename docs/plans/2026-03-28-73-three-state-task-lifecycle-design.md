@@ -11,10 +11,10 @@ completion. Both events map to the "completed" status, creating ambiguity in
 dependency checking and crash recovery. This design introduces a "verified"
 terminal success state that separates the two events.
 
-The change touches six files across two subsystems:
+The change touches files across three subsystems:
 
 1. **Executor subsystem** (task lifecycle engine):
-   - state.py -- TaskStatus type definition
+   - state.py -- TaskStatus type definition + effective_status helper
    - task_selector.py -- dependency satisfaction logic
    - task_runner.py -- post-execution status transitions
    - validator.py -- post-validation status advancement
@@ -36,15 +36,15 @@ A backward-compatibility helper (effective_status) ensures existing plans with
 | File | Action | Purpose |
 |---|---|---|
 | langgraph_pipeline/executor/state.py | Modify | Add "verified" to TaskStatus Literal, add effective_status helper |
-| langgraph_pipeline/executor/nodes/task_selector.py | Modify | Use "verified" for dependency satisfaction |
-| langgraph_pipeline/executor/nodes/task_runner.py | Modify | Set "verified" when validation not configured |
-| langgraph_pipeline/executor/nodes/validator.py | Modify | Advance to "verified" on PASS/WARN |
+| langgraph_pipeline/executor/nodes/task_selector.py | Modify | Use "verified" for dependency satisfaction via effective_status |
+| langgraph_pipeline/executor/nodes/task_runner.py | Modify | Keep "completed" after execution; set "verified" when validation not configured |
+| langgraph_pipeline/executor/nodes/validator.py | Modify | Advance to "verified" on PASS/WARN verdict |
 | langgraph_pipeline/executor/nodes/parallel.py | Modify | Update terminal statuses for dependency resolution |
-| langgraph_pipeline/executor/edges.py | Modify | Count "verified" as done in progress string |
+| langgraph_pipeline/executor/edges.py | Modify | Count "verified" (via effective_status) as done in progress string |
 | langgraph_pipeline/pipeline/nodes/execute_plan.py | Modify | Include "verified" in terminal status set |
 | langgraph_pipeline/pipeline/nodes/scan.py | Modify | Recognize "verified" as completed for plan detection |
 | langgraph_pipeline/web/static/dashboard.js | Modify | Render completed vs verified visual distinction |
-| langgraph_pipeline/web/static/style.css | Modify | Status-specific CSS classes |
+| langgraph_pipeline/web/static/style.css | Modify | Status-specific CSS classes for six states |
 | langgraph_pipeline/web/templates/dashboard.html | Modify | Template conditionals for six states |
 
 ## Design Decisions
@@ -52,7 +52,7 @@ A backward-compatibility helper (effective_status) ensures existing plans with
 ### D1: Extend TaskStatus with "verified" state
 
 Addresses: P1, P2, FR1
-Satisfies: AC1, AC2, AC3, AC4, AC7, AC8, AC9, AC10, AC11, AC12, AC13, AC14
+Satisfies: AC1, AC2, AC7, AC8, AC9
 
 Approach: Add "verified" to the TaskStatus Literal in executor/state.py, making
 it the sixth valid value alongside pending, in_progress, completed, failed, and
@@ -65,14 +65,16 @@ skipped. The semantic meaning of each state:
 - failed: execution or validation failed (unchanged)
 - skipped: deliberately skipped (unchanged)
 
-All downstream code that reads or writes task status accepts these six values.
+The type definition provides separate, distinguishable states for "execution
+finished" (completed) and "validation passed" (verified), allowing developers
+to unambiguously determine task validation status from the status value alone.
 
 Files: langgraph_pipeline/executor/state.py
 
 ### D2: Backward-compatible effective_status helper
 
 Addresses: FR5
-Satisfies: AC24, AC25, AC26
+Satisfies: AC18, AC19, AC20
 
 Approach: Add an effective_status(task, validation_meta) function to state.py
 that returns the effective status for dependency checking and progress counting.
@@ -83,30 +85,42 @@ For a task with status "completed", it returns "verified" when:
 3. The task has already been through validation (validation_attempts > 0)
 
 This is a pure read-time transformation. It never mutates the stored status
-value in the plan YAML (satisfying AC26). Callers in task_selector.py,
-parallel.py, edges.py, and execute_plan.py use effective_status instead of
-reading task["status"] directly for dependency/progress decisions.
+value in the plan YAML. Callers in task_selector.py, parallel.py, edges.py,
+and execute_plan.py use effective_status instead of reading task["status"]
+directly for dependency/progress decisions.
+
+The backward-compatibility logic only applies to tasks that have "completed"
+status -- new tasks that go through the full lifecycle will have their status
+explicitly set to "verified" by the validator (D3), so the effective_status
+helper does not mask genuinely incomplete validation for new tasks.
 
 Files: langgraph_pipeline/executor/state.py
 
 ### D3: Two-phase task completion in task_runner and validator
 
-Addresses: FR3, P1, P2
-Satisfies: AC19, AC20
+Addresses: FR3, P2
+Satisfies: AC3, AC4, AC13, AC14, AC15
 
 Approach: The task runner continues to set status = "completed" after successful
-execution (line 692 of task_runner.py). The validator node, upon a PASS or WARN
-verdict, advances the status from "completed" to "verified" and persists to YAML.
-This creates two distinct transitions reflecting two distinct events.
+execution. The validator node, upon a PASS or WARN verdict, advances the status
+from "completed" to "verified" and persists to YAML. This creates two distinct
+transitions reflecting two distinct events:
+
+  in_progress -> completed (execution success) -> verified (validation success)
 
 For tasks where validation is not configured (agent not in run_after, or
 validation disabled), the validator already skips with PASS. The validator node
 will additionally set status to "verified" before returning when it skips due
 to validation not being applicable. This ensures all successfully-executed tasks
-reach "verified" status regardless of validation configuration (satisfying AC20).
+reach "verified" status regardless of validation configuration.
 
-The parallel.py node uses the same logic: after a parallel task completes with
-outcome "completed", the validator handles advancement to "verified".
+After a crash where execution succeeded but validation did not run, the task
+status will be "completed" (not "verified"), clearly indicating that validation
+is still pending. On crash recovery, this distinction is unambiguous from the
+task status alone.
+
+If validation fails after execution succeeds, the validator sets the status to
+"failed", keeping the task in a non-verified state.
 
 Files: langgraph_pipeline/executor/nodes/task_runner.py,
        langgraph_pipeline/executor/nodes/validator.py
@@ -114,7 +128,7 @@ Files: langgraph_pipeline/executor/nodes/task_runner.py,
 ### D4: Verified-based dependency satisfaction in task selector
 
 Addresses: FR2, P3
-Satisfies: AC5, AC6, AC15, AC16, AC17, AC18
+Satisfies: AC5, AC6, AC10, AC11, AC12
 
 Approach: Change TERMINAL_STATUSES in task_selector.py from
 {"completed", "failed", "skipped"} to {"verified", "failed", "skipped"}.
@@ -124,7 +138,8 @@ so that both new "verified" tasks and backward-compatible legacy "completed"
 tasks satisfy dependencies.
 
 A task in "completed" status (awaiting validation) does NOT satisfy dependencies.
-Dependent tasks remain blocked until the predecessor reaches "verified".
+Dependent tasks remain blocked until the predecessor reaches "verified" (or is
+treated as "verified" via effective_status for backward compatibility).
 
 The same change applies to _TERMINAL_STATUSES in parallel.py for parallel
 group dependency resolution.
@@ -135,12 +150,16 @@ Files: langgraph_pipeline/executor/nodes/task_selector.py,
 ### D5: Progress counting with verified-as-done
 
 Addresses: FR4 (backend)
-Satisfies: AC21, AC22
+Satisfies: AC16, AC17
 
 Approach: Update _tasks_completed_str in edges.py to count "verified" (via
 effective_status) as done instead of "completed". Update _TERMINAL_STATUSES
 in execute_plan.py to include "verified". Update scan.py to recognize "verified"
 alongside "completed" when detecting in-progress plans.
+
+The dashboard progress bar and completion counts will reflect only tasks that
+have fully passed validation (or are backward-compatible legacy completed tasks),
+excluding tasks that are merely awaiting validation.
 
 Files: langgraph_pipeline/executor/edges.py,
        langgraph_pipeline/pipeline/nodes/execute_plan.py,
@@ -149,7 +168,7 @@ Files: langgraph_pipeline/executor/edges.py,
 ### D6: Dashboard visual distinction for completed vs verified
 
 Addresses: FR4 (UI)
-Satisfies: AC23
+Satisfies: AC16, AC17
 
 Approach: Phase 0 design competition. Three competing designs evaluate how to
 visually distinguish "completed" (awaiting validation) from "verified" (fully
@@ -172,29 +191,23 @@ Files: langgraph_pipeline/web/static/dashboard.js,
 
 | AC | Design Decision(s) | Approach |
 |---|---|---|
-| AC1 | D1 | "verified" added to TaskStatus separates execution-finished from validation-passed |
-| AC2 | D1 | Code checks status == "verified" vs "completed" programmatically |
-| AC3 | D1, D3 | "completed" means awaiting validation; "verified" means fully done |
-| AC4 | D1, D3 | "completed" redefined as execution finished, awaiting validation |
-| AC5 | D4 | Task selector requires "verified" via effective_status; blocks on "completed" |
-| AC6 | D4 | Validation failure sets "failed"; dependents remain blocked |
-| AC7 | D1 | Six states defined in TaskStatus Literal type |
-| AC8 | D1 | "pending" = not started (unchanged) |
-| AC9 | D1 | "in_progress" = currently executing (unchanged) |
-| AC10 | D1, D3 | "completed" = execution succeeded, awaiting validation |
-| AC11 | D1, D3 | "verified" = validation passed or not configured |
-| AC12 | D1 | "failed" = execution or validation failed (unchanged) |
-| AC13 | D1 | "skipped" = deliberately skipped (unchanged) |
-| AC14 | D1 | All six states in TaskStatus Literal, accepted everywhere |
-| AC15 | D4 | Task selector checks effective_status == "verified" for dependencies |
-| AC16 | D4 | All predecessors "verified" (effective) -> task eligible |
-| AC17 | D4 | Any predecessor "completed" (not verified) -> task blocked |
-| AC18 | D4 | Only "verified" (or effective "verified") satisfies dependency requirements |
-| AC19 | D3 | Task runner sets "completed"; validator advances to "verified" |
-| AC20 | D3 | Validator sets "verified" when skipping non-applicable validation |
-| AC21 | D5 | Progress counts "verified" (via effective_status) as done |
-| AC22 | D5 | "completed" excluded from done count (only "verified" counts) |
-| AC23 | D6 | Phase 0 design competition for visual distinction |
-| AC24 | D2 | effective_status returns "verified" for legacy completed tasks |
-| AC25 | D2, D5 | Legacy completed treated as done via effective_status in progress counting |
-| AC26 | D2 | effective_status is read-only; never mutates stored YAML values |
+| AC1 | D1 | "verified" added to TaskStatus provides separate state for validation-passed vs execution-finished |
+| AC2 | D1 | Developer checks status == "verified" vs "completed" to determine if validation has run |
+| AC3 | D1, D3 | After crash, task stays "completed" (awaiting validation); "verified" means fully done |
+| AC4 | D1, D3 | "completed" unambiguously means execution done but validation pending |
+| AC5 | D4 | Task selector uses effective_status to distinguish awaiting-validation from passed-validation |
+| AC6 | D4 | Dependents blocked until predecessor reaches "verified" (via effective_status) |
+| AC7 | D1 | Six states defined in TaskStatus Literal: pending, in_progress, completed, verified, failed, skipped |
+| AC8 | D1 | "completed" redefined as intermediate state: execution succeeded, awaiting validation |
+| AC9 | D1 | "verified" defined as terminal success: validation passed or not required |
+| AC10 | D4 | TERMINAL_STATUSES changed to {"verified", "failed", "skipped"}; selector requires "verified" |
+| AC11 | D4 | "completed" not in TERMINAL_STATUSES; dependents blocked until "verified" |
+| AC12 | D4 | "verified" in TERMINAL_STATUSES satisfies all downstream dependency checks |
+| AC13 | D3 | Task runner sets "completed" after successful execution (unchanged behavior) |
+| AC14 | D3 | Validator advances "completed" to "verified" on PASS/WARN verdict |
+| AC15 | D3 | Validation failure sets "failed"; task remains non-verified |
+| AC16 | D5, D6 | Backend: edges.py counts effective_status "verified" as done; Frontend: visual green checkmark |
+| AC17 | D5, D6 | Backend: "completed" excluded from done count; Frontend: amber/pending visual for "completed" |
+| AC18 | D2 | effective_status returns "verified" for legacy completed tasks when validation not configured |
+| AC19 | D2 | Legacy plans work via effective_status read-time transformation; no YAML mutation needed |
+| AC20 | D2 | effective_status only applies backward-compat for completed tasks; new tasks go through full lifecycle |
