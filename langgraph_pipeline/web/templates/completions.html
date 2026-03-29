@@ -128,8 +128,8 @@
 
         <td>
           {% if row.run_id %}
-            <a href="/proxy?trace_id={{ row.run_id | e }}" target="_blank" rel="noopener"
-               aria-label="View trace for {{ row.slug | e }}">Trace</a>
+            <a href="/execution-history/{{ row.run_id | e }}"
+               aria-label="View execution history for {{ row.slug | e }}">Trace</a>
           {% else %}
             &mdash;
           {% endif %}

@@ -174,10 +174,8 @@ def create_app(config: Optional[dict] = None):
     # unless the user explicitly opts in via web.proxy.forward_to_langsmith: true.
     proxy_config = (config or {}).get("web", {}).get("proxy", {})
     from langgraph_pipeline.web.proxy import init_proxy
-    from langgraph_pipeline.web.routes.proxy import router as proxy_router
 
     init_proxy(proxy_config)
-    app.include_router(proxy_router)
     logger.info("TracingProxy active (forward_to_langsmith=%s)", proxy_config.get("forward_to_langsmith", False))
 
     # LangSmith-compatible shim endpoints.
