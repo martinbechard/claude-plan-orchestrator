@@ -1,14 +1,19 @@
 # langgraph_pipeline/executor/state.py
-# TaskState TypedDict schema for the task execution subgraph.
+# TaskState TypedDict schema and task lifecycle helpers for the executor subgraph.
 # Design: docs/plans/2026-02-26-05-task-execution-subgraph-design.md
+# Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md
 
-"""State schema for the executor StateGraph.
+"""State schema and task lifecycle helpers for the executor StateGraph.
 
 TaskState is threaded through every node in the task execution subgraph.
 The task_results field uses Annotated with operator.add so LangGraph merges
 parallel branch results by appending rather than replacing.
 
 Parent pipeline and child subgraph share plan_path and cost accumulator keys.
+
+The effective_status() helper provides backward-compatible status resolution:
+legacy "completed" tasks are treated as "verified" when validation was not
+configured or applicable, without mutating stored YAML values.
 """
 
 import operator
@@ -23,7 +28,14 @@ ValidationVerdict = Literal["PASS", "WARN", "FAIL"]
 # ─── Domain literal types ─────────────────────────────────────────────────────
 
 ModelTier = Literal["haiku", "sonnet", "opus"]
-TaskStatus = Literal["pending", "in_progress", "completed", "failed", "skipped"]
+TaskStatus = Literal[
+    "pending",       # not started
+    "in_progress",   # currently executing
+    "completed",     # execution succeeded, awaiting validation (intermediate)
+    "verified",      # validation passed or not required (terminal success)
+    "failed",        # execution or validation failed
+    "skipped",       # deliberately skipped
+]
 
 
 class TaskResult(TypedDict):
@@ -36,6 +48,56 @@ class TaskResult(TypedDict):
     input_tokens: int
     output_tokens: int
     message: str  # brief summary or error description
+
+
+# ─── Backward-compatible status resolution ───────────────────────────────────
+
+# Status value for tasks that completed execution but have not yet been validated.
+_STATUS_COMPLETED: TaskStatus = "completed"
+# Terminal success status: validation passed or not required.
+_STATUS_VERIFIED: TaskStatus = "verified"
+
+
+def effective_status(task: dict, validation_meta: dict) -> TaskStatus:
+    """Return the effective status of a task for dependency and progress checks.
+
+    For tasks with status "completed", returns "verified" when backward-compatibility
+    applies — i.e., validation was not configured, the task's agent is not in the
+    run_after list, or the task has already been through validation. This is a pure
+    read-time transformation that never mutates stored YAML values.
+
+    For all other statuses (pending, in_progress, verified, failed, skipped), returns
+    the raw status unchanged.
+
+    Args:
+        task: A plan task dict with at least a "status" key.
+        validation_meta: The plan's meta.validation config dict. Expected keys:
+            enabled (bool), run_after (list[str]), and optionally
+            max_validation_attempts (int).
+
+    Returns:
+        The effective TaskStatus for dependency checking and progress counting.
+    """
+    raw_status: str = task.get("status", "pending")
+    if raw_status != _STATUS_COMPLETED:
+        return raw_status  # type: ignore[return-value]
+
+    # Validation not enabled for this plan
+    if not validation_meta.get("enabled", False):
+        return _STATUS_VERIFIED
+
+    # Task's agent is not in the run_after list
+    run_after = validation_meta.get("run_after", [])
+    agent_name = task.get("agent", "coder")
+    if run_after and agent_name not in run_after:
+        return _STATUS_VERIFIED
+
+    # Task has already been through validation (validation_attempts > 0)
+    if (task.get("validation_attempts") or 0) > 0:
+        return _STATUS_VERIFIED
+
+    # Genuinely awaiting validation — keep "completed"
+    return _STATUS_COMPLETED
 
 
 # ─── Executor subgraph state ──────────────────────────────────────────────────
