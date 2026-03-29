@@ -5,6 +5,7 @@
 # Design: docs/plans/2026-03-27-56-item-page-show-output-artifacts-design.md
 # Design: docs/plans/2026-03-27-57-track-and-display-item-artifacts-design.md
 # Design: docs/plans/2026-03-28-72-item-page-auto-refresh-collapses-sections-design.md
+# Design: docs/plans/2026-03-29-74-item-page-step-explorer-design.md
 
 """FastAPI router that serves the work-item detail page.
 
@@ -21,8 +22,9 @@ import json
 import re
 import subprocess
 import time
+from datetime import datetime
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, TypedDict
 
 import yaml
 from fastapi import APIRouter, HTTPException, Query
@@ -66,6 +68,61 @@ _STAGE_DESIGNING = "designing"
 _STAGE_QUEUED = "queued"
 _STAGE_STUCK = "stuck"
 _STAGE_UNKNOWN = "unknown"
+
+_STAGE_STATUS_NOT_STARTED = "not_started"
+_STAGE_STATUS_IN_PROGRESS = "in_progress"
+_STAGE_STATUS_DONE = "done"
+
+_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M"
+
+# Ordered pipeline stages for the step-explorer accordion (D1/AC9).
+# Each tuple is (machine_id, display_name).  This constant is the single
+# source of truth for stage identity and display names.
+STAGE_ORDER: list[tuple[str, str]] = [
+    ("intake", "Intake"),
+    ("requirements", "Requirements"),
+    ("planning", "Planning"),
+    ("execution", "Execution"),
+    ("verification", "Verification"),
+    ("archive", "Archive"),
+]
+
+# ─── Data Models ──────────────────────────────────────────────────────────────
+
+
+class ArtifactInfo(TypedDict):
+    """A single discoverable artifact within a pipeline stage.
+
+    name: Human-readable label shown in the UI (e.g. "User Request").
+    path: Relative file path passed to /artifact-content for on-demand loading.
+    timestamp: Raw epoch float from file mtime; 0.0 when unavailable.
+    timestamp_display: Pre-formatted "YYYY-MM-DD HH:MM" string for Jinja2.
+    """
+
+    name: str
+    path: str
+    timestamp: float
+    timestamp_display: str
+
+
+class StageInfo(TypedDict):
+    """One ordered pipeline stage containing zero or more artifacts.
+
+    id: Lowercase identifier (e.g. "intake") used as CSS class and JSON key.
+    name: Title-case display label (e.g. "Intake").
+    status: One of "not_started", "in_progress", or "done".
+    artifacts: Ordered list of discovered artifacts for this stage.
+    completion_ts: Formatted timestamp when done, None otherwise.
+    completion_epoch: Raw epoch float for JSON serialisation, None otherwise.
+    """
+
+    id: str
+    name: str
+    status: str
+    artifacts: list[ArtifactInfo]
+    completion_ts: Optional[str]
+    completion_epoch: Optional[float]
+
 
 # ─── Jinja2 Setup ─────────────────────────────────────────────────────────────
 
@@ -278,6 +335,238 @@ def item_artifact_content(
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _format_timestamp(epoch: float) -> str:
+    """Format an epoch float as 'YYYY-MM-DD HH:MM' in local time.
+
+    Returns an empty string when epoch is 0.0 (sentinel for unavailable mtime).
+
+    Args:
+        epoch: Seconds since Unix epoch.
+
+    Returns:
+        Formatted timestamp string, or empty string for epoch 0.0.
+    """
+    if epoch == 0.0:
+        return ""
+    return datetime.fromtimestamp(epoch).strftime(_TIMESTAMP_FORMAT)
+
+
+def _make_artifact(name: str, path: Path) -> ArtifactInfo:
+    """Create an ArtifactInfo dict for an existing file.
+
+    Args:
+        name: Human-readable display label.
+        path: Path to the artifact file.
+
+    Returns:
+        ArtifactInfo dict with timestamp from file mtime (0.0 on error).
+    """
+    try:
+        ts = path.stat().st_mtime
+    except Exception:
+        ts = 0.0
+    return {
+        "name": name,
+        "path": str(path),
+        "timestamp": ts,
+        "timestamp_display": _format_timestamp(ts),
+    }
+
+
+def build_stages(
+    slug: str,
+    item_type: Optional[str],
+    pipeline_stage: str,
+) -> list[StageInfo]:
+    """Build the ordered list of pipeline stages with their discovered artifacts.
+
+    Performs three passes:
+    1. Discover artifacts per stage using existing helper functions.
+    2. Compute stage status via _compute_stage_statuses().
+    3. Compute completion timestamps for done stages (latest artifact mtime).
+
+    The Verification stage is omitted entirely when item_type is "feature".
+
+    Args:
+        slug: Work item slug.
+        item_type: "feature", "defect", "analysis", or None.
+        pipeline_stage: Current pipeline stage from _derive_pipeline_stage().
+
+    Returns:
+        Ordered list of StageInfo dicts per STAGE_ORDER (without Verification
+        when item_type is "feature").
+    """
+    # ── Pass 1: Discover artifacts per stage ──────────────────────────────────
+
+    stage_artifacts: dict[str, list[ArtifactInfo]] = {sid: [] for sid, _ in STAGE_ORDER}
+
+    # Intake
+    req_path = _find_original_request_file(slug)
+    if req_path is not None:
+        stage_artifacts["intake"].append(_make_artifact("User Request", req_path))
+    clauses_path = ws_path_fn(slug) / "clauses.md"
+    if clauses_path.exists():
+        stage_artifacts["intake"].append(_make_artifact("Clause Register", clauses_path))
+    five_whys_path = ws_path_fn(slug) / "five-whys.md"
+    if five_whys_path.exists():
+        stage_artifacts["intake"].append(_make_artifact("5 Whys Analysis", five_whys_path))
+
+    # Requirements
+    req_file = _find_structured_requirements_file(slug)
+    if req_file is not None:
+        stage_artifacts["requirements"].append(
+            _make_artifact("Structured Requirements", req_file)
+        )
+
+    # Planning
+    design_doc = _find_design_doc(slug)
+    if design_doc is not None:
+        stage_artifacts["planning"].append(_make_artifact("Design Document", design_doc))
+    plan_yaml = _find_plan_yaml(slug)
+    if plan_yaml is not None:
+        stage_artifacts["planning"].append(_make_artifact("YAML Plan", plan_yaml))
+
+    # Execution: log files (worker-output first, then workspace logs; deduplicate by name)
+    seen_logs: set[str] = set()
+    for log_dir in [WORKER_OUTPUT_DIR / slug, ws_path_fn(slug) / "logs"]:
+        if not log_dir.is_dir():
+            continue
+        for p in sorted(log_dir.iterdir()):
+            if p.suffix == ".log" and p.name not in seen_logs:
+                seen_logs.add(p.name)
+                stage_artifacts["execution"].append(_make_artifact(p.name, p))
+
+    # Execution: validation JSON files (workspace first, then worker-output)
+    seen_val: set[str] = set()
+    for val_dir in [ws_path_fn(slug) / "validation", WORKER_OUTPUT_DIR / slug]:
+        if not val_dir.is_dir():
+            continue
+        for p in sorted(val_dir.glob("validation-*.json")):
+            if p.name not in seen_val:
+                seen_val.add(p.name)
+                stage_artifacts["execution"].append(_make_artifact(p.name, p))
+
+    # Verification: workspace takes priority over worker-output
+    for vr_path in [
+        ws_path_fn(slug) / "verification-report.md",
+        WORKER_OUTPUT_DIR / slug / "verification-report.md",
+    ]:
+        if vr_path.exists():
+            stage_artifacts["verification"].append(
+                _make_artifact("Verification Report", vr_path)
+            )
+            break
+
+    # Archive: first match across completed backlog directories
+    for dir_str in COMPLETED_DIRS.values():
+        completion_path = Path(dir_str) / f"{slug}.md"
+        if completion_path.exists():
+            stage_artifacts["archive"].append(
+                _make_artifact("Completion Record", completion_path)
+            )
+            break
+
+    # ── Build initial StageInfo list ──────────────────────────────────────────
+
+    stages: list[StageInfo] = []
+    for stage_id, stage_name in STAGE_ORDER:
+        if stage_id == "verification" and item_type == "feature":
+            continue
+        stages.append({
+            "id": stage_id,
+            "name": stage_name,
+            "status": _STAGE_STATUS_NOT_STARTED,
+            "artifacts": stage_artifacts[stage_id],
+            "completion_ts": None,
+            "completion_epoch": None,
+        })
+
+    # ── Pass 2: Compute stage statuses ────────────────────────────────────────
+    _compute_stage_statuses(stages, pipeline_stage)
+
+    # ── Pass 3: Compute completion timestamps for done stages ─────────────────
+    for stage in stages:
+        if stage["status"] == _STAGE_STATUS_DONE and stage["artifacts"]:
+            max_ts = max(a["timestamp"] for a in stage["artifacts"])
+            stage["completion_epoch"] = max_ts
+            stage["completion_ts"] = _format_timestamp(max_ts)
+
+    return stages
+
+
+def _compute_stage_statuses(
+    stages: list[StageInfo],
+    pipeline_stage: str,
+) -> None:
+    """Mutate stages in place to set status fields based on pipeline_stage.
+
+    Uses a lookup matrix mapping each pipeline_stage value to a list of
+    expected statuses per stage index, adjusted for artifact presence on
+    "done*" entries (stages that should show done only when artifacts exist).
+
+    Args:
+        stages: List of StageInfo dicts to update in place.
+        pipeline_stage: Current pipeline stage string from _derive_pipeline_stage().
+    """
+    # Stage index order mirrors STAGE_ORDER (without any omitted stages).
+    # Statuses are indexed by position: intake, requirements, planning,
+    # execution, verification, archive.  When verification is omitted for
+    # features, the list has one fewer entry and indices shift accordingly.
+    stage_ids = [s["id"] for s in stages]
+
+    # Base status assignments per pipeline_stage (before artifact-presence
+    # adjustment).  "done*" is represented as DONE here; the adjustment below
+    # downgrades to IN_PROGRESS when the stage has no artifacts.
+    D = _STAGE_STATUS_DONE
+    P = _STAGE_STATUS_IN_PROGRESS
+    N = _STAGE_STATUS_NOT_STARTED
+
+    _BASE_MATRIX: dict[str, list[str]] = {
+        _STAGE_QUEUED:    [N, N, N, N, N, N],
+        _STAGE_UNKNOWN:   [N, N, N, N, N, N],
+        _STAGE_CLAIMED:   [P, N, N, N, N, N],
+        _STAGE_DESIGNING: [D, D, P, N, N, N],
+        _STAGE_PLANNING:  [D, D, P, N, N, N],
+        _STAGE_EXECUTING: [D, D, D, P, N, N],
+        _STAGE_VALIDATING:[D, D, D, D, P, N],
+        _STAGE_COMPLETED: [D, D, D, D, D, D],
+    }
+
+    # "done*" stages: a stage is in_progress when it has no artifacts,
+    # even though the pipeline has nominally moved past it.
+    _DONE_STAR_STAGES = {"intake", "requirements", "planning", "execution", "verification"}
+
+    base_statuses = _BASE_MATRIX.get(pipeline_stage)
+    if base_statuses is None:
+        # stuck or unrecognised: derive from artifact presence
+        found_in_progress = False
+        for stage in stages:
+            if stage["artifacts"]:
+                stage["status"] = D
+            elif not found_in_progress:
+                stage["status"] = P
+                found_in_progress = True
+            else:
+                stage["status"] = N
+        return
+
+    # Apply base matrix, adjusting done* stages by artifact presence
+    for stage in stages:
+        idx = stage_ids.index(stage["id"]) if stage["id"] in stage_ids else -1
+        if idx < 0 or idx >= len(base_statuses):
+            stage["status"] = N
+            continue
+        assigned = base_statuses[idx]
+        if (
+            assigned == D
+            and stage["id"] in _DONE_STAR_STAGES
+            and pipeline_stage != _STAGE_COMPLETED
+            and not stage["artifacts"]
+        ):
+            assigned = P
+        stage["status"] = assigned
 
 
 def _render_md_to_html(md_path: Path) -> str:
