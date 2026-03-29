@@ -29,7 +29,7 @@ import yaml
 from langgraph.types import Send
 
 from langgraph_pipeline.executor.circuit_breaker import record_failure, reset_failures
-from langgraph_pipeline.executor.state import TaskResult, TaskState
+from langgraph_pipeline.executor.state import TaskResult, TaskState, effective_status
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.claude_cli import (
     OutputCollector,
@@ -67,8 +67,10 @@ MODEL_TIER_TO_CLI_NAME: dict[str, str] = {
     "opus": "claude-opus-4-6",
 }
 
-# Terminal statuses used for dependency resolution
-_TERMINAL_STATUSES = frozenset({"completed", "verified", "failed", "skipped"})
+# Terminal statuses used for dependency resolution.
+# "completed" is excluded: it is an intermediate state (awaiting validation).
+# Legacy completed tasks are promoted to "verified" via effective_status().
+_TERMINAL_STATUSES = frozenset({"verified", "failed", "skipped"})
 
 # Thread-safe lock serialising plan YAML reads/writes and git index staging
 # from concurrently executing parallel branches.
@@ -115,9 +117,17 @@ def _collect_tasks(plan_data: dict) -> list[dict]:
     return tasks
 
 
-def _completed_task_ids(all_tasks: list[dict]) -> set[str]:
-    """Return the set of task IDs that have reached a terminal status."""
-    return {t["id"] for t in all_tasks if t.get("status") in _TERMINAL_STATUSES}
+def _completed_task_ids(all_tasks: list[dict], validation_meta: dict) -> set[str]:
+    """Return the set of task IDs whose effective status is terminal.
+
+    Uses effective_status() so that legacy "completed" tasks are promoted to
+    "verified" when validation was not configured or already ran, while genuinely
+    awaiting-validation tasks remain blocked.
+    """
+    return {
+        t["id"] for t in all_tasks
+        if effective_status(t, validation_meta) in _TERMINAL_STATUSES
+    }
 
 
 # ─── Parallel Group Helpers ───────────────────────────────────────────────────
@@ -135,7 +145,8 @@ def _find_parallel_group_tasks(plan_data: dict, parallel_group: str) -> list[dic
         are all in a terminal state.
     """
     all_tasks = _collect_tasks(plan_data)
-    completed_ids = _completed_task_ids(all_tasks)
+    validation_meta = plan_data.get("meta", {}).get("validation", {})
+    completed_ids = _completed_task_ids(all_tasks, validation_meta)
     result: list[dict] = []
     for task in all_tasks:
         if task.get("parallel_group") != parallel_group:

@@ -147,14 +147,26 @@ class TestCollectTasks:
 
 
 class TestCompletedTaskIds:
-    def test_returns_terminal_ids_only(self):
+    # No validation: completed tasks get promoted to verified via effective_status
+    _NO_VALIDATION = {}
+    _VALIDATION_ENABLED = {"enabled": True, "run_after": ["coder"]}
+
+    def test_verified_failed_skipped_included(self):
         tasks = [
-            {"id": "1", "status": "completed"},
+            {"id": "1", "status": "verified"},
             {"id": "2", "status": "pending"},
             {"id": "3", "status": "failed"},
             {"id": "4", "status": "skipped"},
         ]
-        assert _completed_task_ids(tasks) == {"1", "3", "4"}
+        assert _completed_task_ids(tasks, self._NO_VALIDATION) == {"1", "3", "4"}
+
+    def test_completed_promoted_when_no_validation(self):
+        tasks = [{"id": "1", "status": "completed", "agent": "coder"}]
+        assert _completed_task_ids(tasks, self._NO_VALIDATION) == {"1"}
+
+    def test_completed_blocked_when_validation_enabled(self):
+        tasks = [{"id": "1", "status": "completed", "agent": "coder"}]
+        assert _completed_task_ids(tasks, self._VALIDATION_ENABLED) == set()
 
 
 # ─── Tests: _find_parallel_group_tasks ────────────────────────────────────────
@@ -197,6 +209,42 @@ class TestFindParallelGroupTasks:
     def test_returns_empty_for_unknown_group(self):
         plan = _make_plan(_make_task("1.1", parallel_group="ga"))
         assert _find_parallel_group_tasks(plan, "gb") == []
+
+    def test_completed_dep_blocks_when_validation_enabled(self):
+        """Parallel group task blocked by completed (not verified) dependency."""
+        plan = {
+            "meta": {
+                "name": "P",
+                "plan_doc": "d",
+                "validation": {"enabled": True, "run_after": ["coder"]},
+            },
+            "sections": [{
+                "tasks": [
+                    _make_task("1.0", status="completed", agent="coder"),
+                    _make_task("1.1", parallel_group="ga", dependencies=["1.0"]),
+                ],
+            }],
+        }
+        tasks = _find_parallel_group_tasks(plan, "ga")
+        assert tasks == []
+
+    def test_verified_dep_satisfies_with_validation_enabled(self):
+        """Parallel group task unblocked by verified dependency."""
+        plan = {
+            "meta": {
+                "name": "P",
+                "plan_doc": "d",
+                "validation": {"enabled": True, "run_after": ["coder"]},
+            },
+            "sections": [{
+                "tasks": [
+                    _make_task("1.0", status="verified", agent="coder"),
+                    _make_task("1.1", parallel_group="ga", dependencies=["1.0"]),
+                ],
+            }],
+        }
+        tasks = _find_parallel_group_tasks(plan, "ga")
+        assert [t["id"] for t in tasks] == ["1.1"]
 
 
 # ─── Tests: _filter_exclusive_resources ──────────────────────────────────────

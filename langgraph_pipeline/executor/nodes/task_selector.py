@@ -21,14 +21,17 @@ import yaml
 
 from langgraph_pipeline.executor.circuit_breaker import is_circuit_open
 from langgraph_pipeline.executor.escalation import MODEL_TIER_PROGRESSION
-from langgraph_pipeline.executor.state import ModelTier, TaskState
+from langgraph_pipeline.executor.state import ModelTier, TaskState, effective_status
 from langgraph_pipeline.shared.config import load_orchestrator_config
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 PENDING_STATUS = "pending"
-TERMINAL_STATUSES = frozenset({"completed", "verified", "failed", "skipped"})
+# "completed" is intentionally excluded: it is an intermediate state (awaiting
+# validation).  Legacy completed tasks are promoted to "verified" at read time
+# via effective_status(), so they still satisfy dependencies.
+TERMINAL_STATUSES = frozenset({"verified", "failed", "skipped"})
 
 # Pattern to extract model from agent frontmatter (e.g. "model: sonnet")
 _AGENT_MODEL_PATTERN = re.compile(r"^model:\s*(\S+)", re.MULTILINE)
@@ -68,16 +71,25 @@ def _collect_tasks(plan_data: dict) -> list[dict]:
     return tasks
 
 
-def _completed_task_ids(all_tasks: list[dict]) -> set[str]:
-    """Return the set of task IDs whose status is terminal.
+def _completed_task_ids(all_tasks: list[dict], validation_meta: dict) -> set[str]:
+    """Return the set of task IDs whose effective status is terminal.
+
+    Uses effective_status() so that legacy "completed" tasks (where validation
+    was not configured or already ran) are promoted to "verified" and still
+    satisfy dependencies, while genuinely awaiting-validation tasks remain
+    blocked.
 
     Args:
         all_tasks: All task dicts from the plan.
+        validation_meta: The plan's meta.validation config dict.
 
     Returns:
-        Set of task IDs with completed, failed, or skipped status.
+        Set of task IDs with verified, failed, or skipped effective status.
     """
-    return {t["id"] for t in all_tasks if t.get("status") in TERMINAL_STATUSES}
+    return {
+        t["id"] for t in all_tasks
+        if effective_status(t, validation_meta) in TERMINAL_STATUSES
+    }
 
 
 def _is_budget_exceeded(state: TaskState, plan_data: dict) -> bool:
@@ -189,7 +201,8 @@ def find_next_task(state: TaskState) -> dict:
     """
     plan_data: dict = state.get("plan_data") or _load_plan_yaml(state["plan_path"])
     all_tasks = _collect_tasks(plan_data)
-    completed_ids = _completed_task_ids(all_tasks)
+    validation_meta = plan_data.get("meta", {}).get("validation", {})
+    completed_ids = _completed_task_ids(all_tasks, validation_meta)
     completed_count = len(completed_ids)
     total_count = len(all_tasks)
     tasks_completed_str = f"{completed_count}/{total_count}"

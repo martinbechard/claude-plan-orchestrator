@@ -40,24 +40,30 @@ def _make_state(**overrides) -> dict:
     return base
 
 
-def _make_plan(*tasks, budget_limit_usd=None) -> dict:
+def _make_plan(*tasks, budget_limit_usd=None, validation=None) -> dict:
     """Build a minimal plan dict with a single section containing the given tasks."""
     meta = {"name": "Test Plan", "max_attempts_default": 3}
     if budget_limit_usd is not None:
         meta["budget_limit_usd"] = budget_limit_usd
+    if validation is not None:
+        meta["validation"] = validation
     return {
         "meta": meta,
         "sections": [{"id": "s1", "name": "Section 1", "tasks": list(tasks)}],
     }
 
 
-def _make_task(task_id: str, status: str = "pending", deps=None, parallel_group=None) -> dict:
+def _make_task(
+    task_id: str, status: str = "pending", deps=None, parallel_group=None,
+    agent: str = "coder", **extra,
+) -> dict:
     """Build a minimal task dict."""
-    task: dict = {"id": task_id, "name": f"Task {task_id}", "status": status}
+    task: dict = {"id": task_id, "name": f"Task {task_id}", "status": status, "agent": agent}
     if deps is not None:
         task["dependencies"] = deps
     if parallel_group is not None:
         task["parallel_group"] = parallel_group
+    task.update(extra)
     return task
 
 
@@ -116,36 +122,69 @@ class TestCollectTasks:
 
 
 class TestCompletedTaskIds:
-    """_completed_task_ids returns only tasks with terminal statuses."""
+    """_completed_task_ids returns only tasks with terminal effective statuses."""
 
-    def test_completed_included(self):
-        tasks = [_make_task("1.1", "completed")]
-        assert "1.1" in _completed_task_ids(tasks)
+    # No validation configured: completed tasks are promoted to verified
+    _NO_VALIDATION = {}
+
+    # Validation enabled for coder agent
+    _VALIDATION_ENABLED = {"enabled": True, "run_after": ["coder"]}
+
+    def test_verified_included(self):
+        tasks = [_make_task("1.1", "verified")]
+        assert "1.1" in _completed_task_ids(tasks, self._NO_VALIDATION)
 
     def test_failed_included(self):
         tasks = [_make_task("1.1", "failed")]
-        assert "1.1" in _completed_task_ids(tasks)
+        assert "1.1" in _completed_task_ids(tasks, self._NO_VALIDATION)
 
     def test_skipped_included(self):
         tasks = [_make_task("1.1", "skipped")]
-        assert "1.1" in _completed_task_ids(tasks)
+        assert "1.1" in _completed_task_ids(tasks, self._NO_VALIDATION)
 
     def test_pending_excluded(self):
         tasks = [_make_task("1.1", "pending")]
-        assert "1.1" not in _completed_task_ids(tasks)
+        assert "1.1" not in _completed_task_ids(tasks, self._NO_VALIDATION)
 
     def test_in_progress_excluded(self):
         tasks = [_make_task("1.1", "in_progress")]
-        assert "1.1" not in _completed_task_ids(tasks)
+        assert "1.1" not in _completed_task_ids(tasks, self._NO_VALIDATION)
 
-    def test_mixed_statuses(self):
-        tasks = [
-            _make_task("1.1", "completed"),
-            _make_task("1.2", "pending"),
-            _make_task("1.3", "failed"),
-        ]
-        result = _completed_task_ids(tasks)
-        assert result == {"1.1", "1.3"}
+    def test_completed_promoted_when_no_validation(self):
+        """Legacy completed tasks satisfy dependencies when validation is off."""
+        tasks = [_make_task("1.1", "completed")]
+        assert "1.1" in _completed_task_ids(tasks, self._NO_VALIDATION)
+
+    def test_completed_blocked_when_validation_enabled(self):
+        """Tasks awaiting validation do NOT satisfy dependencies (AC11)."""
+        task = _make_task("1.1", "completed")
+        task["agent"] = "coder"
+        assert "1.1" not in _completed_task_ids([task], self._VALIDATION_ENABLED)
+
+    def test_completed_promoted_when_agent_not_in_run_after(self):
+        """Completed task whose agent is not validated is promoted to verified."""
+        task = _make_task("1.1", "completed")
+        task["agent"] = "design-judge"
+        validation = {"enabled": True, "run_after": ["coder"]}
+        assert "1.1" in _completed_task_ids([task], validation)
+
+    def test_completed_promoted_when_already_validated(self):
+        """Completed task that already went through validation is promoted."""
+        task = _make_task("1.1", "completed")
+        task["agent"] = "coder"
+        task["validation_attempts"] = 1
+        assert "1.1" in _completed_task_ids([task], self._VALIDATION_ENABLED)
+
+    def test_mixed_statuses_with_validation(self):
+        verified_task = _make_task("1.1", "verified")
+        completed_task = _make_task("1.2", "completed")
+        completed_task["agent"] = "coder"
+        pending_task = _make_task("1.3", "pending")
+        failed_task = _make_task("1.4", "failed")
+        tasks = [verified_task, completed_task, pending_task, failed_task]
+        result = _completed_task_ids(tasks, self._VALIDATION_ENABLED)
+        # 1.2 is blocked (completed + awaiting validation)
+        assert result == {"1.1", "1.4"}
 
 
 # ─── Tests: _is_budget_exceeded ───────────────────────────────────────────────
@@ -362,3 +401,68 @@ class TestFindNextTaskNode:
 
         assert "plan_data" in result
         assert result["plan_data"]["meta"]["name"] == "Test Plan"
+
+    def test_completed_blocks_dependent_when_validation_enabled(self, tmp_path):
+        """AC11: completed (awaiting validation) blocks dependents."""
+        validation = {"enabled": True, "run_after": ["coder"]}
+        plan = _make_plan(
+            _make_task("1.1", "completed", agent="coder"),
+            _make_task("1.2", "pending", deps=["1.1"]),
+            validation=validation,
+        )
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        # 1.2 is blocked because 1.1 is completed (not verified)
+        assert result["current_task_id"] is None
+
+    def test_verified_satisfies_dependency(self, tmp_path):
+        """AC12: verified status satisfies dependency checks."""
+        validation = {"enabled": True, "run_after": ["coder"]}
+        plan = _make_plan(
+            _make_task("1.1", "verified", agent="coder"),
+            _make_task("1.2", "pending", deps=["1.1"]),
+            validation=validation,
+        )
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        assert result["current_task_id"] == "1.2"
+
+    def test_completed_promoted_for_non_validated_agent(self, tmp_path):
+        """AC18: completed tasks whose agent is not in run_after are promoted."""
+        validation = {"enabled": True, "run_after": ["coder"]}
+        plan = _make_plan(
+            _make_task("1.1", "completed", agent="design-judge"),
+            _make_task("1.2", "pending", deps=["1.1"]),
+            validation=validation,
+        )
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        assert result["current_task_id"] == "1.2"
+
+    def test_completed_promoted_when_already_validated(self, tmp_path):
+        """Completed tasks that already went through validation satisfy deps."""
+        validation = {"enabled": True, "run_after": ["coder"]}
+        plan = _make_plan(
+            _make_task("1.1", "completed", agent="coder", validation_attempts=1),
+            _make_task("1.2", "pending", deps=["1.1"]),
+            validation=validation,
+        )
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        assert result["current_task_id"] == "1.2"
