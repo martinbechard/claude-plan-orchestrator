@@ -33,7 +33,9 @@ _INITIAL_TOKENS = 0
 _INITIAL_FAILURES = 0
 
 # Task statuses that count as terminal/completed for snapshot counts.
-_TERMINAL_STATUSES = frozenset({"completed", "failed", "skipped"})
+# "verified" is the terminal success state; "completed" means execution done but
+# validation still pending (kept for backward compatibility with legacy plans).
+_TERMINAL_STATUSES = frozenset({"completed", "verified", "failed", "skipped"})
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────

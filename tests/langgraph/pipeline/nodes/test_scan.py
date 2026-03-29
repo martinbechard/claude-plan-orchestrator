@@ -201,15 +201,82 @@ class TestFindInProgressPlans:
         result = _find_in_progress_plans()
         assert result == []
 
+    def test_detects_plan_with_verified_and_pending_tasks(self, tmp_path, monkeypatch):
+        """A plan with verified + pending tasks is in progress."""
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        monkeypatch.setattr(scan_mod, "PLANS_DIR", str(tmp_path))
+        plan = tmp_path / "01-my-feature.yaml"
+        plan_data = {
+            "meta": {"name": "Test Plan", "source_item": "", "status": "pending"},
+            "sections": [{
+                "id": "s1",
+                "name": "Section 1",
+                "tasks": [
+                    {"id": "1.1", "name": "Task 1", "status": "verified"},
+                    {"id": "1.2", "name": "Task 2", "status": "pending"},
+                ],
+            }],
+        }
+        plan.write_text(yaml.dump(plan_data))
+        result = _find_in_progress_plans()
+        assert str(plan) in result
+
+    def test_excludes_all_verified_plan(self, tmp_path, monkeypatch):
+        """A plan where all tasks are verified (none pending) is fully done."""
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        monkeypatch.setattr(scan_mod, "PLANS_DIR", str(tmp_path))
+        plan = tmp_path / "01-my-feature.yaml"
+        plan_data = {
+            "meta": {"name": "Test Plan", "source_item": "", "status": "pending"},
+            "sections": [{
+                "id": "s1",
+                "name": "Section 1",
+                "tasks": [
+                    {"id": "1.1", "name": "Task 1", "status": "verified"},
+                    {"id": "1.2", "name": "Task 2", "status": "verified"},
+                ],
+            }],
+        }
+        plan.write_text(yaml.dump(plan_data))
+        result = _find_in_progress_plans()
+        assert result == []
+
 
 # ─── _source_item_for_plan ────────────────────────────────────────────────────
 
 
 class TestSourceItemForPlan:
-    def test_returns_source_item_path(self, tmp_path):
+    def test_returns_source_item_path_when_file_exists(self, tmp_path):
+        """Returns the stored source_item path when the file exists on disk."""
+        source_file = tmp_path / "01-bug.md"
+        _write_md(source_file)
         plan = tmp_path / "my-plan.yaml"
-        _write_plan(plan, source_item="docs/defect-backlog/01-bug.md")
-        assert _source_item_for_plan(str(plan)) == "docs/defect-backlog/01-bug.md"
+        _write_plan(plan, source_item=str(source_file))
+        assert _source_item_for_plan(str(plan)) == str(source_file)
+
+    def test_falls_back_to_backlog_search_when_stored_path_stale(self, tmp_path, monkeypatch):
+        """When source_item path is stale (crash recovery), searches backlog dirs by slug."""
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        # Stored path doesn't exist (item was unclaimed back to backlog).
+        plan = tmp_path / "01-bug.yaml"
+        _write_plan(plan, source_item="/stale/path/.claimed/01-bug.md")
+        # Item is in a backlog dir with matching slug.
+        defect_dir = tmp_path / "defects"
+        defect_dir.mkdir()
+        _write_md(defect_dir / "01-bug.md")
+        monkeypatch.setattr(scan_mod, "BACKLOG_DIRS", {"defect": str(defect_dir)})
+        result = _source_item_for_plan(str(plan))
+        assert result == str(defect_dir / "01-bug.md")
+
+    def test_returns_none_when_slug_not_in_any_backlog(self, tmp_path, monkeypatch):
+        """Returns None when source_item is stale and slug not found in any backlog dir."""
+        import langgraph_pipeline.pipeline.nodes.scan as scan_mod
+        plan = tmp_path / "01-bug.yaml"
+        _write_plan(plan, source_item="/stale/path/01-bug.md")
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+        monkeypatch.setattr(scan_mod, "BACKLOG_DIRS", {"defect": str(empty_dir)})
+        assert _source_item_for_plan(str(plan)) is None
 
     def test_returns_none_for_missing_source_item(self, tmp_path):
         plan = tmp_path / "my-plan.yaml"

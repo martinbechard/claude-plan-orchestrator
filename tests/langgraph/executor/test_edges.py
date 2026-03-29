@@ -260,41 +260,106 @@ class TestRouteConstants:
 # ─── Tests: _tasks_completed_str ─────────────────────────────────────────────
 
 
-class TestTasksCompletedStr:
-    """_tasks_completed_str computes 'X/Y' from task_results and plan_data."""
+def _make_plan_data_with_validation(
+    tasks: list[dict],
+    validation_enabled: bool = True,
+    run_after: list[str] | None = None,
+    max_attempts_default: int | None = None,
+) -> dict:
+    """Build plan_data with validation config and custom task list."""
+    meta: dict = {"name": "Test Plan"}
+    if max_attempts_default is not None:
+        meta["max_attempts_default"] = max_attempts_default
+    meta["validation"] = {
+        "enabled": validation_enabled,
+        "run_after": run_after or ["coder"],
+    }
+    return {
+        "meta": meta,
+        "sections": [{"id": "s1", "tasks": tasks}],
+    }
 
-    def test_returns_x_of_y_when_plan_data_present(self):
-        plan_data = _make_plan_data()
-        state = _make_state(
-            plan_data=plan_data,
-            task_results=[
-                {"task_id": "1.1", "status": "completed"},
-            ],
-        )
+
+class TestTasksCompletedStr:
+    """_tasks_completed_str counts verified tasks (via effective_status) as done."""
+
+    def test_counts_verified_tasks_as_done(self):
+        plan_data = _make_plan_data_with_validation([
+            {"id": "1.1", "status": "verified", "agent": "coder"},
+            {"id": "1.2", "status": "pending", "agent": "coder"},
+        ])
+        state = _make_state(plan_data=plan_data)
         assert _tasks_completed_str(state) == "1/2"
 
-    def test_returns_zero_when_no_tasks_complete(self):
-        plan_data = _make_plan_data()
-        state = _make_state(plan_data=plan_data, task_results=[])
+    def test_completed_awaiting_validation_not_counted_as_done(self):
+        """A task with status 'completed' that still needs validation is NOT done."""
+        plan_data = _make_plan_data_with_validation([
+            {"id": "1.1", "status": "completed", "agent": "coder"},
+            {"id": "1.2", "status": "pending", "agent": "coder"},
+        ])
+        state = _make_state(plan_data=plan_data)
         assert _tasks_completed_str(state) == "0/2"
 
-    def test_returns_count_only_when_no_plan_data(self):
+    def test_completed_promoted_via_backward_compat(self):
+        """Legacy completed task with validation_attempts > 0 is promoted to verified."""
+        plan_data = _make_plan_data_with_validation([
+            {"id": "1.1", "status": "completed", "agent": "coder", "validation_attempts": 1},
+            {"id": "1.2", "status": "pending", "agent": "coder"},
+        ])
+        state = _make_state(plan_data=plan_data)
+        assert _tasks_completed_str(state) == "1/2"
+
+    def test_completed_with_validation_disabled_promoted(self):
+        """When validation is disabled, completed tasks are promoted to verified."""
+        plan_data = _make_plan_data_with_validation(
+            [
+                {"id": "1.1", "status": "completed", "agent": "coder"},
+                {"id": "1.2", "status": "pending", "agent": "coder"},
+            ],
+            validation_enabled=False,
+        )
+        state = _make_state(plan_data=plan_data)
+        assert _tasks_completed_str(state) == "1/2"
+
+    def test_returns_zero_when_no_tasks_verified(self):
+        plan_data = _make_plan_data_with_validation([
+            {"id": "1.1", "status": "pending", "agent": "coder"},
+            {"id": "1.2", "status": "in_progress", "agent": "coder"},
+        ])
+        state = _make_state(plan_data=plan_data)
+        assert _tasks_completed_str(state) == "0/2"
+
+    def test_fallback_counts_from_task_results_when_no_plan_data(self):
         state = _make_state(
             plan_data=None,
             task_results=[{"task_id": "1.1", "status": "completed"}],
         )
         assert _tasks_completed_str(state) == "1"
 
-    def test_counts_only_completed_status(self):
-        plan_data = _make_plan_data()
+    def test_fallback_counts_verified_from_task_results(self):
         state = _make_state(
-            plan_data=plan_data,
+            plan_data=None,
+            task_results=[{"task_id": "1.1", "status": "verified"}],
+        )
+        assert _tasks_completed_str(state) == "1"
+
+    def test_fallback_excludes_failed_from_task_results(self):
+        state = _make_state(
+            plan_data=None,
             task_results=[
                 {"task_id": "1.1", "status": "completed"},
                 {"task_id": "1.2", "status": "failed"},
             ],
         )
-        assert _tasks_completed_str(state) == "1/2"
+        assert _tasks_completed_str(state) == "1"
+
+    def test_all_verified_counts_all(self):
+        plan_data = _make_plan_data_with_validation([
+            {"id": "1.1", "status": "verified", "agent": "coder"},
+            {"id": "1.2", "status": "verified", "agent": "coder"},
+        ])
+        state = _make_state(plan_data=plan_data)
+        assert _tasks_completed_str(state) == "2/2"
 
 
 # ─── Tests: retry_check trace metadata ───────────────────────────────────────
@@ -340,11 +405,13 @@ class TestRetryCheckTraceMetadata:
         assert call_kwargs["reason"] == "validator_failed_retry_available"
 
     def test_emits_tasks_completed_string(self):
-        plan_data = _make_plan_data()
+        plan_data = _make_plan_data_with_validation([
+            {"id": "1.1", "status": "verified", "agent": "coder"},
+            {"id": "1.2", "status": "pending", "agent": "coder"},
+        ])
         state = _make_state(
             last_validation_verdict="PASS",
             plan_data=plan_data,
-            task_results=[{"task_id": "1.1", "status": "completed"}],
         )
         with patch("langgraph_pipeline.executor.edges.add_trace_metadata") as mock_meta:
             retry_check(state)

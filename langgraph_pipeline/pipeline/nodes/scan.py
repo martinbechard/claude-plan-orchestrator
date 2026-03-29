@@ -30,6 +30,7 @@ from langgraph_pipeline.shared.paths import (
     DEFECT_DIR,
     FEATURE_DIR,
     PLANS_DIR,
+    ensure_workspace,
 )
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -142,7 +143,7 @@ def _find_in_progress_plans() -> list[str]:
         for section in plan.get("sections", []):
             for task in section.get("tasks", []):
                 status = task.get("status", "pending")
-                if status == "completed":
+                if status in ("completed", "verified"):
                     has_completed = True
                 elif status in ("pending", "in_progress"):
                     has_pending = True
@@ -156,14 +157,45 @@ def _find_in_progress_plans() -> list[str]:
 def _source_item_for_plan(plan_path: str) -> Optional[str]:
     """Return the source_item path from a plan's meta section, or None.
 
-    The source_item field stores the original backlog file path
-    (e.g. 'docs/defect-backlog/01-some-bug.md').
+    The source_item field stores the path at plan-creation time, which is
+    typically inside CLAIMED_DIR (e.g. 'tmp/plans/.claimed/01-some-bug.md').
+    After a crash, _unclaim_orphaned_items() moves the file back to its
+    backlog directory, so the stored path may be stale. When the stored
+    path does not exist, falls back to searching all backlog directories
+    by slug.
     """
     try:
         with open(plan_path, "r") as f:
             plan = yaml.safe_load(f)
-        return plan.get("meta", {}).get("source_item") or None
+        source = plan.get("meta", {}).get("source_item") or None
     except (IOError, yaml.YAMLError):
+        return None
+
+    if source and Path(source).exists():
+        return source
+
+    # Stored path is stale (crash recovery). Search by slug in backlog dirs.
+    slug = Path(plan_path).stem
+    for backlog_path in BACKLOG_DIRS.values():
+        candidate = Path(backlog_path) / f"{slug}.md"
+        if candidate.exists():
+            return str(candidate)
+
+    return None
+
+
+def _worker_pid_for_plan(plan_path: str) -> Optional[int]:
+    """Return the worker_pid from a plan's meta section, or None.
+
+    The worker_pid is saved by the supervisor when a crashed worker's item
+    is unclaimed, so a new worker can reuse the checkpoint DB and thread ID.
+    """
+    try:
+        with open(plan_path, "r") as f:
+            plan = yaml.safe_load(f)
+        pid = plan.get("meta", {}).get("worker_pid")
+        return int(pid) if pid is not None else None
+    except (IOError, yaml.YAMLError, ValueError, TypeError):
         return None
 
 
@@ -175,6 +207,17 @@ def _item_type_from_path(filepath: str) -> str:
     if "feature" in path_lower:
         return "feature"
     return "analysis"
+
+
+def _copy_input_to_workspace(item_path: str, workspace: Path) -> None:
+    """Copy the raw backlog item into the workspace as input.md."""
+    try:
+        import shutil
+        dest = workspace / "input.md"
+        if not dest.exists():
+            shutil.copy2(item_path, dest)
+    except OSError:
+        pass  # Non-fatal — workspace input copy is best-effort
 
 
 # ─── Item claiming ────────────────────────────────────────────────────────────
@@ -281,6 +324,8 @@ def scan_backlog(state: PipelineState) -> dict:
             filepath = source_item
             slug = Path(filepath).stem
             item_type = _item_type_from_path(filepath)
+            ws = ensure_workspace(slug)
+            _copy_input_to_workspace(filepath, ws)
             _, root_run_id = create_root_run(slug, filepath)
             add_trace_metadata({
                 "node_name": "scan_backlog",
@@ -294,6 +339,8 @@ def scan_backlog(state: PipelineState) -> dict:
                 "item_type": item_type,
                 "item_name": slug.replace("-", " ").title(),
                 "plan_path": plan_path,
+                "worker_pid": _worker_pid_for_plan(plan_path),
+                "workspace_path": str(ws),
                 "langsmith_root_run_id": root_run_id,
             }
 
@@ -302,6 +349,8 @@ def scan_backlog(state: PipelineState) -> dict:
         items = _scan_directory(directory, item_type)
         if items:
             filepath, slug, found_type = items[0]
+            ws = ensure_workspace(slug)
+            _copy_input_to_workspace(filepath, ws)
             _, root_run_id = create_root_run(slug, filepath)
             add_trace_metadata({
                 "node_name": "scan_backlog",
@@ -315,6 +364,7 @@ def scan_backlog(state: PipelineState) -> dict:
                 "item_type": found_type,
                 "item_name": slug.replace("-", " ").title(),
                 "plan_path": None,
+                "workspace_path": str(ws),
                 "langsmith_root_run_id": root_run_id,
             }
 

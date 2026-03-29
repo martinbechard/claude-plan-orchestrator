@@ -19,6 +19,7 @@ from langgraph_pipeline.pipeline.nodes.execute_plan import (
     _INITIAL_FAILURES,
     _INITIAL_TASK_ATTEMPT,
     _INITIAL_TOKENS,
+    _TERMINAL_STATUSES,
     _plan_task_snapshot,
     execute_plan,
 )
@@ -207,7 +208,7 @@ _SAMPLE_PLAN_YAML = textwrap.dedent("""\
       tasks:
       - id: '1.1'
         name: Task A
-        status: completed
+        status: verified
       - id: '1.2'
         name: Task B
         status: pending
@@ -237,7 +238,7 @@ class TestPlanTaskSnapshot:
         plan_file.write_text(_SAMPLE_PLAN_YAML)
         result = _plan_task_snapshot(str(plan_file))
         statuses = {t["task_id"]: t["status"] for t in result["plan_tasks"]}
-        assert statuses["1.1"] == "completed"
+        assert statuses["1.1"] == "verified"
         assert statuses["1.2"] == "pending"
         assert statuses["2.1"] == "skipped"
         assert statuses["2.2"] == "failed"
@@ -246,7 +247,7 @@ class TestPlanTaskSnapshot:
         plan_file = tmp_path / "plan.yaml"
         plan_file.write_text(_SAMPLE_PLAN_YAML)
         result = _plan_task_snapshot(str(plan_file))
-        # completed, skipped, failed are all terminal → 3 terminal out of 4
+        # verified, skipped, failed are all terminal → 3 terminal out of 4
         assert result["completed_count"] == 3
         assert result["total_count"] == 4
 
@@ -265,6 +266,62 @@ class TestPlanTaskSnapshot:
         plan_file.write_text("meta:\n  source_item: foo.md\n")
         result = _plan_task_snapshot(str(plan_file))
         assert result == {"plan_tasks": [], "completed_count": 0, "total_count": 0}
+
+    def test_verified_counted_as_terminal(self, tmp_path):
+        """The 'verified' status is recognized as terminal in snapshot counting."""
+        plan_yaml = textwrap.dedent("""\
+            sections:
+            - id: '1'
+              tasks:
+              - id: '1.1'
+                status: verified
+              - id: '1.2'
+                status: pending
+        """)
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(plan_yaml)
+        result = _plan_task_snapshot(str(plan_file))
+        assert result["completed_count"] == 1
+        assert result["total_count"] == 2
+
+    def test_completed_still_counted_as_terminal(self, tmp_path):
+        """Legacy 'completed' status is still terminal for snapshot counting."""
+        plan_yaml = textwrap.dedent("""\
+            sections:
+            - id: '1'
+              tasks:
+              - id: '1.1'
+                status: completed
+              - id: '1.2'
+                status: pending
+        """)
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(plan_yaml)
+        result = _plan_task_snapshot(str(plan_file))
+        assert result["completed_count"] == 1
+        assert result["total_count"] == 2
+
+
+class TestTerminalStatuses:
+    """_TERMINAL_STATUSES includes verified alongside legacy terminal statuses."""
+
+    def test_verified_is_terminal(self):
+        assert "verified" in _TERMINAL_STATUSES
+
+    def test_completed_is_terminal(self):
+        assert "completed" in _TERMINAL_STATUSES
+
+    def test_failed_is_terminal(self):
+        assert "failed" in _TERMINAL_STATUSES
+
+    def test_skipped_is_terminal(self):
+        assert "skipped" in _TERMINAL_STATUSES
+
+    def test_pending_is_not_terminal(self):
+        assert "pending" not in _TERMINAL_STATUSES
+
+    def test_in_progress_is_not_terminal(self):
+        assert "in_progress" not in _TERMINAL_STATUSES
 
 
 # ─── Tests: plan task snapshot trace metadata ──────────────────────────────────

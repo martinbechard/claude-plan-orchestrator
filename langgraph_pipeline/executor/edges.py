@@ -18,7 +18,7 @@ Subgraph topology and the routing function used at each edge:
 from langgraph.graph import END
 
 from langgraph_pipeline.executor.circuit_breaker import is_circuit_open
-from langgraph_pipeline.executor.state import TaskState
+from langgraph_pipeline.executor.state import TaskState, effective_status
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
 
 # ─── Route label constants ────────────────────────────────────────────────────
@@ -118,18 +118,34 @@ def circuit_check(state: TaskState) -> str:
 
 
 def _tasks_completed_str(state: TaskState) -> str:
-    """Compute a 'X/Y' string of completed tasks vs total plan tasks.
+    """Compute a 'X/Y' string of verified-done tasks vs total plan tasks.
 
-    Reads task_results for completed count and plan_data.sections for total.
-    Returns 'X/Y' when total is known, or 'X' when plan_data is unavailable.
+    Uses effective_status() to count tasks that have reached "verified" status
+    (either explicitly or via backward-compatible promotion). Only verified
+    tasks count as done, not tasks merely awaiting validation ("completed").
+
+    Returns 'X/Y' when plan_data is available, or 'X' when it is not.
     """
+    plan_data = state.get("plan_data") or {}
+    validation_meta = plan_data.get("meta", {}).get("validation", {})
+
+    done_count = 0
+    total_count = 0
+    for section in plan_data.get("sections", []):
+        for task in section.get("tasks", []):
+            total_count += 1
+            if effective_status(task, validation_meta) == "verified":
+                done_count += 1
+
+    if total_count:
+        return f"{done_count}/{total_count}"
+
+    # Fallback: no plan_data loaded yet; count from task_results
     task_results = state.get("task_results") or []
-    completed_count = sum(1 for r in task_results if r.get("status") == "completed")
-    total_count = sum(
-        len(section.get("tasks", []))
-        for section in (state.get("plan_data") or {}).get("sections", [])
+    fallback_count = sum(
+        1 for r in task_results if r.get("status") in ("completed", "verified")
     )
-    return f"{completed_count}/{total_count}" if total_count else str(completed_count)
+    return str(fallback_count)
 
 
 def retry_check(state: TaskState) -> str:
