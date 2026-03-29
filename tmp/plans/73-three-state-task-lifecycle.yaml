@@ -261,7 +261,7 @@ sections:
     dependencies:
     - '1.2'
     - '2.1'
-    status: in_progress
+    status: completed
     target_acs:
     - AC16
     - AC17
@@ -273,3 +273,8 @@ sections:
     last_attempt: '2026-03-28T21:15:19.141618'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-28T21:21:33.938085'
+    result_message: 'Implemented D5: edges.py _tasks_completed_str uses effective_status
+      to count verified as done (AC16) and exclude completed-awaiting-validation (AC17).
+      execute_plan.py _TERMINAL_STATUSES includes verified. scan.py _find_in_progress_plans
+      recognizes verified alongside completed. 15 new/updated tests, 1617 total passing.'
