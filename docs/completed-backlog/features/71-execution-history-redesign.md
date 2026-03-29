@@ -44,7 +44,7 @@ Keep a "show raw trace data" toggle hidden by default for developer debugging.
 
 The TracingProxy in langgraph_pipeline/web/proxy.py already has: SQLite trace DB, get_children_batch() for direct children, get_child_costs_batch() with recursive CTE for cost aggregation, get_child_time_spans_batch() for child time ranges. The Completions page already shows slug, outcome, cost, duration with trace links. The narrative template exists but needs recursive rework.
 
-## LangSmith Trace: 3a4ac29e-bca3-497f-a6af-4a10b684c9f9
+
 
 
 ## 5 Whys Analysis
