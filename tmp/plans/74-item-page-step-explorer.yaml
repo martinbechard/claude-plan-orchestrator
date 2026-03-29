@@ -174,7 +174,7 @@ sections:
   - id: '1.1'
     name: Create stage data model and build_stages() function
     agent: coder
-    status: completed
+    status: verified
     target_acs:
     - AC1
     - AC2
@@ -205,12 +205,18 @@ sections:
       (artifact discovery + status matrix + completion timestamps), and _compute_stage_statuses()
       with full 9-state pipeline matrix. Verification stage omitted for features.
       Raw input labeled 'User Request'. All 1617 tests pass.
+    validation_attempts: 1
+    validation_findings: 'All 11 target ACs verified. Build passes. 1617 tests pass.
+      Data model and build_stages() correctly implement D1/D6: ArtifactInfo/StageInfo
+      TypedDicts, STAGE_ORDER constant, three-pass build_stages() algorithm with artifact
+      discovery, status matrix, and completion timestamps. Verification stage omitted
+      for features. Raw input labeled ''User Request''.'
   - id: '1.2'
     name: Add stage status computation and extend /dynamic endpoint
     agent: coder
     dependencies:
     - '1.1'
-    status: pending
+    status: in_progress
     target_acs:
     - AC7
     - AC10
@@ -229,3 +235,6 @@ sections:
       (latest artifact mtime when done, None when not done). Extend the /item/{slug}/dynamic
       endpoint to include stages array with status, timestamps, and artifact_count
       for live polling updates. Pass stages to the Jinja2 template context in item_detail().'
+    last_attempt: '2026-03-29T13:36:09.669055'
+    attempts: 1
+    model_used: sonnet
