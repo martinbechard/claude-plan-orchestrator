@@ -215,6 +215,12 @@ sections:
       completed->verified on PASS/WARN, completed->failed on FAIL. Skip paths (disabled,
       not in run_after, max attempts) advance to verified. Added verified to TERMINAL_STATUSES
       in task_selector and parallel as companion fix. 9 new tests, 1590 total passing.'
+    validation_attempts: 1
+    validation_findings: All 5 targeted ACs for D3 (P2, FR3) verified. Validator advances
+      completed->verified on PASS/WARN, completed->failed on FAIL. Skip paths (disabled,
+      not in run_after, max attempts) correctly advance to verified. Task runner still
+      sets completed after execution. 1590 tests pass, build succeeds, no placeholders
+      found.
 - id: '2'
   name: Dependency Resolution and Progress Counting
   status: pending
@@ -224,7 +230,7 @@ sections:
     agent: coder
     dependencies:
     - '1.1'
-    status: pending
+    status: in_progress
     target_acs:
     - AC5
     - AC6
@@ -236,6 +242,9 @@ sections:
       docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md
 
       '
+    last_attempt: '2026-03-28T21:08:09.055488'
+    attempts: 1
+    model_used: opus
   - id: '2.2'
     name: Update progress counting and pipeline scan for verified status
     agent: coder
