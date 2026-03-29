@@ -195,7 +195,7 @@ sections:
     agent: coder
     dependencies:
     - '1.1'
-    status: in_progress
+    status: completed
     target_acs:
     - AC3
     - AC4
@@ -210,6 +210,11 @@ sections:
     last_attempt: '2026-03-28T20:55:56.938633'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-28T21:05:18.707506'
+    result_message: 'Implemented D3 two-phase status transitions: validator advances
+      completed->verified on PASS/WARN, completed->failed on FAIL. Skip paths (disabled,
+      not in run_after, max attempts) advance to verified. Added verified to TERMINAL_STATUSES
+      in task_selector and parallel as companion fix. 9 new tests, 1590 total passing.'
 - id: '2'
   name: Dependency Resolution and Progress Counting
   status: pending
