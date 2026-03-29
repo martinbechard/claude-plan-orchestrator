@@ -162,7 +162,7 @@ sections:
   - id: '1.1'
     name: Add verified status to TaskStatus and create effective_status helper
     agent: coder
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -180,6 +180,12 @@ sections:
     last_attempt: '2026-03-28T20:49:13.884707'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-28T20:53:41.894358'
+    result_message: 'Added ''verified'' to TaskStatus Literal (6 states: pending,
+      in_progress, completed, verified, failed, skipped) and created effective_status()
+      backward-compat helper that promotes legacy completed tasks to verified when
+      validation is not configured/applicable. 38 tests pass including 17 new tests
+      for effective_status.'
   - id: '1.2'
     name: Update task runner and validator for completed-to-verified transitions
     agent: coder
