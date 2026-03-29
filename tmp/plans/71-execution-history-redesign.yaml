@@ -438,7 +438,7 @@ sections:
       (4) Update any existing tests that reference /proxy routes.
 
       '
-    status: in_progress
+    status: completed
     target_acs:
     - AC8
     - AC9
@@ -450,3 +450,9 @@ sections:
     last_attempt: '2026-03-28T20:04:02.170589'
     attempts: 1
     model_used: opus
+    completed_at: '2026-03-28T20:14:19.530025'
+    result_message: 'Removed old Traces page (D7): deleted Traces nav link from base.html,
+      removed proxy_router from server.py, deleted routes/proxy.py + 3 proxy templates
+      + trace_narrative.py helper + test_trace_narrative.py, updated completions.html
+      trace links to /execution-history/{run_id}, pruned test_proxy.py of all /proxy
+      endpoint and route-helper tests. 1563 tests pass.'
