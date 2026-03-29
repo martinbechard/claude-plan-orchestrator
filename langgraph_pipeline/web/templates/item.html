@@ -874,6 +874,160 @@
     font-style: italic;
     padding: 0.4rem 0;
 }
+
+/* ── Step Explorer Accordion ─────────────────────────────────────────── */
+.step-explorer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.step-stage {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.step-stage-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #f8fafc;
+    border: none;
+    border-bottom: 1px solid #e2e8f0;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a1a2e;
+    text-align: left;
+    font-family: inherit;
+    line-height: 1.4;
+}
+
+.step-stage-header:hover {
+    background: #f0f4f8;
+}
+
+.step-stage-header:focus-visible {
+    outline: 2px solid #3b6fcf;
+    outline-offset: -2px;
+}
+
+.step-stage.collapsed .step-stage-header {
+    border-bottom-color: transparent;
+}
+
+.step-stage.collapsed .step-stage-body {
+    display: none;
+}
+
+.step-stage-chevron {
+    font-size: 9px;
+    color: #6b7280;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+}
+
+.step-stage:not(.collapsed) .step-stage-chevron {
+    transform: rotate(90deg);
+}
+
+.step-stage-name {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.step-status-badge {
+    flex-shrink: 0;
+}
+
+.step-status-not_started {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.step-status-in_progress {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.step-status-done {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.step-stage-ts {
+    font-size: 11px;
+    color: #6b7280;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.step-stage-count {
+    font-size: 11px;
+    color: #9ca3af;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.step-stage-body {
+    padding: 0.25rem 0;
+}
+
+.step-artifact {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid #f0f4f8;
+}
+
+.step-artifact:last-child {
+    border-bottom: none;
+}
+
+.step-artifact-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.step-artifact-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.step-artifact-ts {
+    font-size: 11px;
+    color: #6b7280;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    white-space: nowrap;
+}
+
+.step-artifact-content {
+    margin: 0.4rem 0 0;
+    background: #1a1a2e;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+    font-size: 11px;
+    color: #e2e8f0;
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre;
+    line-height: 1.5;
+}
+
+.step-empty {
+    padding: 1rem;
+    font-size: 12px;
+    color: #6b7280;
+    font-style: italic;
+}
 </style>
 {% endblock %}
 
@@ -986,98 +1140,53 @@
 {# ── Two-column layout ───────────────────────────────────────────────────── #}
 <div class="item-layout">
 
-  {# ── Left: Traceability Chain (Raw Input → Clauses → 5 Whys → Requirements → Design) ── #}
+  {# ── Left: Step Explorer Accordion (D4, AC7, AC9, AC10, AC12, AC13, AC14) ── #}
   <div>
-    {# 1. Raw input (original backlog item) #}
-    {% if original_request_html %}
-    <div class="item-card">
-      <div class="item-card-header">
-        <h2 class="item-card-title">Raw Input</h2>
-      </div>
-      <div class="requirements-body" aria-label="Original backlog item">
-        {{ original_request_html | safe }}
-      </div>
-    </div>
-    {% endif %}
-
-    {# 2. Clause Register (C1, C2, ... extracted from raw input) #}
-    {% if clause_register_html %}
-    <div class="item-card" style="margin-top: 1rem;">
-      <div class="item-card-header">
-        <h2 class="item-card-title">Clause Register</h2>
-      </div>
-      <div class="requirements-body" aria-label="Clause register">
-        {{ clause_register_html | safe }}
-      </div>
-    </div>
-    {% endif %}
-
-    {# 3. 5 Whys Analysis (W1-W5 with clause references) #}
-    {% if five_whys_html %}
-    <div class="item-card" style="margin-top: 1rem;">
-      <div class="item-card-header">
-        <h2 class="item-card-title">5 Whys Analysis</h2>
-      </div>
-      <div class="requirements-body" aria-label="5 Whys analysis">
-        {{ five_whys_html | safe }}
-      </div>
-    </div>
-    {% endif %}
-
-    {# 4. Structured requirements (P/UC/FR numbered with ACs) #}
-    {% if structured_requirements_html %}
-    <div class="item-card" style="margin-top: 1rem;">
-      <div class="item-card-header">
-        <h2 class="item-card-title">Structured Requirements</h2>
-      </div>
-      <div class="requirements-body" aria-label="Structured requirements document">
-        {{ structured_requirements_html | safe }}
-      </div>
-    </div>
-    {% endif %}
-
-    {# 5. Design document #}
-    {% if requirements_html %}
-    <div class="item-card" style="margin-top: 1rem;">
-      <div class="item-card-header">
-        <h2 class="item-card-title">Design</h2>
-      </div>
-      <div class="requirements-body" aria-label="Design document">
-        {{ requirements_html | safe }}
-      </div>
-    </div>
-    {% endif %}
-
-    {# 6. Cross-reference validation reports #}
-    {% if cross_ref_reports %}
-    <div class="item-card" style="margin-top: 1rem;">
-      <div class="item-card-header">
-        <h2 class="item-card-title">Validation Reports</h2>
-      </div>
-      {% for report in cross_ref_reports %}
-      <details style="margin: 0.5rem 1rem;">
-        <summary style="cursor: pointer; font-weight: 600; padding: 0.4rem 0;">{{ report.name }}</summary>
-        <div class="requirements-body" aria-label="{{ report.name }}">
-          {{ report.html | safe }}
+    <div class="step-explorer" data-slug="{{ slug }}">
+      {% for stage in stages %}
+      <div class="step-stage collapsed"
+           data-stage-id="{{ stage.id }}"
+           data-stage-status="{{ stage.status }}"
+           data-artifact-count="{{ stage.artifacts | length }}">
+        <button class="step-stage-header"
+                type="button"
+                aria-expanded="false"
+                aria-controls="step-body-{{ stage.id }}">
+          <span class="step-stage-chevron" aria-hidden="true">&#9654;</span>
+          <span class="step-stage-name">{{ stage.name }}</span>
+          <span class="badge step-status-badge step-status-{{ stage.status }}">
+            {{ stage.status | replace('_', ' ') }}
+          </span>
+          {% if stage.completion_ts %}
+          <span class="step-stage-ts">{{ stage.completion_ts }}</span>
+          {% endif %}
+          <span class="step-stage-count">
+            {{ stage.artifacts | length }} artifact{{ 's' if stage.artifacts | length != 1 else '' }}
+          </span>
+        </button>
+        <div class="step-stage-body" id="step-body-{{ stage.id }}" role="region"
+             aria-label="{{ stage.name }} stage artifacts">
+          {% if stage.artifacts %}
+            {% for artifact in stage.artifacts %}
+            <div class="step-artifact">
+              <div class="step-artifact-meta">
+                <span class="step-artifact-name">{{ artifact.name }}</span>
+                {% if artifact.timestamp_display %}
+                <span class="step-artifact-ts">{{ artifact.timestamp_display }}</span>
+                {% endif %}
+              </div>
+              <pre class="step-artifact-content"
+                   data-artifact-path="{{ artifact.path }}"
+                   hidden>Loading&hellip;</pre>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="step-empty">No artifacts yet</div>
+          {% endif %}
         </div>
-      </details>
+      </div>
       {% endfor %}
     </div>
-    {% endif %}
-
-    {# No data at all #}
-    {% if not requirements_html and not structured_requirements_html and not original_request_html and not clause_register_html %}
-    <div class="item-card">
-      <div class="item-card-header">
-        <h2 class="item-card-title">Requirements</h2>
-      </div>
-      <div class="empty-state" style="padding: 2.5rem 1rem;">
-        <div class="icon" aria-hidden="true">&#128462;</div>
-        <div><strong>No requirements document</strong></div>
-        <div>No backlog file was found for this item.</div>
-      </div>
-    </div>
-    {% endif %}
   </div>
 
   {# ── Right: Plan + Completions + Traces ──────────────────────────────────── #}
@@ -1418,6 +1527,111 @@ document.querySelectorAll('.output-preview-details').forEach(function (el) {
     });
 }());
 
+/* ── Step Explorer: collapse/expand + on-demand content loading (AC13, AC20, AC21) ── */
+(function () {
+    var slug = {{ slug | tojson }};
+    var STORAGE_PREFIX = 'step-explorer-' + slug + '-';
+
+    function loadStageArtifacts(stageEl) {
+        stageEl.querySelectorAll('.step-artifact-content').forEach(function (pre) {
+            if (pre.dataset.loaded) { return; }
+            pre.hidden = false;
+            pre.dataset.loaded = '1';
+            pre.textContent = 'Loading\u2026';
+            var url = '/item/' + encodeURIComponent(slug) +
+                '/artifact-content?path=' + encodeURIComponent(pre.dataset.artifactPath);
+            fetch(url)
+                .then(function (r) {
+                    if (!r.ok) { throw new Error('HTTP ' + r.status); }
+                    return r.text();
+                })
+                .then(function (t) { pre.textContent = t; })
+                .catch(function (err) { pre.textContent = 'Failed to load: ' + err.message; });
+        });
+    }
+
+    document.querySelectorAll('.step-stage').forEach(function (stage) {
+        var stageId = stage.dataset.stageId;
+        var header = stage.querySelector('.step-stage-header');
+        var saved = localStorage.getItem(STORAGE_PREFIX + stageId);
+
+        /* Determine initial state: saved preference > default (expand in_progress) */
+        var shouldExpand;
+        if (saved !== null) {
+            shouldExpand = saved === 'expanded';
+        } else {
+            shouldExpand = stage.dataset.stageStatus === 'in_progress';
+        }
+
+        if (shouldExpand) {
+            stage.classList.remove('collapsed');
+            header.setAttribute('aria-expanded', 'true');
+            loadStageArtifacts(stage);
+        }
+
+        header.addEventListener('click', function () {
+            var isCollapsed = stage.classList.toggle('collapsed');
+            header.setAttribute('aria-expanded', String(!isCollapsed));
+            localStorage.setItem(STORAGE_PREFIX + stageId,
+                isCollapsed ? 'collapsed' : 'expanded');
+            if (!isCollapsed) { loadStageArtifacts(stage); }
+        });
+    });
+
+    /* Expose for /dynamic polling updates */
+    window._stepExplorer = {
+        updateStages: function (stages) {
+            for (var i = 0; i < stages.length; i++) {
+                var s = stages[i];
+                var stageEl = document.querySelector(
+                    '.step-stage[data-stage-id="' + s.id + '"]');
+                if (!stageEl) { continue; }
+
+                var oldCount = parseInt(stageEl.dataset.artifactCount || '0', 10);
+                stageEl.dataset.stageStatus = s.status;
+                stageEl.dataset.artifactCount = String(s.artifact_count);
+
+                /* Update status badge */
+                var badge = stageEl.querySelector('.step-status-badge');
+                if (badge) {
+                    badge.className = 'badge step-status-badge step-status-' + s.status;
+                    badge.textContent = s.status.replace(/_/g, ' ');
+                }
+
+                /* Update completion timestamp */
+                var tsEl = stageEl.querySelector('.step-stage-ts');
+                if (s.completion_ts) {
+                    if (!tsEl) {
+                        tsEl = document.createElement('span');
+                        tsEl.className = 'step-stage-ts';
+                        var countEl = stageEl.querySelector('.step-stage-count');
+                        if (countEl) { countEl.parentNode.insertBefore(tsEl, countEl); }
+                    }
+                    tsEl.textContent = s.completion_ts;
+                } else if (tsEl) {
+                    tsEl.textContent = '';
+                }
+
+                /* Update artifact count label */
+                var countEl2 = stageEl.querySelector('.step-stage-count');
+                if (countEl2) {
+                    countEl2.textContent = s.artifact_count +
+                        ' artifact' + (s.artifact_count !== 1 ? 's' : '');
+                }
+
+                /* Clear cache when new artifacts appear */
+                if (s.artifact_count > oldCount) {
+                    stageEl.querySelectorAll(
+                        '.step-artifact-content[data-loaded]'
+                    ).forEach(function (pre) {
+                        delete pre.dataset.loaded;
+                    });
+                }
+            }
+        }
+    };
+}());
+
 /* ── Selective refresh: fetch /item/{slug}/dynamic and update data-dynamic elements (D4, D5, D6) ── */
 (function () {
     var REFRESH_INTERVAL_MS = 10000;
@@ -1630,6 +1844,11 @@ document.querySelectorAll('.output-preview-details').forEach(function (el) {
                     if (valCountEl) { valCountEl.textContent = String(data.validation_results.length); }
                 } else {
                     if (valCard) { valCard.hidden = true; }
+                }
+
+                /* Update step explorer stage statuses (D5) */
+                if (data.stages && window._stepExplorer) {
+                    window._stepExplorer.updateStages(data.stages);
                 }
 
                 /* Stop on terminal stage (D6) */
