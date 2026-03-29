@@ -24,23 +24,26 @@ sections:
     target_acs:
     - AC16
     - AC17
-    description: >
-      Produce a systems/architecture design for visually distinguishing
+    description: 'Produce a systems/architecture design for visually distinguishing
       "completed" (awaiting validation) from "verified" (fully done) task states in
-      the dashboard UI. Implements FR4 per D6 from work item:
-      tmp/plans/.claimed/73-three-state-task-lifecycle.md
-      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md
-      Requirements: docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md
-      Focus on data flow from task status through effective_status() to dashboard_state.py
+      the dashboard UI. Implements FR4 per D6 from work item: tmp/plans/.claimed/73-three-state-task-lifecycle.md
+      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md Requirements:
+      docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md Focus on
+      data flow from task status through effective_status() to dashboard_state.py
       to Jinja2 templates, CSS class mapping strategy for all six states, and how
-      the backward-compatible effective_status feeds the progress bar and task list UI.
+      the backward-compatible effective_status feeds the progress bar and task list
+      UI.
+
+      '
     last_attempt: '2026-03-28T20:18:58.515744'
     attempts: 1
     model_used: opus
-    result_message: >
-      Systems design produced at docs/plans/2026-03-28-73-dashboard-status-design-1-systems.md.
+    result_message: 'Systems design produced at docs/plans/2026-03-28-73-dashboard-status-design-1-systems.md.
       Covers six-state CSS class mapping, dual-path rendering pipeline (Jinja2 + JS),
-      progress counter semantics, icon/color strategy, and backward compatibility approach.
+      progress counter semantics, icon/color strategy, and backward compatibility
+      approach.
+
+      '
     completed_at: '2026-03-28T20:24:15.889303'
   - id: '0.2'
     name: UX design for task status visual differentiation
@@ -50,26 +53,27 @@ sections:
     target_acs:
     - AC16
     - AC17
-    description: >
-      Produce a UX design for visually distinguishing "completed" (awaiting
-      validation) from "verified" (fully done) task states in the dashboard UI.
-      Implements FR4 per D6 from work item:
-      tmp/plans/.claimed/73-three-state-task-lifecycle.md
-      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md
-      Requirements: docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md
-      Focus on color semantics for the six-state lifecycle, iconography (checkmark variants,
+    description: 'Produce a UX design for visually distinguishing "completed" (awaiting
+      validation) from "verified" (fully done) task states in the dashboard UI. Implements
+      FR4 per D6 from work item: tmp/plans/.claimed/73-three-state-task-lifecycle.md
+      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md Requirements:
+      docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md Focus on
+      color semantics for the six-state lifecycle, iconography (checkmark variants,
       spinner, etc.), progress bar segment representation, accessibility (WCAG 2.1
       AA, color-blind safe), and user mental model mapping where "completed" conveys
       "awaiting next step" and "verified" conveys "fully done".
+
+      '
     last_attempt: '2026-03-28T20:18:58.556735'
     attempts: 1
     model_used: opus
-    result_message: >
-      UX design produced for six-state task status visual differentiation.
+    result_message: 'UX design produced for six-state task status visual differentiation.
       Covers color palette (WCAG AA compliant), double-checkmark iconography, stacked
       progress bar, color-blind safety with triple-channel perception, and screen
       reader support. Key design decision: amber for completed (awaiting validation),
       green for verified (fully done).
+
+      '
     completed_at: '2026-03-28T20:25:03.273382'
   - id: '0.3'
     name: Frontend design for task status visual differentiation
@@ -79,24 +83,25 @@ sections:
     target_acs:
     - AC16
     - AC17
-    description: >
-      Produce a frontend implementation design for visually distinguishing
+    description: 'Produce a frontend implementation design for visually distinguishing
       "completed" (awaiting validation) from "verified" (fully done) task states in
-      the dashboard UI. Implements FR4 per D6 from work item:
-      tmp/plans/.claimed/73-three-state-task-lifecycle.md
-      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md
-      Requirements: docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md
-      Focus on CSS class strategy for six states, Jinja2 template conditionals,
-      dashboard.js status rendering functions, progress bar segment colors, and task
-      list row styling. Preserve existing vanilla JS + Jinja2 stack.
+      the dashboard UI. Implements FR4 per D6 from work item: tmp/plans/.claimed/73-three-state-task-lifecycle.md
+      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md Requirements:
+      docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md Focus on
+      CSS class strategy for six states, Jinja2 template conditionals, dashboard.js
+      status rendering functions, progress bar segment colors, and task list row styling.
+      Preserve existing vanilla JS + Jinja2 stack.
+
+      '
     last_attempt: '2026-03-28T20:18:58.542564'
     attempts: 1
     model_used: opus
-    result_message: >
-      Frontend design document produced at tmp/worker-output/0.3-frontend-design.md.
+    result_message: 'Frontend design document produced at tmp/worker-output/0.3-frontend-design.md.
       Covers six-state CSS class strategy (amber for completed, green for verified),
       Jinja2 template conditionals, progress bar segments, JS rendering functions,
       and WCAG 2.1 AA accessible color palette. All changes scoped to item.html.
+
+      '
     completed_at: '2026-03-28T20:24:17.870333'
   - id: '0.4'
     name: Judge dashboard status UI design competition
@@ -105,35 +110,42 @@ sections:
     - '0.1'
     - '0.2'
     - '0.3'
-    status: pending
+    status: completed
     target_acs:
     - AC16
     - AC17
-    description: >
-      Evaluate the three competing designs for dashboard task status visual
-      differentiation. Score each against FR4 acceptance criteria (AC16, AC17)
-      from work item: tmp/plans/.claimed/73-three-state-task-lifecycle.md
-      Requirements: docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md
-      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md
-      Select the winner with written rationale. Judge against D6 design decision
-      covering progress counting display, visual distinction between completed and
-      verified, and accessibility.
+    description: 'Evaluate the three competing designs for dashboard task status visual
+      differentiation. Score each against FR4 acceptance criteria (AC16, AC17) from
+      work item: tmp/plans/.claimed/73-three-state-task-lifecycle.md Requirements:
+      docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md Design:
+      docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md Select the winner
+      with written rationale. Judge against D6 design decision covering progress counting
+      display, visual distinction between completed and verified, and accessibility.
+
+      '
+    last_attempt: '2026-03-28T20:40:30.886640'
+    attempts: 1
+    model_used: opus
+    completed_at: '2026-03-28T20:44:37.652332'
+    result_message: 'Winner: Design 3 - Frontend Implementation (46/50). Judgment
+      written to tmp/worker-output/73-three-state-task-lifecycle-judgment.md. Design
+      overview updated with scoring table.'
   - id: '0.5'
     name: Bridge winning design to implementation tasks
     agent: planner
     dependencies:
     - '0.4'
     status: pending
-    description: >
-      Read the winning UI design from the design competition (task 0.4)
-      and extend this YAML plan with concrete frontend implementation tasks for
-      dashboard status visual differentiation. Work item:
-      tmp/plans/.claimed/73-three-state-task-lifecycle.md
+    description: 'Read the winning UI design from the design competition (task 0.4)
+      and extend this YAML plan with concrete frontend implementation tasks for dashboard
+      status visual differentiation. Work item: tmp/plans/.claimed/73-three-state-task-lifecycle.md
       Requirements: docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md
-      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md
-      New tasks should address D6 and target AC16, AC17. Frontend tasks depend on
-      section 2 (task 2.2) being complete since they need the backend effective_status
-      and progress counting changes in place.
+      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md New tasks
+      should address D6 and target AC16, AC17. Frontend tasks depend on section 2
+      (task 2.2) being complete since they need the backend effective_status and progress
+      counting changes in place.
+
+      '
 - id: '1'
   name: Core State Model and Task Transitions
   status: pending
@@ -151,11 +163,11 @@ sections:
     - AC18
     - AC19
     - AC20
-    description: >
-      Implement P1, FR1, FR5 per design decisions D1, D2 from work item:
-      tmp/plans/.claimed/73-three-state-task-lifecycle.md
-      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md
+    description: 'Implement P1, FR1, FR5 per design decisions D1, D2 from work item:
+      tmp/plans/.claimed/73-three-state-task-lifecycle.md Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md
       Requirements: docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md
+
+      '
   - id: '1.2'
     name: Update task runner and validator for completed-to-verified transitions
     agent: coder
@@ -168,11 +180,11 @@ sections:
     - AC13
     - AC14
     - AC15
-    description: >
-      Implement P2, FR3 per design decision D3 from work item:
-      tmp/plans/.claimed/73-three-state-task-lifecycle.md
-      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md
-      Requirements: docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md
+    description: 'Implement P2, FR3 per design decision D3 from work item: tmp/plans/.claimed/73-three-state-task-lifecycle.md
+      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md Requirements:
+      docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md
+
+      '
 - id: '2'
   name: Dependency Resolution and Progress Counting
   status: pending
@@ -189,11 +201,11 @@ sections:
     - AC10
     - AC11
     - AC12
-    description: >
-      Implement P3, FR2 per design decision D4 from work item:
-      tmp/plans/.claimed/73-three-state-task-lifecycle.md
-      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md
-      Requirements: docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md
+    description: 'Implement P3, FR2 per design decision D4 from work item: tmp/plans/.claimed/73-three-state-task-lifecycle.md
+      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md Requirements:
+      docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md
+
+      '
   - id: '2.2'
     name: Update progress counting and pipeline scan for verified status
     agent: coder
@@ -204,8 +216,8 @@ sections:
     target_acs:
     - AC16
     - AC17
-    description: >
-      Implement FR4 (backend portion) per design decision D5 from work item:
-      tmp/plans/.claimed/73-three-state-task-lifecycle.md
-      Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md
+    description: 'Implement FR4 (backend portion) per design decision D5 from work
+      item: tmp/plans/.claimed/73-three-state-task-lifecycle.md Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md
       Requirements: docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md
+
+      '
