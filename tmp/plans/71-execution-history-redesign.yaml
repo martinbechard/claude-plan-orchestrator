@@ -2,7 +2,6 @@ meta:
   name: 71-execution-history-redesign
   source_item: tmp/plans/.claimed/71-execution-history-redesign.md
   requirements_path: docs/plans/2026-03-28-71-execution-history-redesign-requirements.md
-  worker_pid: 50446
   validation:
     enabled: true
     run_after:
@@ -411,6 +410,9 @@ sections:
       duration, cost, model, token_count, inputs_json, outputs_json, metadata_json,
       children[]. Added TreeNode.to_dict() and extract_token_count() to execution_tree.py.
       Mounted router in server.py. 15 unit tests all passing, 1647 total tests green.'
+    validation_attempts: 2
+    validation_findings: All 6 task requirements met. Routes, JSON fields, server
+      mounting, and 15 unit tests all verified.
 - id: '2'
   name: Remove Old Traces Page and Update Entry Points
   status: pending
@@ -436,7 +438,7 @@ sections:
       (4) Update any existing tests that reference /proxy routes.
 
       '
-    status: pending
+    status: in_progress
     target_acs:
     - AC8
     - AC9
@@ -445,3 +447,6 @@ sections:
     - AC34
     - AC35
     - AC36
+    last_attempt: '2026-03-28T20:04:02.170589'
+    attempts: 1
+    model_used: opus
