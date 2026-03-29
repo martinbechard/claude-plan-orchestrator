@@ -250,13 +250,18 @@ sections:
       and parallel.py, replaced with effective_status()-based dependency resolution.
       completed tasks awaiting validation now block dependents; legacy completed tasks
       promoted via backward-compat. 12 new tests, 1602 total passing.'
+    validation_attempts: 1
+    validation_findings: All 5 ACs for D4 verified. TERMINAL_STATUSES excludes 'completed'
+      in both task_selector.py and parallel.py. effective_status() used for dependency
+      resolution. 12 new tests cover all verified/completed/backward-compat scenarios.
+      1602 tests pass, build clean, no placeholders.
   - id: '2.2'
     name: Update progress counting and pipeline scan for verified status
     agent: coder
     dependencies:
     - '1.2'
     - '2.1'
-    status: pending
+    status: in_progress
     target_acs:
     - AC16
     - AC17
@@ -265,3 +270,6 @@ sections:
       Requirements: docs/plans/2026-03-28-73-three-state-task-lifecycle-requirements.md
 
       '
+    last_attempt: '2026-03-28T21:15:19.141618'
+    attempts: 1
+    model_used: opus
