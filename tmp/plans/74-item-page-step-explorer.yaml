@@ -216,7 +216,7 @@ sections:
     agent: coder
     dependencies:
     - '1.1'
-    status: completed
+    status: in_progress
     target_acs:
     - AC7
     - AC10
@@ -235,12 +235,19 @@ sections:
       (latest artifact mtime when done, None when not done). Extend the /item/{slug}/dynamic
       endpoint to include stages array with status, timestamps, and artifact_count
       for live polling updates. Pass stages to the Jinja2 template context in item_detail().'
-    last_attempt: '2026-03-29T13:36:09.669055'
-    attempts: 1
-    model_used: sonnet
+    last_attempt: '2026-03-29T13:46:37.197588'
+    attempts: 2
+    model_used: opus
     completed_at: '2026-03-29T13:40:09.473045'
     result_message: 'Wired build_stages() into item_dynamic() (adds lightweight stages
       summary array to /dynamic JSON response: id, status, completion_ts, completion_epoch,
       artifact_count) and item_detail() (passes stages list to Jinja2 template context).
       Updated test to expect new ''stages'' key and mock build_stages/_detect_item_type.
       All 1617 tests pass.'
+    validation_attempts: 1
+    validation_findings: Backend wiring (build_stages wired to /dynamic and item_detail)
+      is correctly implemented and all 1617 tests pass. However, all 9 target ACs
+      require template/UI display that has not been implemented — item.html has no
+      stage accordion, no status badges, no timestamps on stages or artifacts, and
+      no on-demand loading behavior. The stages variable is passed to the template
+      context but unused.
