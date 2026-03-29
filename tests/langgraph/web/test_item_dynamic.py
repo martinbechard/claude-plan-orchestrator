@@ -89,9 +89,11 @@ def test_dynamic_returns_json_with_all_fields(client: TestClient):
     with (
         patch(f"{_MODULE}._load_completions", return_value=_SAMPLE_COMPLETIONS),
         patch(f"{_MODULE}._derive_pipeline_stage", return_value="executing"),
+        patch(f"{_MODULE}._detect_item_type", return_value="defect"),
         patch(f"{_MODULE}._get_active_worker", return_value=None),
         patch(f"{_MODULE}._load_plan_tasks", return_value=_SAMPLE_PLAN_TASKS),
         patch(f"{_MODULE}._load_validation_results", return_value=_SAMPLE_VALIDATION_RESULTS),
+        patch(f"{_MODULE}.build_stages", return_value=[]),
     ):
         resp = client.get(f"/item/{_TEST_SLUG}/dynamic")
 
@@ -108,6 +110,7 @@ def test_dynamic_returns_json_with_all_fields(client: TestClient):
         "avg_velocity",
         "plan_tasks",
         "validation_results",
+        "stages",
     }
     assert set(data.keys()) == expected_keys
 

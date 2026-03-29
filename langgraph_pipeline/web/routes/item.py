@@ -170,6 +170,7 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
     output_artifacts = _collect_output_artifacts(slug)
     validation_results = _load_validation_results(slug)
     avg_velocity = _compute_avg_velocity(completions)
+    stages = build_stages(slug, item_type, pipeline_stage)
 
     # When a worker is active, use its live stats instead of completions
     if active_worker:
@@ -193,6 +194,7 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
             "total_cost_usd": total_cost_usd,
             "total_duration_s": total_duration_s,
             "total_tokens": total_tokens,
+            "stages": stages,
             "requirements_html": requirements_html,
             "original_request_html": original_request_html,
             "structured_requirements_html": structured_requirements_html,
@@ -224,11 +226,12 @@ def item_dynamic(slug: str) -> JSONResponse:
 
     Returns:
         JSON object with pipeline_stage, active_worker, total_cost_usd,
-        total_duration_s, total_tokens, avg_velocity, plan_tasks, and
-        validation_results.
+        total_duration_s, total_tokens, avg_velocity, plan_tasks,
+        validation_results, and stages (lightweight stage-status summary).
     """
     completions = _load_completions(slug)
     pipeline_stage = _derive_pipeline_stage(slug, completions)
+    item_type = _detect_item_type(slug)
     active_worker = _get_active_worker(slug)
     total_cost_usd = sum(c.get("cost_usd", 0.0) for c in completions)
     total_duration_s = sum(c.get("duration_s", 0.0) for c in completions)
@@ -236,6 +239,17 @@ def item_dynamic(slug: str) -> JSONResponse:
     avg_velocity = _compute_avg_velocity(completions)
     plan_tasks = _load_plan_tasks(slug)
     validation_results = _load_validation_results(slug)
+    stages = build_stages(slug, item_type, pipeline_stage)
+    stage_summaries = [
+        {
+            "id": s["id"],
+            "status": s["status"],
+            "completion_ts": s["completion_ts"],
+            "completion_epoch": s["completion_epoch"],
+            "artifact_count": len(s["artifacts"]),
+        }
+        for s in stages
+    ]
 
     # When a worker is active, use its live stats instead of completions
     if active_worker:
@@ -256,6 +270,7 @@ def item_dynamic(slug: str) -> JSONResponse:
         "avg_velocity": avg_velocity,
         "plan_tasks": plan_tasks,
         "validation_results": validation_results,
+        "stages": stage_summaries,
     })
 
 
