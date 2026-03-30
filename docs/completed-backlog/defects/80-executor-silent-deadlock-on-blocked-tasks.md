@@ -17,7 +17,7 @@ When pending tasks exist but none have satisfied dependencies, the executor shou
 
 - langgraph_pipeline/executor/nodes/task_selector.py - find_next_task deadlock detection (line ~268 logs a message but the executor loop still exits cleanly)
 
-## LangSmith Trace: 7fa8e8f0-c561-48f0-a1a7-ca83275052c2
+
 
 
 ## 5 Whys Analysis

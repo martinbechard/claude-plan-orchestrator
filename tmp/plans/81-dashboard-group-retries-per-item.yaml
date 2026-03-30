@@ -99,7 +99,7 @@ sections:
   - id: '1.1'
     name: Create shared grouping utility and integrate into proxy and dashboard_state
     agent: coder
-    status: completed
+    status: verified
     target_acs:
     - AC1
     - AC2
@@ -138,6 +138,11 @@ sections:
       limit*3, groups via utility). Updated DashboardState.snapshot() to use grouped
       proxy path and apply grouping to in-memory fallback. Added 7 unit tests for
       grouping utility and 2 snapshot integration tests. 1714 tests passing.
+    validation_attempts: 1
+    validation_findings: All 6 target ACs verified. D1 (completion_grouping.py) and
+      D2 (proxy + dashboard_state integration) fully implemented per systems design.
+      1714 tests passing, 0 regressions. 7 grouping unit tests + 2 snapshot integration
+      tests cover all specified cases.
 - id: '2'
   name: Frontend retry grouping UI
   status: pending
@@ -145,7 +150,7 @@ sections:
   - id: '2.1'
     name: Implement retry badge, disclosure toggle, and expandable sub-rows
     agent: frontend-coder
-    status: pending
+    status: in_progress
     dependencies:
     - '1.1'
     target_acs:
@@ -180,3 +185,6 @@ sections:
       Wire toggle click handlers in renderCompletions(). Add CSS for .retry-sub-row
       (indented, muted bg, smaller font), .retry-sub-slug, .retry-attempt-label. Ensure
       keyboard accessibility (button element, aria-expanded, aria-label).'
+    last_attempt: '2026-03-30T13:14:01.865507'
+    attempts: 1
+    model_used: sonnet
