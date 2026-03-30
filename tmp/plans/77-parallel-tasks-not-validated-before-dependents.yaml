@@ -82,7 +82,7 @@ sections:
   - id: '1.2'
     name: Verify FR2 status contract with targeted tests
     agent: coder
-    status: in_progress
+    status: completed
     target_acs:
     - AC11
     - AC12
@@ -112,3 +112,7 @@ sections:
     last_attempt: '2026-03-30T13:02:25.975789'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-30T13:07:41.223539'
+    result_message: 'Added TestFR2StatusContract class (9 tests) to test_task_selector.py
+      documenting AC11, AC12, AC13 contracts at three layers: effective_status(),
+      _completed_task_ids(), and _find_eligible_task(). All 1705 tests pass, no regressions.'
