@@ -15,7 +15,7 @@ After a parallel group completes, the executor should validate each task that re
 - langgraph_pipeline/executor/nodes/task_selector.py - find_next_task logic
 - langgraph_pipeline/executor/nodes/validator.py - validate_task invocation
 
-## LangSmith Trace: 891458c2-99d5-47f7-b184-8912846aa6af
+
 
 
 ## 5 Whys Analysis
