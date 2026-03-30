@@ -392,6 +392,46 @@ class TestDiscoverChannels:
 
         assert result == {"orchestrator-features": "C2"}
 
+    def test_logs_channels_only_on_first_call(self, capsys):
+        n = _make_notifier()
+        channel_names = ["orchestrator-notifications", "orchestrator-features"]
+        channels_data = [{"name": nm, "id": f"C{i}"} for i, nm in enumerate(channel_names)]
+
+        def _fresh_resp():
+            return BytesIO(json.dumps({"ok": True, "channels": channels_data}).encode())
+
+        # First call: should print the discovered message
+        with patch("urllib.request.urlopen") as mock_open:
+            mock_open.return_value.__enter__ = lambda s: _fresh_resp()
+            mock_open.return_value.__exit__ = MagicMock(return_value=False)
+            n._discover_channels()
+        out_first = capsys.readouterr().out
+        assert "[SLACK] Discovered channels:" in out_first
+
+        # Expire cache so the API is called again
+        n._channels_discovered_at = 0.0
+
+        with patch("urllib.request.urlopen") as mock_open:
+            mock_open.return_value.__enter__ = lambda s: _fresh_resp()
+            mock_open.return_value.__exit__ = MagicMock(return_value=False)
+            n._discover_channels()
+        out_second = capsys.readouterr().out
+        assert "[SLACK] Discovered channels:" not in out_second
+
+    def test_channels_logged_flag_starts_false(self):
+        n = _make_notifier()
+        assert n._channels_logged is False
+
+    def test_channels_logged_flag_set_after_first_discovery(self, capsys):
+        n = _make_notifier()
+        channels_data = [{"name": "orchestrator-notifications", "id": "C1"}]
+        resp = BytesIO(json.dumps({"ok": True, "channels": channels_data}).encode())
+        with patch("urllib.request.urlopen") as mock_open:
+            mock_open.return_value.__enter__ = lambda s: resp
+            mock_open.return_value.__exit__ = MagicMock(return_value=False)
+            n._discover_channels()
+        assert n._channels_logged is True
+
 
 # ── _get_notifications_channel_id ────────────────────────────────────────────
 

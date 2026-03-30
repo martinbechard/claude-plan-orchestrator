@@ -261,6 +261,7 @@ class SlackPoller:
         # Channel discovery cache
         self._discovered_channels: dict[str, str] = {}
         self._channels_discovered_at = 0.0
+        self._channels_logged: bool = False
 
         self._bot_user_id: Optional[str] = None  # A0: identity-based self-skip
 
@@ -353,11 +354,12 @@ class SlackPoller:
 
             self._discovered_channels = channels
             self._channels_discovered_at = now
-            if channels:
+            if channels and not self._channels_logged:
                 print(
                     f"[SLACK] Discovered channels: "
                     f"{', '.join(f'#{n}' for n in sorted(channels))}"
                 )
+                self._channels_logged = True
             return channels
 
         except Exception as e:

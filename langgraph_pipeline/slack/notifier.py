@@ -110,6 +110,7 @@ class SlackNotifier(IdentityMixin):
         self._channels_discovered_at = 0.0
         self._channel_prefix = SLACK_CHANNEL_PREFIX
         self._own_sent_ts: set[str] = set()
+        self._channels_logged: bool = False
 
         try:
             with open(config_path, "r") as f:
@@ -351,11 +352,12 @@ class SlackNotifier(IdentityMixin):
 
             self._discovered_channels = channels
             self._channels_discovered_at = now
-            if channels:
+            if channels and not self._channels_logged:
                 print(
                     f"[SLACK] Discovered channels: "
                     f"{', '.join(f'#{n}' for n in sorted(channels))}"
                 )
+                self._channels_logged = True
             return channels
 
         except Exception as e:

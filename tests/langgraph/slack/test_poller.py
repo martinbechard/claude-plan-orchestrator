@@ -179,6 +179,54 @@ class TestDiscoverChannels:
 
         assert result == {"orchestrator-features": "C1"}
 
+    def test_logs_channels_only_on_first_call(self, capsys):
+        p = _make_poller(channel_prefix="orchestrator-")
+        channels_payload = {
+            "ok": True,
+            "channels": [
+                {"name": "orchestrator-features", "id": "C1"},
+                {"name": "orchestrator-defects", "id": "C2"},
+            ],
+        }
+
+        def _fresh_resp():
+            return BytesIO(json.dumps(channels_payload).encode())
+
+        # First call: cache is empty, should print the discovered message
+        with patch("urllib.request.urlopen") as mock_open:
+            mock_open.return_value.__enter__ = lambda s: _fresh_resp()
+            mock_open.return_value.__exit__ = MagicMock(return_value=False)
+            p._discover_channels()
+        out_first = capsys.readouterr().out
+        assert "[SLACK] Discovered channels:" in out_first
+
+        # Expire cache so the API is called again on the second call
+        p._channels_discovered_at = 0.0
+
+        with patch("urllib.request.urlopen") as mock_open:
+            mock_open.return_value.__enter__ = lambda s: _fresh_resp()
+            mock_open.return_value.__exit__ = MagicMock(return_value=False)
+            p._discover_channels()
+        out_second = capsys.readouterr().out
+        assert "[SLACK] Discovered channels:" not in out_second
+
+    def test_channels_logged_flag_starts_false(self):
+        p = _make_poller()
+        assert p._channels_logged is False
+
+    def test_channels_logged_flag_set_after_first_discovery(self, capsys):
+        p = _make_poller(channel_prefix="orchestrator-")
+        channels_payload = {
+            "ok": True,
+            "channels": [{"name": "orchestrator-notifications", "id": "C1"}],
+        }
+        resp = BytesIO(json.dumps(channels_payload).encode())
+        with patch("urllib.request.urlopen") as mock_open:
+            mock_open.return_value.__enter__ = lambda s: resp
+            mock_open.return_value.__exit__ = MagicMock(return_value=False)
+            p._discover_channels()
+        assert p._channels_logged is True
+
 
 # ── _get_channel_role ─────────────────────────────────────────────────────────
 
