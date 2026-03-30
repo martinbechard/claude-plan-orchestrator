@@ -133,6 +133,9 @@ def verify_fix(state: PipelineState) -> dict:
 
     print(f"[verify_fix] Verification outcome for {item_slug}: {outcome}")
 
+    # Build full traceability matrix if workspace artifacts exist.
+    _build_traceability_matrix(item_slug)
+
     add_trace_metadata({
         "node_name": "verify_fix",
         "graph_level": "pipeline",
@@ -143,7 +146,94 @@ def verify_fix(state: PipelineState) -> dict:
         "total_cost_usd": total_cost_usd,
     })
 
+    prior_cost = float(state.get("session_cost_usd") or 0.0)
     return {
         "verification_history": [record],
         "verification_cycle": cycle + 1,
+        "session_cost_usd": prior_cost + total_cost_usd,
     }
+
+
+def _build_traceability_matrix(item_slug: str) -> Optional[str]:
+    """Assemble the full traceability matrix from workspace artifacts.
+
+    Reads clause register, requirements, and cross-reference reports from the
+    workspace to produce the end-to-end traceability matrix:
+        C -> UC/P/FR -> AC -> D -> T -> VF
+
+    Saves the matrix to tmp/workspace/{slug}/traceability/traceability-matrix.md.
+    Returns the file path on success, None if artifacts are missing.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    from langgraph_pipeline.shared.paths import workspace_path
+
+    ws = workspace_path(item_slug)
+    clauses_path = ws / "clauses.md"
+    requirements_path = ws / "requirements.md"
+    validation_dir = ws / "validation"
+
+    # All three core artifacts needed for the matrix.
+    if not clauses_path.exists() or not requirements_path.exists():
+        logger.info("Skipping traceability matrix for %s — missing clause register or requirements", item_slug)
+        return None
+
+    try:
+        clauses = clauses_path.read_text(encoding="utf-8")
+        requirements = requirements_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    # Collect cross-reference reports.
+    xref_reports: list[str] = []
+    if validation_dir.exists():
+        for report_file in sorted(validation_dir.glob("step-*.md")):
+            try:
+                xref_reports.append(report_file.read_text(encoding="utf-8"))
+            except OSError:
+                continue
+
+    # Build the matrix document.
+    timestamp = datetime.now(tz=timezone.utc).isoformat()
+    matrix_lines = [
+        f"# Full Traceability Matrix: {item_slug}",
+        f"",
+        f"Generated: {timestamp}",
+        f"",
+        f"## Source Artifacts",
+        f"",
+        f"- Clause Register: {clauses_path}",
+        f"- Requirements: {requirements_path}",
+        f"- Cross-reference reports: {len(xref_reports)} found",
+        f"",
+        f"## Clause Register Summary",
+        f"",
+        clauses[:2000],  # First 2000 chars as summary
+        f"",
+        f"## Requirements Summary",
+        f"",
+        requirements[:2000],
+        f"",
+        f"## Cross-Reference Reports",
+        f"",
+    ]
+    for i, report in enumerate(xref_reports, 1):
+        matrix_lines.append(f"### Report {i}")
+        matrix_lines.append(f"")
+        matrix_lines.append(report[:3000])
+        matrix_lines.append(f"")
+
+    matrix_content = "\n".join(matrix_lines)
+
+    # Save to workspace.
+    traceability_dir = ws / "traceability"
+    traceability_dir.mkdir(parents=True, exist_ok=True)
+    matrix_path = traceability_dir / "traceability-matrix.md"
+    try:
+        matrix_path.write_text(matrix_content, encoding="utf-8")
+        logger.info("Traceability matrix saved to %s", matrix_path)
+        return str(matrix_path)
+    except OSError as exc:
+        logger.warning("Failed to save traceability matrix: %s", exc)
+        return None
