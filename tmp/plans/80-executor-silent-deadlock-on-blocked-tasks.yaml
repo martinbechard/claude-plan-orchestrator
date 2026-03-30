@@ -20,7 +20,7 @@ sections:
     name: Add deadlock state fields and return distinguishable deadlock result from
       find_next_task
     agent: coder
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -56,6 +56,13 @@ sections:
     last_attempt: '2026-03-30T12:45:52.565751'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-30T12:52:03.204627'
+    result_message: Added deadlock_detected (bool) and deadlock_details (Optional[list[dict]])
+      to TaskState. Modified find_next_task deadlock branch to build per-task details
+      (task_id, task_name, unsatisfied_deps) and return deadlock_detected=True. Replaced
+      print with logger.warning() including blocked task IDs and unsatisfied dep IDs.
+      All non-deadlock paths return deadlock_detected=False explicitly. 8 new TDD
+      tests added and passing. Full suite 1649/1649 green.
   - id: '1.2'
     name: Propagate deadlock signal to PipelineState and handle in routing and archival
     agent: coder
