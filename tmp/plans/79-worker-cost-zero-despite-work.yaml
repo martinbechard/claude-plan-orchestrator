@@ -74,7 +74,7 @@ sections:
   - id: '1.3'
     name: Add end-to-end cost accumulation test
     agent: coder
-    status: in_progress
+    status: completed
     target_acs:
     - AC9
     description: 'Implement FR1 per design decision D3 from work item: tmp/plans/.claimed/79-worker-cost-zero-despite-work.md
@@ -85,3 +85,9 @@ sections:
     last_attempt: '2026-03-30T13:11:43.749474'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-30T13:20:48.814159'
+    result_message: 'Created tests/langgraph/pipeline/nodes/test_cost_accumulation.py
+      with 7 tests verifying end-to-end cost accumulation (D3, AC9). Tests confirm:
+      final session_cost_usd equals sum of all stage costs (0.12+0.35+0.48+1.25=2.20),
+      costs are monotonically non-decreasing across stages, each stage contributes
+      its expected delta, and costs never reset to zero. All 1721 tests pass.'
