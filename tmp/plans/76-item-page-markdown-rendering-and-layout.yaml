@@ -20,7 +20,7 @@ sections:
     name: Systems design for markdown rendering pipeline and layout containment
     agent: systems-designer
     parallel_group: design-phase0
-    status: pending
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -34,24 +34,34 @@ sections:
     - AC10
     - AC11
     - AC12
-    description: >
-      Produce a systems architecture design covering P1, P2, FR1, FR2 from work
-      item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+    description: 'Produce a systems architecture design covering P1, P2, FR1, FR2
+      from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
       Design: docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-design.md
       Requirements: docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-requirements.md
 
       Focus on: (1) the artifact-content endpoint modification to support optional
       HTML rendering for markdown files (D1), reusing the existing _render_md_to_html()
       function in item.py; (2) the data flow from server-rendered HTML to the client
-      display layer; (3) CSS grid containment strategy for the two-column layout
-      (D3) including min-width: 0 vs overflow: hidden tradeoffs; (4) how the
-      existing .requirements-body CSS styles can be reused for rendered markdown
-      in artifact viewers.
+      display layer; (3) CSS grid containment strategy for the two-column layout (D3)
+      including min-width: 0 vs overflow: hidden tradeoffs; (4) how the existing .requirements-body
+      CSS styles can be reused for rendered markdown in artifact viewers.
+
+      '
+    last_attempt: '2026-03-30T12:19:51.674230'
+    attempts: 1
+    model_used: opus
+    result_message: 'Systems architecture design produced: requirements doc (12 ACs,
+      3 NFs) and full design doc covering D1 (server-side render=html endpoint param
+      reusing _render_md_to_html), D2 (client-side .md detection with innerHTML/div
+      display), D3 (CSS grid min-width:0 + overflow:hidden containment), D4 (overflow-x:auto
+      for wide content). Includes data flow diagrams, tradeoff analysis, and AC traceability
+      grid.'
+    completed_at: '2026-03-30T12:26:20.854041'
   - id: '0.2'
     name: UX design for markdown display and layout preservation
     agent: ux-designer
     parallel_group: design-phase0
-    status: pending
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -65,25 +75,33 @@ sections:
     - AC10
     - AC11
     - AC12
-    description: >
-      Produce a UX design covering P1, P2, FR1, FR2 from work item:
-      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+    description: 'Produce a UX design covering P1, P2, FR1, FR2 from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
       Design: docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-design.md
       Requirements: docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-requirements.md
 
-      Focus on: (1) how rendered markdown should visually integrate within the
-      dark-background artifact viewers vs the white-background item cards;
-      (2) typography and spacing for rendered headings, lists, and code blocks
-      within the constrained artifact width; (3) user experience of switching
-      between markdown and non-markdown artifacts (consistent expand/collapse
-      behavior); (4) accessibility of rendered markdown content (semantic HTML,
-      proper heading hierarchy); (5) graceful handling of wide content via
-      horizontal scroll vs line wrapping.
+      Focus on: (1) how rendered markdown should visually integrate within the dark-background
+      artifact viewers vs the white-background item cards; (2) typography and spacing
+      for rendered headings, lists, and code blocks within the constrained artifact
+      width; (3) user experience of switching between markdown and non-markdown artifacts
+      (consistent expand/collapse behavior); (4) accessibility of rendered markdown
+      content (semantic HTML, proper heading hierarchy); (5) graceful handling of
+      wide content via horizontal scroll vs line wrapping.
+
+      '
+    last_attempt: '2026-03-30T12:19:51.620495'
+    attempts: 1
+    model_used: opus
+    result_message: 'UX design document produced covering all 5 focus areas: visual
+      integration (adaptive light/dark containers), typography (reusing .requirements-body
+      styles), interaction patterns (consistent expand/collapse), accessibility (semantic
+      HTML, role=document, WCAG AA contrast), and wide content handling (hybrid wrap/scroll
+      strategy). Written to docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-design-ux.md'
+    completed_at: '2026-03-30T12:24:13.283714'
   - id: '0.3'
     name: Frontend implementation design for markdown rendering and CSS fixes
     agent: frontend-coder
     parallel_group: design-phase0
-    status: pending
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -97,20 +115,30 @@ sections:
     - AC10
     - AC11
     - AC12
-    description: >
-      Produce a concrete frontend implementation design covering P1, P2, FR1, FR2
-      from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+    description: 'Produce a concrete frontend implementation design covering P1, P2,
+      FR1, FR2 from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
       Design: docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-design.md
       Requirements: docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-requirements.md
 
       Focus on: (1) JavaScript changes to loadStageArtifacts() and output artifact
-      click handler to detect .md extensions and switch between innerHTML/div vs
-      textContent/pre display (D2); (2) concrete CSS rules for grid overflow
-      containment on .item-layout children (D3); (3) CSS for rendered markdown
-      within artifact viewers -- whether to reuse .requirements-body styles or
-      create artifact-specific markdown styles (D4); (4) how to handle the
-      server-side render=html parameter in fetch calls; (5) template changes
-      needed in item.html for the dual-mode (pre vs div) artifact display.
+      click handler to detect .md extensions and switch between innerHTML/div vs textContent/pre
+      display (D2); (2) concrete CSS rules for grid overflow containment on .item-layout
+      children (D3); (3) CSS for rendered markdown within artifact viewers -- whether
+      to reuse .requirements-body styles or create artifact-specific markdown styles
+      (D4); (4) how to handle the server-side render=html parameter in fetch calls;
+      (5) template changes needed in item.html for the dual-mode (pre vs div) artifact
+      display.
+
+      '
+    last_attempt: '2026-03-30T12:19:51.728839'
+    attempts: 1
+    model_used: opus
+    result_message: 'Frontend implementation design covering D1-D4: shared loadArtifactContent()
+      JS helper for dual-mode pre/div display, CSS grid min-width:0 overflow containment,
+      .artifact-md-body + .requirements-body reuse for rendered markdown, render=html
+      endpoint parameter, and parent-level data-loaded pattern for DOM replacement
+      safety.'
+    completed_at: '2026-03-30T12:23:45.269215'
   - id: '0.4'
     name: Judge markdown rendering and layout design competition
     agent: design-judge
@@ -132,16 +160,17 @@ sections:
     - AC10
     - AC11
     - AC12
-    description: >
-      Evaluate the three competing designs for markdown rendering and layout fixes.
-      Score each against all acceptance criteria (AC1-AC12) from work item:
-      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
-      Requirements: docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-requirements.md
+    description: 'Evaluate the three competing designs for markdown rendering and
+      layout fixes. Score each against all acceptance criteria (AC1-AC12) from work
+      item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md Requirements:
+      docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-requirements.md
       Design: docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-design.md
 
       Judge against D1-D4 design decisions covering server-side markdown rendering,
       client-side markdown-aware display, CSS grid overflow containment, and overflow
       scrolling for wide content. Select the winner with written rationale.
+
+      '
   - id: '0.5'
     name: Bridge winning design to implementation tasks
     agent: planner
@@ -161,16 +190,16 @@ sections:
     - AC10
     - AC11
     - AC12
-    description: >
-      Read the winning design from the design competition (task 0.4) and extend
-      this YAML plan with concrete implementation tasks. Work item:
-      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+    description: 'Read the winning design from the design competition (task 0.4) and
+      extend this YAML plan with concrete implementation tasks. Work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
       Requirements: docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-requirements.md
       Design: docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-design.md
 
       The new tasks should cover D1-D4 and address P1, P2, FR1, FR2. Implementation
       depends on the design competition output. Tasks should be scoped to individual
       files or small groups of related changes.
+
+      '
 - id: '1'
   name: Backend - Markdown Rendering Endpoint
   status: pending
@@ -188,15 +217,15 @@ sections:
     - AC4
     - AC5
     - AC6
-    description: >
-      Implement D1 for requirements P1, FR1 from work item:
-      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+    description: 'Implement D1 for requirements P1, FR1 from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
       Design: docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-design.md
 
       Modify the GET /item/{slug}/artifact-content endpoint in item.py to accept an
       optional render=html query parameter. When the file has a .md extension and
       render=html is set, use _render_md_to_html() to return an HTMLResponse instead
       of PlainTextResponse. Include unit tests for the new parameter behavior.
+
+      '
 - id: '2'
   name: Frontend - Markdown Display and Layout Fix
   status: pending
@@ -220,17 +249,16 @@ sections:
     - AC10
     - AC11
     - AC12
-    description: >
-      Implement D2, D3, D4 for requirements P1, P2, FR1, FR2 from work item:
-      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
-      Design: docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-design.md
+    description: 'Implement D2, D3, D4 for requirements P1, P2, FR1, FR2 from work
+      item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md Design:
+      docs/plans/2026-03-30-76-item-page-markdown-rendering-and-layout-design.md
 
-      (1) Modify loadStageArtifacts() JS to detect .md file extensions and fetch
-      with render=html, displaying returned HTML via innerHTML in a styled div
-      instead of textContent in pre (D2).
+      (1) Modify loadStageArtifacts() JS to detect .md file extensions and fetch with
+      render=html, displaying returned HTML via innerHTML in a styled div instead
+      of textContent in pre (D2).
 
-      (2) Apply the same .md detection logic to the output artifacts sidebar
-      click handler (D2).
+      (2) Apply the same .md detection logic to the output artifacts sidebar click
+      handler (D2).
 
       (3) Add min-width: 0 to .item-layout left column child and overflow: hidden
       to fix the CSS grid overflow that pushes the sidebar (D3).
@@ -238,5 +266,7 @@ sections:
       (4) Add overflow-x: auto and max-width: 100% to rendered markdown containers,
       and ensure code blocks within rendered markdown scroll horizontally (D4).
 
-      (5) Style rendered markdown within artifact viewers using or extending the
-      existing .requirements-body CSS patterns.
+      (5) Style rendered markdown within artifact viewers using or extending the existing
+      .requirements-body CSS patterns.
+
+      '
