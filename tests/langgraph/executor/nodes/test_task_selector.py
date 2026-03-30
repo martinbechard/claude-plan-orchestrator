@@ -18,6 +18,7 @@ from langgraph_pipeline.executor.nodes.task_selector import (
     _load_plan_yaml,
     find_next_task,
 )
+from langgraph_pipeline.executor.state import effective_status
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -750,3 +751,96 @@ class TestFindNextTaskValidationPriority:
 
         # 0.1 already validated; 1.1 should be selected
         assert result["current_task_id"] == "1.1"
+
+
+# ─── Tests: FR2 status contract (AC11, AC12, AC13) ───────────────────────────
+
+
+class TestFR2StatusContract:
+    """Regression safety net documenting the FR2 status contract (D3, AC11, AC12, AC13).
+
+    Design decision D3 confirms that effective_status() and _completed_task_ids()
+    already enforce the correct validation-gating contract. These tests pin that
+    behavior at three layers to prevent future regressions:
+      1. effective_status()       – raw status resolution
+      2. _completed_task_ids()    – dependency-satisfied set building
+      3. _find_eligible_task()    – task scheduling decision
+    """
+
+    _VALIDATION = {"enabled": True, "run_after": ["coder"]}
+
+    # ── AC11: completed + agent in run_after + validation_attempts=0 → non-terminal ──
+
+    def test_ac11_effective_status_returns_completed_for_unvalidated_task(self):
+        """AC11: effective_status returns 'completed' (non-terminal) for a task awaiting validation."""
+        task = {"id": "0.3", "status": "completed", "agent": "coder", "validation_attempts": 0}
+        assert effective_status(task, self._VALIDATION) == "completed"
+
+    def test_ac11_completed_task_excluded_from_completed_task_ids(self):
+        """AC11: _completed_task_ids excludes a task awaiting validation from the terminal set."""
+        task = _make_task("0.3", "completed", agent="coder")
+        result = _completed_task_ids([task], self._VALIDATION)
+        assert "0.3" not in result
+
+    def test_ac11_dependent_blocked_when_prereq_awaits_validation(self):
+        """AC11: _find_eligible_task returns None when the prerequisite is 'completed' (unvalidated)."""
+        prereq = _make_task("0.3", "completed", agent="coder")
+        dependent = _make_task("0.4", "pending", deps=["0.3"])
+        completed = _completed_task_ids([prereq, dependent], self._VALIDATION)
+        assert _find_eligible_task([dependent], completed) is None
+
+    # ── AC12: completed + agent NOT in run_after → terminal ─────────────────────
+
+    def test_ac12_effective_status_returns_verified_for_non_validated_agent(self):
+        """AC12: effective_status returns 'verified' (terminal) when agent is not in run_after."""
+        task = {"id": "0.1", "status": "completed", "agent": "systems-designer"}
+        assert effective_status(task, self._VALIDATION) == "verified"
+
+    def test_ac12_non_validated_agent_included_in_completed_task_ids(self):
+        """AC12: _completed_task_ids includes a completed task whose agent is not in run_after."""
+        task = _make_task("0.1", "completed", agent="systems-designer")
+        result = _completed_task_ids([task], self._VALIDATION)
+        assert "0.1" in result
+
+    def test_ac12_dependent_unblocked_when_prereq_agent_not_in_run_after(self):
+        """AC12: _find_eligible_task selects dependent when prerequisite agent is not validated."""
+        prereq = _make_task("0.1", "completed", agent="systems-designer")
+        dependent = _make_task("0.2", "pending", deps=["0.1"])
+        completed = _completed_task_ids([prereq, dependent], self._VALIDATION)
+        result = _find_eligible_task([dependent], completed)
+        assert result is not None
+        assert result["id"] == "0.2"
+
+    # ── AC13: dependent blocked until prerequisite reaches 'verified' ────────────
+
+    def test_ac13_dependent_blocked_while_prereq_in_completed(self):
+        """AC13: _find_eligible_task returns None while prerequisite has status='completed'."""
+        prereq = _make_task("0.3", "completed", agent="coder")  # awaiting validation
+        dependent = _make_task("0.4", "pending", deps=["0.3"])
+        completed = _completed_task_ids([prereq], self._VALIDATION)
+        assert _find_eligible_task([dependent], completed) is None
+
+    def test_ac13_dependent_unblocked_once_prereq_reaches_verified(self):
+        """AC13: _find_eligible_task selects dependent after prerequisite reaches 'verified'."""
+        prereq = _make_task("0.3", "verified", agent="coder")  # validation complete
+        dependent = _make_task("0.4", "pending", deps=["0.3"])
+        completed = _completed_task_ids([prereq], self._VALIDATION)
+        result = _find_eligible_task([dependent], completed)
+        assert result is not None
+        assert result["id"] == "0.4"
+
+    def test_ac13_status_transition_completed_to_verified_unblocks_dependent(self):
+        """AC13: transition completed→verified changes _find_eligible_task result from None to the task."""
+        dependent = _make_task("0.4", "pending", deps=["0.3"])
+
+        # Before validation: prereq is 'completed' → dependent blocked
+        prereq_before = _make_task("0.3", "completed", agent="coder")
+        completed_before = _completed_task_ids([prereq_before], self._VALIDATION)
+        assert _find_eligible_task([dependent], completed_before) is None
+
+        # After validation: prereq is 'verified' → dependent unblocked
+        prereq_after = _make_task("0.3", "verified", agent="coder")
+        completed_after = _completed_task_ids([prereq_after], self._VALIDATION)
+        result = _find_eligible_task([dependent], completed_after)
+        assert result is not None
+        assert result["id"] == "0.4"
