@@ -20,7 +20,7 @@ sections:
     name: Systems design for completion grouping data model and query layer
     agent: systems-designer
     parallel_group: design-phase0
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -45,11 +45,15 @@ sections:
     last_attempt: '2026-03-30T12:41:22.815866'
     attempts: 1
     model_used: opus
+    result_message: 'Produced systems design document covering D1 (proxy list_completions_grouped
+      query), D2 (in-memory grouping fallback), SSE payload shape (attempt_count +
+      retries), and shared group_completions_by_slug() utility. Output: docs/plans/2026-03-30-81-dashboard-group-retries-per-item-design-1-systems.md'
+    completed_at: '2026-03-30T12:45:33.132539'
   - id: '0.2'
     name: UX design for retry grouping and expandable history
     agent: ux-designer
     parallel_group: design-phase0
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -76,6 +80,12 @@ sections:
     last_attempt: '2026-03-30T12:41:22.803578'
     attempts: 1
     model_used: opus
+    result_message: 'Produced UX design document covering D3 (retry count badge: compact
+      x2 pill, neutral gray, placed after outcome badge) and D4 (disclosure triangle
+      with full-cell click target, indented muted sub-rows, aria-expanded keyboard
+      navigation). Includes cost aggregation strategy (summed cost on primary, final-attempt
+      duration) and full AC traceability grid.'
+    completed_at: '2026-03-30T12:45:27.083480'
   - id: '0.3'
     name: Frontend implementation design for retry grouping UI
     agent: frontend-coder

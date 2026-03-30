@@ -20,7 +20,7 @@ sections:
   - id: '1.1'
     name: Add validation-pending scan to find_next_task and new routing edge
     agent: coder
-    status: pending
+    status: in_progress
     target_acs:
     - AC1
     - AC2
@@ -32,18 +32,17 @@ sections:
     - AC8
     - AC9
     - AC10
-    description: >
-      Implement D1 and D2 for requirements P1, P2, FR1 from work item:
-      tmp/plans/.claimed/77-parallel-tasks-not-validated-before-dependents.md
-      Design: docs/plans/2026-03-30-77-parallel-tasks-not-validated-before-dependents-design.md
+    description: 'Implement D1 and D2 for requirements P1, P2, FR1 from work item:
+      tmp/plans/.claimed/77-parallel-tasks-not-validated-before-dependents.md Design:
+      docs/plans/2026-03-30-77-parallel-tasks-not-validated-before-dependents-design.md
       Requirements: docs/plans/2026-03-30-77-parallel-tasks-not-validated-before-dependents-requirements.md
 
       Three files to modify:
 
       (1) langgraph_pipeline/executor/nodes/task_selector.py -- In find_next_task,
       before the pending_tasks scan, add a scan for tasks with status="completed",
-      agent in validation run_after list, and validation_attempts==0. If found,
-      return the first as current_task_id (with appropriate trace metadata and logging).
+      agent in validation run_after list, and validation_attempts==0. If found, return
+      the first as current_task_id (with appropriate trace metadata and logging).
 
       (2) langgraph_pipeline/executor/edges.py -- Add ROUTE_NEEDS_VALIDATION constant.
       Modify parallel_check() to return ROUTE_NEEDS_VALIDATION when the current task
@@ -55,9 +54,14 @@ sections:
 
       Include unit tests in tests/langgraph/executor/nodes/test_task_selector.py and
       tests/langgraph/executor/test_edges.py covering: (a) find_next_task selects
-      unvalidated completed task over pending tasks, (b) parallel_check returns
-      ROUTE_NEEDS_VALIDATION for completed tasks, (c) the full routing path from
-      find_next_task through validate_task works for the reproduction scenario.
+      unvalidated completed task over pending tasks, (b) parallel_check returns ROUTE_NEEDS_VALIDATION
+      for completed tasks, (c) the full routing path from find_next_task through validate_task
+      works for the reproduction scenario.
+
+      '
+    last_attempt: '2026-03-30T12:46:34.052902'
+    attempts: 1
+    model_used: sonnet
   - id: '1.2'
     name: Verify FR2 status contract with targeted tests
     agent: coder
@@ -66,25 +70,25 @@ sections:
     - AC11
     - AC12
     - AC13
-    description: >
-      Verify D3 for requirement FR2 from work item:
-      tmp/plans/.claimed/77-parallel-tasks-not-validated-before-dependents.md
+    description: 'Verify D3 for requirement FR2 from work item: tmp/plans/.claimed/77-parallel-tasks-not-validated-before-dependents.md
       Design: docs/plans/2026-03-30-77-parallel-tasks-not-validated-before-dependents-design.md
       Requirements: docs/plans/2026-03-30-77-parallel-tasks-not-validated-before-dependents-requirements.md
 
-      Add targeted tests to tests/langgraph/executor/test_edges.py or
-      tests/langgraph/executor/nodes/test_task_selector.py confirming:
+      Add targeted tests to tests/langgraph/executor/test_edges.py or tests/langgraph/executor/nodes/test_task_selector.py
+      confirming:
 
-      (a) AC11: For a task with status="completed", agent in run_after,
-      validation_attempts=0 -- effective_status returns "completed" (non-terminal)
-      and _completed_task_ids excludes it, so dependents remain blocked.
+      (a) AC11: For a task with status="completed", agent in run_after, validation_attempts=0
+      -- effective_status returns "completed" (non-terminal) and _completed_task_ids
+      excludes it, so dependents remain blocked.
 
-      (b) AC12: For a task with status="completed", agent NOT in run_after --
-      effective_status returns "verified" (terminal) and _completed_task_ids
-      includes it, so dependents can proceed.
+      (b) AC12: For a task with status="completed", agent NOT in run_after -- effective_status
+      returns "verified" (terminal) and _completed_task_ids includes it, so dependents
+      can proceed.
 
-      (c) AC13: A dependent task with a prerequisite in "completed" (needing
-      validation) is not selected by _find_eligible_task until the prerequisite
-      reaches "verified" status.
+      (c) AC13: A dependent task with a prerequisite in "completed" (needing validation)
+      is not selected by _find_eligible_task until the prerequisite reaches "verified"
+      status.
 
       These tests document the existing behavior as a regression safety net.
+
+      '

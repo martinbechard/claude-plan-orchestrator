@@ -17,9 +17,10 @@ sections:
   status: pending
   tasks:
   - id: '1.1'
-    name: Add deadlock state fields and return distinguishable deadlock result from find_next_task
+    name: Add deadlock state fields and return distinguishable deadlock result from
+      find_next_task
     agent: coder
-    status: pending
+    status: in_progress
     target_acs:
     - AC1
     - AC2
@@ -31,28 +32,30 @@ sections:
     - AC10
     - AC13
     - AC14
-    description: >
-      Implement requirements P1, P2, FR1, FR2, FR4 and design decisions D1, D2
-      from work item: tmp/plans/.claimed/80-executor-silent-deadlock-on-blocked-tasks.md
+    description: 'Implement requirements P1, P2, FR1, FR2, FR4 and design decisions
+      D1, D2 from work item: tmp/plans/.claimed/80-executor-silent-deadlock-on-blocked-tasks.md
       Design: docs/plans/2026-03-30-80-executor-silent-deadlock-on-blocked-tasks-design.md
       Requirements: docs/plans/2026-03-30-80-executor-silent-deadlock-on-blocked-tasks-requirements.md
 
-      In langgraph_pipeline/executor/state.py:
-      (D1) Add deadlock_detected: bool and deadlock_details: Optional[list[dict]] fields
-      to TaskState.
+      In langgraph_pipeline/executor/state.py: (D1) Add deadlock_detected: bool and
+      deadlock_details: Optional[list[dict]] fields to TaskState.
 
-      In langgraph_pipeline/executor/nodes/task_selector.py:
-      (D1) Modify the deadlock branch in find_next_task to build deadlock_details
-      (task_id, task_name, unsatisfied_deps for each pending task) and return
-      deadlock_detected=True in the state dict.
+      In langgraph_pipeline/executor/nodes/task_selector.py: (D1) Modify the deadlock
+      branch in find_next_task to build deadlock_details (task_id, task_name, unsatisfied_deps
+      for each pending task) and return deadlock_detected=True in the state dict.
       (D2) Replace the existing print statement with logger.warning() that includes
       blocked task IDs and their unsatisfied dependency IDs. Enhance add_trace_metadata
       to include deadlock_details.
 
       Update tests in tests/langgraph/executor/nodes/test_task_selector.py to verify:
       deadlock branch returns deadlock_detected=True with correct deadlock_details;
-      normal completion returns deadlock_detected=False;
-      warning log is emitted at correct level with task and dependency details.
+      normal completion returns deadlock_detected=False; warning log is emitted at
+      correct level with task and dependency details.
+
+      '
+    last_attempt: '2026-03-30T12:45:52.565751'
+    attempts: 1
+    model_used: sonnet
   - id: '1.2'
     name: Propagate deadlock signal to PipelineState and handle in routing and archival
     agent: coder
@@ -64,31 +67,31 @@ sections:
     - AC6
     - AC11
     - AC12
-    description: >
-      Implement requirements P3, FR3 and design decisions D3, D4
-      from work item: tmp/plans/.claimed/80-executor-silent-deadlock-on-blocked-tasks.md
+    description: 'Implement requirements P3, FR3 and design decisions D3, D4 from
+      work item: tmp/plans/.claimed/80-executor-silent-deadlock-on-blocked-tasks.md
       Design: docs/plans/2026-03-30-80-executor-silent-deadlock-on-blocked-tasks-design.md
       Requirements: docs/plans/2026-03-30-80-executor-silent-deadlock-on-blocked-tasks-requirements.md
 
-      In langgraph_pipeline/pipeline/state.py:
-      (D3) Add executor_deadlock: bool and executor_deadlock_details: Optional[list[dict]]
-      fields to PipelineState.
+      In langgraph_pipeline/pipeline/state.py: (D3) Add executor_deadlock: bool and
+      executor_deadlock_details: Optional[list[dict]] fields to PipelineState.
 
-      In langgraph_pipeline/pipeline/nodes/execute_plan.py:
-      (D3) After executor.invoke(), read final_task_state deadlock_detected and
-      deadlock_details and return them as executor_deadlock and executor_deadlock_details
-      in the PipelineState update dict.
+      In langgraph_pipeline/pipeline/nodes/execute_plan.py: (D3) After executor.invoke(),
+      read final_task_state deadlock_detected and deadlock_details and return them
+      as executor_deadlock and executor_deadlock_details in the PipelineState update
+      dict.
 
-      In langgraph_pipeline/pipeline/edges.py:
-      (D4) Modify route_after_execution to check state["executor_deadlock"]. When True,
-      route to NODE_ARCHIVE (skip verify for defects) and log warning with details.
+      In langgraph_pipeline/pipeline/edges.py: (D4) Modify route_after_execution to
+      check state["executor_deadlock"]. When True, route to NODE_ARCHIVE (skip verify
+      for defects) and log warning with details.
 
-      In langgraph_pipeline/pipeline/nodes/archival.py:
-      (D4) Add ARCHIVE_OUTCOME_DEADLOCK = "deadlock". Modify _determine_outcome to check
-      state["executor_deadlock"] and return "deadlock" outcome. Modify _build_slack_message
-      to handle deadlock outcome with error-level notification listing blocked tasks.
+      In langgraph_pipeline/pipeline/nodes/archival.py: (D4) Add ARCHIVE_OUTCOME_DEADLOCK
+      = "deadlock". Modify _determine_outcome to check state["executor_deadlock"]
+      and return "deadlock" outcome. Modify _build_slack_message to handle deadlock
+      outcome with error-level notification listing blocked tasks.
 
-      Update tests in:
-      - tests/langgraph/pipeline/nodes/test_execute_plan.py: deadlock propagation
-      - tests/langgraph/pipeline/test_edges.py: route_after_execution with deadlock
-      - tests/langgraph/pipeline/nodes/test_archival.py: deadlock outcome handling
+      Update tests in: - tests/langgraph/pipeline/nodes/test_execute_plan.py: deadlock
+      propagation - tests/langgraph/pipeline/test_edges.py: route_after_execution
+      with deadlock - tests/langgraph/pipeline/nodes/test_archival.py: deadlock outcome
+      handling
+
+      '
