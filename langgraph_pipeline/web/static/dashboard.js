@@ -153,6 +153,7 @@ var latestWorkers = [];
 var latestCompletions = [];
 var colorMode = COLOR_MODE_TYPE;
 var prevActiveSlugSet = new Set();
+var expandedRetrySlugs = new Set();
 
 function getStoredView() {
   try {
@@ -327,41 +328,117 @@ function renderWorkers(workers) {
   container.appendChild(fragment);
 }
 
+/**
+ * Inserts or removes retry sub-rows after the given primary row.
+ * Updates expandedRetrySlugs to preserve state across SSE re-renders.
+ * @param {HTMLTableRowElement} primaryRow - The <tr> for the grouped entry.
+ * @param {Array} retries - Array of prior-attempt objects (newest-first).
+ * @param {boolean} expand - true to insert sub-rows, false to remove.
+ */
+function toggleRetryRows(primaryRow, retries, expand) {
+  var toggle = primaryRow.querySelector(".retry-toggle");
+  var slug = primaryRow.getAttribute("data-slug");
+
+  // Remove existing sub-rows for this slug (idempotent cleanup)
+  var existing = primaryRow.parentNode.querySelectorAll(
+    'tr.retry-sub-row[data-parent-slug="' + slug + '"]'
+  );
+  existing.forEach(function(el) { el.remove(); });
+
+  if (expand) {
+    toggle.setAttribute("aria-expanded", "true");
+    toggle.setAttribute("aria-label", "Hide retry history");
+    primaryRow.setAttribute("data-expanded", "true");
+    expandedRetrySlugs.add(slug);
+
+    var totalAttempts = retries.length + 1;
+    var fragment = document.createDocumentFragment();
+
+    retries.forEach(function(r, idx) {
+      var clone = stampTemplate("tpl-retry-row");
+      var subRow = clone.querySelector("tr");
+      subRow.setAttribute("data-parent-slug", slug);
+
+      // Retries are newest-first; first retry is attempt (totalAttempts - 1)
+      var attemptNum = totalAttempts - 1 - idx;
+      clone.querySelector(".retry-attempt-label").textContent = "Attempt " + attemptNum;
+
+      var outcomeEl = clone.querySelector(".outcome-badge");
+      outcomeEl.textContent = r.outcome;
+      outcomeEl.classList.add(outcomeBadgeClass(r.outcome));
+
+      clone.querySelector(".retry-sub-cost").textContent = fmtCost(r.cost_usd);
+      clone.querySelector(".retry-sub-duration").textContent = fmtElapsed(r.duration_s || 0);
+      clone.querySelector(".retry-sub-finished").textContent = fmtFinished(r.finished_at);
+
+      var traceLink = clone.querySelector(".trace-link");
+      if (r.run_id) {
+        traceLink.href = "/proxy?trace_id=" + encodeURIComponent(r.run_id);
+        traceLink.style.display = "";
+      }
+
+      fragment.appendChild(clone);
+    });
+
+    primaryRow.after(fragment);
+  } else {
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-label", "Show retry history");
+    primaryRow.setAttribute("data-expanded", "false");
+    expandedRetrySlugs.delete(slug);
+  }
+}
+
 function renderCompletions(completions) {
-  const tbody = document.getElementById("completions-container");
-  const emptyRow = document.getElementById("completions-empty");
+  var tbody = document.getElementById("completions-container");
+  var emptyRow = document.getElementById("completions-empty");
 
   if (!completions || completions.length === 0) {
     emptyRow.style.display = "";
-    Array.from(tbody.querySelectorAll("tr:not(#completions-empty)")).forEach(el => el.remove());
+    Array.from(tbody.querySelectorAll("tr:not(#completions-empty)")).forEach(function(el) { el.remove(); });
+    expandedRetrySlugs.clear();
     return;
   }
 
   emptyRow.style.display = "none";
 
-  const fragment = document.createDocumentFragment();
+  var fragment = document.createDocumentFragment();
   completions.forEach(function(c) {
-    const clone = stampTemplate("tpl-completion-row");
+    var clone = stampTemplate("tpl-completion-row");
 
-    const completionSlugEl = clone.querySelector(".completion-slug");
-    const completionSlugLink = document.createElement("a");
+    var completionSlugEl = clone.querySelector(".completion-slug");
+    var hasRetries = c.attempt_count > 1 && c.retries && c.retries.length > 0;
+
+    var toggle = clone.querySelector(".retry-toggle");
+    if (hasRetries) {
+      toggle.style.display = "";
+    }
+
+    var completionSlugLink = document.createElement("a");
     completionSlugLink.href = "/item/" + encodeURIComponent(c.slug);
     completionSlugLink.textContent = c.slug;
     completionSlugEl.appendChild(completionSlugLink);
 
-    const typeEl = clone.querySelector(".item-type-badge");
+    var typeEl = clone.querySelector(".item-type-badge");
     typeEl.textContent = c.item_type;
     typeEl.classList.add(itemTypeBadgeClass(c.item_type));
 
-    const outcomeEl = clone.querySelector(".outcome-badge");
+    var outcomeEl = clone.querySelector(".outcome-badge");
     outcomeEl.textContent = c.outcome;
     outcomeEl.classList.add(outcomeBadgeClass(c.outcome));
 
+    var retryBadge = clone.querySelector(".retry-count-badge");
+    if (c.attempt_count > 1) {
+      retryBadge.textContent = "x" + c.attempt_count;
+      retryBadge.setAttribute("aria-label", c.attempt_count + " attempts");
+      retryBadge.style.display = "";
+    }
+
     clone.querySelector(".completion-cost").textContent = fmtCost(c.cost_usd);
-    clone.querySelector(".completion-duration").textContent = fmtElapsed(c.duration_s ?? 0);
+    clone.querySelector(".completion-duration").textContent = fmtElapsed(c.duration_s || 0);
     clone.querySelector(".completion-finished").textContent = fmtFinished(c.finished_at);
 
-    const traceLink = clone.querySelector(".trace-link");
+    var traceLink = clone.querySelector(".trace-link");
     if (c.run_id) {
       traceLink.href = "/proxy?trace_id=" + encodeURIComponent(c.run_id);
       traceLink.style.display = "";
@@ -369,11 +446,39 @@ function renderCompletions(completions) {
       traceLink.style.display = "none";
     }
 
+    var primaryRow = clone.querySelector("tr");
+    primaryRow.setAttribute("data-slug", c.slug);
+    if (hasRetries) {
+      primaryRow.setAttribute("data-has-retries", "true");
+      // IIFE captures correct row/retries reference for each forEach iteration
+      (function(row, retries) {
+        toggle.addEventListener("click", function(evt) {
+          evt.stopPropagation();
+          var expanded = row.getAttribute("data-expanded") === "true";
+          toggleRetryRows(row, retries, !expanded);
+        });
+      })(primaryRow, c.retries);
+    }
+
     fragment.appendChild(clone);
   });
 
-  Array.from(tbody.querySelectorAll("tr:not(#completions-empty)")).forEach(el => el.remove());
+  Array.from(tbody.querySelectorAll("tr:not(#completions-empty)")).forEach(function(el) { el.remove(); });
   tbody.appendChild(fragment);
+
+  // Restore expanded state after SSE re-render
+  expandedRetrySlugs.forEach(function(slug) {
+    var match = completions.find(function(c) { return c.slug === slug; });
+    if (match && match.retries && match.retries.length > 0) {
+      var row = tbody.querySelector('tr[data-slug="' + slug + '"]');
+      if (row) {
+        toggleRetryRows(row, match.retries, true);
+      }
+    } else {
+      // Slug scrolled out of window or no longer has retries
+      expandedRetrySlugs.delete(slug);
+    }
+  });
 }
 
 function renderErrors(errors) {
@@ -394,9 +499,13 @@ function renderErrors(errors) {
   badge.style.display = "";
 
   const fragment = document.createDocumentFragment();
-  errors.forEach(function(msg) {
+  errors.forEach(function(entry) {
     const clone = stampTemplate("tpl-error-row");
-    clone.querySelector(".error-row").textContent = msg;
+    var row = clone.querySelector(".error-row");
+    var ts = row.querySelector(".error-timestamp");
+    var msgEl = row.querySelector(".error-message");
+    ts.textContent = fmtFinished(entry.timestamp);
+    msgEl.textContent = entry.message;
     fragment.appendChild(clone);
   });
 
@@ -688,7 +797,7 @@ function renderAll(data) {
   renderTimeline(workers, latestCompletions);
   applyView(currentView);
   renderCompletions(latestCompletions);
-  renderErrors(data.recent_errors);
+  renderErrors(data.recent_notifications);
 }
 
 // ── Connection status ──────────────────────────────────────────────────────────

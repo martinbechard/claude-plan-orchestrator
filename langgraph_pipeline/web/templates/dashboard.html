@@ -104,17 +104,17 @@
   </div>
 </section>
 
-{# ── Error stream panel (collapsible) ──────────────────────────────────────── #}
-<section aria-labelledby="hd-errors">
+{# ── Notifications panel (collapsible) ─────────────────────────────────────── #}
+<section aria-labelledby="hd-notifications">
   <details class="error-panel" id="error-panel">
-    <summary id="hd-errors">
-      Error Stream
+    <summary id="hd-notifications">
+      Notifications
       <span class="error-count-badge" id="error-count-badge" aria-live="polite"></span>
     </summary>
-    <div class="error-list" id="errors-container" aria-label="Error stream" role="log" aria-live="polite">
+    <div class="error-list" id="errors-container" aria-label="Notifications" role="log" aria-live="polite">
       <div class="empty-state" id="errors-empty">
-        <div><strong>No errors recorded</strong></div>
-        <div>Errors will appear here if any occur.</div>
+        <div><strong>No notifications</strong></div>
+        <div>Errors, quota alerts, and worker crashes will appear here.</div>
       </div>
     </div>
   </details>
@@ -140,21 +140,49 @@
 {# Completion row template — one <tr> per recent_completions entry #}
 <template id="tpl-completion-row">
   <tr>
-    <td class="completion-slug"></td>
+    <td class="completion-slug">
+      <button class="retry-toggle" type="button"
+              aria-expanded="false" aria-label="Show retry history"
+              style="display:none">&#9654;</button>
+    </td>
     <td class="completion-trace">
       <a class="trace-link" href="#" target="_blank" rel="noopener" style="display:none" aria-label="View trace">Trace</a>
     </td>
     <td><span class="badge item-type-badge"></span></td>
-    <td><span class="badge outcome-badge"></span></td>
+    <td class="completion-outcome-cell">
+      <span class="badge outcome-badge"></span>
+      <span class="retry-count-badge" style="display:none" aria-label="Retry count"></span>
+    </td>
     <td class="completion-cost" style="text-align:right"></td>
     <td class="completion-duration" style="text-align:right"></td>
     <td class="completion-finished"></td>
   </tr>
 </template>
 
-{# Error row template — one <p> per recent_errors entry #}
+{# Retry sub-row template — one <tr> per prior attempt in a grouped completion entry #}
+<template id="tpl-retry-row">
+  <tr class="retry-sub-row">
+    <td class="retry-sub-slug">
+      <span class="retry-attempt-label"></span>
+    </td>
+    <td class="retry-sub-trace">
+      <a class="trace-link" href="#" target="_blank" rel="noopener"
+         style="display:none" aria-label="View trace">Trace</a>
+    </td>
+    <td></td>
+    <td><span class="badge outcome-badge"></span></td>
+    <td class="retry-sub-cost" style="text-align:right"></td>
+    <td class="retry-sub-duration" style="text-align:right"></td>
+    <td class="retry-sub-finished"></td>
+  </tr>
+</template>
+
+{# Notification row template — one <p> per recent_notifications entry #}
 <template id="tpl-error-row">
-  <p class="error-row"></p>
+  <p class="error-row">
+    <span class="error-timestamp"></span>
+    <span class="error-message"></span>
+  </p>
 </template>
 
 {# Timeline row template — one instance per worker or completion in timeline view #}
