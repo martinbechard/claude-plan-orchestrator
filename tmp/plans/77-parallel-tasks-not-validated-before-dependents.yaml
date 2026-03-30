@@ -20,7 +20,7 @@ sections:
   - id: '1.1'
     name: Add validation-pending scan to find_next_task and new routing edge
     agent: coder
-    status: completed
+    status: verified
     target_acs:
     - AC1
     - AC2
@@ -73,10 +73,16 @@ sections:
       cases, TestRouteAfterFindNextTaskNeedsValidation, ROUTE_NEEDS_VALIDATION constant
       test). Fixed existing test_completed_blocks_dependent_when_validation_enabled
       to reflect correct new behavior. All 1670 tests pass.
+    validation_attempts: 1
+    validation_findings: All 10 acceptance criteria (AC1-AC10) for D1 and D2 are satisfied.
+      Validation-pending scan in find_next_task correctly prioritizes unvalidated
+      completed tasks over new work. ROUTE_NEEDS_VALIDATION routing in parallel_check
+      and _route_after_find_next_task correctly directs to existing validate_task
+      node. 1696 tests pass, no regressions, no placeholders.
   - id: '1.2'
     name: Verify FR2 status contract with targeted tests
     agent: coder
-    status: pending
+    status: in_progress
     target_acs:
     - AC11
     - AC12
@@ -103,3 +109,6 @@ sections:
       These tests document the existing behavior as a regression safety net.
 
       '
+    last_attempt: '2026-03-30T13:02:25.975789'
+    attempts: 1
+    model_used: sonnet
