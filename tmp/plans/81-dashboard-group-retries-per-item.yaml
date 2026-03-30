@@ -99,7 +99,7 @@ sections:
   - id: '1.1'
     name: Create shared grouping utility and integrate into proxy and dashboard_state
     agent: coder
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -132,6 +132,12 @@ sections:
     last_attempt: '2026-03-30T13:07:10.133335'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-30T13:10:29.924219'
+    result_message: Created completion_grouping.py with group_completions_by_slug()
+      pure function. Added list_completions_grouped() to TracingProxy (over-fetches
+      limit*3, groups via utility). Updated DashboardState.snapshot() to use grouped
+      proxy path and apply grouping to in-memory fallback. Added 7 unit tests for
+      grouping utility and 2 snapshot integration tests. 1714 tests passing.
 - id: '2'
   name: Frontend retry grouping UI
   status: pending
