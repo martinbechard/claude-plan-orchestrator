@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Add pre-archive task validation and incomplete outcome to archival node
     agent: coder
-    status: completed
+    status: verified
     target_acs:
     - AC1
     - AC2
@@ -61,3 +61,8 @@ sections:
       when non-empty; _build_slack_message handles incomplete outcome with warning
       level listing task IDs; _write_archive_warnings persists archive-warnings.txt
       to worker-output. All 52 archival tests pass (1641 total, no regressions).'
+    validation_attempts: 1
+    validation_findings: All 10 acceptance criteria met. 52/52 archival tests pass.
+      1641/1641 full suite passes. ARCHIVE_TERMINAL_STATUSES, _find_non_terminal_tasks,
+      ARCHIVE_OUTCOME_INCOMPLETE, _build_slack_message incomplete branch, and _write_archive_warnings
+      all implemented and verified.
