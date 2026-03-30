@@ -6,7 +6,7 @@ Two issues with the item detail page artifact display:
 
 2. When an artifact section is expanded, it takes the full page width and pushes or overlaps the right column (plan tasks, completion history, etc.). Expanded content should stay within its column and not affect the sidebar layout.
 
-## LangSmith Trace: 99120759-34e0-479c-85fd-c71427c82cc2
+
 
 
 ## 5 Whys Analysis
