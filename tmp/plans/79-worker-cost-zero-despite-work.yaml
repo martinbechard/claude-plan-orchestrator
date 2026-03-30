@@ -20,7 +20,7 @@ sections:
     name: Add additive cost propagation to intake, requirements, plan_creation, and
       verification nodes
     agent: coder
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -36,6 +36,12 @@ sections:
     last_attempt: '2026-03-30T12:42:22.827296'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-30T12:46:02.722638'
+    result_message: Added additive session_cost_usd propagation to intake_analyze,
+      structure_requirements, create_plan, and verify_fix nodes. Each node now reads
+      state["session_cost_usd"] (defaulting to 0.0) and returns prior_cost + total_cost_usd,
+      ensuring costs accumulate monotonically across all pipeline node boundaries.
+      All 1623 tests pass.
   - id: '1.2'
     name: Fix additive merge in execute_plan for executor subgraph costs
     agent: coder
