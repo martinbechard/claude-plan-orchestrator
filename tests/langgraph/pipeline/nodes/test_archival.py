@@ -12,9 +12,13 @@ import pytest
 
 from langgraph_pipeline.pipeline.nodes.archival import (
     ARCHIVE_OUTCOME_EXHAUSTED,
+    ARCHIVE_OUTCOME_INCOMPLETE,
     ARCHIVE_OUTCOME_SUCCESS,
+    ARCHIVE_TERMINAL_STATUSES,
+    ARCHIVE_WARNINGS_FILENAME,
     _build_slack_message,
     _determine_outcome,
+    _find_non_terminal_tasks,
     _last_verification_outcome,
     _move_item_to_completed,
     _remove_plan_yaml,
@@ -61,6 +65,71 @@ def _make_defect_fail_state(cycle: int = 3) -> dict:
             {"outcome": "FAIL", "timestamp": "2026-01-01T00:00:00+00:00", "notes": "Still broken."}
         ],
     )
+
+
+def _write_plan_yaml(path, sections_data) -> None:
+    """Write a minimal plan YAML to *path* with the given sections structure."""
+    import yaml
+    data = {"sections": sections_data}
+    Path(path).write_text(yaml.dump(data))
+
+
+# ─── _find_non_terminal_tasks ─────────────────────────────────────────────────
+
+
+class TestFindNonTerminalTasks:
+    def test_returns_empty_when_plan_path_none(self):
+        assert _find_non_terminal_tasks(None) == []
+
+    def test_returns_empty_when_plan_file_missing(self, tmp_path):
+        assert _find_non_terminal_tasks(str(tmp_path / "nonexistent.yaml")) == []
+
+    def test_returns_empty_when_all_tasks_terminal(self, tmp_path):
+        plan = tmp_path / "plan.yaml"
+        _write_plan_yaml(plan, [
+            {"id": "1", "name": "S1", "tasks": [
+                {"id": "1.1", "name": "Task A", "status": "verified"},
+                {"id": "1.2", "name": "Task B", "status": "failed"},
+                {"id": "1.3", "name": "Task C", "status": "skipped"},
+            ]}
+        ])
+        assert _find_non_terminal_tasks(str(plan)) == []
+
+    def test_returns_non_terminal_tasks_when_mixed(self, tmp_path):
+        plan = tmp_path / "plan.yaml"
+        _write_plan_yaml(plan, [
+            {"id": "1", "name": "S1", "tasks": [
+                {"id": "1.1", "name": "Done Task", "status": "verified"},
+                {"id": "1.2", "name": "Pending Task", "status": "pending"},
+                {"id": "1.3", "name": "Blocked Task", "status": "blocked"},
+            ]}
+        ])
+        result = _find_non_terminal_tasks(str(plan))
+        assert len(result) == 2
+        assert ("1.2", "Pending Task", "pending") in result
+        assert ("1.3", "Blocked Task", "blocked") in result
+
+    def test_enumerates_tasks_across_all_sections(self, tmp_path):
+        plan = tmp_path / "plan.yaml"
+        _write_plan_yaml(plan, [
+            {"id": "1", "name": "S1", "tasks": [
+                {"id": "1.1", "name": "Task A", "status": "verified"},
+            ]},
+            {"id": "2", "name": "S2", "tasks": [
+                {"id": "2.1", "name": "Task B", "status": "pending"},
+            ]},
+        ])
+        result = _find_non_terminal_tasks(str(plan))
+        assert result == [("2.1", "Task B", "pending")]
+
+    def test_terminal_statuses_are_exactly_verified_failed_skipped(self):
+        assert ARCHIVE_TERMINAL_STATUSES == {"verified", "failed", "skipped"}
+
+    def test_returns_empty_when_sections_key_missing(self, tmp_path):
+        plan = tmp_path / "plan.yaml"
+        import yaml
+        plan.write_text(yaml.dump({"meta": {"name": "test"}}))
+        assert _find_non_terminal_tasks(str(plan)) == []
 
 
 # ─── _last_verification_outcome ───────────────────────────────────────────────
@@ -118,6 +187,24 @@ class TestDetermineOutcome:
     def test_defect_with_no_history_is_success(self):
         state = _make_state(item_type="defect", verification_history=[])
         assert _determine_outcome(state) == ARCHIVE_OUTCOME_SUCCESS
+
+    def test_non_terminal_tasks_override_feature_success(self):
+        state = _make_state(item_type="feature", verification_history=[])
+        pending = [("1.1", "Task", "pending")]
+        assert _determine_outcome(state, pending) == ARCHIVE_OUTCOME_INCOMPLETE
+
+    def test_non_terminal_tasks_override_defect_pass(self):
+        state = _make_state(item_type="defect")  # has PASS record
+        pending = [("1.2", "Task", "blocked")]
+        assert _determine_outcome(state, pending) == ARCHIVE_OUTCOME_INCOMPLETE
+
+    def test_empty_non_terminal_list_does_not_change_outcome(self):
+        state = _make_state(item_type="feature", verification_history=[])
+        assert _determine_outcome(state, []) == ARCHIVE_OUTCOME_SUCCESS
+
+    def test_none_non_terminal_does_not_change_outcome(self):
+        state = _make_state(item_type="feature", verification_history=[])
+        assert _determine_outcome(state, None) == ARCHIVE_OUTCOME_SUCCESS
 
 
 # ─── _move_item_to_completed ──────────────────────────────────────────────────
@@ -196,6 +283,24 @@ class TestBuildSlackMessage:
     def test_type_label_capitalized_in_message(self):
         msg, _ = _build_slack_message("X", "feature", ARCHIVE_OUTCOME_SUCCESS)
         assert "Feature" in msg
+
+    def test_incomplete_message_has_warning_level(self):
+        pending = [("1.1", "My Task", "pending")]
+        _, level = _build_slack_message("Item", "feature", ARCHIVE_OUTCOME_INCOMPLETE, pending)
+        assert level == "warning"
+
+    def test_incomplete_message_contains_incomplete(self):
+        pending = [("1.1", "My Task", "pending")]
+        msg, _ = _build_slack_message("Item", "feature", ARCHIVE_OUTCOME_INCOMPLETE, pending)
+        assert "incomplete" in msg.lower()
+
+    def test_incomplete_message_lists_task_id(self):
+        pending = [("1.2", "Pending Task", "pending"), ("1.3", "Blocked Task", "blocked")]
+        msg, _ = _build_slack_message("Item", "defect", ARCHIVE_OUTCOME_INCOMPLETE, pending)
+        assert "1.2" in msg
+        assert "1.3" in msg
+        assert "pending" in msg
+        assert "blocked" in msg
 
 
 # ─── archive node ─────────────────────────────────────────────────────────────
@@ -301,6 +406,91 @@ class TestArchive:
             result = archive(state)  # Should not raise
 
         assert result == {}
+
+
+# ─── archive node — pending tasks integration ─────────────────────────────────
+
+
+class TestArchiveWithPendingTasks:
+    def _make_plan_with_pending(self, tmp_path) -> str:
+        """Write a plan YAML with one verified task and one pending task."""
+        plan = tmp_path / "01-bug.yaml"
+        _write_plan_yaml(plan, [
+            {"id": "1", "name": "Section", "tasks": [
+                {"id": "1.1", "name": "Done", "status": "verified"},
+                {"id": "1.2", "name": "Pending Task", "status": "pending"},
+            ]}
+        ])
+        return str(plan)
+
+    def test_outcome_is_incomplete_when_pending_tasks_remain(self, tmp_path):
+        plan_path = self._make_plan_with_pending(tmp_path)
+        state = _make_state(item_path="", plan_path=plan_path)
+
+        with patch("langgraph_pipeline.pipeline.nodes.archival.SlackNotifier") as mock_cls, \
+             patch("langgraph_pipeline.pipeline.nodes.archival.WORKER_OUTPUT_DIR", tmp_path), \
+             patch("langgraph_pipeline.pipeline.nodes.archival._preserve_plan_yaml"):
+            mock_instance = MagicMock()
+            mock_cls.return_value = mock_instance
+            archive(state)
+
+        call_kwargs = mock_instance.send_status.call_args
+        level = call_kwargs[1].get("level") or (
+            call_kwargs[0][1] if len(call_kwargs[0]) >= 2 else None
+        )
+        assert level == "warning"
+
+    def test_slack_message_lists_non_terminal_tasks(self, tmp_path):
+        plan_path = self._make_plan_with_pending(tmp_path)
+        state = _make_state(item_path="", plan_path=plan_path)
+
+        with patch("langgraph_pipeline.pipeline.nodes.archival.SlackNotifier") as mock_cls, \
+             patch("langgraph_pipeline.pipeline.nodes.archival.WORKER_OUTPUT_DIR", tmp_path), \
+             patch("langgraph_pipeline.pipeline.nodes.archival._preserve_plan_yaml"):
+            mock_instance = MagicMock()
+            mock_cls.return_value = mock_instance
+            archive(state)
+
+        call_kwargs = mock_instance.send_status.call_args
+        message = call_kwargs[0][0]
+        assert "1.2" in message
+        assert "pending" in message
+
+    def test_archive_warnings_file_written_to_worker_output(self, tmp_path):
+        plan_path = self._make_plan_with_pending(tmp_path)
+        slug = "01-bug"
+        state = _make_state(item_slug=slug, item_path="", plan_path=plan_path)
+
+        with patch("langgraph_pipeline.pipeline.nodes.archival.SlackNotifier") as mock_cls, \
+             patch("langgraph_pipeline.pipeline.nodes.archival.WORKER_OUTPUT_DIR", tmp_path), \
+             patch("langgraph_pipeline.pipeline.nodes.archival._preserve_plan_yaml"):
+            mock_cls.return_value = MagicMock()
+            archive(state)
+
+        warnings_file = tmp_path / slug / ARCHIVE_WARNINGS_FILENAME
+        assert warnings_file.exists(), "archive-warnings.txt must be written to worker-output"
+        content = warnings_file.read_text()
+        assert "1.2" in content
+        assert "pending" in content
+
+    def test_no_warnings_file_when_all_tasks_terminal(self, tmp_path):
+        plan = tmp_path / "01-bug.yaml"
+        _write_plan_yaml(plan, [
+            {"id": "1", "name": "Section", "tasks": [
+                {"id": "1.1", "name": "Done", "status": "verified"},
+            ]}
+        ])
+        slug = "01-bug"
+        state = _make_state(item_slug=slug, item_path="", plan_path=str(plan))
+
+        with patch("langgraph_pipeline.pipeline.nodes.archival.SlackNotifier") as mock_cls, \
+             patch("langgraph_pipeline.pipeline.nodes.archival.WORKER_OUTPUT_DIR", tmp_path), \
+             patch("langgraph_pipeline.pipeline.nodes.archival._preserve_plan_yaml"):
+            mock_cls.return_value = MagicMock()
+            archive(state)
+
+        warnings_file = tmp_path / slug / ARCHIVE_WARNINGS_FILENAME
+        assert not warnings_file.exists(), "archive-warnings.txt must NOT be written when all tasks are terminal"
 
 
 # ─── _strip_trace_id_line ─────────────────────────────────────────────────────
