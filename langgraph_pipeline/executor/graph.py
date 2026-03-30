@@ -10,14 +10,15 @@ parallel worktree execution, circuit breaking, and model escalation happen
 inside this subgraph.
 
 Graph topology:
-  find_next_task --[all_done]--------> END
-  find_next_task --[single_task]-----> execute_task
-  find_next_task --[parallel_group]--> execute_parallel_task (fan-out) --> fan_in --> find_next_task
-  find_next_task --[empty_parallel]--> fan_in --> find_next_task
-  execute_task   --[circuit_break]---> END
-  execute_task   --[continue]--------> validate_task
-  validate_task  --[pass/fail]-------> find_next_task
-  validate_task  --[retry]-----------> escalate --> execute_task
+  find_next_task --[all_done]----------> END
+  find_next_task --[needs_validation]--> validate_task
+  find_next_task --[single_task]-------> execute_task
+  find_next_task --[parallel_group]----> execute_parallel_task (fan-out) --> fan_in --> find_next_task
+  find_next_task --[empty_parallel]----> fan_in --> find_next_task
+  execute_task   --[circuit_break]-----> END
+  execute_task   --[continue]----------> validate_task
+  validate_task  --[pass/fail]---------> find_next_task
+  validate_task  --[retry]-------------> escalate --> execute_task
 
 Note on the LangGraph Send API:
   In LangGraph 1.0.x, parallel dispatch via Send() must originate from a
@@ -34,6 +35,7 @@ from langgraph_pipeline.executor.edges import (
     ROUTE_CIRCUIT_BREAK,
     ROUTE_CONTINUE,
     ROUTE_FAIL,
+    ROUTE_NEEDS_VALIDATION,
     ROUTE_PARALLEL_GROUP,
     ROUTE_PASS,
     ROUTE_RETRY,
@@ -106,9 +108,11 @@ def _route_after_find_next_task(state: TaskState):
     that Send objects originate from conditional edge functions.
 
     Decision tree:
-    1. parallel_check returns ROUTE_ALL_DONE  -> END
-    2. parallel_check returns ROUTE_SINGLE_TASK -> NODE_EXECUTE_TASK
-    3. parallel_check returns ROUTE_PARALLEL_GROUP:
+    1. parallel_check returns ROUTE_ALL_DONE        -> END
+    2. parallel_check returns ROUTE_NEEDS_VALIDATION -> NODE_VALIDATE_TASK
+       (task was selected by the validation-pending scan; bypass execute_task)
+    3. parallel_check returns ROUTE_SINGLE_TASK     -> NODE_EXECUTE_TASK
+    4. parallel_check returns ROUTE_PARALLEL_GROUP:
        a. fan_out returns non-empty list     -> list[Send] to execute_parallel_task
        b. fan_out returns empty list         -> NODE_FAN_IN (no-op fan-in)
 
@@ -122,6 +126,9 @@ def _route_after_find_next_task(state: TaskState):
 
     if route == ROUTE_ALL_DONE:
         return END
+
+    if route == ROUTE_NEEDS_VALIDATION:
+        return NODE_VALIDATE_TASK
 
     if route == ROUTE_SINGLE_TASK:
         return NODE_EXECUTE_TASK
@@ -160,12 +167,13 @@ def build_executor_graph() -> StateGraph:
 
     graph.set_entry_point(NODE_FIND_NEXT_TASK)
 
-    # find_next_task -> route -> execute_task | execute_parallel_task(s) | fan_in | END
+    # find_next_task -> route -> execute_task | validate_task | execute_parallel_task(s) | fan_in | END
     graph.add_conditional_edges(
         NODE_FIND_NEXT_TASK,
         _route_after_find_next_task,
         {
             NODE_EXECUTE_TASK: NODE_EXECUTE_TASK,
+            NODE_VALIDATE_TASK: NODE_VALIDATE_TASK,
             NODE_FAN_IN: NODE_FAN_IN,
             END: END,
             # list[Send] to execute_parallel_task is handled implicitly by LangGraph

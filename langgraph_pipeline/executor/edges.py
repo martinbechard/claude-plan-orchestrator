@@ -10,7 +10,7 @@ without executing any node side effects.
 
 Subgraph topology and the routing function used at each edge:
 
-  find_next_task  --[parallel_check]--> fan_out | execute_task | END
+  find_next_task  --[parallel_check]--> fan_out | execute_task | validate_task | END
   execute_task    --[circuit_check] --> validate_task | END
   validate_task   --[retry_check]  --> find_next_task | escalate | find_next_task(fail)
 """
@@ -25,6 +25,7 @@ from langgraph_pipeline.shared.langsmith import add_trace_metadata
 # Returned by routing functions; matched against path_map in add_conditional_edges.
 
 ROUTE_ALL_DONE = "all_done"
+ROUTE_NEEDS_VALIDATION = "needs_validation"
 ROUTE_PARALLEL_GROUP = "parallel_group"
 ROUTE_SINGLE_TASK = "single_task"
 ROUTE_CIRCUIT_BREAK = "circuit_break"
@@ -76,19 +77,28 @@ def parallel_check(state: TaskState) -> str:
 
     Decision tree:
     - current_task_id is None → ROUTE_ALL_DONE  (terminate subgraph)
+    - current task has status="completed" → ROUTE_NEEDS_VALIDATION (selected for validation)
     - current task has parallel_group set → ROUTE_PARALLEL_GROUP
     - otherwise → ROUTE_SINGLE_TASK
+
+    A task with status="completed" was selected by the validation-pending scan in
+    find_next_task, not the normal pending-task scan.  It must be routed directly
+    to validate_task rather than execute_task.
 
     Args:
         state: Current TaskState after find_next_task has run.
 
     Returns:
-        One of ROUTE_ALL_DONE, ROUTE_PARALLEL_GROUP, or ROUTE_SINGLE_TASK.
+        One of ROUTE_ALL_DONE, ROUTE_NEEDS_VALIDATION, ROUTE_PARALLEL_GROUP,
+        or ROUTE_SINGLE_TASK.
     """
     if all_done(state):
         return ROUTE_ALL_DONE
 
     task = _find_current_task(state)
+    if task and task.get("status") == "completed":
+        return ROUTE_NEEDS_VALIDATION
+
     if task and task.get("parallel_group"):
         return ROUTE_PARALLEL_GROUP
 

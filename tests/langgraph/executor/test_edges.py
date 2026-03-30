@@ -12,6 +12,7 @@ from langgraph_pipeline.executor.edges import (
     ROUTE_CIRCUIT_BREAK,
     ROUTE_CONTINUE,
     ROUTE_FAIL,
+    ROUTE_NEEDS_VALIDATION,
     ROUTE_PARALLEL_GROUP,
     ROUTE_PASS,
     ROUTE_RETRY,
@@ -93,7 +94,7 @@ class TestAllDone:
 
 
 class TestParallelCheck:
-    """parallel_check routes to all_done, parallel_group, or single_task."""
+    """parallel_check routes to all_done, needs_validation, parallel_group, or single_task."""
 
     def test_no_current_task_routes_all_done(self):
         state = _make_state(current_task_id=None)
@@ -117,6 +118,40 @@ class TestParallelCheck:
     def test_no_plan_data_routes_single_when_task_set(self):
         state = _make_state(current_task_id="1.1", plan_data=None)
         assert parallel_check(state) == ROUTE_SINGLE_TASK
+
+    def test_completed_task_routes_needs_validation(self):
+        """A task with status='completed' was selected for validation, not execution."""
+        plan_data = {
+            "meta": {"name": "Test Plan"},
+            "sections": [{
+                "id": "s1",
+                "tasks": [
+                    {"id": "0.3", "name": "Task 0.3", "status": "completed", "agent": "coder"},
+                ],
+            }],
+        }
+        state = _make_state(current_task_id="0.3", plan_data=plan_data)
+        assert parallel_check(state) == ROUTE_NEEDS_VALIDATION
+
+    def test_completed_task_with_parallel_group_routes_needs_validation(self):
+        """Completed status takes priority over parallel_group — route to validation, not fan-out."""
+        plan_data = {
+            "meta": {"name": "Test Plan"},
+            "sections": [{
+                "id": "s1",
+                "tasks": [
+                    {
+                        "id": "0.3",
+                        "name": "Task 0.3",
+                        "status": "completed",
+                        "agent": "coder",
+                        "parallel_group": "phase-0",
+                    },
+                ],
+            }],
+        }
+        state = _make_state(current_task_id="0.3", plan_data=plan_data)
+        assert parallel_check(state) == ROUTE_NEEDS_VALIDATION
 
 
 # ─── Tests: circuit_check ─────────────────────────────────────────────────────
@@ -253,8 +288,58 @@ class TestRouteConstants:
     def test_fail_label(self):
         assert ROUTE_FAIL == "fail"
 
+    def test_needs_validation_label(self):
+        assert ROUTE_NEEDS_VALIDATION == "needs_validation"
+
     def test_default_max_attempts(self):
         assert DEFAULT_MAX_ATTEMPTS == 3
+
+
+# ─── Tests: _route_after_find_next_task routing to validate_task ─────────────
+
+
+class TestRouteAfterFindNextTaskNeedsValidation:
+    """_route_after_find_next_task routes completed tasks directly to validate_task (AC2, AC10)."""
+
+    def test_completed_task_routes_to_validate_task(self):
+        """When current task has status='completed', route goes to NODE_VALIDATE_TASK."""
+        from langgraph_pipeline.executor.graph import (
+            NODE_VALIDATE_TASK,
+            _route_after_find_next_task,
+        )
+
+        plan_data = {
+            "meta": {"name": "Test Plan"},
+            "sections": [{
+                "id": "s1",
+                "tasks": [
+                    {"id": "0.3", "name": "Task 0.3", "status": "completed", "agent": "coder"},
+                ],
+            }],
+        }
+        state = _make_state(current_task_id="0.3", plan_data=plan_data)
+        result = _route_after_find_next_task(state)
+        assert result == NODE_VALIDATE_TASK
+
+    def test_pending_task_routes_to_execute_task(self):
+        """Pending single task still routes to NODE_EXECUTE_TASK (no regression)."""
+        from langgraph_pipeline.executor.graph import (
+            NODE_EXECUTE_TASK,
+            _route_after_find_next_task,
+        )
+
+        plan_data = {
+            "meta": {"name": "Test Plan"},
+            "sections": [{
+                "id": "s1",
+                "tasks": [
+                    {"id": "1.1", "name": "Task 1.1", "status": "pending", "agent": "coder"},
+                ],
+            }],
+        }
+        state = _make_state(current_task_id="1.1", plan_data=plan_data)
+        result = _route_after_find_next_task(state)
+        assert result == NODE_EXECUTE_TASK
 
 
 # ─── Tests: _tasks_completed_str ─────────────────────────────────────────────

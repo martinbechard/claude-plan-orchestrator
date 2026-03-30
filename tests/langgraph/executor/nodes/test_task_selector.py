@@ -13,6 +13,7 @@ from langgraph_pipeline.executor.nodes.task_selector import (
     _collect_tasks,
     _completed_task_ids,
     _find_eligible_task,
+    _find_validation_pending_task,
     _is_budget_exceeded,
     _load_plan_yaml,
     find_next_task,
@@ -403,7 +404,7 @@ class TestFindNextTaskNode:
         assert result["plan_data"]["meta"]["name"] == "Test Plan"
 
     def test_completed_blocks_dependent_when_validation_enabled(self, tmp_path):
-        """AC11: completed (awaiting validation) blocks dependents."""
+        """AC11: completed (awaiting validation) blocks dependents; validation is scheduled instead."""
         validation = {"enabled": True, "run_after": ["coder"]}
         plan = _make_plan(
             _make_task("1.1", "completed", agent="coder"),
@@ -416,8 +417,8 @@ class TestFindNextTaskNode:
 
         result = find_next_task(state)
 
-        # 1.2 is blocked because 1.1 is completed (not verified)
-        assert result["current_task_id"] is None
+        # 1.2 is blocked; find_next_task schedules 1.1 for validation instead
+        assert result["current_task_id"] == "1.1"
 
     def test_verified_satisfies_dependency(self, tmp_path):
         """AC12: verified status satisfies dependency checks."""
@@ -593,3 +594,159 @@ class TestFindNextTaskNode:
         combined = " ".join(r.getMessage() for r in warning_records)
         # Each task's unsatisfied dep should appear somewhere in the log output
         assert "1.1" in combined and "1.2" in combined
+
+
+# ─── Tests: _find_validation_pending_task ────────────────────────────────────
+
+
+class TestFindValidationPendingTask:
+    """_find_validation_pending_task returns first unvalidated completed task needing validation."""
+
+    _NO_VALIDATION: dict = {}
+    _VALIDATION_ENABLED: dict = {"enabled": True, "run_after": ["coder"]}
+
+    def test_returns_none_when_validation_disabled(self):
+        tasks = [_make_task("1.1", "completed")]
+        assert _find_validation_pending_task(tasks, self._NO_VALIDATION) is None
+
+    def test_returns_none_when_run_after_empty(self):
+        tasks = [_make_task("1.1", "completed")]
+        assert _find_validation_pending_task(tasks, {"enabled": True, "run_after": []}) is None
+
+    def test_returns_none_when_agent_not_in_run_after(self):
+        tasks = [_make_task("1.1", "completed", agent="design-judge")]
+        assert _find_validation_pending_task(tasks, self._VALIDATION_ENABLED) is None
+
+    def test_returns_none_when_already_validated(self):
+        task = _make_task("1.1", "completed", agent="coder")
+        task["validation_attempts"] = 1
+        assert _find_validation_pending_task([task], self._VALIDATION_ENABLED) is None
+
+    def test_returns_none_for_pending_task(self):
+        tasks = [_make_task("1.1", "pending", agent="coder")]
+        assert _find_validation_pending_task(tasks, self._VALIDATION_ENABLED) is None
+
+    def test_returns_none_for_verified_task(self):
+        tasks = [_make_task("1.1", "verified", agent="coder")]
+        assert _find_validation_pending_task(tasks, self._VALIDATION_ENABLED) is None
+
+    def test_returns_completed_task_needing_validation(self):
+        task = _make_task("1.1", "completed", agent="coder")
+        result = _find_validation_pending_task([task], self._VALIDATION_ENABLED)
+        assert result is not None
+        assert result["id"] == "1.1"
+
+    def test_returns_first_task_needing_validation(self):
+        task1 = _make_task("0.1", "completed", agent="coder")
+        task2 = _make_task("0.2", "completed", agent="coder")
+        result = _find_validation_pending_task([task1, task2], self._VALIDATION_ENABLED)
+        assert result is not None
+        assert result["id"] == "0.1"
+
+    def test_skips_tasks_not_needing_validation_returns_next(self):
+        task1 = _make_task("0.1", "completed", agent="design-judge")  # not in run_after
+        task2 = _make_task("0.2", "completed", agent="coder")         # needs validation
+        result = _find_validation_pending_task([task1, task2], self._VALIDATION_ENABLED)
+        assert result is not None
+        assert result["id"] == "0.2"
+
+    def test_handles_multiple_agents_in_run_after(self):
+        validation = {"enabled": True, "run_after": ["coder", "frontend-coder"]}
+        task = _make_task("0.3", "completed", agent="frontend-coder")
+        result = _find_validation_pending_task([task], validation)
+        assert result is not None
+        assert result["id"] == "0.3"
+
+    def test_returns_none_when_all_tasks_pending(self):
+        tasks = [_make_task("1.1", "pending"), _make_task("1.2", "pending")]
+        assert _find_validation_pending_task(tasks, self._VALIDATION_ENABLED) is None
+
+
+# ─── Tests: find_next_task validation-pending priority ───────────────────────
+
+
+class TestFindNextTaskValidationPriority:
+    """find_next_task prioritises validation-pending tasks over new pending work (AC1, AC7, AC8)."""
+
+    def test_validation_pending_selected_over_pending_task(self, tmp_path):
+        """AC1, AC7, AC8: unvalidated completed task takes priority over pending work."""
+        validation = {"enabled": True, "run_after": ["coder"]}
+        plan = _make_plan(
+            _make_task("0.1", "completed", agent="coder"),  # needs validation
+            _make_task("1.1", "pending"),                   # independent pending task
+            validation=validation,
+        )
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        assert result["current_task_id"] == "0.1"
+
+    def test_pending_selected_when_no_validation_pending(self, tmp_path):
+        """Falls through to pending scan when all completed tasks are already validated."""
+        validation = {"enabled": True, "run_after": ["coder"]}
+        plan = _make_plan(
+            _make_task("0.1", "verified", agent="coder"),  # already validated
+            _make_task("1.1", "pending"),
+            validation=validation,
+        )
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        assert result["current_task_id"] == "1.1"
+
+    def test_reproduction_scenario_validates_parallel_task_first(self, tmp_path):
+        """AC5: tasks 0.1-0.3 parallel (0.3 needs validation); 0.4 becomes ready after."""
+        validation = {"enabled": True, "run_after": ["frontend-coder"]}
+        plan = _make_plan(
+            _make_task("0.1", "completed", agent="systems-designer"),  # no validation needed
+            _make_task("0.2", "completed", agent="ux-designer"),       # no validation needed
+            _make_task("0.3", "completed", agent="frontend-coder"),    # needs validation
+            _make_task("0.4", "pending", deps=["0.1", "0.2", "0.3"]), # blocked until 0.3 verified
+            validation=validation,
+        )
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        # 0.3 is selected for validation — not 0.4 (which is blocked) and not None (deadlock)
+        assert result["current_task_id"] == "0.3"
+        assert result["deadlock_detected"] is False
+
+    def test_validation_pending_task_not_selected_when_validation_disabled(self, tmp_path):
+        """Without validation config, completed tasks are promoted; pending scan runs normally."""
+        plan = _make_plan(
+            _make_task("0.1", "completed", agent="coder"),
+            _make_task("1.1", "pending"),
+        )  # no validation config
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        assert result["current_task_id"] == "1.1"
+
+    def test_already_validated_task_not_re_selected(self, tmp_path):
+        """Tasks with validation_attempts > 0 are not re-selected for validation."""
+        validation = {"enabled": True, "run_after": ["coder"]}
+        plan = _make_plan(
+            _make_task("0.1", "completed", agent="coder", validation_attempts=1),
+            _make_task("1.1", "pending"),
+            validation=validation,
+        )
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        # 0.1 already validated; 1.1 should be selected
+        assert result["current_task_id"] == "1.1"
