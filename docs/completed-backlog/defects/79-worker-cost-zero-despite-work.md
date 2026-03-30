@@ -17,7 +17,7 @@ The reported cost should reflect all API calls made during the worker's executio
 - langgraph_pipeline/pipeline/nodes/plan_creation.py - cost accumulation
 - langgraph_pipeline/pipeline/nodes/execute_plan.py - cost mapping from executor to pipeline state
 
-## LangSmith Trace: d507da1b-7ea9-4e24-821a-2b990e327d64
+
 
 
 ## 5 Whys Analysis
