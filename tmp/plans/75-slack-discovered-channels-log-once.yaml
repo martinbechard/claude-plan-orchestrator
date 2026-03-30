@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Add _channels_logged flag to poller and notifier, gate discovery print
     agent: coder
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -33,3 +33,9 @@ sections:
     last_attempt: '2026-03-30T12:11:05.846342'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-30T12:14:36.648246'
+    result_message: 'Added _channels_logged: bool = False to SlackPoller and SlackNotifier.
+      Gated the ''[SLACK] Discovered channels: ...'' print with ''if not self._channels_logged''
+      and set flag to True after first print. Added 3 tests each to test_poller.py
+      and test_notifier.py covering log-once, flag starts False, and flag set after
+      first discovery. All 1623 tests pass.'
