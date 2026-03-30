@@ -466,3 +466,130 @@ class TestFindNextTaskNode:
         result = find_next_task(state)
 
         assert result["current_task_id"] == "1.2"
+
+    def test_deadlock_returns_deadlock_detected_true(self, tmp_path):
+        """Deadlock branch sets deadlock_detected=True in the returned state."""
+        plan = _make_plan(
+            _make_task("1.1", "pending", deps=["1.2"]),
+            _make_task("1.2", "pending", deps=["1.1"]),
+        )
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        assert result["deadlock_detected"] is True
+
+    def test_deadlock_returns_deadlock_details_with_all_blocked_tasks(self, tmp_path):
+        """deadlock_details contains an entry for each pending blocked task."""
+        plan = _make_plan(
+            _make_task("1.1", "pending", deps=["1.2"]),
+            _make_task("1.2", "pending", deps=["1.1"]),
+        )
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        details = result["deadlock_details"]
+        assert details is not None
+        assert len(details) == 2
+        task_ids = {d["task_id"] for d in details}
+        assert task_ids == {"1.1", "1.2"}
+
+    def test_deadlock_details_include_task_name(self, tmp_path):
+        """Each deadlock detail entry includes the task name."""
+        plan = _make_plan(
+            _make_task("1.1", "pending", deps=["1.2"]),
+            _make_task("1.2", "pending", deps=["1.1"]),
+        )
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        for detail in result["deadlock_details"]:
+            assert "task_name" in detail
+            assert detail["task_name"]  # non-empty
+
+    def test_deadlock_details_include_unsatisfied_deps(self, tmp_path):
+        """Each deadlock detail entry lists the unsatisfied dependency IDs."""
+        plan = _make_plan(
+            _make_task("1.1", "pending", deps=["1.2"]),
+            _make_task("1.2", "pending", deps=["1.1"]),
+        )
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        detail_1_1 = next(d for d in result["deadlock_details"] if d["task_id"] == "1.1")
+        assert "1.2" in detail_1_1["unsatisfied_deps"]
+        detail_1_2 = next(d for d in result["deadlock_details"] if d["task_id"] == "1.2")
+        assert "1.1" in detail_1_2["unsatisfied_deps"]
+
+    def test_normal_completion_returns_deadlock_detected_false(self, tmp_path):
+        """When all tasks are done, deadlock_detected is False."""
+        plan = _make_plan(_make_task("1.1", "completed"))
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        assert result["deadlock_detected"] is False
+
+    def test_task_selected_returns_deadlock_detected_false(self, tmp_path):
+        """When a task is selected, deadlock_detected is False."""
+        plan = _make_plan(_make_task("1.1"))
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        result = find_next_task(state)
+
+        assert result["deadlock_detected"] is False
+
+    def test_deadlock_emits_warning_log_with_task_ids(self, tmp_path, caplog):
+        """Warning log includes blocked task IDs when deadlock is detected."""
+        import logging
+
+        plan = _make_plan(
+            _make_task("1.1", "pending", deps=["1.2"]),
+            _make_task("1.2", "pending", deps=["1.1"]),
+        )
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        with caplog.at_level(logging.WARNING, logger="langgraph_pipeline.executor.nodes.task_selector"):
+            find_next_task(state)
+
+        warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert warning_records, "Expected at least one WARNING-level log record"
+        combined = " ".join(r.getMessage() for r in warning_records)
+        assert "1.1" in combined or "1.2" in combined
+
+    def test_deadlock_emits_warning_log_with_dep_ids(self, tmp_path, caplog):
+        """Warning log includes unsatisfied dependency IDs for each blocked task."""
+        import logging
+
+        plan = _make_plan(
+            _make_task("1.1", "pending", deps=["1.2"]),
+            _make_task("1.2", "pending", deps=["1.1"]),
+        )
+        plan_file = tmp_path / "plan.yaml"
+        plan_file.write_text(yaml.dump(plan))
+        state = _make_state(plan_path=str(plan_file))
+
+        with caplog.at_level(logging.WARNING, logger="langgraph_pipeline.executor.nodes.task_selector"):
+            find_next_task(state)
+
+        warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        combined = " ".join(r.getMessage() for r in warning_records)
+        # Each task's unsatisfied dep should appear somewhere in the log output
+        assert "1.1" in combined and "1.2" in combined

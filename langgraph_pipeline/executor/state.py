@@ -2,6 +2,7 @@
 # TaskState TypedDict schema and task lifecycle helpers for the executor subgraph.
 # Design: docs/plans/2026-02-26-05-task-execution-subgraph-design.md
 # Design: docs/plans/2026-03-28-73-three-state-task-lifecycle-design.md
+# Design: docs/plans/2026-03-30-80-executor-silent-deadlock-on-blocked-tasks-design.md
 
 """State schema and task lifecycle helpers for the executor StateGraph.
 
@@ -140,6 +141,12 @@ class TaskState(TypedDict):
 
     # ── LangSmith root trace ──────────────────────────────────────────────────
     langsmith_root_run_id: Optional[str]  # UUID of the shared root RunTree from PipelineState
+
+    # ── Deadlock detection ────────────────────────────────────────────────────
+    # Set by find_next_task when pending tasks exist but none are eligible.
+    # Propagated to PipelineState so downstream nodes can route appropriately.
+    deadlock_detected: bool
+    deadlock_details: Optional[list[dict]]  # [{task_id, task_name, unsatisfied_deps}]
 
     # ── Cost accumulators (shared with parent pipeline) ───────────────────────
     plan_cost_usd: float
