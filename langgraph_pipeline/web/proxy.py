@@ -21,6 +21,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from langgraph_pipeline.web.completion_grouping import group_completions_by_slug
+
 logger = logging.getLogger(__name__)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -29,6 +31,7 @@ DB_DEFAULT_PATH = "~/.claude/orchestrator-traces.db"
 PAGE_SIZE_DEFAULT = 50
 
 COMPLETIONS_LIMIT = 20
+GROUPED_QUERY_MULTIPLIER = 3
 TOP_TOOL_CALLS_LIMIT = 250
 BASH_COMMAND_PREVIEW_LENGTH = 50
 
@@ -626,6 +629,36 @@ class TracingProxy:
         with self._connect() as conn:
             rows = conn.execute(sql, params).fetchall()
         return [dict(row) for row in rows]
+
+    def list_completions_grouped(self, limit: int = COMPLETIONS_LIMIT) -> list[dict]:
+        """Return completions grouped by slug for the dashboard SSE feed.
+
+        Queries recent completions (over-fetching by GROUPED_QUERY_MULTIPLIER to
+        account for retries) and groups rows sharing the same slug.
+        For each slug, the most recent completion becomes the primary entry;
+        older completions become the retries list.
+
+        Args:
+            limit: Maximum number of grouped entries to return.
+
+        Returns:
+            List of grouped completion dicts. Each dict has the standard
+            completion fields for the primary (most recent) attempt, plus:
+            - attempt_count: Total number of completions for this slug.
+            - retries: List of prior-attempt dicts (oldest first), each with
+              outcome, cost_usd, duration_s, finished_at, run_id.
+        """
+        sql = """
+            SELECT slug, item_type, outcome, cost_usd, duration_s, finished_at,
+                   run_id, tokens_per_minute, verification_notes
+            FROM completions
+            ORDER BY finished_at DESC
+            LIMIT ?
+        """
+        with self._connect() as conn:
+            rows = conn.execute(sql, [limit * GROUPED_QUERY_MULTIPLIER]).fetchall()
+        flat = [dict(row) for row in rows]
+        return group_completions_by_slug(flat, limit)
 
     def count_completions(
         self,

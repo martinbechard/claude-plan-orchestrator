@@ -99,9 +99,9 @@ def test_errors_capped_at_max():
     state = get_dashboard_state()
 
     for i in range(MAX_RECENT_ERRORS + 1):
-        state.add_error(f"error message {i}")
+        state.add_notification(f"error message {i}")
 
-    assert len(state.recent_errors) == MAX_RECENT_ERRORS
+    assert len(state.recent_notifications) == MAX_RECENT_ERRORS
 
 
 def test_snapshot_returns_serialisable_dict():
@@ -119,7 +119,7 @@ def test_snapshot_returns_serialisable_dict():
         "session_start_time_iso",
         "active_count",
         "total_processed",
-        "recent_errors",
+        "recent_notifications",
     }
     assert expected_keys == set(result.keys())
     # Verify the values are primitive-safe types (no dataclass instances)
@@ -136,7 +136,7 @@ def test_reset_clears_state():
         item_type=SAMPLE_ITEM_TYPE,
         start_time=time.monotonic(),
     )
-    state.add_error("some error")
+    state.add_notification("some error")
 
     reset_dashboard_state()
 
@@ -144,53 +144,45 @@ def test_reset_clears_state():
     assert new_state is not state
     assert new_state.active_workers == {}
     assert new_state.recent_completions == []
-    assert new_state.recent_errors == []
+    assert new_state.recent_notifications == []
 
 
 # ─── DashboardErrorHandler Tests ─────────────────────────────────────────────
 
 
-def test_handler_forwards_warning_record():
-    """DashboardErrorHandler.emit() adds WARNING records to recent_errors."""
+def test_handler_filters_warning_record():
+    """DashboardErrorHandler filters WARNING records — only ERROR+ is forwarded."""
+    test_logger = logging.getLogger("langgraph_pipeline._test_warning_filter")
+    test_logger.setLevel(logging.DEBUG)
     handler = DashboardErrorHandler()
-    record = logging.LogRecord(
-        name="langgraph_pipeline.test",
-        level=logging.WARNING,
-        pathname="",
-        lineno=0,
-        msg="something went wrong",
-        args=(),
-        exc_info=None,
-    )
+    test_logger.addHandler(handler)
+    try:
+        test_logger.warning("something went wrong")
+    finally:
+        test_logger.removeHandler(handler)
+        test_logger.setLevel(logging.NOTSET)
 
-    handler.emit(record)
-
-    state = get_dashboard_state()
-    assert len(state.recent_errors) == 1
-    assert "[WARNING]" in state.recent_errors[0]
-    assert "langgraph_pipeline.test" in state.recent_errors[0]
-    assert "something went wrong" in state.recent_errors[0]
+    assert get_dashboard_state().recent_notifications == []
 
 
 def test_handler_forwards_error_record():
-    """DashboardErrorHandler.emit() adds ERROR records to recent_errors."""
+    """DashboardErrorHandler forwards ERROR records to recent_notifications."""
+    test_logger = logging.getLogger("langgraph_pipeline._test_error_forward")
+    test_logger.setLevel(logging.DEBUG)
     handler = DashboardErrorHandler()
-    record = logging.LogRecord(
-        name="langgraph_pipeline.supervisor",
-        level=logging.ERROR,
-        pathname="",
-        lineno=0,
-        msg="worker crashed",
-        args=(),
-        exc_info=None,
-    )
-
-    handler.emit(record)
+    test_logger.addHandler(handler)
+    try:
+        test_logger.error("worker crashed")
+    finally:
+        test_logger.removeHandler(handler)
+        test_logger.setLevel(logging.NOTSET)
 
     state = get_dashboard_state()
-    assert len(state.recent_errors) == 1
-    assert "[ERROR]" in state.recent_errors[0]
-    assert "worker crashed" in state.recent_errors[0]
+    assert len(state.recent_notifications) == 1
+    entry = state.recent_notifications[0]
+    assert "[ERROR]" in entry["message"]
+    assert "worker crashed" in entry["message"]
+    assert "timestamp" in entry
 
 
 def test_handler_ignores_debug_record():
@@ -210,7 +202,7 @@ def test_handler_ignores_debug_record():
         test_logger.removeHandler(handler)
         test_logger.setLevel(logging.NOTSET)
 
-    assert get_dashboard_state().recent_errors == []
+    assert get_dashboard_state().recent_notifications == []
 
 
 def test_handler_ignores_info_record():
@@ -225,33 +217,29 @@ def test_handler_ignores_info_record():
         test_logger.removeHandler(handler)
         test_logger.setLevel(logging.NOTSET)
 
-    assert get_dashboard_state().recent_errors == []
+    assert get_dashboard_state().recent_notifications == []
 
 
-def test_handler_accumulates_multiple_records():
-    """Multiple emit() calls accumulate in recent_errors in LIFO order."""
+def test_handler_accumulates_multiple_error_records():
+    """Multiple ERROR records accumulate in recent_notifications in LIFO order."""
+    test_logger = logging.getLogger("langgraph_pipeline._test_accumulate")
+    test_logger.setLevel(logging.DEBUG)
     handler = DashboardErrorHandler()
-    messages = ["first warning", "second warning", "third error"]
-    levels = [logging.WARNING, logging.WARNING, logging.ERROR]
-
-    for msg, level in zip(messages, levels):
-        record = logging.LogRecord(
-            name="langgraph_pipeline.node",
-            level=level,
-            pathname="",
-            lineno=0,
-            msg=msg,
-            args=(),
-            exc_info=None,
-        )
-        handler.emit(record)
+    test_logger.addHandler(handler)
+    try:
+        test_logger.error("first error")
+        test_logger.error("second error")
+        test_logger.error("third error")
+    finally:
+        test_logger.removeHandler(handler)
+        test_logger.setLevel(logging.NOTSET)
 
     state = get_dashboard_state()
-    assert len(state.recent_errors) == 3
-    # add_error prepends, so most-recent is first
-    assert "third error" in state.recent_errors[0]
-    assert "second warning" in state.recent_errors[1]
-    assert "first warning" in state.recent_errors[2]
+    assert len(state.recent_notifications) == 3
+    # add_notification prepends, so most-recent is first
+    assert "third error" in state.recent_notifications[0]["message"]
+    assert "second error" in state.recent_notifications[1]["message"]
+    assert "first error" in state.recent_notifications[2]["message"]
 
 
 def test_update_worker_run_id_sets_run_id():
@@ -578,3 +566,53 @@ def test_snapshot_session_start_time_iso_matches_field(monkeypatch):
     state = get_dashboard_state()
     snap = state.snapshot()
     assert snap["session_start_time_iso"] == state.session_start_time.isoformat()
+
+
+# ─── Grouping in snapshot() ───────────────────────────────────────────────────
+
+
+def test_snapshot_in_memory_path_groups_same_slug(monkeypatch):
+    """snapshot() in-memory fallback groups two completions with the same slug into one entry."""
+    monkeypatch.setattr(
+        "langgraph_pipeline.web.dashboard_state.get_proxy", lambda: None
+    )
+    state = get_dashboard_state()
+    pid_a, pid_b = 30001, 30002
+
+    state.add_active_worker(pid=pid_a, slug=SAMPLE_SLUG, item_type=SAMPLE_ITEM_TYPE,
+                            start_time=0.0)
+    state.remove_active_worker(pid=pid_a, outcome="warn", cost_usd=0.10, duration_s=30.0)
+
+    state.add_active_worker(pid=pid_b, slug=SAMPLE_SLUG, item_type=SAMPLE_ITEM_TYPE,
+                            start_time=1.0)
+    state.remove_active_worker(pid=pid_b, outcome="success", cost_usd=0.20, duration_s=40.0)
+
+    snap = state.snapshot()
+    completions = snap["recent_completions"]
+
+    assert len(completions) == 1
+    entry = completions[0]
+    assert entry["slug"] == SAMPLE_SLUG
+    assert entry["attempt_count"] == 2
+    assert len(entry["retries"]) == 1
+
+
+def test_snapshot_in_memory_path_adds_grouping_fields_for_single_item(monkeypatch):
+    """snapshot() in-memory fallback adds attempt_count=1 and retries=[] for a single completion."""
+    monkeypatch.setattr(
+        "langgraph_pipeline.web.dashboard_state.get_proxy", lambda: None
+    )
+    state = get_dashboard_state()
+
+    state.add_active_worker(pid=SAMPLE_PID, slug=SAMPLE_SLUG, item_type=SAMPLE_ITEM_TYPE,
+                            start_time=time.monotonic())
+    state.remove_active_worker(pid=SAMPLE_PID, outcome=SAMPLE_OUTCOME,
+                               cost_usd=SAMPLE_COST_USD, duration_s=SAMPLE_DURATION_S)
+
+    snap = state.snapshot()
+    completions = snap["recent_completions"]
+
+    assert len(completions) == 1
+    entry = completions[0]
+    assert entry["attempt_count"] == 1
+    assert entry["retries"] == []

@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Optional
 
 from langgraph_pipeline.shared.paths import BACKLOG_DIRS
+from langgraph_pipeline.web.completion_grouping import group_completions_by_slug
 from langgraph_pipeline.web.proxy import get_proxy
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -106,7 +107,7 @@ class DashboardState:
         self.session_start: float = time.monotonic()
         self.session_start_time: datetime = datetime.now(timezone.utc)
         self.session_id: Optional[int] = None
-        self.recent_errors: list[str] = []
+        self.recent_notifications: list[dict] = []
         self._total_processed: int = 0
 
     # ─── Mutators ─────────────────────────────────────────────────────────────
@@ -212,16 +213,20 @@ class DashboardState:
             if worker is not None:
                 worker.run_id = run_id
 
-    def add_error(self, message: str) -> None:
-        """Prepend an error message to the recent-errors stream.
+    def add_notification(self, message: str) -> None:
+        """Prepend a notification message to the recent-notifications stream.
+
+        Each notification is stored as a dict with 'message' and 'timestamp'
+        (epoch seconds via time.time()) so the dashboard can show when it occurred.
 
         Args:
             message: Human-readable error description.
         """
         with self._lock:
-            self.recent_errors.insert(0, message)
-            if len(self.recent_errors) > MAX_RECENT_ERRORS:
-                self.recent_errors = self.recent_errors[:MAX_RECENT_ERRORS]
+            entry = {"message": message, "timestamp": time.time()}
+            self.recent_notifications.insert(0, entry)
+            if len(self.recent_notifications) > MAX_RECENT_ERRORS:
+                self.recent_notifications = self.recent_notifications[:MAX_RECENT_ERRORS]
 
     def set_session_id(self, session_id: int) -> None:
         """Store the active session DB row id.
@@ -273,7 +278,7 @@ class DashboardState:
         Returns:
             Dict with keys: active_workers, recent_completions, queue_count,
             session_cost_usd, session_elapsed_s, active_count, total_processed,
-            recent_errors.
+            recent_notifications.
         """
         self.sweep_dead_workers()
         now = time.monotonic()
@@ -302,9 +307,9 @@ class DashboardState:
                 )
             proxy = get_proxy()
             if proxy is not None:
-                completions_list = proxy.list_completions()
+                completions_list = proxy.list_completions_grouped()
             else:
-                completions_list = [
+                flat_list = [
                     {
                         "slug": c.slug,
                         "item_type": c.item_type,
@@ -316,7 +321,8 @@ class DashboardState:
                     }
                     for c in self.recent_completions
                 ]
-            errors_copy = list(self.recent_errors)
+                completions_list = group_completions_by_slug(flat_list)
+            errors_copy = list(self.recent_notifications)
             session_cost = self.session_cost_usd
             elapsed = time.monotonic() - self.session_start
             active_count = len(self.active_workers)
@@ -333,7 +339,7 @@ class DashboardState:
             "session_start_time_iso": self.session_start_time.isoformat(),
             "active_count": active_count,
             "total_processed": total,
-            "recent_errors": errors_copy,
+            "recent_notifications": errors_copy,
         }
 
 
@@ -385,20 +391,24 @@ def reset_dashboard_state() -> None:
 
 
 class DashboardErrorHandler(logging.Handler):
-    """Logging handler that forwards WARNING+ records to the dashboard error stream.
+    """Logging handler that forwards ERROR+ records to the dashboard notification stream.
+
+    Only forwards ERROR and CRITICAL — WARNING is too noisy for the dashboard
+    (e.g. fake-data detection, stale config warnings). Explicit notifications
+    from pipeline code use add_notification() directly.
 
     Install on the 'langgraph_pipeline' logger (not root) to capture pipeline-internal
-    warnings without forwarding noise from third-party libraries.
+    errors without forwarding noise from third-party libraries.
     """
 
     def __init__(self) -> None:
         super().__init__()
-        self.setLevel(logging.WARNING)
+        self.setLevel(logging.ERROR)
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Format the record and append it to DashboardState.recent_errors."""
+        """Format the record and append it to DashboardState notifications."""
         try:
             msg = f"[{record.levelname}] {record.name}: {self.format(record)}"
-            get_dashboard_state().add_error(msg)
+            get_dashboard_state().add_notification(msg)
         except Exception:
             self.handleError(record)
