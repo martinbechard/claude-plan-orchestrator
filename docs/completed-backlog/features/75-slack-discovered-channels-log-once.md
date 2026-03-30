@@ -2,7 +2,7 @@
 
 The "[SLACK] Discovered channels: ..." message is logged repeatedly during pipeline operation. It should only be logged once when the orchestrator starts up, not on every poll cycle or reconnection.
 
-## LangSmith Trace: 10b35fca-ee60-428f-b82b-fd1c16504888
+
 
 
 ## 5 Whys Analysis
