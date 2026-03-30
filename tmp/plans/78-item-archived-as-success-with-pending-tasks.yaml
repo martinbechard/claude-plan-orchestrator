@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Add pre-archive task validation and incomplete outcome to archival node
     agent: coder
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -54,3 +54,10 @@ sections:
     last_attempt: '2026-03-30T12:40:27.855815'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-30T12:46:21.216232'
+    result_message: 'Added pre-archive task validation gate: _find_non_terminal_tasks
+      reads plan YAML and returns non-terminal (task_id, task_name, status) tuples;
+      _determine_outcome accepts non_terminal_tasks parameter and returns ARCHIVE_OUTCOME_INCOMPLETE
+      when non-empty; _build_slack_message handles incomplete outcome with warning
+      level listing task IDs; _write_archive_warnings persists archive-warnings.txt
+      to worker-output. All 52 archival tests pass (1641 total, no regressions).'
