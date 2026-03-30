@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Add pre-archive task validation and incomplete outcome to archival node
     agent: coder
-    status: pending
+    status: in_progress
     target_acs:
     - AC1
     - AC2
@@ -31,24 +31,26 @@ sections:
     - AC8
     - AC9
     - AC10
-    description: >
-      Implement requirements P1, P2, FR1, FR2 and design decisions D1, D2, D3
-      from work item: tmp/plans/.claimed/78-item-archived-as-success-with-pending-tasks.md
+    description: 'Implement requirements P1, P2, FR1, FR2 and design decisions D1,
+      D2, D3 from work item: tmp/plans/.claimed/78-item-archived-as-success-with-pending-tasks.md
       Design: docs/plans/2026-03-30-78-item-archived-as-success-with-pending-tasks-design.md
       Requirements: docs/plans/2026-03-30-78-item-archived-as-success-with-pending-tasks-requirements.md
 
-      In langgraph_pipeline/pipeline/nodes/archival.py:
-      (D1) Add ARCHIVE_TERMINAL_STATUSES = frozenset({"verified", "failed", "skipped"})
-      and _find_non_terminal_tasks(plan_path) that reads the plan YAML and returns
-      a list of (task_id, task_name, task_status) for non-terminal tasks.
-      (D2) Add ARCHIVE_OUTCOME_INCOMPLETE = "incomplete" and modify _determine_outcome()
-      to accept non_terminal_tasks parameter; return incomplete when list is non-empty.
-      (D3) Update _build_slack_message() for the incomplete outcome with warning level
-      listing non-terminal task IDs; write archive-warnings.txt to worker-output;
-      update archive() to call _find_non_terminal_tasks before _determine_outcome.
+      In langgraph_pipeline/pipeline/nodes/archival.py: (D1) Add ARCHIVE_TERMINAL_STATUSES
+      = frozenset({"verified", "failed", "skipped"}) and _find_non_terminal_tasks(plan_path)
+      that reads the plan YAML and returns a list of (task_id, task_name, task_status)
+      for non-terminal tasks. (D2) Add ARCHIVE_OUTCOME_INCOMPLETE = "incomplete" and
+      modify _determine_outcome() to accept non_terminal_tasks parameter; return incomplete
+      when list is non-empty. (D3) Update _build_slack_message() for the incomplete
+      outcome with warning level listing non-terminal task IDs; write archive-warnings.txt
+      to worker-output; update archive() to call _find_non_terminal_tasks before _determine_outcome.
 
-      Update tests in tests/langgraph/pipeline/nodes/test_archival.py to cover:
-      _find_non_terminal_tasks with all-terminal, mixed, and no-plan-path cases;
-      _determine_outcome with non-terminal tasks overriding other logic;
-      _build_slack_message for the incomplete outcome;
+      Update tests in tests/langgraph/pipeline/nodes/test_archival.py to cover: _find_non_terminal_tasks
+      with all-terminal, mixed, and no-plan-path cases; _determine_outcome with non-terminal
+      tasks overriding other logic; _build_slack_message for the incomplete outcome;
       archive() integration with a plan YAML containing pending tasks.
+
+      '
+    last_attempt: '2026-03-30T12:40:27.855815'
+    attempts: 1
+    model_used: sonnet
