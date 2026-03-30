@@ -198,6 +198,86 @@ class TestExecutePlanCostMapping:
         assert "session_output_tokens" in result
 
 
+# ─── Tests: additive accumulation from prior state ────────────────────────────
+
+
+class TestExecutePlanAdditiveAccumulation:
+    """execute_plan must add executor costs to prior pipeline state costs (D2)."""
+
+    def test_adds_executor_cost_to_prior_session_cost(self):
+        state = _make_state(
+            plan_path="tmp/plans/plan.yaml",
+            session_cost_usd=2.50,
+        )
+        mock_compiled = _make_mock_subgraph(cost_usd=1.23)
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
+        ) as mock_build:
+            mock_build.return_value.compile.return_value = mock_compiled
+            result = execute_plan(state)
+
+        assert result["session_cost_usd"] == pytest.approx(3.73)
+
+    def test_adds_executor_tokens_to_prior_session_tokens(self):
+        state = _make_state(
+            plan_path="tmp/plans/plan.yaml",
+            session_input_tokens=3000,
+            session_output_tokens=1500,
+        )
+        mock_compiled = _make_mock_subgraph(input_tokens=5000, output_tokens=2000)
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
+        ) as mock_build:
+            mock_build.return_value.compile.return_value = mock_compiled
+            result = execute_plan(state)
+
+        assert result["session_input_tokens"] == 8000
+        assert result["session_output_tokens"] == 3500
+
+    def test_result_is_zero_when_both_prior_and_executor_are_zero(self):
+        state = _make_state(
+            plan_path="tmp/plans/plan.yaml",
+            session_cost_usd=0.0,
+        )
+        mock_compiled = _make_mock_subgraph(cost_usd=0.0)
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
+        ) as mock_build:
+            mock_build.return_value.compile.return_value = mock_compiled
+            result = execute_plan(state)
+
+        assert result["session_cost_usd"] == pytest.approx(0.0)
+
+    def test_prior_cost_preserved_when_executor_returns_zero(self):
+        state = _make_state(
+            plan_path="tmp/plans/plan.yaml",
+            session_cost_usd=1.75,
+        )
+        mock_compiled = _make_mock_subgraph(cost_usd=0.0)
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
+        ) as mock_build:
+            mock_build.return_value.compile.return_value = mock_compiled
+            result = execute_plan(state)
+
+        assert result["session_cost_usd"] == pytest.approx(1.75)
+
+    def test_cost_never_decreases_after_executor(self):
+        prior = 5.00
+        state = _make_state(
+            plan_path="tmp/plans/plan.yaml",
+            session_cost_usd=prior,
+        )
+        mock_compiled = _make_mock_subgraph(cost_usd=0.50)
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
+        ) as mock_build:
+            mock_build.return_value.compile.return_value = mock_compiled
+            result = execute_plan(state)
+
+        assert result["session_cost_usd"] >= prior
+
+
 # ─── Tests: _plan_task_snapshot helper ────────────────────────────────────────
 
 

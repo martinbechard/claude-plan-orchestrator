@@ -91,6 +91,9 @@ def execute_plan(state: PipelineState) -> dict:
     plan_path: Optional[str] = state.get("plan_path")
     item_slug: str = state.get("item_slug", "")
     item_type: str = state.get("item_type", "feature")
+    prior_cost: float = float(state.get("session_cost_usd") or 0.0)
+    prior_input_tokens: int = int(state.get("session_input_tokens") or 0)
+    prior_output_tokens: int = int(state.get("session_output_tokens") or 0)
 
     if not plan_path:
         print(f"[execute_plan] No plan_path in state for {item_slug!r}; skipping.")
@@ -152,10 +155,12 @@ def execute_plan(state: PipelineState) -> dict:
     })
 
     return {
-        "session_cost_usd": cost_usd,
-        "session_input_tokens": input_tokens,
-        "session_output_tokens": output_tokens,
+        "session_cost_usd": prior_cost + cost_usd,
+        "session_input_tokens": prior_input_tokens + input_tokens,
+        "session_output_tokens": prior_output_tokens + output_tokens,
         "quota_exhausted": bool(final_task_state.get("quota_exhausted")),
         "last_validation_verdict": final_task_state.get("last_validation_verdict"),
         "verification_notes": final_task_state.get("plan_verification_notes"),
+        "executor_deadlock": bool(final_task_state.get("deadlock_detected")),
+        "executor_deadlock_details": final_task_state.get("deadlock_details"),
     }
