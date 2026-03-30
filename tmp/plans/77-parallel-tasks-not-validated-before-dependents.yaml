@@ -20,7 +20,7 @@ sections:
   - id: '1.1'
     name: Add validation-pending scan to find_next_task and new routing edge
     agent: coder
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -62,6 +62,17 @@ sections:
     last_attempt: '2026-03-30T12:46:34.052902'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-03-30T12:59:29.111574'
+    result_message: Implemented D1 and D2 from design doc. Added _find_validation_pending_task
+      helper and validation-pending scan in find_next_task (task_selector.py already
+      had this from plan-80 overlap — verified clean). Added ROUTE_NEEDS_VALIDATION
+      constant and completed-task routing in parallel_check (edges.py). Wired ROUTE_NEEDS_VALIDATION
+      -> NODE_VALIDATE_TASK in _route_after_find_next_task and add_conditional_edges
+      (graph.py). Added 20 new tests across test_task_selector.py (TestFindValidationPendingTask,
+      TestFindNextTaskValidationPriority) and test_edges.py (TestParallelCheck new
+      cases, TestRouteAfterFindNextTaskNeedsValidation, ROUTE_NEEDS_VALIDATION constant
+      test). Fixed existing test_completed_blocks_dependent_when_validation_enabled
+      to reflect correct new behavior. All 1670 tests pass.
   - id: '1.2'
     name: Verify FR2 status contract with targeted tests
     agent: coder
