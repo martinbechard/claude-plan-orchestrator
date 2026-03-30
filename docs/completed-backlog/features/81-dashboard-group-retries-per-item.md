@@ -2,7 +2,7 @@
 
 When an item fails with outcome=warn and is retried, the completions table shows two separate rows (warn + success) that look like duplicate entries. The dashboard should group retry attempts under a single item, showing the final outcome prominently with the retry history accessible on demand (e.g. expandable row or tooltip showing previous attempts).
 
-## LangSmith Trace: d95f1677-1bef-4aea-ba10-43ec0024d221
+
 
 
 ## 5 Whys Analysis
