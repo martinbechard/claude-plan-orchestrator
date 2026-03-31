@@ -6,6 +6,7 @@
 """Unit tests for langgraph_pipeline.web.proxy (TracingProxy data layer)."""
 
 import json
+import sqlite3
 from unittest.mock import patch
 
 import pytest
@@ -1683,4 +1684,474 @@ def test_get_child_slugs_batch_multiple_parents(proxy):
     assert len(result) == 2
     assert result[SLUG_PARENT_A] == "11-feature-alpha"
     assert result[SLUG_PARENT_B] == "22-feature-beta"
+
+
+# ─── Completions Upsert Tests (AC1–AC29 subset for task 1.1) ─────────────────
+
+# Constants for completion upsert tests
+UPSERT_SLUG = "85-completions-upsert"
+UPSERT_ITEM_TYPE = "feature"
+UPSERT_RUN_ID_1 = "run-attempt-001"
+UPSERT_RUN_ID_2 = "run-attempt-002"
+UPSERT_NOTES_1 = '{"verdict": "warn", "findings": ["partial"]}'
+UPSERT_NOTES_2 = '{"verdict": "success", "findings": []}'
+
+
+def _read_completion_row(proxy: TracingProxy, slug: str) -> dict:
+    """Read the single completion row for a given slug directly from SQLite."""
+    with sqlite3.connect(str(proxy._db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM completions WHERE slug = ?", [slug]
+        ).fetchone()
+    assert row is not None, f"No completion row found for slug={slug}"
+    return dict(row)
+
+
+def _count_completion_rows(proxy: TracingProxy, slug: str) -> int:
+    """Return the number of completions rows for a given slug."""
+    with sqlite3.connect(str(proxy._db_path)) as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM completions WHERE slug = ?", [slug]
+        ).fetchone()
+    return row[0]
+
+
+def test_record_completion_first_insert_creates_single_row(proxy):
+    """First record_completion for a slug inserts exactly one row (AC7)."""
+    proxy.record_completion(
+        slug=UPSERT_SLUG,
+        item_type=UPSERT_ITEM_TYPE,
+        outcome="warn",
+        cost_usd=1.23,
+        duration_s=60.0,
+        run_id=UPSERT_RUN_ID_1,
+        tokens_per_minute=1500.0,
+        verification_notes=UPSERT_NOTES_1,
+    )
+
+    assert _count_completion_rows(proxy, UPSERT_SLUG) == 1
+
+
+def test_record_completion_first_insert_initializes_attempts_history(proxy):
+    """First insert creates attempts_history with a single-entry JSON array (AC16, AC18)."""
+    proxy.record_completion(
+        slug=UPSERT_SLUG,
+        item_type=UPSERT_ITEM_TYPE,
+        outcome="warn",
+        cost_usd=1.23,
+        duration_s=60.0,
+        run_id=UPSERT_RUN_ID_1,
+        tokens_per_minute=1500.0,
+        verification_notes=UPSERT_NOTES_1,
+    )
+
+    row = _read_completion_row(proxy, UPSERT_SLUG)
+    history = json.loads(row["attempts_history"])
+    assert isinstance(history, list)
+    assert len(history) == 1
+
+    entry = history[0]
+    assert entry["outcome"] == "warn"
+    assert abs(entry["cost_usd"] - 1.23) < 1e-9
+    assert abs(entry["duration_s"] - 60.0) < 1e-9
+    assert entry["run_id"] == UPSERT_RUN_ID_1
+    assert abs(entry["tokens_per_minute"] - 1500.0) < 1e-9
+    assert "finished_at" in entry
+
+
+def test_record_completion_retry_only_one_row(proxy):
+    """After a retry, exactly one row exists for the slug (AC1, AC2)."""
+    proxy.record_completion(
+        slug=UPSERT_SLUG,
+        item_type=UPSERT_ITEM_TYPE,
+        outcome="warn",
+        cost_usd=1.23,
+        duration_s=60.0,
+        run_id=UPSERT_RUN_ID_1,
+    )
+    proxy.record_completion(
+        slug=UPSERT_SLUG,
+        item_type=UPSERT_ITEM_TYPE,
+        outcome="success",
+        cost_usd=0.50,
+        duration_s=30.0,
+        run_id=UPSERT_RUN_ID_2,
+    )
+
+    assert _count_completion_rows(proxy, UPSERT_SLUG) == 1
+
+
+def test_record_completion_retry_accumulates_cost(proxy):
+    """Second completion accumulates cost_usd by summing both attempts (AC8)."""
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="warn",
+        cost_usd=1.23, duration_s=60.0,
+    )
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="success",
+        cost_usd=0.50, duration_s=30.0,
+    )
+
+    row = _read_completion_row(proxy, UPSERT_SLUG)
+    assert abs(row["cost_usd"] - 1.73) < 1e-9
+
+
+def test_record_completion_retry_accumulates_duration(proxy):
+    """Second completion accumulates duration_s by summing both attempts (AC9)."""
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="warn",
+        cost_usd=1.23, duration_s=60.0,
+    )
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="success",
+        cost_usd=0.50, duration_s=30.0,
+    )
+
+    row = _read_completion_row(proxy, UPSERT_SLUG)
+    assert abs(row["duration_s"] - 90.0) < 1e-9
+
+
+def test_record_completion_retry_replaces_outcome(proxy):
+    """Second completion sets outcome to the latest attempt's value (AC10)."""
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="warn",
+        cost_usd=1.23, duration_s=60.0,
+    )
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="success",
+        cost_usd=0.50, duration_s=30.0,
+    )
+
+    row = _read_completion_row(proxy, UPSERT_SLUG)
+    assert row["outcome"] == "success"
+
+
+def test_record_completion_retry_replaces_run_id(proxy):
+    """Second completion sets run_id to the latest attempt's value (AC12)."""
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="warn",
+        cost_usd=1.23, duration_s=60.0, run_id=UPSERT_RUN_ID_1,
+    )
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="success",
+        cost_usd=0.50, duration_s=30.0, run_id=UPSERT_RUN_ID_2,
+    )
+
+    row = _read_completion_row(proxy, UPSERT_SLUG)
+    assert row["run_id"] == UPSERT_RUN_ID_2
+
+
+def test_record_completion_retry_replaces_tokens_per_minute(proxy):
+    """Second completion sets tokens_per_minute to the latest attempt's value (AC13)."""
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="warn",
+        cost_usd=1.0, duration_s=60.0, tokens_per_minute=1000.0,
+    )
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="success",
+        cost_usd=0.5, duration_s=30.0, tokens_per_minute=2000.0,
+    )
+
+    row = _read_completion_row(proxy, UPSERT_SLUG)
+    assert abs(row["tokens_per_minute"] - 2000.0) < 1e-9
+
+
+def test_record_completion_retry_replaces_verification_notes(proxy):
+    """Second completion sets verification_notes to the latest attempt's value (AC14)."""
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="warn",
+        cost_usd=1.0, duration_s=60.0, verification_notes=UPSERT_NOTES_1,
+    )
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="success",
+        cost_usd=0.5, duration_s=30.0, verification_notes=UPSERT_NOTES_2,
+    )
+
+    row = _read_completion_row(proxy, UPSERT_SLUG)
+    assert row["verification_notes"] == UPSERT_NOTES_2
+
+
+def test_record_completion_retry_appends_to_attempts_history(proxy):
+    """Second completion appends a new entry to attempts_history (AC17)."""
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="warn",
+        cost_usd=1.23, duration_s=60.0, run_id=UPSERT_RUN_ID_1,
+    )
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="success",
+        cost_usd=0.50, duration_s=30.0, run_id=UPSERT_RUN_ID_2,
+    )
+
+    row = _read_completion_row(proxy, UPSERT_SLUG)
+    history = json.loads(row["attempts_history"])
+    assert isinstance(history, list)
+    assert len(history) == 2
+    assert history[0]["outcome"] == "warn"
+    assert history[0]["run_id"] == UPSERT_RUN_ID_1
+    assert history[1]["outcome"] == "success"
+    assert history[1]["run_id"] == UPSERT_RUN_ID_2
+
+
+def test_record_completion_attempts_history_entries_have_required_fields(proxy):
+    """Each entry in attempts_history contains all required fields (AC18)."""
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="warn",
+        cost_usd=1.23, duration_s=60.0, run_id=UPSERT_RUN_ID_1,
+        tokens_per_minute=1500.0,
+    )
+
+    row = _read_completion_row(proxy, UPSERT_SLUG)
+    history = json.loads(row["attempts_history"])
+    entry = history[0]
+    for field in ("outcome", "cost_usd", "duration_s", "finished_at", "run_id", "tokens_per_minute"):
+        assert field in entry, f"Missing field: {field}"
+
+
+def test_unique_constraint_on_slug_raises_on_raw_insert(proxy):
+    """A raw INSERT with duplicate slug raises IntegrityError (AC3, AC4)."""
+    proxy.record_completion(
+        slug=UPSERT_SLUG, item_type=UPSERT_ITEM_TYPE, outcome="success",
+        cost_usd=1.0, duration_s=10.0,
+    )
+
+    with pytest.raises(sqlite3.IntegrityError):
+        with sqlite3.connect(str(proxy._db_path)) as conn:
+            conn.execute(
+                "INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, finished_at)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                [UPSERT_SLUG, "feature", "fail", 0.5, 5.0, "2026-03-31T10:00:00"],
+            )
+
+
+# ─── Migration Tests (AC19–AC26) ─────────────────────────────────────────────
+
+MIGRATION_SCHEMA_SQL = """
+CREATE TABLE completions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL,
+    item_type TEXT NOT NULL,
+    outcome TEXT NOT NULL,
+    cost_usd REAL NOT NULL DEFAULT 0.0,
+    duration_s REAL NOT NULL DEFAULT 0.0,
+    finished_at TEXT NOT NULL,
+    run_id TEXT,
+    tokens_per_minute REAL NOT NULL DEFAULT 0.0,
+    verification_notes TEXT
+)
+"""
+
+MIGRATION_OTHER_TABLES_SQL = [
+    """CREATE TABLE traces (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT NOT NULL,
+        parent_run_id TEXT,
+        name TEXT NOT NULL,
+        model TEXT NOT NULL DEFAULT '',
+        start_time TEXT,
+        end_time TEXT,
+        inputs_json TEXT,
+        outputs_json TEXT,
+        metadata_json TEXT,
+        error TEXT,
+        created_at TEXT NOT NULL
+    )""",
+    """CREATE TABLE cost_tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_slug TEXT NOT NULL,
+        item_type TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        agent_type TEXT NOT NULL,
+        model TEXT NOT NULL,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        cost_usd REAL NOT NULL DEFAULT 0.0,
+        duration_s REAL NOT NULL DEFAULT 0.0,
+        tool_calls_json TEXT,
+        recorded_at TEXT NOT NULL
+    )""",
+    """CREATE TABLE sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        label TEXT,
+        start_time TEXT NOT NULL,
+        end_time TEXT,
+        total_cost_usd REAL NOT NULL DEFAULT 0.0,
+        items_processed INTEGER NOT NULL DEFAULT 0,
+        notes TEXT
+    )""",
+]
+
+
+def _make_pre_migration_db(tmp_path, rows: list) -> str:
+    """Create a SQLite DB with duplicate completion rows (no UNIQUE constraint, no attempts_history).
+
+    Args:
+        tmp_path: pytest tmp_path fixture.
+        rows: List of (slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id,
+                       tokens_per_minute, verification_notes) tuples.
+
+    Returns:
+        Absolute path to the DB file as a string.
+    """
+    db_path = str(tmp_path / "pre-migration.db")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(MIGRATION_SCHEMA_SQL)
+        for sql in MIGRATION_OTHER_TABLES_SQL:
+            conn.execute(sql)
+        for row in rows:
+            conn.execute(
+                "INSERT INTO completions"
+                " (slug, item_type, outcome, cost_usd, duration_s, finished_at,"
+                "  run_id, tokens_per_minute, verification_notes)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                row,
+            )
+    return db_path
+
+
+def test_migration_merges_three_duplicate_rows_cost(tmp_path):
+    """Migration sums cost_usd across all 3 rows for a duplicate slug (AC19)."""
+    rows = [
+        ("dup-slug", "feature", "warn", 1.0, 30.0, "2026-03-31T08:00:00", "run-1", 1000.0, None),
+        ("dup-slug", "feature", "warn", 2.0, 60.0, "2026-03-31T09:00:00", "run-2", 1200.0, None),
+        ("dup-slug", "feature", "success", 0.5, 15.0, "2026-03-31T10:00:00", "run-3", 1500.0, None),
+    ]
+    db_path = _make_pre_migration_db(tmp_path, rows)
+    proxy = TracingProxy({"db_path": db_path})
+
+    row = _read_completion_row(proxy, "dup-slug")
+    assert abs(row["cost_usd"] - 3.5) < 1e-9
+
+
+def test_migration_merges_three_duplicate_rows_duration(tmp_path):
+    """Migration sums duration_s across all 3 rows for a duplicate slug (AC20)."""
+    rows = [
+        ("dup-slug", "feature", "warn", 1.0, 30.0, "2026-03-31T08:00:00", "run-1", 1000.0, None),
+        ("dup-slug", "feature", "warn", 2.0, 60.0, "2026-03-31T09:00:00", "run-2", 1200.0, None),
+        ("dup-slug", "feature", "success", 0.5, 15.0, "2026-03-31T10:00:00", "run-3", 1500.0, None),
+    ]
+    db_path = _make_pre_migration_db(tmp_path, rows)
+    proxy = TracingProxy({"db_path": db_path})
+
+    row = _read_completion_row(proxy, "dup-slug")
+    assert abs(row["duration_s"] - 105.0) < 1e-9
+
+
+def test_migration_merges_duplicate_rows_latest_fields(tmp_path):
+    """Migration uses outcome/finished_at/run_id/tpm/notes from the latest row (AC21)."""
+    notes_latest = '{"verdict": "success"}'
+    rows = [
+        ("dup-slug", "feature", "warn", 1.0, 30.0, "2026-03-31T08:00:00", "run-1", 1000.0, None),
+        ("dup-slug", "feature", "success", 0.5, 15.0, "2026-03-31T10:00:00", "run-3", 1500.0, notes_latest),
+        ("dup-slug", "feature", "warn", 2.0, 60.0, "2026-03-31T09:00:00", "run-2", 1200.0, None),
+    ]
+    db_path = _make_pre_migration_db(tmp_path, rows)
+    proxy = TracingProxy({"db_path": db_path})
+
+    row = _read_completion_row(proxy, "dup-slug")
+    assert row["outcome"] == "success"
+    assert row["finished_at"] == "2026-03-31T10:00:00"
+    assert row["run_id"] == "run-3"
+    assert abs(row["tokens_per_minute"] - 1500.0) < 1e-9
+    assert row["verification_notes"] == notes_latest
+
+
+def test_migration_builds_attempts_history_from_all_rows(tmp_path):
+    """Migration builds attempts_history JSON array from all rows ordered by finished_at (AC22)."""
+    rows = [
+        ("dup-slug", "feature", "warn", 1.0, 30.0, "2026-03-31T08:00:00", "run-1", 1000.0, None),
+        ("dup-slug", "feature", "warn", 2.0, 60.0, "2026-03-31T09:00:00", "run-2", 1200.0, None),
+        ("dup-slug", "feature", "success", 0.5, 15.0, "2026-03-31T10:00:00", "run-3", 1500.0, None),
+    ]
+    db_path = _make_pre_migration_db(tmp_path, rows)
+    proxy = TracingProxy({"db_path": db_path})
+
+    row = _read_completion_row(proxy, "dup-slug")
+    history = json.loads(row["attempts_history"])
+    assert isinstance(history, list)
+    assert len(history) == 3
+    assert history[0]["run_id"] == "run-1"
+    assert history[0]["finished_at"] == "2026-03-31T08:00:00"
+    assert history[1]["run_id"] == "run-2"
+    assert history[2]["run_id"] == "run-3"
+    assert history[2]["finished_at"] == "2026-03-31T10:00:00"
+
+
+def test_migration_deletes_extra_rows(tmp_path):
+    """Migration deletes all but the merged row, leaving exactly one per slug (AC23)."""
+    rows = [
+        ("dup-slug", "feature", "warn", 1.0, 30.0, "2026-03-31T08:00:00", "run-1", 1000.0, None),
+        ("dup-slug", "feature", "success", 0.5, 15.0, "2026-03-31T10:00:00", "run-2", 1500.0, None),
+    ]
+    db_path = _make_pre_migration_db(tmp_path, rows)
+    proxy = TracingProxy({"db_path": db_path})
+
+    with sqlite3.connect(db_path) as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM completions WHERE slug = ?", ["dup-slug"]
+        ).fetchone()[0]
+    assert count == 1
+
+
+def test_migration_handles_single_row_without_error(tmp_path):
+    """Migration is a no-op for slugs that already have only one row (AC24)."""
+    rows = [
+        ("solo-slug", "feature", "success", 1.0, 30.0, "2026-03-31T08:00:00", "run-1", 1000.0, None),
+    ]
+    db_path = _make_pre_migration_db(tmp_path, rows)
+    proxy = TracingProxy({"db_path": db_path})
+
+    row = _read_completion_row(proxy, "solo-slug")
+    assert abs(row["cost_usd"] - 1.0) < 1e-9
+
+    history = json.loads(row["attempts_history"])
+    assert len(history) == 1
+
+
+def test_migration_is_idempotent(tmp_path):
+    """Running _init_db a second time on the same DB does not alter data (idempotent)."""
+    rows = [
+        ("dup-slug", "feature", "warn", 1.0, 30.0, "2026-03-31T08:00:00", "run-1", 1000.0, None),
+        ("dup-slug", "feature", "success", 0.5, 15.0, "2026-03-31T10:00:00", "run-2", 1500.0, None),
+    ]
+    db_path = _make_pre_migration_db(tmp_path, rows)
+    proxy = TracingProxy({"db_path": db_path})
+
+    # Record the merged state
+    first_row = _read_completion_row(proxy, "dup-slug")
+
+    # Create a second proxy pointing at the same DB — triggers _init_db again
+    proxy2 = TracingProxy({"db_path": db_path})
+    second_row = _read_completion_row(proxy2, "dup-slug")
+
+    assert abs(second_row["cost_usd"] - first_row["cost_usd"]) < 1e-9
+    assert abs(second_row["duration_s"] - first_row["duration_s"]) < 1e-9
+    assert second_row["outcome"] == first_row["outcome"]
+
+    history = json.loads(second_row["attempts_history"])
+    assert len(history) == 2
+
+
+def test_migration_runs_in_proxy_init_db(tmp_path):
+    """Migration is executed inside proxy.py _init_db (AC26)."""
+    rows = [
+        ("slug-x", "defect", "warn", 0.8, 20.0, "2026-03-31T07:00:00", "run-a", 800.0, None),
+        ("slug-x", "defect", "fail", 0.4, 10.0, "2026-03-31T08:00:00", "run-b", 900.0, None),
+    ]
+    db_path = _make_pre_migration_db(tmp_path, rows)
+
+    # The TracingProxy constructor calls _init_db which must run the migration
+    TracingProxy({"db_path": db_path})
+
+    with sqlite3.connect(db_path) as conn:
+        count = conn.execute("SELECT COUNT(*) FROM completions").fetchone()[0]
+    assert count == 1, "Migration should have merged duplicates into one row"
+
+
+def test_completions_table_has_attempts_history_column(proxy):
+    """The completions table schema includes an attempts_history column (AC15)."""
+    with sqlite3.connect(str(proxy._db_path)) as conn:
+        info = conn.execute("PRAGMA table_info(completions)").fetchall()
+    column_names = [row[1] for row in info]
+    assert "attempts_history" in column_names
 

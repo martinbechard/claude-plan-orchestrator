@@ -77,6 +77,14 @@ _ALTER_ADD_COMPLETIONS_VERIFICATION_NOTES_SQL = (
     "ALTER TABLE completions ADD COLUMN verification_notes TEXT"
 )
 
+_ALTER_ADD_COMPLETIONS_ATTEMPTS_HISTORY_SQL = (
+    "ALTER TABLE completions ADD COLUMN attempts_history TEXT"
+)
+
+_CREATE_UNIQUE_INDEX_SLUG_SQL = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_completions_slug_unique ON completions (slug)"
+)
+
 _CREATE_SESSIONS_SQL = """
 CREATE TABLE IF NOT EXISTS sessions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -379,10 +387,113 @@ class TracingProxy:
                 conn.execute(_ALTER_ADD_COMPLETIONS_VERIFICATION_NOTES_SQL)
             except sqlite3.OperationalError:
                 pass  # Column already exists in an existing database
+            try:
+                conn.execute(_ALTER_ADD_COMPLETIONS_ATTEMPTS_HISTORY_SQL)
+            except sqlite3.OperationalError:
+                pass  # Column already exists in an existing database
+            self._migrate_completion_duplicates(conn)
+            conn.execute(_CREATE_UNIQUE_INDEX_SLUG_SQL)
             conn.execute(_DEDUPLICATE_RUN_IDS_SQL)
             conn.execute(_CREATE_UNIQUE_INDEX_RUN_ID_SQL)
             for index_sql in _CREATE_INDEXES_SQL:
                 conn.execute(index_sql)
+
+    def _migrate_completion_duplicates(self, conn: sqlite3.Connection) -> None:
+        """Merge duplicate completion rows per slug and backfill attempts_history.
+
+        For each slug with multiple rows: accumulates cost_usd and duration_s,
+        takes latest-row values for outcome/finished_at/run_id/tokens_per_minute/
+        verification_notes, builds attempts_history JSON from all rows (ordered by
+        finished_at ASC), updates the row with MAX(id) as tiebreaker, and deletes
+        the rest. Also backfills attempts_history for single rows that have NULL.
+
+        Idempotent: after the first run there are no duplicates and all rows have
+        attempts_history set, so subsequent calls are no-ops.
+        """
+        dup_slugs = conn.execute(
+            "SELECT slug FROM completions GROUP BY slug HAVING COUNT(*) > 1"
+        ).fetchall()
+
+        for dup_row in dup_slugs:
+            slug = dup_row[0]
+            rows = conn.execute(
+                """
+                SELECT id, outcome, cost_usd, duration_s, finished_at, run_id,
+                       tokens_per_minute, verification_notes
+                FROM completions
+                WHERE slug = ?
+                ORDER BY finished_at ASC, id ASC
+                """,
+                [slug],
+            ).fetchall()
+
+            total_cost = sum(r["cost_usd"] for r in rows)
+            total_duration = sum(r["duration_s"] for r in rows)
+            latest_row = max(rows, key=lambda r: (r["finished_at"], r["id"]))
+
+            history = [
+                {
+                    "outcome": r["outcome"],
+                    "cost_usd": r["cost_usd"],
+                    "duration_s": r["duration_s"],
+                    "finished_at": r["finished_at"],
+                    "run_id": r["run_id"],
+                    "tokens_per_minute": r["tokens_per_minute"],
+                }
+                for r in rows
+            ]
+
+            conn.execute(
+                """
+                UPDATE completions
+                SET cost_usd=?, duration_s=?, outcome=?, finished_at=?, run_id=?,
+                    tokens_per_minute=?, verification_notes=?, attempts_history=?
+                WHERE id=?
+                """,
+                [
+                    total_cost,
+                    total_duration,
+                    latest_row["outcome"],
+                    latest_row["finished_at"],
+                    latest_row["run_id"],
+                    latest_row["tokens_per_minute"],
+                    latest_row["verification_notes"],
+                    json.dumps(history),
+                    latest_row["id"],
+                ],
+            )
+
+            other_ids = [r["id"] for r in rows if r["id"] != latest_row["id"]]
+            placeholders = ",".join("?" * len(other_ids))
+            conn.execute(
+                f"DELETE FROM completions WHERE id IN ({placeholders})",
+                other_ids,
+            )
+
+        null_rows = conn.execute(
+            """
+            SELECT id, outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute
+            FROM completions
+            WHERE attempts_history IS NULL
+            """
+        ).fetchall()
+        for r in null_rows:
+            single_history = json.dumps(
+                [
+                    {
+                        "outcome": r["outcome"],
+                        "cost_usd": r["cost_usd"],
+                        "duration_s": r["duration_s"],
+                        "finished_at": r["finished_at"],
+                        "run_id": r["run_id"],
+                        "tokens_per_minute": r["tokens_per_minute"],
+                    }
+                ]
+            )
+            conn.execute(
+                "UPDATE completions SET attempts_history=? WHERE id=?",
+                [single_history, r["id"]],
+            )
 
     def _connect(self) -> sqlite3.Connection:
         """Open and return a new SQLite connection with row_factory set."""
@@ -573,17 +684,41 @@ class TracingProxy:
             verification_notes: JSON string with verdict, findings[], and evidence from the validator.
         """
         finished_at = datetime.now(timezone.utc).isoformat()
+        attempt_entry = json.dumps(
+            {
+                "outcome": outcome,
+                "cost_usd": cost_usd,
+                "duration_s": duration_s,
+                "finished_at": finished_at,
+                "run_id": run_id,
+                "tokens_per_minute": tokens_per_minute,
+            }
+        )
+        initial_history = json.dumps([json.loads(attempt_entry)])
         try:
             with self._connect() as conn:
                 conn.execute(
                     """
                     INSERT INTO completions
                         (slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id,
-                         tokens_per_minute, verification_notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         tokens_per_minute, verification_notes, attempts_history)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(slug) DO UPDATE SET
+                        item_type=excluded.item_type,
+                        outcome=excluded.outcome,
+                        cost_usd=completions.cost_usd + excluded.cost_usd,
+                        duration_s=completions.duration_s + excluded.duration_s,
+                        finished_at=excluded.finished_at,
+                        run_id=excluded.run_id,
+                        tokens_per_minute=excluded.tokens_per_minute,
+                        verification_notes=excluded.verification_notes,
+                        attempts_history=json_insert(completions.attempts_history, '$[#]', json(?))
                     """,
-                    [slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id,
-                     tokens_per_minute, verification_notes],
+                    [
+                        slug, item_type, outcome, cost_usd, duration_s, finished_at, run_id,
+                        tokens_per_minute, verification_notes, initial_history,
+                        attempt_entry,
+                    ],
                 )
         except Exception:
             logger.debug("TracingProxy: failed to record completion for %s", slug, exc_info=True)
