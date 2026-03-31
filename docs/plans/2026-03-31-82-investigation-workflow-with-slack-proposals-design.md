@@ -2,258 +2,264 @@
 
 Source item: tmp/plans/.claimed/82-investigation-workflow-with-slack-proposals.md
 Requirements: docs/plans/2026-03-31-82-investigation-workflow-with-slack-proposals-requirements.md
+Date: 2026-03-31
 
 ## Architecture Overview
 
-The investigation workflow adds a new pipeline path that diverges from the standard
-defect/feature flow after the intake node. Instead of structuring requirements and
-creating an execution plan, investigations run a Claude-driven analysis that produces
-multiple discrete proposals, posts them to Slack for human approval, and files accepted
-items as new backlog entries.
+The investigation workflow adds a new pipeline workflow type that branches
+after intake to run a Claude-powered analysis, produce structured proposals,
+post them to Slack for human approval, and file accepted proposals as backlog
+items. The design reuses the existing intake stage (clause extraction + 5 Whys)
+and the existing Slack thread reply-polling infrastructure from the suspension
+module.
 
-### Pipeline Flow
+### Graph Topology Extension
 
-```
-intake_analyze (reuses 5-whys for investigation)
-    |
-    v [route_after_intake -- investigation branch]
-run_investigation (Claude analysis -> proposals YAML)
-    |
-    v
-process_investigation (Slack post -> poll reply -> parse -> file -> record)
-    |
-    v [route_after_process_investigation]
-archive (if done) | END (if waiting for reply)
-```
+The existing pipeline graph follows a linear path:
+
+    intake -> structure_requirements -> create_plan -> execute_plan -> verify/archive
+
+Investigation items diverge after intake:
+
+    intake -> run_investigation -> process_investigation -> archive | END
+
+The process_investigation node is a state machine with three phases that
+uses should_stop to suspend between pipeline cycles while waiting for a
+Slack reply. This mirrors the existing suspension pattern where nodes set
+should_stop=True to yield control back to the supervisor.
 
 ### Key Files
 
 New files:
-- langgraph_pipeline/investigation/__init__.py -- module init
-- langgraph_pipeline/investigation/proposals.py -- Proposal/ProposalSet models, persistence, response parser, filing
-- langgraph_pipeline/pipeline/nodes/investigation.py -- run_investigation and process_investigation pipeline nodes
-- tests/langgraph/investigation/__init__.py -- test module init
-- tests/langgraph/investigation/test_proposals.py -- proposal model, parser, filing tests
-- tests/langgraph/pipeline/nodes/test_investigation.py -- pipeline node tests
+- langgraph_pipeline/investigation/__init__.py (package init)
+- langgraph_pipeline/investigation/proposals.py (data model, persistence, response parser)
+- langgraph_pipeline/pipeline/nodes/investigation.py (two graph nodes)
+- tests/langgraph/investigation/__init__.py (test package init)
+- tests/langgraph/investigation/test_proposals.py (proposal model + parser tests)
+- tests/langgraph/pipeline/nodes/test_investigation.py (node function tests)
 
 Modified files:
-- langgraph_pipeline/pipeline/state.py -- add "investigation" to ItemType
-- langgraph_pipeline/shared/paths.py -- add INVESTIGATION_DIR, COMPLETED_INVESTIGATIONS_DIR
-- langgraph_pipeline/pipeline/edges.py -- add investigation routing functions and node constants
-- langgraph_pipeline/pipeline/graph.py -- wire investigation nodes into graph
-- langgraph_pipeline/pipeline/nodes/__init__.py -- export investigation nodes
-- langgraph_pipeline/pipeline/nodes/intake.py -- handle investigation type (reuse 5-whys path)
-- langgraph_pipeline/pipeline/nodes/archival.py -- handle investigation archival
-- langgraph_pipeline/slack/notifier.py -- add investigation channel suffix, add post_proposals method
-- langgraph_pipeline/supervisor.py -- scan investigation backlog directory
+- langgraph_pipeline/pipeline/state.py (add "investigation" to ItemType)
+- langgraph_pipeline/shared/paths.py (add investigation dirs)
+- langgraph_pipeline/pipeline/edges.py (new node constants, routing functions)
+- langgraph_pipeline/pipeline/graph.py (wire investigation nodes)
+- langgraph_pipeline/pipeline/nodes/__init__.py (export new nodes)
+- langgraph_pipeline/pipeline/nodes/archival.py (handle investigation type)
+- langgraph_pipeline/pipeline/nodes/intake.py (handle investigation intake)
+- langgraph_pipeline/supervisor.py (include investigation in scan order)
+- langgraph_pipeline/slack/notifier.py (add investigations channel, post_proposals method)
+- langgraph_pipeline/slack/poller.py (add investigations to SLACK_CHANNEL_ROLE_SUFFIXES)
+- tests/langgraph/pipeline/test_edges.py (routing tests for investigation)
+
+---
 
 ## Design Decisions
 
-### D1: Add "investigation" as a new ItemType with dedicated infrastructure
+### D1: Investigation type registration
 
-Addresses: FR1, UC1
-Satisfies: AC1, AC2, AC3, AC7
+Addresses: UC1 (submit investigation request), FR1 (investigation workflow type)
+Satisfies: AC1, AC2, AC3
+Approach: Add "investigation" to the ItemType Literal in state.py. Add
+INVESTIGATION_DIR = "docs/investigation-backlog" and
+COMPLETED_INVESTIGATIONS_DIR = "docs/completed-backlog/investigations" to
+paths.py, with entries in BACKLOG_DIRS and COMPLETED_DIRS. Update
+supervisor.py to include investigation in the backlog scan order (after
+defects and features, before analyses). The pipeline recognizes investigation
+items via their directory location, preserving the original request text
+in the item file.
+Files: langgraph_pipeline/pipeline/state.py, langgraph_pipeline/shared/paths.py,
+langgraph_pipeline/supervisor.py
 
-Approach: Add "investigation" to the ItemType literal in state.py. Add
-INVESTIGATION_DIR (docs/investigation-backlog) and COMPLETED_INVESTIGATIONS_DIR
-(docs/completed-backlog/investigations) to paths.py. Add these to BACKLOG_DIRS
-and COMPLETED_DIRS dictionaries. Update the supervisor scan order to include
-investigation items. Update the worker to accept "investigation" as an item type.
+### D2: Investigation intake reuse
 
-Files: state.py, paths.py, supervisor.py, worker.py
+Addresses: FR1 (investigation workflow type)
+Satisfies: AC6
+Approach: In intake.py, handle item_type == "investigation" the same as
+"analysis" -- run clause extraction and 5-whys analysis to produce
+clause_register_path and five_whys_path. This reuses the existing intake
+infrastructure without modification, providing structured context for the
+investigation runner.
+Files: langgraph_pipeline/pipeline/nodes/intake.py
 
-### D2: Reuse analysis intake (clause extraction, 5 whys) for investigation type
+### D3: Investigation analysis engine (run_investigation node)
 
-Addresses: FR1
-Satisfies: AC10
-
-Approach: In intake.py, treat investigation items the same as analysis items for
-the intake phase -- run clause extraction and 5-whys analysis. The investigation
-type already matches the analysis pattern of needing root-cause analysis before
-proceeding. The intake output (clause_register_path, five_whys_path) feeds into
-the investigation analysis node as context.
-
-Files: intake.py
-
-### D3: Claude-driven investigation analysis producing structured proposals
-
-Addresses: FR2, FR3
-Satisfies: AC11, AC12, AC13, AC14, AC15, AC16, AC17, AC18
-
-Approach: Create a run_investigation pipeline node that spawns Claude (Opus) with
-a structured prompt. The prompt includes the original item content, clause register,
-and 5-whys output as context, and instructs Claude to: (1) read relevant code, logs,
-data, and traces referenced in the analysis, (2) perform systematic root-cause
-investigation, (3) output a JSON array of proposals. Each proposal has: type
-(defect or enhancement), title, description with evidence citations from the
-codebase, and severity (critical/high/medium/low). The node parses the JSON output,
-validates each proposal has all required fields, and constructs a ProposalSet.
-
+Addresses: FR1 (investigation produces multiple proposals), FR2 (structured proposal generation)
+Satisfies: AC4, AC5, AC7, AC8, AC9, AC10
+Approach: Create run_investigation node function that spawns Claude (Opus
+model) via claude_cli.py with a structured prompt. The prompt includes the
+original item content, clause register, and 5-whys analysis as context, and
+instructs Claude to investigate the codebase and produce a JSON array of
+proposals. Each proposal must contain type (defect/enhancement), title,
+description with evidence, and severity (critical/high/medium/low). The
+node is idempotent: if proposals.yaml already exists in the workspace,
+it returns state unchanged. The node follows existing patterns from
+intake.py and plan_creation.py for Claude CLI invocation and output parsing.
+Uses the "planner" permission profile for the Claude call.
 Files: langgraph_pipeline/pipeline/nodes/investigation.py
 
-### D4: Proposal persistence as YAML in workspace
+### D4: Proposal data model and persistence
 
-Addresses: FR5
-Satisfies: AC24, AC25, AC26, AC27
+Addresses: FR4 (proposal state persistence)
+Satisfies: AC14, AC16, AC17, AC18, AC19
+Approach: Create two dataclasses in langgraph_pipeline/investigation/proposals.py:
+- Proposal: number, proposal_type (Literal["defect", "enhancement"]), title,
+  description, severity (Literal["critical", "high", "medium", "low"]),
+  status (Literal["pending", "accepted", "rejected"]) defaulting to "pending",
+  filed_path (Optional[str]) defaulting to None.
+- ProposalSet: slug, generated_at (ISO-8601 string), status
+  (Literal["pending", "approved", "rejected", "partial"]) defaulting to
+  "pending", slack_channel_id (Optional[str]), slack_thread_ts (Optional[str]),
+  reply_text (Optional[str]), proposals (list[Proposal]).
 
-Approach: Define Proposal and ProposalSet dataclasses in
-langgraph_pipeline/investigation/proposals.py. ProposalSet contains: slug,
-generated_at timestamp, status (pending/approved/rejected/partial), slack_channel_id,
-slack_thread_ts (populated after posting), reply_text (populated after response),
-and a list of Proposal objects. Persist as {workspace}/proposals.yaml using
-PyYAML safe_dump. The file is keyed by slug implicitly (each workspace directory
-corresponds to one slug). The thread_ts field enables Slack reply matching. File-based
-persistence survives pipeline restarts.
+Persistence uses workspace YAML files (proposals.yaml in the item workspace
+dir). This is the simplest option from the three design alternatives (C14-C16)
+and is consistent with how the pipeline already stores per-item artifacts.
+save_proposals() writes proposals.yaml via PyYAML safe_dump. load_proposals()
+reads and reconstructs the dataclass, returning None if the file is missing.
+Lookup is by slug (workspace directory name), and thread_ts is stored
+alongside the proposal set.
+Files: langgraph_pipeline/investigation/__init__.py,
+langgraph_pipeline/investigation/proposals.py
 
-Proposal dataclass fields: number (int), proposal_type (defect/enhancement), title,
-description, severity, status (pending/accepted/rejected), filed_path (Optional,
-set after filing).
+### D5: Slack proposal messaging with threading
 
-Files: langgraph_pipeline/investigation/proposals.py
+Addresses: FR3 (Slack proposal messaging with threading), UC2 (review proposals via Slack)
+Satisfies: AC11, AC12, AC13, AC14
+Approach: Add "investigations" to SLACK_CHANNEL_ROLE_SUFFIXES in both
+notifier.py and poller.py, mapping to "investigation". Add a post_proposals()
+method to SlackNotifier that formats proposals as a numbered Block Kit message.
+Each proposal shows: number, type badge (defect/enhancement), title, truncated
+description, severity. Post as a top-level message to the investigations
+channel and return the message ts (thread_ts). The thread_ts is saved to
+proposals.yaml so the poller can match replies to their parent proposal.
+Files: langgraph_pipeline/slack/notifier.py, langgraph_pipeline/slack/poller.py
 
-### D5: Slack numbered list delivery with thread_ts tracking
+### D6: Process investigation state machine (process_investigation node)
 
-Addresses: FR4
-Satisfies: AC19, AC20, AC21, AC22, AC23
+Addresses: FR3, FR4, UC2, FR6
+Satisfies: AC11, AC12, AC13, AC14, AC15
+Approach: The process_investigation node implements a three-phase state machine:
 
-Approach: Add an "investigations" channel role to SLACK_CHANNEL_ROLE_SUFFIXES in
-notifier.py (maps to orchestrator-investigations channel). Add a post_proposals()
-method to SlackNotifier that formats proposals as a numbered Block Kit message
-with type badges, titles, descriptions, and severity. Post as a top-level message
-so user replies create a thread. Capture the returned message ts (which becomes
-the thread_ts for replies) and store it in the ProposalSet. The Slack poller can
-then match threaded replies to the parent proposal message via the stored thread_ts.
+Phase 1 (Post proposals): If proposals.yaml exists but slack_thread_ts is None,
+instantiate SlackNotifier, call post_proposals() to send the numbered list,
+save the returned thread_ts and channel_id to proposals.yaml, set
+should_stop=True, return state.
 
-Files: langgraph_pipeline/slack/notifier.py
+Phase 2 (Poll for reply): If slack_thread_ts exists but reply_text is None,
+call SlackNotifier's check_suspension_reply() to check the thread for a
+human reply (skip bot messages). If no reply, set should_stop=True, return
+state. If reply found, save reply_text to proposals.yaml, proceed to Phase 3.
 
-### D6: Suspension-based reply polling with should_stop pattern
+Phase 3 (Parse and file): Call parse_approval_response(reply_text,
+len(proposals)). For each accepted proposal, call file_accepted_proposals().
+Update proposal statuses and save final proposals.yaml. Return state with
+should_stop=False so routing proceeds to archive.
 
-Addresses: UC2
-Satisfies: AC4, AC5, AC6
-
-Approach: The process_investigation node implements a state-machine pattern:
-(1) If proposals are persisted but no thread_ts exists, post to Slack and set
-should_stop=True. (2) If thread_ts exists but no reply, poll the Slack thread
-using conversations.replies API. If no reply found, set should_stop=True (the
-supervisor will re-invoke on the next cycle). (3) If a reply is found, proceed
-to parse and file. This reuses the existing pipeline pattern where should_stop
-causes the graph to route to END and the supervisor retries later. The human
-approval gate ensures no items are filed until the user responds.
-
+This mirrors the existing suspension pattern where nodes set should_stop=True
+to yield control, and the supervisor resumes them on the next cycle.
 Files: langgraph_pipeline/pipeline/nodes/investigation.py
 
-### D7: Multi-strategy response parser with LLM fallback
+### D7: Flexible response parsing
 
-Addresses: FR6
-Satisfies: AC28, AC29, AC30, AC31, AC32, AC33, AC34
-
-Approach: Implement parse_approval_response(text, proposal_count) in proposals.py
-that returns a set of accepted proposal numbers. Strategy chain (case-insensitive,
-whitespace-stripped):
-1. "all" or "yes" -> accept all (numbers 1..proposal_count)
-2. "none" or "no" -> accept none (empty set)
-3. Regex for comma/space-separated numbers (e.g. "1, 3, 5") -> accept listed
-4. Regex for "all except N[, M...]" -> accept all minus listed
-5. Fallback: call Claude (Haiku for cost efficiency) with the response text and
-   proposal list, asking it to return accepted numbers as a JSON array
-
-All strategies normalize whitespace and are case-insensitive. The parser operates
-on the matched proposal set (identified by slug via the workspace proposals.yaml).
-
+Addresses: FR5 (flexible response parsing)
+Satisfies: AC20, AC21, AC22, AC23, AC24, AC25
+Approach: Create parse_approval_response(text, proposal_count) -> set[int] in
+proposals.py. Uses a strategy chain:
+1. Strip whitespace, lowercase. "all" or "yes" returns full set.
+2. "none" or "no" returns empty set.
+3. Regex for comma/space-separated numbers (r"^[\d,\s]+$") parses each
+   number, validates in range 1..proposal_count.
+4. Regex for "all except" pattern (r"^all\s+except\s+([\d,\s]+)$") computes
+   full set minus listed numbers.
+5. Fallback: call Claude Haiku via claude_cli.py with a prompt asking it to
+   return accepted numbers as a JSON array given the response text and
+   proposal count. Parse the JSON array from output.
 Files: langgraph_pipeline/investigation/proposals.py
 
-### D8: File accepted proposals as backlog entries
+### D8: Auto-filing accepted proposals as backlog items
 
-Addresses: FR7
-Satisfies: AC35, AC36, AC37, AC38, AC39
-
-Approach: Implement file_accepted_proposals() in proposals.py that iterates over
-accepted proposals and writes markdown files. Defects go to docs/defect-backlog/,
-enhancements go to docs/feature-backlog/. Each file follows the standard backlog
-format: title, status (Open), priority (mapped from severity), summary (from
-proposal description), and description with investigation evidence. File names use
-the next available sequence number based on existing backlog items (matching the
-pattern {N}-{slugified-title}.md). Filed items are automatically picked up by the
-pipeline on the next scan cycle since the supervisor already scans both directories.
-The process is fully automated after the Slack approval -- no manual intervention.
-
+Addresses: FR6 (auto-filing accepted proposals)
+Satisfies: AC26, AC27, AC28, AC29
+Approach: Add file_accepted_proposals(proposal_set) to proposals.py. For each
+accepted proposal: determine target directory (DEFECT_DIR for "defect",
+FEATURE_DIR for "enhancement" from paths.py). Find next available sequence
+number by scanning existing files. Write markdown using the standard backlog
+format: title heading, Status Open, Priority from severity, Summary from
+description, Description with investigation evidence. Set proposal.filed_path.
+Filed items are automatically picked up by the pipeline because they appear
+in the backlog directories that the supervisor scans on each cycle.
 Files: langgraph_pipeline/investigation/proposals.py
 
-### D9: Outcome recording in proposals file
+### D9: Investigation outcome recording
 
-Addresses: FR8
-Satisfies: AC40, AC41, AC42
+Addresses: FR7 (investigation outcome recording)
+Satisfies: AC30, AC31
+Approach: After parse_approval_response runs and proposals are filed (D8),
+update each Proposal's status field to "accepted" or "rejected". Set
+ProposalSet.status to "approved" (all accepted), "rejected" (all rejected),
+or "partial" (mixed). Save the final proposals.yaml to the workspace. A
+reviewer can inspect tmp/workspace/{slug}/proposals.yaml to see the
+disposition of every proposal.
+Files: langgraph_pipeline/investigation/proposals.py,
+langgraph_pipeline/pipeline/nodes/investigation.py
 
-Approach: After parsing the user's response, update each Proposal object's status
-field to "accepted" or "rejected". For accepted proposals, also set the filed_path
-field to the path of the created backlog entry. Update the ProposalSet's overall
-status to "approved" (all accepted), "rejected" (none accepted), or "partial"
-(some accepted, some rejected). Persist the updated proposals.yaml. This file
-serves as the complete audit trail for the investigation, showing all proposals
-and the user's disposition of each.
+### D10: Graph routing for investigation
 
-Files: langgraph_pipeline/investigation/proposals.py
+Addresses: UC1, FR1
+Satisfies: AC2
+Approach: In edges.py, add NODE_RUN_INVESTIGATION = "run_investigation" and
+NODE_PROCESS_INVESTIGATION = "process_investigation" constants. Modify
+route_after_intake to check for item_type == "investigation" and return
+NODE_RUN_INVESTIGATION instead of NODE_STRUCTURE_REQS. Add
+route_after_investigation() returning NODE_PROCESS_INVESTIGATION. Add
+route_after_process_investigation() returning END if should_stop is True,
+else NODE_ARCHIVE.
 
-### D10: Investigation-specific graph routing
+In graph.py, import run_investigation and process_investigation from nodes,
+add them via add_node(), and wire conditional edges:
+run_investigation -> route_after_investigation -> process_investigation,
+process_investigation -> route_after_process_investigation -> archive | END.
 
-Addresses: FR1
-Satisfies: AC7, AC8, AC9
+Update nodes/__init__.py to export both functions. Ensure archival.py handles
+the investigation type mapping to the "completed" outcome.
+Files: langgraph_pipeline/pipeline/edges.py, langgraph_pipeline/pipeline/graph.py,
+langgraph_pipeline/pipeline/nodes/__init__.py,
+langgraph_pipeline/pipeline/nodes/archival.py
 
-Approach: Modify route_after_intake in edges.py to check for item_type ==
-"investigation" and route to run_investigation instead of structure_requirements.
-Add two new node name constants: NODE_RUN_INVESTIGATION and
-NODE_PROCESS_INVESTIGATION. Add a new routing function
-route_after_investigation() that always routes to process_investigation. Add
-route_after_process_investigation() that checks should_stop -- if True, return
-END (waiting for Slack reply); otherwise return NODE_ARCHIVE. Wire both new
-nodes and their conditional edges into graph.py. This gives investigation a
-completely separate path from the standard plan-based workflows.
-
-Files: langgraph_pipeline/pipeline/edges.py, langgraph_pipeline/pipeline/graph.py
+---
 
 ## Design -> AC Traceability Grid
 
 | AC | Design Decision(s) | Approach |
 |---|---|---|
-| AC1 | D1 | Investigation submitted through existing pipeline intake mechanism |
-| AC2 | D1 | "investigation" added to ItemType literal |
-| AC3 | D1 | Supervisor scans investigation backlog, worker processes automatically |
-| AC4 | D6 | Slack thread reply polling via conversations.replies API |
-| AC5 | D5, D6 | Thread matching via stored thread_ts in proposals.yaml |
-| AC6 | D6 | Pipeline waits (should_stop) until Slack reply received before filing |
-| AC7 | D1, D10 | Conditional routing in edges.py separates investigation from analysis |
-| AC8 | D10 | Investigation produces proposal list, not single document |
-| AC9 | D6, D10 | Investigation requires Slack approval before completing |
-| AC10 | D2 | Intake runs clause extraction and 5-whys for investigation type |
-| AC11 | D3 | Claude reads code, logs, traces referenced in intake output |
-| AC12 | D3 | Investigation prompt directs systematic root-cause analysis |
-| AC13 | D3 | Proposal descriptions include evidence citations from codebase |
-| AC14 | D3, D4 | Proposal model requires type field (defect or enhancement) |
-| AC15 | D3, D4 | Proposal model requires title field |
-| AC16 | D3, D4 | Proposal model requires description with evidence |
-| AC17 | D3, D4 | Proposal model requires severity field |
-| AC18 | D3, D4 | Multiple proposals stored in ProposalSet list |
-| AC19 | D5 | Proposals formatted as numbered Slack Block Kit message |
-| AC20 | D5 | Posted to orchestrator-investigations channel |
-| AC21 | D5 | Top-level Slack post enables thread replies |
-| AC22 | D4, D5 | thread_ts saved to proposals.yaml after posting |
-| AC23 | D5, D6 | Poller matches reply to parent via stored thread_ts |
-| AC24 | D4 | Proposals persisted as YAML on disk in workspace |
-| AC25 | D4 | Workspace directory keyed by slug provides lookup |
-| AC26 | D4 | thread_ts field stored in proposals.yaml |
-| AC27 | D4 | File-based persistence survives pipeline restart |
-| AC28 | D7 | "all"/"yes" pattern in strategy chain |
-| AC29 | D7 | "none"/"no" pattern in strategy chain |
-| AC30 | D7 | Comma-separated numbers regex |
-| AC31 | D7 | "all except N" regex |
-| AC32 | D7 | LLM fallback (Haiku) for free-text |
-| AC33 | D7 | Parser operates on matched proposal set from workspace |
-| AC34 | D7 | Case-insensitive, whitespace-tolerant matching |
-| AC35 | D8 | Defects filed to docs/defect-backlog/ |
-| AC36 | D8 | Enhancements filed to docs/feature-backlog/ |
-| AC37 | D8 | Uses same markdown format as manually created items |
-| AC38 | D8 | Pipeline scans backlog dirs automatically on next cycle |
-| AC39 | D8 | No manual intervention beyond Slack approval |
-| AC40 | D9 | Proposal status set to "accepted" in proposals.yaml |
-| AC41 | D9 | Proposal status set to "rejected" in proposals.yaml |
-| AC42 | D9 | proposals.yaml readable after investigation completes |
+| AC1 | D1 | Investigation items submitted via docs/investigation-backlog/, scanned by supervisor |
+| AC2 | D1, D10 | ItemType includes "investigation"; route_after_intake branches to run_investigation |
+| AC3 | D1 | Original item text preserved in backlog file, accessible to investigation runner |
+| AC4 | D3 | run_investigation spawns Claude Opus to read code, logs, traces |
+| AC5 | D3 | run_investigation produces a list of Proposal objects, not a single document |
+| AC6 | D2 | Intake handles investigation same as analysis (clause extraction + 5 Whys) |
+| AC7 | D3, D4 | Proposal dataclass has proposal_type field constrained to defect/enhancement |
+| AC8 | D3, D4 | Proposal dataclass has title field |
+| AC9 | D3, D4 | Proposal dataclass has description field with evidence citations |
+| AC10 | D3, D4 | Proposal dataclass has severity field (critical/high/medium/low) |
+| AC11 | D5, D6 | post_proposals sends numbered Block Kit list to Slack investigations channel |
+| AC12 | D5 | post_proposals routes to orchestrator-investigations channel |
+| AC13 | D5, D6 | Replies captured in same thread via thread_ts correlation |
+| AC14 | D4, D5 | thread_ts saved to proposals.yaml alongside proposal data |
+| AC15 | D6 | Phase 3 only runs after Slack reply received; no filing without approval |
+| AC16 | D4 | proposals.yaml persisted to disk via save_proposals() |
+| AC17 | D4 | load_proposals() retrieves by slug (workspace dir); thread_ts enables poller lookup |
+| AC18 | D4 | ProposalSet stores all fields: type, title, description, severity, thread_ts |
+| AC19 | D4 | File-based persistence survives pipeline restart |
+| AC20 | D7 | parse_approval_response: "all"/"yes" returns full set |
+| AC21 | D7 | parse_approval_response: "none"/"no" returns empty set |
+| AC22 | D7 | parse_approval_response: "1, 3, 5" returns {1, 3, 5} |
+| AC23 | D7 | parse_approval_response: "all except 2" returns full set minus {2} |
+| AC24 | D7 | parse_approval_response fallback: Claude Haiku interprets free-text |
+| AC25 | D7 | Response matched to most recent proposal set via workspace slug lookup |
+| AC26 | D8 | Defect proposals filed to docs/defect-backlog/ |
+| AC27 | D8 | Enhancement proposals filed to docs/feature-backlog/ |
+| AC28 | D8 | Filed items use standard backlog format (title, status, priority, description) |
+| AC29 | D8 | Filed items appear in scanned directories, auto-discovered next cycle |
+| AC30 | D9 | Each Proposal.status updated to accepted/rejected in proposals.yaml |
+| AC31 | D9 | Reviewer inspects tmp/workspace/{slug}/proposals.yaml for full audit trail |
