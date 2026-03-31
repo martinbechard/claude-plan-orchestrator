@@ -20,7 +20,7 @@ sections:
     name: Systems design for execution history tree rendering
     agent: systems-designer
     parallel_group: design-phase0
-    status: pending
+    status: failed
     target_acs:
     - AC2
     - AC3
@@ -44,11 +44,15 @@ sections:
       run metadata from template context bootstraps the initial display.
 
       '
+    last_attempt: '2026-03-31T16:36:05.196317'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.2'
     name: UX design for execution history tree rendering
     agent: ux-designer
     parallel_group: design-phase0
-    status: pending
+    status: failed
     target_acs:
     - AC2
     - AC3
@@ -73,11 +77,15 @@ sections:
       stack.
 
       '
+    last_attempt: '2026-03-31T16:36:05.181008'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.3'
     name: Frontend implementation design for execution history tree
     agent: frontend-coder
     parallel_group: design-phase0
-    status: pending
+    status: failed
     target_acs:
     - AC2
     - AC3
@@ -101,6 +109,10 @@ sections:
       via extra_head block.
 
       '
+    last_attempt: '2026-03-31T16:36:05.166164'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.4'
     name: Judge execution history tree design competition
     agent: design-judge

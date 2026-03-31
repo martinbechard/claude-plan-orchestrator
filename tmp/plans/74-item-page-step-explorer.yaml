@@ -20,7 +20,7 @@ sections:
     name: Systems design for step-based artifact explorer
     agent: systems-designer
     parallel_group: design-phase0
-    status: pending
+    status: in_progress
     target_acs:
     - AC1
     - AC2
@@ -35,22 +35,25 @@ sections:
     - AC20
     - AC21
     - AC22
-    description: >
-      Produce a systems/architecture design for the item detail page step explorer.
-      Covers P1, FR1, FR2 per D1, D2 from work item: tmp/plans/.claimed/74-item-page-step-explorer.md
-      Design: docs/plans/2026-03-31-74-item-page-step-explorer-design.md
-      Requirements: docs/plans/2026-03-31-74-item-page-step-explorer-requirements.md
+    description: 'Produce a systems/architecture design for the item detail page step
+      explorer. Covers P1, FR1, FR2 per D1, D2 from work item: tmp/plans/.claimed/74-item-page-step-explorer.md
+      Design: docs/plans/2026-03-31-74-item-page-step-explorer-design.md Requirements:
+      docs/plans/2026-03-31-74-item-page-step-explorer-requirements.md
 
       Focus on: StageInfo/ArtifactInfo data model, build_stages() function mapping
-      artifact discovery to six ordered stages, stage status computation matrix,
-      /dynamic endpoint extension for live stage updates, and artifact-to-stage
-      mapping for all six stages (Intake, Requirements, Planning, Execution,
-      Verification, Archive).
+      artifact discovery to six ordered stages, stage status computation matrix, /dynamic
+      endpoint extension for live stage updates, and artifact-to-stage mapping for
+      all six stages (Intake, Requirements, Planning, Execution, Verification, Archive).
+
+      '
+    last_attempt: '2026-03-31T16:37:28.466449'
+    attempts: 1
+    model_used: opus
   - id: '0.2'
     name: UX design for step-based artifact explorer
     agent: ux-designer
     parallel_group: design-phase0
-    status: pending
+    status: in_progress
     target_acs:
     - AC11
     - AC12
@@ -65,23 +68,26 @@ sections:
     - AC24
     - AC25
     - AC26
-    description: >
-      Produce a UX design for the step-based artifact explorer accordion.
-      Covers P2, P3, P4, FR3, FR4, FR5, UC1 per D3, D4, D5, D6 from work item:
-      tmp/plans/.claimed/74-item-page-step-explorer.md
-      Design: docs/plans/2026-03-31-74-item-page-step-explorer-design.md
-      Requirements: docs/plans/2026-03-31-74-item-page-step-explorer-requirements.md
+    description: 'Produce a UX design for the step-based artifact explorer accordion.
+      Covers P2, P3, P4, FR3, FR4, FR5, UC1 per D3, D4, D5, D6 from work item: tmp/plans/.claimed/74-item-page-step-explorer.md
+      Design: docs/plans/2026-03-31-74-item-page-step-explorer-design.md Requirements:
+      docs/plans/2026-03-31-74-item-page-step-explorer-requirements.md
 
-      Focus on: stage section visual hierarchy with status badges (not_started /
-      in_progress / done), collapse/expand interaction patterns with chevron icons,
-      timestamp placement for stages and artifacts, loading indicators for on-demand
-      content, default expand behavior, responsive layout, accessibility (keyboard
-      navigation, ARIA attributes), and "User Request" label replacing "Raw Input".
+      Focus on: stage section visual hierarchy with status badges (not_started / in_progress
+      / done), collapse/expand interaction patterns with chevron icons, timestamp
+      placement for stages and artifacts, loading indicators for on-demand content,
+      default expand behavior, responsive layout, accessibility (keyboard navigation,
+      ARIA attributes), and "User Request" label replacing "Raw Input".
+
+      '
+    last_attempt: '2026-03-31T16:37:28.520008'
+    attempts: 1
+    model_used: opus
   - id: '0.3'
     name: Frontend implementation design for step explorer
     agent: frontend-coder
     parallel_group: design-phase0
-    status: pending
+    status: in_progress
     target_acs:
     - AC13
     - AC14
@@ -91,18 +97,21 @@ sections:
     - AC20
     - AC25
     - AC26
-    description: >
-      Produce a concrete frontend implementation design for the step-based
-      artifact explorer. Covers P1, P3, P4, FR4, UC1 per D4, D5 from work item:
-      tmp/plans/.claimed/74-item-page-step-explorer.md
-      Design: docs/plans/2026-03-31-74-item-page-step-explorer-design.md
-      Requirements: docs/plans/2026-03-31-74-item-page-step-explorer-requirements.md
+    description: 'Produce a concrete frontend implementation design for the step-based
+      artifact explorer. Covers P1, P3, P4, FR4, UC1 per D4, D5 from work item: tmp/plans/.claimed/74-item-page-step-explorer.md
+      Design: docs/plans/2026-03-31-74-item-page-step-explorer-design.md Requirements:
+      docs/plans/2026-03-31-74-item-page-step-explorer-requirements.md
 
       Focus on: HTML structure for accordion stages using vanilla JS, CSS classes
       for stage states and transitions, localStorage persistence for collapse state,
-      AJAX content fetching with DOM-based data-loaded caching, integration with
-      /dynamic polling for live stage status updates, chevron indicators, and how
-      to structure the step explorer markup in item.html.
+      AJAX content fetching with DOM-based data-loaded caching, integration with /dynamic
+      polling for live stage status updates, chevron indicators, and how to structure
+      the step explorer markup in item.html.
+
+      '
+    last_attempt: '2026-03-31T16:37:28.500016'
+    attempts: 1
+    model_used: opus
   - id: '0.4'
     name: Judge step explorer design competition
     agent: design-judge
@@ -121,40 +130,40 @@ sections:
     - AC18
     - AC20
     - AC26
-    description: >
-      Evaluate the three competing designs for the step-based artifact explorer.
-      Score each against acceptance criteria from work item:
-      tmp/plans/.claimed/74-item-page-step-explorer.md
+    description: 'Evaluate the three competing designs for the step-based artifact
+      explorer. Score each against acceptance criteria from work item: tmp/plans/.claimed/74-item-page-step-explorer.md
       Requirements: docs/plans/2026-03-31-74-item-page-step-explorer-requirements.md
       Design: docs/plans/2026-03-31-74-item-page-step-explorer-design.md
 
-      Key criteria: artifact grouping under six stages (AC1-AC6), chronological
-      order (AC7, AC8), stage status display (AC9), timestamps (AC11, AC12, AC23),
-      collapsibility (AC16, AC17, AC25), on-demand loading (AC13-AC15, AC26),
-      "User Request" label (AC18, AC19), accessibility, and implementation
-      feasibility with existing vanilla JS + Jinja2 stack. Select the winner
-      with written rationale.
+      Key criteria: artifact grouping under six stages (AC1-AC6), chronological order
+      (AC7, AC8), stage status display (AC9), timestamps (AC11, AC12, AC23), collapsibility
+      (AC16, AC17, AC25), on-demand loading (AC13-AC15, AC26), "User Request" label
+      (AC18, AC19), accessibility, and implementation feasibility with existing vanilla
+      JS + Jinja2 stack. Select the winner with written rationale.
+
+      '
   - id: '0.5'
     name: Bridge winning design to implementation tasks
     agent: planner
     dependencies:
     - '0.4'
     status: pending
-    description: >
-      Read the winning UI design from the design competition (task 0.4) and
-      extend this YAML plan with concrete implementation details for frontend
-      tasks. Work item: tmp/plans/.claimed/74-item-page-step-explorer.md
-      Requirements: docs/plans/2026-03-31-74-item-page-step-explorer-requirements.md
-      Design: docs/plans/2026-03-31-74-item-page-step-explorer-design.md
+    description: 'Read the winning UI design from the design competition (task 0.4)
+      and extend this YAML plan with concrete implementation details for frontend
+      tasks. Work item: tmp/plans/.claimed/74-item-page-step-explorer.md Requirements:
+      docs/plans/2026-03-31-74-item-page-step-explorer-requirements.md Design: docs/plans/2026-03-31-74-item-page-step-explorer-design.md
 
-      Frontend tasks in section 2 should be refined with specifics from the
-      winning design. Backend task in section 1 is already specified.
+      Frontend tasks in section 2 should be refined with specifics from the winning
+      design. Backend task in section 1 is already specified.
+
+      '
 - id: '1'
   name: 'Backend: Stage Data Model, Status Computation, and API'
   status: pending
   tasks:
   - id: '1.1'
-    name: Implement stage data model, build_stages(), status matrix, and /dynamic extension
+    name: Implement stage data model, build_stages(), status matrix, and /dynamic
+      extension
     agent: coder
     status: pending
     target_acs:
@@ -177,36 +186,36 @@ sections:
     - AC22
     - AC23
     - AC24
-    description: >
-      Implement P1, P2, FR1, FR2, FR3, FR5 per D1, D2, D3, D6 from work item:
-      tmp/plans/.claimed/74-item-page-step-explorer.md
-      Design: docs/plans/2026-03-31-74-item-page-step-explorer-design.md
+    description: 'Implement P1, P2, FR1, FR2, FR3, FR5 per D1, D2, D3, D6 from work
+      item: tmp/plans/.claimed/74-item-page-step-explorer.md Design: docs/plans/2026-03-31-74-item-page-step-explorer-design.md
       Requirements: docs/plans/2026-03-31-74-item-page-step-explorer-requirements.md
 
-      D1: Create StageInfo and ArtifactInfo TypedDicts. Implement build_stages()
-      mapping artifact discovery into six ordered stages per STAGE_ORDER constant.
-      Omit Verification stage for feature items (AC5). Label raw request as
-      "User Request" (AC18, AC19). Map artifacts to stages: Intake (AC1),
-      Requirements (AC2), Planning (AC3), Execution (AC4), Verification (AC5),
-      Archive (AC6). Display six stages in order (AC7, AC8). Group under stage
-      headings (AC20) with visual hierarchy (AC21, AC22).
+      D1: Create StageInfo and ArtifactInfo TypedDicts. Implement build_stages() mapping
+      artifact discovery into six ordered stages per STAGE_ORDER constant. Omit Verification
+      stage for feature items (AC5). Label raw request as "User Request" (AC18, AC19).
+      Map artifacts to stages: Intake (AC1), Requirements (AC2), Planning (AC3), Execution
+      (AC4), Verification (AC5), Archive (AC6). Display six stages in order (AC7,
+      AC8). Group under stage headings (AC20) with visual hierarchy (AC21, AC22).
 
-      D2: Implement _compute_stage_statuses() with lookup matrix for three-state
-      status (AC9). Compute completion timestamps from latest artifact mtime (AC10).
+      D2: Implement _compute_stage_statuses() with lookup matrix for three-state status
+      (AC9). Compute completion timestamps from latest artifact mtime (AC10).
 
-      D3: Each artifact gets file mtime as timestamp (AC11, AC12). Timestamps on
-      both stages and artifacts (AC23, AC24).
+      D3: Each artifact gets file mtime as timestamp (AC11, AC12). Timestamps on both
+      stages and artifacts (AC23, AC24).
 
       D6: "User Request" label (AC18) within Intake stage (AC19).
 
-      Extend /item/{slug}/dynamic to include stages array with status,
-      completion_ts, completion_epoch, artifact_count for live polling.
+      Extend /item/{slug}/dynamic to include stages array with status, completion_ts,
+      completion_epoch, artifact_count for live polling.
+
+      '
 - id: '2'
   name: 'Frontend: Step Explorer Accordion'
   status: pending
   tasks:
   - id: '2.1'
-    name: Implement step explorer accordion with collapsible stages and on-demand loading
+    name: Implement step explorer accordion with collapsible stages and on-demand
+      loading
     agent: frontend-coder
     dependencies:
     - '0.5'
@@ -239,28 +248,27 @@ sections:
     - AC24
     - AC25
     - AC26
-    description: >
-      Implement P1, P2, P3, P4, FR1, FR2, FR3, FR4, FR5, UC1 per D1, D3, D4,
-      D5, D6 from work item: tmp/plans/.claimed/74-item-page-step-explorer.md
-      Design: docs/plans/2026-03-31-74-item-page-step-explorer-design.md
-      Requirements: docs/plans/2026-03-31-74-item-page-step-explorer-requirements.md
+    description: 'Implement P1, P2, P3, P4, FR1, FR2, FR3, FR4, FR5, UC1 per D1, D3,
+      D4, D5, D6 from work item: tmp/plans/.claimed/74-item-page-step-explorer.md
+      Design: docs/plans/2026-03-31-74-item-page-step-explorer-design.md Requirements:
+      docs/plans/2026-03-31-74-item-page-step-explorer-requirements.md
 
-      D5: Replace layout in item.html with step explorer accordion. Each stage
-      renders as collapsible section with button header (aria-expanded,
-      aria-controls), stage name, status badge (AC9), completion timestamp (AC10),
-      artifact count. CSS "collapsed" class hides body. localStorage persists
-      expand/collapse state per slug+stageId. Independent collapse/expand (AC16).
-      Chevron icon indicates state (AC17). Users can collapse unneeded sections
-      (AC25).
+      D5: Replace layout in item.html with step explorer accordion. Each stage renders
+      as collapsible section with button header (aria-expanded, aria-controls), stage
+      name, status badge (AC9), completion timestamp (AC10), artifact count. CSS "collapsed"
+      class hides body. localStorage persists expand/collapse state per slug+stageId.
+      Independent collapse/expand (AC16). Chevron icon indicates state (AC17). Users
+      can collapse unneeded sections (AC25).
 
-      D1: Render six stages in order (AC7, AC8) with artifacts nested under
-      each stage (AC1-AC6, AC11, AC20), showing timestamps (AC12, AC23, AC24).
-      Visual hierarchy (AC21, AC22).
+      D1: Render six stages in order (AC7, AC8) with artifacts nested under each stage
+      (AC1-AC6, AC11, AC20), showing timestamps (AC12, AC23, AC24). Visual hierarchy
+      (AC21, AC22).
 
-      D4: Artifact content not rendered at page load (AC14). On stage expand,
-      JS fetches each artifact via /item/{slug}/artifact-content?path= (AC13,
-      AC15). Cache via data-loaded DOM attribute. Avoids loading all content
-      simultaneously (AC26). /dynamic polling updates stage status badges and
-      detects new artifacts.
+      D4: Artifact content not rendered at page load (AC14). On stage expand, JS fetches
+      each artifact via /item/{slug}/artifact-content?path= (AC13, AC15). Cache via
+      data-loaded DOM attribute. Avoids loading all content simultaneously (AC26).
+      /dynamic polling updates stage status badges and detects new artifacts.
 
       D6: "User Request" label in Intake stage (AC18, AC19).
+
+      '

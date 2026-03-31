@@ -21,7 +21,7 @@ sections:
     name: Systems design for markdown rendering pipeline and layout constraints
     agent: systems-designer
     parallel_group: design-phase0
-    status: pending
+    status: failed
     target_acs:
     - AC1
     - AC7
@@ -44,11 +44,15 @@ sections:
       code paths (step explorer + output artifact sidebar).
 
       '
+    last_attempt: '2026-03-31T16:26:48.145371'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.2'
     name: UX design for rendered markdown content and layout stability
     agent: ux-designer
     parallel_group: design-phase0
-    status: pending
+    status: failed
     target_acs:
     - AC1
     - AC2
@@ -71,11 +75,15 @@ sections:
       within the dark theme.
 
       '
+    last_attempt: '2026-03-31T16:26:48.131492'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.3'
     name: Frontend implementation design for markdown rendering and layout fix
     agent: frontend-coder
     parallel_group: design-phase0
-    status: pending
+    status: failed
     target_acs:
     - AC1
     - AC6
@@ -99,6 +107,10 @@ sections:
       non-markdown artifacts. Preserve existing vanilla JS + Jinja2 stack.
 
       '
+    last_attempt: '2026-03-31T16:26:48.164872'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.4'
     name: Judge markdown rendering and layout design competition
     agent: design-judge
