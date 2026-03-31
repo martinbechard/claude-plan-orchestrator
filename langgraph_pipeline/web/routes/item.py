@@ -19,6 +19,7 @@ Endpoints:
 """
 
 import json
+import logging
 import re
 import subprocess
 import time
@@ -28,6 +29,10 @@ from typing import Callable, Optional, TypedDict
 
 import yaml
 from fastapi import APIRouter, HTTPException, Query
+
+# Suppress noisy DEBUG messages from the markdown library
+# ("Successfully loaded extension ...") on every conversion call.
+logging.getLogger("markdown").setLevel(logging.WARNING)
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
@@ -160,6 +165,7 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
     plan_tasks = _load_plan_tasks(slug)
     completions = _load_completions(slug)
     _parse_verification_notes(completions)
+    outcome = _derive_outcome(completions)
     traces = _load_root_traces(slug)
     pipeline_stage = _derive_pipeline_stage(slug, completions)
     active_worker = _get_active_worker(slug)
@@ -209,6 +215,7 @@ def item_detail(request: Request, slug: str) -> HTMLResponse:
             "validation_results": validation_results,
             "avg_velocity": avg_velocity,
             "last_trace": last_trace,
+            "outcome": outcome,
         },
     )
 
@@ -230,6 +237,7 @@ def item_dynamic(slug: str) -> JSONResponse:
         validation_results, and stages (lightweight stage-status summary).
     """
     completions = _load_completions(slug)
+    outcome = _derive_outcome(completions)
     pipeline_stage = _derive_pipeline_stage(slug, completions)
     item_type = _detect_item_type(slug)
     active_worker = _get_active_worker(slug)
@@ -271,6 +279,7 @@ def item_dynamic(slug: str) -> JSONResponse:
         "plan_tasks": plan_tasks,
         "validation_results": validation_results,
         "stages": stage_summaries,
+        "outcome": outcome,
     })
 
 
@@ -856,6 +865,23 @@ def _load_plan_tasks(slug: str) -> Optional[list[dict]]:
                 }
             )
     return tasks if tasks else None
+
+
+def _derive_outcome(completions: list[dict]) -> Optional[str]:
+    """Return the outcome from the most recent completion record.
+
+    The completions list is ordered by finished_at descending (newest first),
+    so the first element is the most recent.
+
+    Args:
+        completions: List of completion dicts from _load_completions().
+
+    Returns:
+        Outcome string ("success", "warn", or "fail"), or None if no completions.
+    """
+    if not completions:
+        return None
+    return completions[0].get("outcome") or None
 
 
 def _load_completions(slug: str) -> list[dict]:

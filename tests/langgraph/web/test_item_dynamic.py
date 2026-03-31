@@ -111,6 +111,7 @@ def test_dynamic_returns_json_with_all_fields(client: TestClient):
         "plan_tasks",
         "validation_results",
         "stages",
+        "outcome",
     }
     assert set(data.keys()) == expected_keys
 

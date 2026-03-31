@@ -126,6 +126,11 @@
 
 .last-trace-link:hover { background: #dbeafe; text-decoration: none; }
 
+/* Outcome badges in the item header — more prominent than pipeline-stage badges */
+.item-badges .outcome-success { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; font-weight: 700; }
+.item-badges .outcome-warn    { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; font-weight: 700; }
+.item-badges .outcome-fail    { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; font-weight: 700; }
+
 /* Status / pipeline-stage badges */
 .status-running   { background: #d1fae5; color: #065f46; }
 .status-completed { background: #dbeafe; color: #1e40af; }
@@ -1044,6 +1049,12 @@
   <div class="item-header-main">
     <h1 class="item-slug">{{ slug }}</h1>
     <div class="item-badges">
+      <span data-dynamic="outcome-badge">
+      {% if outcome %}
+        <span class="badge outcome-{{ outcome }}"
+              aria-label="Outcome: {{ outcome }}">{{ outcome }}</span>
+      {% endif %}
+      </span>
       {% if item_type %}
         <span class="badge item-type-{{ item_type }}"
               aria-label="Type: {{ item_type }}">{{ item_type }}</span>
@@ -1844,6 +1855,16 @@ document.querySelectorAll('.output-preview-details').forEach(function (el) {
                     if (valCountEl) { valCountEl.textContent = String(data.validation_results.length); }
                 } else {
                     if (valCard) { valCard.hidden = true; }
+                }
+
+                /* Outcome badge — update header badge on each refresh (D5) */
+                var outcomeBadgeEl = el('outcome-badge');
+                if (outcomeBadgeEl) {
+                    if (data.outcome) {
+                        outcomeBadgeEl.innerHTML = '<span class="badge outcome-' + data.outcome + '" aria-label="Outcome: ' + data.outcome + '">' + data.outcome + '</span>';
+                    } else {
+                        outcomeBadgeEl.innerHTML = '';
+                    }
                 }
 
                 /* Update step explorer stage statuses (D5) */
