@@ -11,112 +11,13 @@ meta:
     validators:
     - validator
     max_validation_attempts: 2
-  worker_pid: 4960
 sections:
-- id: '0'
-  name: 'Phase 0: Attempt History Drill-Down UI Design'
-  status: pending
-  tasks:
-  - id: '0.1'
-    name: Systems design for attempt history drill-down
-    agent: systems-designer
-    parallel_group: design-phase0
-    status: pending
-    target_acs:
-    - AC36
-    description: 'Produce a systems/architecture design for the attempt history drill-down
-      in the dashboard completions display. Covers UC1 per D6 from work item: tmp/plans/.claimed/85-completions-upsert-by-slug.md
-      Design: docs/plans/2026-03-31-85-completions-upsert-by-slug-design.md Requirements:
-      docs/plans/2026-03-31-85-completions-upsert-by-slug-requirements.md
-
-      Focus on: data flow from attempts_history JSON column through the list_completions_grouped
-      response to the dashboard template, SSE event payload shape, and how the drill-down
-      data integrates with the existing completion row rendering. The backend changes
-      (D1-D5) provide a single row per slug with an attempts_history JSON array; this
-      design determines how the frontend consumes and displays that data.
-
-      '
-  - id: '0.2'
-    name: UX design for attempt history drill-down
-    agent: ux-designer
-    parallel_group: design-phase0
-    status: pending
-    target_acs:
-    - AC36
-    description: 'Produce a UX design for the attempt history drill-down on completion
-      rows in the dashboard. Covers UC1 per D6 from work item: tmp/plans/.claimed/85-completions-upsert-by-slug.md
-      Design: docs/plans/2026-03-31-85-completions-upsert-by-slug-design.md Requirements:
-      docs/plans/2026-03-31-85-completions-upsert-by-slug-requirements.md
-
-      Focus on: interaction pattern for expanding/collapsing attempt history on a
-      completion row, visual hierarchy between the summary row and per-attempt details,
-      information density (showing outcome, cost, duration, timestamp, run_id, tokens_per_minute
-      per attempt), accessibility (keyboard navigation, ARIA attributes), and how
-      to indicate that history is available (attempt count badge, expand icon).
-
-      '
-  - id: '0.3'
-    name: Frontend implementation design for attempt history drill-down
-    agent: frontend-coder
-    parallel_group: design-phase0
-    status: pending
-    target_acs:
-    - AC36
-    description: 'Produce a concrete frontend implementation design for the attempt
-      history drill-down. Covers UC1 per D6 from work item: tmp/plans/.claimed/85-completions-upsert-by-slug.md
-      Design: docs/plans/2026-03-31-85-completions-upsert-by-slug-design.md Requirements:
-      docs/plans/2026-03-31-85-completions-upsert-by-slug-requirements.md
-
-      Focus on: HTML structure for expandable attempt rows using vanilla JS, CSS classes
-      for expand/collapse transitions, how to render the attempts_history array from
-      the SSE payload, integration with the existing dashboard completion table markup,
-      and the existing vanilla JS + Jinja2 stack conventions used in this project.
-
-      '
-  - id: '0.4'
-    name: Judge attempt history drill-down design competition
-    agent: design-judge
-    dependencies:
-    - '0.1'
-    - '0.2'
-    - '0.3'
-    status: pending
-    target_acs:
-    - AC36
-    description: 'Evaluate the three competing designs for the attempt history drill-down.
-      Score each against AC36 from work item: tmp/plans/.claimed/85-completions-upsert-by-slug.md
-      Requirements: docs/plans/2026-03-31-85-completions-upsert-by-slug-requirements.md
-      Design: docs/plans/2026-03-31-85-completions-upsert-by-slug-design.md
-
-      Key criteria: ability to view per-attempt history with all six fields (outcome,
-      cost_usd, duration_s, finished_at, run_id, tokens_per_minute), usability of
-      the drill-down interaction, accessibility, visual clarity, and implementation
-      feasibility with the existing vanilla JS + Jinja2 stack. Select the winner with
-      written rationale.
-
-      '
-  - id: '0.5'
-    name: Bridge winning design to implementation tasks
-    agent: planner
-    dependencies:
-    - '0.4'
-    status: pending
-    description: 'Read the winning UI design from the design competition (task 0.4)
-      and extend this YAML plan with concrete implementation details for the frontend
-      task in section 2. Work item: tmp/plans/.claimed/85-completions-upsert-by-slug.md
-      Requirements: docs/plans/2026-03-31-85-completions-upsert-by-slug-requirements.md
-      Design: docs/plans/2026-03-31-85-completions-upsert-by-slug-design.md
-
-      The frontend task 2.1 should be refined with specifics from the winning design.
-      Backend tasks in section 1 are already specified.
-
-      '
 - id: '1'
-  name: 'Backend: Migration, Upsert, Schema, and Grouping'
+  name: 'Backend: Migration, Upsert, and UNIQUE Constraint'
   status: pending
   tasks:
   - id: '1.1'
-    name: Implement migration, upsert, UNIQUE constraint, and grouping updates
+    name: Add attempts_history column, merge duplicates, add UNIQUE index, implement upsert
     agent: coder
     status: pending
     target_acs:
@@ -124,7 +25,6 @@ sections:
     - AC2
     - AC3
     - AC4
-    - AC5
     - AC6
     - AC7
     - AC8
@@ -146,84 +46,86 @@ sections:
     - AC24
     - AC25
     - AC26
-    - AC27
-    - AC28
-    - AC29
-    - AC30
-    - AC31
-    - AC32
-    - AC33
-    - AC34
-    - AC35
-    description: 'Implement P1, P2, P3, FR1, FR2, FR3, FR4 per D1, D2, D3, D4, D5
-      from work item: tmp/plans/.claimed/85-completions-upsert-by-slug.md Design:
-      docs/plans/2026-03-31-85-completions-upsert-by-slug-design.md Requirements:
-      docs/plans/2026-03-31-85-completions-upsert-by-slug-requirements.md
+    description: >
+      Implement P1, P2, P4, FR1, FR2, FR3 per D1, D2, D3, D4 from work item:
+      tmp/plans/.claimed/85-completions-upsert-by-slug.md
+      Design: docs/plans/2026-03-31-85-completions-upsert-by-slug-design.md
+      Requirements: docs/plans/2026-03-31-85-completions-upsert-by-slug-requirements.md
 
-      All changes in langgraph_pipeline/web/proxy.py and langgraph_pipeline/web/completion_grouping.py:
+      All changes in langgraph_pipeline/web/proxy.py:
 
-      D1: Add _ALTER_ADD_COMPLETIONS_ATTEMPTS_HISTORY_SQL constant. Execute in _init_db
-      with try/except OperationalError, following the existing ALTER TABLE migration
-      pattern.
+      D1: Add _ALTER_ADD_COMPLETIONS_ATTEMPTS_HISTORY_SQL constant. Execute in
+      _init_db with try/except OperationalError, following the existing ALTER
+      TABLE migration pattern.
 
-      D2: Add _migrate_completion_duplicates(self, conn) method called from _init_db
-      after D1 and before D3. For each slug with COUNT(*) > 1: fetch all rows ordered
-      by finished_at ASC, compute cost_usd = SUM, duration_s = SUM, build attempts_history
-      JSON array from all rows (each entry: outcome, cost_usd, duration_s, finished_at,
-      run_id, tokens_per_minute), update the row with latest finished_at (MAX(id)
-      tiebreaker) with accumulated values and history, delete other rows. For non-duplicate
-      rows with NULL attempts_history, set it to a single-entry JSON array. Must be
+      D2: Add _migrate_completion_duplicates(self, conn) method called from
+      _init_db after D1 and before D3. For each slug with COUNT(*) > 1: fetch
+      all rows ordered by finished_at ASC, compute cost_usd = SUM, duration_s
+      = SUM, build attempts_history JSON array from all rows (each entry:
+      outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute),
+      update the row with latest finished_at (MAX(id) tiebreaker) with
+      accumulated values and history, delete other rows. For non-duplicate rows
+      with NULL attempts_history, set to a single-entry JSON array. Must be
       idempotent.
 
-      D3: Add _CREATE_UNIQUE_INDEX_SLUG_SQL constant with CREATE UNIQUE INDEX IF NOT
-      EXISTS idx_completions_slug_unique ON completions (slug). Execute in _init_db
+      D3: Add _CREATE_UNIQUE_INDEX_SLUG_SQL = CREATE UNIQUE INDEX IF NOT EXISTS
+      idx_completions_slug_unique ON completions (slug). Execute in _init_db
       after D2 migration.
 
-      D4: Replace the plain INSERT in record_completion with INSERT INTO completions
-      (..., attempts_history) VALUES (..., ?) ON CONFLICT(slug) DO UPDATE SET item_type=excluded.item_type,
-      outcome=excluded.outcome, cost_usd=completions.cost_usd + excluded.cost_usd,
-      duration_s=completions.duration_s + excluded.duration_s, finished_at=excluded.finished_at,
-      run_id=excluded.run_id, tokens_per_minute=excluded.tokens_per_minute, verification_notes=excluded.verification_notes,
-      attempts_history=json_insert(completions.attempts_history, ''$[#]'', json(?)).
-      On first insert, initialize attempts_history to a single-entry JSON array.
+      D4: Replace the plain INSERT in record_completion with INSERT INTO
+      completions (..., attempts_history) VALUES (..., ?) ON CONFLICT(slug) DO
+      UPDATE SET item_type=excluded.item_type, outcome=excluded.outcome,
+      cost_usd=completions.cost_usd + excluded.cost_usd,
+      duration_s=completions.duration_s + excluded.duration_s,
+      finished_at=excluded.finished_at, run_id=excluded.run_id,
+      tokens_per_minute=excluded.tokens_per_minute,
+      verification_notes=excluded.verification_notes,
+      attempts_history=json_insert(completions.attempts_history, '$[#]',
+      json(?)). On first insert, initialize attempts_history to a single-entry
+      JSON array.
 
-      D5: Update SELECT queries in list_completions, list_completions_grouped, and
-      list_completions_by_slug to include attempts_history. Update completion_grouping.py
-      to parse attempts_history JSON from each row and derive attempt_count (len)
-      and retries (all but last entry) from it, instead of building retries from multiple
-      database rows.
-
-      Write tests in tests/langgraph/web/test_proxy.py covering: - Upsert accumulates
-      cost/duration on same slug (AC9, AC10) - Upsert replaces outcome/finished_at/run_id/tpm/notes
-      (AC11-AC15) - First insert creates row with single-entry attempts_history (AC7,
-      AC18) - Retry appends to attempts_history (AC19, AC20) - Only one row exists
-      after upsert (AC1, AC8) - Migration merges duplicates with correct accumulation
-      (AC21-AC28) - Migration builds attempts_history from all rows (AC27) - Migration
-      is idempotent (AC30) - UNIQUE constraint raises IntegrityError on raw duplicate
-      INSERT (AC4, AC32) - Grouped query returns attempts_history (AC33-AC35)
-
-      '
+      Write tests covering: first insert creates row with single-entry
+      attempts_history (AC7, AC16, AC18), retry accumulates cost/duration
+      (AC8, AC9), retry replaces outcome/finished_at/run_id/tpm/notes
+      (AC10-AC14), retry appends to attempts_history (AC17), only one row
+      after retry (AC1, AC2), migration merges duplicates correctly (AC19-AC24),
+      migration builds attempts_history from all rows (AC22), migration is
+      idempotent, UNIQUE constraint raises IntegrityError on raw duplicate
+      INSERT (AC3, AC4), migration runs in proxy.py _init_db (AC26).
 - id: '2'
-  name: 'Frontend: Attempt History Drill-Down'
+  name: 'Backend: Query and Grouping Adaptation'
   status: pending
   tasks:
   - id: '2.1'
-    name: Implement attempt history drill-down in dashboard
-    agent: frontend-coder
+    name: Update queries and completion grouping to use attempts_history
+    agent: coder
     dependencies:
-    - '0.5'
     - '1.1'
     status: pending
     target_acs:
-    - AC36
-    description: 'Implement UC1 per D6 from work item: tmp/plans/.claimed/85-completions-upsert-by-slug.md
-      Design: docs/plans/2026-03-31-85-completions-upsert-by-slug-design.md Requirements:
-      docs/plans/2026-03-31-85-completions-upsert-by-slug-requirements.md
+    - AC5
+    - AC27
+    - AC28
+    - AC29
+    description: >
+      Implement P3, UC1 per D5 from work item:
+      tmp/plans/.claimed/85-completions-upsert-by-slug.md
+      Design: docs/plans/2026-03-31-85-completions-upsert-by-slug-design.md
+      Requirements: docs/plans/2026-03-31-85-completions-upsert-by-slug-requirements.md
 
-      Add an expandable detail section to each completion row in the dashboard that
-      shows the per-attempt history from the attempts_history field. Each entry displays
-      outcome, cost_usd, duration_s, finished_at, run_id, and tokens_per_minute. Implementation
-      details will be refined by the planner task (0.5) based on the Phase 0 design
-      competition winner.
+      Update SELECT queries in list_completions, list_completions_grouped, and
+      list_completions_by_slug to include the attempts_history column.
 
-      '
+      Update completion_grouping.py to parse attempts_history JSON from each
+      row and derive attempt_count (len of array) and retries (all but last
+      entry) from it, instead of building retries from multiple database rows.
+      The dashboard already has retry drill-down UI (toggleRetryRows,
+      tpl-retry-row template) that renders per-attempt details -- no template
+      changes needed.
+
+      Since the DB now has one row per slug, list_completions_grouped no longer
+      needs to over-fetch by GROUPED_QUERY_MULTIPLIER. Simplify the query.
+
+      Update tests in tests/langgraph/web/test_completion_grouping.py for the
+      new single-row-with-history data format. Verify that attempt_count and
+      retries are correctly derived from attempts_history (AC5, AC27-AC29).
