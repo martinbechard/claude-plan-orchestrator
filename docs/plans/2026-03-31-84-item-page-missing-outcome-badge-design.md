@@ -87,3 +87,4 @@ Files: langgraph_pipeline/web/templates/item.html
 | AC5 | D3 | Badge inserted before all other badges (first child of item-badges div) |
 | AC6 | D1, D4 | _derive_outcome returns success/warn/fail; CSS classes style each distinctly |
 | AC7 | D1, D3, D5 | Returns None when no completions; badge element empty; JS clears on null |
+| AC8 | D3, D4 | Outcome badge uses same span + CSS class pattern as existing status badges in item-badges div |
