@@ -11,7 +11,6 @@ meta:
     validators:
     - validator
     max_validation_attempts: 2
-  worker_pid: 37143
 sections:
 - id: '0'
   name: 'Phase 0: Markdown Rendering and Layout UI Design Competition'
@@ -21,96 +20,84 @@ sections:
     name: Systems design for markdown rendering pipeline and layout constraints
     agent: systems-designer
     parallel_group: design-phase0
-    status: failed
+    status: pending
     target_acs:
     - AC1
+    - AC5
     - AC7
     - AC8
     - AC9
-    - AC11
-    - AC12
-    description: 'Produce a systems/architecture design for restoring markdown rendering
-      in artifact content sections and enforcing two-column layout constraints. Implements
-      P1, P2, FR1, FR2 per D1, D2 from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+    description: >
+      Produce a systems/architecture design for restoring markdown rendering
+      in artifact content sections and enforcing two-column layout constraints.
+      Implements P1, P2, FR1, FR2 per D1, D2 from work item:
+      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
       Design: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-design.md
       Requirements: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-requirements.md
 
-      Focus on: client-side vs server-side markdown rendering decision, library selection
-      (marked.js, markdown-it, etc.), file extension detection strategy for markdown
-      vs non-markdown content, CSS grid constraint approach for two-column stability
-      (min-width: 0, max-width, overflow), interaction with existing step explorer
-      accordion loadStageArtifacts() JS and the output artifact viewer click handler,
-      and rendering pipeline from fetch to parse to display. Cover both artifact loading
-      code paths (step explorer + output artifact sidebar).
-
-      '
-    last_attempt: '2026-03-31T16:26:48.145371'
-    attempts: 1
-    model_used: opus
-    result_message: Failed to create git worktree
+      Focus on: client-side vs server-side markdown rendering decision, library
+      selection (marked.js, markdown-it, etc.), file extension detection strategy
+      for markdown vs non-markdown content, CSS grid constraint approach for
+      two-column stability (min-width: 0, max-width, overflow), interaction with
+      existing step explorer accordion loadStageArtifacts() JS and the output
+      artifact viewer click handler, and rendering pipeline from fetch to parse
+      to display. Cover both artifact loading code paths (step explorer + output
+      artifact sidebar).
   - id: '0.2'
     name: UX design for rendered markdown content and layout stability
     agent: ux-designer
     parallel_group: design-phase0
-    status: failed
+    status: pending
     target_acs:
     - AC1
     - AC2
     - AC3
     - AC4
-    - AC5
-    - AC8
-    description: 'Produce a UX design for how rendered markdown should appear within
-      artifact sections and how expanded content should behave within the two-column
-      layout. Implements P1, P2, FR2 per D2, D3 from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+    - AC6
+    description: >
+      Produce a UX design for how rendered markdown should appear within
+      artifact sections and how expanded content should behave within the
+      two-column layout. Implements P1, P2, FR2 per D2, D3 from work item:
+      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
       Design: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-design.md
       Requirements: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-requirements.md
 
-      Focus on: visual hierarchy for markdown headings/lists/code within dark-themed
-      accordion sections (#1a1a2e background, #e2e8f0 text), code block styling (background,
-      font, scroll behavior), content overflow behavior (scroll vs wrap vs truncate),
-      responsive layout stability when expanding and collapsing multiple artifact
-      sections simultaneously, visual consistency between rendered markdown and pre-formatted
-      text artifacts, and styling for tables, blockquotes, links, and inline code
-      within the dark theme.
-
-      '
-    last_attempt: '2026-03-31T16:26:48.131492'
-    attempts: 1
-    model_used: opus
-    result_message: Failed to create git worktree
+      Focus on: visual hierarchy for markdown headings/lists/code within
+      dark-themed accordion sections (#1a1a2e background, #e2e8f0 text), code
+      block styling (background, font, scroll behavior), content overflow
+      behavior (scroll vs wrap vs truncate), responsive layout stability when
+      expanding and collapsing multiple artifact sections simultaneously, visual
+      consistency between rendered markdown and pre-formatted text artifacts,
+      and styling for tables, blockquotes, links, and inline code within the
+      dark theme.
   - id: '0.3'
     name: Frontend implementation design for markdown rendering and layout fix
     agent: frontend-coder
     parallel_group: design-phase0
-    status: failed
+    status: pending
     target_acs:
     - AC1
+    - AC5
     - AC6
     - AC7
     - AC9
-    - AC10
-    - AC13
-    description: 'Produce a concrete frontend implementation design for restoring
-      markdown rendering and fixing layout overflow in artifact sections. Implements
-      P1, P2, FR1, FR2 per D1, D2, D3 from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+    description: >
+      Produce a concrete frontend implementation design for restoring markdown
+      rendering and fixing layout overflow in artifact sections. Implements P1,
+      P2, FR1, FR2 per D1, D2, D3 from work item:
+      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
       Design: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-design.md
       Requirements: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-requirements.md
 
-      Focus on: specific JS code changes in loadStageArtifacts() AND the artifact-path-link
-      click handler for marked.js integration, shared renderArtifactContent(pre, mdDiv,
-      text, path) helper function, file extension detection from data-artifact-path,
-      innerHTML vs textContent rendering path decision, div.md-rendered vs pre container
-      switching, CSS class structure for rendered markdown content, CSS fixes for
-      grid layout stability (min-width: 0 on .item-layout children, max-width on content
-      containers, overflow: hidden on step-explorer), pre white-space handling for
-      non-markdown artifacts. Preserve existing vanilla JS + Jinja2 stack.
-
-      '
-    last_attempt: '2026-03-31T16:26:48.164872'
-    attempts: 1
-    model_used: opus
-    result_message: Failed to create git worktree
+      Focus on: specific JS code changes in loadStageArtifacts() AND the
+      artifact-path-link click handler for marked.js integration, shared
+      renderArtifactContent(pre, mdDiv, text, path) helper function, file
+      extension detection from data-artifact-path, innerHTML vs textContent
+      rendering path decision, div.md-rendered vs pre container switching, CSS
+      class structure for rendered markdown content, CSS fixes for grid layout
+      stability (min-width: 0 on .item-layout children, max-width on content
+      containers, overflow: hidden on step-explorer), pre white-space handling
+      for non-markdown artifacts. Preserve existing vanilla JS + Jinja2 stack.
   - id: '0.4'
     name: Judge markdown rendering and layout design competition
     agent: design-judge
@@ -122,51 +109,49 @@ sections:
     target_acs:
     - AC1
     - AC2
+    - AC3
     - AC4
+    - AC5
     - AC6
     - AC7
     - AC8
     - AC9
-    - AC11
-    - AC12
-    - AC13
-    description: 'Evaluate the three competing designs for markdown rendering and
-      layout constraints. Score each against acceptance criteria from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+    description: >
+      Evaluate the three competing designs for markdown rendering and layout
+      constraints. Score each against acceptance criteria from work item:
+      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
       Requirements: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-requirements.md
       Design: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-design.md
 
-      Key criteria: markdown rendering fidelity (AC1, AC2, AC4), universal application
-      to ALL artifact sections including both step explorer and output artifact viewer
-      (AC6, AC7), column containment (AC9, AC11), sidebar stability (AC13), overflow
-      handling (AC8, AC12), dark-theme styling quality, implementation feasibility
-      with existing vanilla JS + Jinja2 stack, and minimal blast radius. Select the
-      winner with written rationale.
-
-      '
+      Key criteria: markdown rendering fidelity (AC1, AC2, AC6), universal
+      application to ALL artifact sections including both step explorer and
+      output artifact viewer (AC5), column containment and sidebar stability
+      (AC3, AC4, AC7, AC8), overflow handling (AC9), dark-theme styling quality,
+      implementation feasibility with existing vanilla JS + Jinja2 stack, and
+      minimal blast radius. Select the winner with written rationale.
   - id: '0.5'
     name: Bridge winning design to implementation tasks
     agent: planner
     dependencies:
     - '0.4'
     status: pending
-    description: 'Read the winning design from the design competition (task 0.4) and
-      extend this YAML plan with concrete frontend implementation tasks. Work item:
-      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md Requirements:
-      docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-requirements.md
+    description: >
+      Read the winning design from the design competition (task 0.4) and extend
+      this YAML plan with concrete frontend implementation tasks. Work item:
+      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+      Requirements: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-requirements.md
       Design: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-design.md
 
-      This is a purely frontend fix -- no backend changes needed. The /item/{slug}/artifact-content
-      endpoint continues returning plain text. Implementation tasks should address
-      D1, D2, D3 and target all ACs (AC1-AC13). Implementation covers: adding marked.js
-      CDN to item.html, creating a shared renderArtifactContent() helper, modifying
-      both loadStageArtifacts() and the artifact-path-link click handler to detect
-      .md files and render through marked, adding div.md-rendered containers alongside
-      pre elements, adding CSS for rendered markdown content dark-theme styling, and
-      fixing CSS layout constraints on artifact containers and grid column children.
-      Key files: item.html, style.css. Assign frontend-coder agent to implementation
-      tasks.
-
-      '
+      This is a purely frontend fix -- no backend changes needed. Implementation
+      tasks should address D1, D2, D3 and target all ACs (AC1-AC9).
+      Implementation covers: adding marked.js CDN to item.html, creating a
+      shared renderArtifactContent() helper, modifying both loadStageArtifacts()
+      and the artifact-path-link click handler to detect .md files and render
+      through marked, adding div.md-rendered containers alongside pre elements,
+      adding CSS for rendered markdown content dark-theme styling, and fixing
+      CSS layout constraints on artifact containers and grid column children.
+      Key files: item.html, style.css. Assign frontend-coder agent to
+      implementation tasks.
 - id: '1'
   name: 'Frontend: Markdown Rendering and Layout Constraints'
   status: pending
@@ -187,32 +172,31 @@ sections:
     - AC7
     - AC8
     - AC9
-    - AC10
-    - AC11
-    - AC12
-    - AC13
-    description: 'Implement P1, P2, FR1, FR2 per D1, D2, D3 from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+    description: >
+      Implement P1, P2, FR1, FR2 per D1, D2, D3 from work item:
+      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
       Design: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-design.md
       Requirements: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-requirements.md
 
-      D1: Add marked.js via CDN with SRI hash to item.html. Create a shared renderArtifactContent(pre,
-      mdDiv, text, path) JS helper. In loadStageArtifacts(), after fetching text,
-      call the helper which checks data-artifact-path for .md extension. For .md files:
-      render through marked.parse(), display as innerHTML in div.md-rendered (hide
-      pre, show div). For non-.md files: display as textContent in pre. Apply the
-      same logic in the artifact-path-link click handler for output artifact viewer
-      entries. Add div.md-rendered sibling elements next to each pre in both the step
-      explorer and output artifact sections.
+      D1: Add marked.js via CDN with SRI hash to item.html. Create a shared
+      renderArtifactContent(pre, mdDiv, text, path) JS helper. In
+      loadStageArtifacts(), after fetching text, call the helper which checks
+      data-artifact-path for .md extension. For .md files: render through
+      marked.parse(), display as innerHTML in div.md-rendered (hide pre, show
+      div). For non-.md files: display as textContent in pre. Apply the same
+      logic in the artifact-path-link click handler for output artifact viewer
+      entries. Add div.md-rendered sibling elements next to each pre in both
+      the step explorer and output artifact sections.
 
-      D2: Add min-width: 0 to .item-layout > * (grid children). Add max-width: 100%
-      and overflow-x: auto to .step-artifact-content, .artifact-viewer-pre, and .md-rendered
-      containers. Add overflow: hidden to .step-explorer. These are static CSS rules
-      that stabilize the layout regardless of expand/collapse state.
+      D2: Add min-width: 0 to .item-layout > * (grid children). Add max-width:
+      100% and overflow-x: auto to .step-artifact-content, .artifact-viewer-pre,
+      and .md-rendered containers. Add overflow: hidden to .step-explorer.
+      These are static CSS rules that stabilize the layout regardless of
+      expand/collapse state.
 
-      D3: Add .md-rendered CSS rules for dark theme: headings with scaled sizes (h1
-      1.3em to h6 0.85em), lists with indentation, code blocks with slightly darker
-      background + monospace, inline code with subtle bg, links with visible color,
-      tables with cell borders, blockquotes with left-border accent. Use same background
-      (#1a1a2e), text color (#e2e8f0), padding, and border-radius as pre.step-artifact-content.
-
-      '
+      D3: Add .md-rendered CSS rules for dark theme: headings with scaled sizes
+      (h1 1.3em to h6 0.85em), lists with indentation, code blocks with
+      slightly darker background + monospace, inline code with subtle bg, links
+      with visible color, tables with cell borders, blockquotes with
+      left-border accent. Use same background (#1a1a2e), text color (#e2e8f0),
+      padding, and border-radius as pre.step-artifact-content.
