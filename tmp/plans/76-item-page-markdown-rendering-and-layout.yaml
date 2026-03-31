@@ -20,7 +20,7 @@ sections:
     name: Systems design for markdown rendering pipeline and layout constraints
     agent: systems-designer
     parallel_group: design-phase0
-    status: pending
+    status: failed
     target_acs:
     - AC1
     - AC2
@@ -28,10 +28,9 @@ sections:
     - AC4
     - AC5
     - AC6
-    description: >
-      Produce a systems/architecture design for restoring markdown rendering in artifact
-      content sections and enforcing two-column layout constraints. Implements P1, P2,
-      FR1, FR2 per D1, D2 from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+    description: 'Produce a systems/architecture design for restoring markdown rendering
+      in artifact content sections and enforcing two-column layout constraints. Implements
+      P1, P2, FR1, FR2 per D1, D2 from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
       Design: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-design.md
       Requirements: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-requirements.md
       Focus on: client-side vs server-side markdown rendering decision, library selection
@@ -40,21 +39,26 @@ sections:
       (min-width: 0, max-width, overflow), interaction with existing step explorer
       accordion and loadStageArtifacts() JS, and rendering pipeline from fetch to
       parse to display.
+
+      '
+    last_attempt: '2026-03-31T15:49:55.942988'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.2'
     name: UX design for rendered markdown content and layout stability
     agent: ux-designer
     parallel_group: design-phase0
-    status: pending
+    status: failed
     target_acs:
     - AC1
     - AC2
     - AC4
     - AC5
     - AC6
-    description: >
-      Produce a UX design for how rendered markdown should appear within artifact sections
-      and how expanded content should behave within the two-column layout. Implements P1,
-      P2, FR2 per D2, D3 from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+    description: 'Produce a UX design for how rendered markdown should appear within
+      artifact sections and how expanded content should behave within the two-column
+      layout. Implements P1, P2, FR2 per D2, D3 from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
       Design: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-design.md
       Requirements: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-requirements.md
       Focus on: visual hierarchy for markdown headings/lists/code within dark-themed
@@ -62,11 +66,17 @@ sections:
       content overflow behavior (scroll vs wrap vs truncate), responsive layout stability
       when expanding/collapsing multiple artifact sections simultaneously, visual
       consistency between rendered markdown and pre-formatted text artifacts.
+
+      '
+    last_attempt: '2026-03-31T15:49:55.905922'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.3'
     name: Frontend implementation design for markdown rendering and layout fix
     agent: frontend-coder
     parallel_group: design-phase0
-    status: pending
+    status: failed
     target_acs:
     - AC1
     - AC2
@@ -74,18 +84,23 @@ sections:
     - AC4
     - AC5
     - AC6
-    description: >
-      Produce a concrete frontend implementation design for restoring markdown rendering
-      and fixing layout overflow in artifact sections. Implements P1, P2, FR1, FR2 per
-      D1, D2, D3 from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+    description: 'Produce a concrete frontend implementation design for restoring
+      markdown rendering and fixing layout overflow in artifact sections. Implements
+      P1, P2, FR1, FR2 per D1, D2, D3 from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
       Design: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-design.md
       Requirements: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-requirements.md
       Focus on: specific JS code changes in loadStageArtifacts() for marked.js integration,
       file extension detection from data-artifact-path, innerHTML vs textContent rendering
       path decision, div.md-rendered vs pre container switching, CSS class structure
-      for rendered markdown content, CSS fixes for grid layout stability (min-width: 0
-      on step-explorer, max-width on content containers), pre white-space handling for
-      non-markdown artifacts. Preserve existing vanilla JS + Jinja2 stack.
+      for rendered markdown content, CSS fixes for grid layout stability (min-width:
+      0 on step-explorer, max-width on content containers), pre white-space handling
+      for non-markdown artifacts. Preserve existing vanilla JS + Jinja2 stack.
+
+      '
+    last_attempt: '2026-03-31T15:49:55.959440'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.4'
     name: Judge markdown rendering and layout design competition
     agent: design-judge
@@ -101,27 +116,27 @@ sections:
     - AC4
     - AC5
     - AC6
-    description: >
-      Evaluate the three competing designs for markdown rendering and layout constraints.
-      Score each against acceptance criteria from work item:
-      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
+    description: 'Evaluate the three competing designs for markdown rendering and
+      layout constraints. Score each against acceptance criteria from work item: tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
       Requirements: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-requirements.md
       Design: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-design.md
-      Key criteria: markdown rendering fidelity (AC1, AC2), universal application to all
-      artifact sections (AC3), column containment (AC4), sidebar stability (AC5), overflow
-      handling (AC6), implementation feasibility with existing vanilla JS + Jinja2 stack,
-      and minimal blast radius. Select the winner with written rationale.
+      Key criteria: markdown rendering fidelity (AC1, AC2), universal application
+      to all artifact sections (AC3), column containment (AC4), sidebar stability
+      (AC5), overflow handling (AC6), implementation feasibility with existing vanilla
+      JS + Jinja2 stack, and minimal blast radius. Select the winner with written
+      rationale.
+
+      '
   - id: '0.5'
     name: Bridge winning design to implementation tasks
     agent: planner
     dependencies:
     - '0.4'
     status: pending
-    description: >
-      Read the winning design from the design competition (task 0.4) and extend this YAML
-      plan with concrete frontend implementation tasks. Work item:
-      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md
-      Requirements: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-requirements.md
+    description: 'Read the winning design from the design competition (task 0.4) and
+      extend this YAML plan with concrete frontend implementation tasks. Work item:
+      tmp/plans/.claimed/76-item-page-markdown-rendering-and-layout.md Requirements:
+      docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-requirements.md
       Design: docs/plans/2026-03-31-76-item-page-markdown-rendering-and-layout-design.md
       This is a purely frontend fix -- no backend changes needed. The /item/{slug}/artifact-content
       endpoint continues returning plain text. New implementation tasks should address
@@ -129,5 +144,7 @@ sections:
       markdown library (e.g., marked.js) to item.html, modifying loadStageArtifacts()
       to detect markdown files and render through the library, adding CSS for rendered
       markdown content styling, and fixing CSS layout constraints on artifact containers
-      and the grid column. Key files: item.html, style.css. Assign frontend-coder agent
-      to implementation tasks.
+      and the grid column. Key files: item.html, style.css. Assign frontend-coder
+      agent to implementation tasks.
+
+      '
