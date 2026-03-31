@@ -29,22 +29,22 @@ sections:
     - AC5
     - AC6
     - AC7
-    description: 'Produce a systems/architecture design for the outcome badge on the
-      work item detail page. Covers P1, UC1, FR1 per D1, D2, D3 from work item: tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
+    description: >
+      Produce a systems/architecture design for the outcome badge on the
+      work item detail page. Covers P1, UC1, FR1 per D1, D2, D3 from work item:
+      tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
       Design: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-design.md
       Requirements: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-requirements.md
 
       Context: The work item detail page (item.py route + item.html template) already
       fetches completion records via proxy.list_completions_by_slug(). The completions
-      contain an outcome field (success/warn/fail). The page renders status badges in
-      an item-badges div but does not display the outcome.
+      contain an outcome field (success/warn/fail). The page renders status badges
+      in an item-badges div but does not display the outcome.
 
       Focus on: data flow from completions list through a derivation helper to the
-      template context and dynamic JSON response, how the outcome integrates with the
-      existing badge rendering pipeline, the contract between item_detail()/item_dynamic()
+      template context and dynamic JSON response, how the outcome integrates with
+      the existing badge rendering pipeline, the contract between item_detail()/item_dynamic()
       and the template, and the edge case when no completion record exists.
-
-      '
   - id: '0.2'
     name: UX design for outcome badge
     agent: ux-designer
@@ -57,8 +57,10 @@ sections:
     - AC5
     - AC6
     - AC7
-    description: 'Produce a UX design for the outcome badge on the work item detail
-      page. Covers UC1, FR1 per D3, D4 from work item: tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
+    description: >
+      Produce a UX design for the outcome badge on the work item detail
+      page. Covers UC1, FR1 per D3, D4 from work item:
+      tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
       Design: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-design.md
       Requirements: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-requirements.md
 
@@ -72,8 +74,6 @@ sections:
       completion exists (in-progress items), accessibility (color contrast ratios,
       screen reader text), and consistency with the existing badge styling conventions
       in the project.
-
-      '
   - id: '0.3'
     name: Frontend implementation design for outcome badge
     agent: frontend-coder
@@ -85,8 +85,10 @@ sections:
     - AC5
     - AC6
     - AC7
-    description: 'Produce a concrete frontend implementation design for the outcome
-      badge. Covers P1, FR1 per D1, D2, D3, D4, D5 from work item: tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
+    description: >
+      Produce a concrete frontend implementation design for the outcome
+      badge. Covers P1, FR1 per D1, D2, D3, D4, D5 from work item:
+      tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
       Design: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-design.md
       Requirements: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-requirements.md
 
@@ -99,8 +101,6 @@ sections:
       CSS class definitions for outcome-success/outcome-warn/outcome-fail, the JS
       handler in the selective-refresh block to update the badge on dynamic refresh,
       and the empty/null handling for in-progress items without completions.
-
-      '
   - id: '0.4'
     name: Judge outcome badge design competition
     agent: design-judge
@@ -117,8 +117,10 @@ sections:
     - AC5
     - AC6
     - AC7
-    description: 'Evaluate the three competing designs for the outcome badge. Score
-      each against acceptance criteria from work item: tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
+    description: >
+      Evaluate the three competing designs for the outcome badge. Score
+      each against acceptance criteria from work item:
+      tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
       Requirements: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-requirements.md
       Design: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-design.md
 
@@ -126,17 +128,16 @@ sections:
       a glance without extra clicks (AC3), visible without scrolling past other status
       (AC4), appears as first badge (AC5), renders all three values correctly (AC6),
       gracefully absent for in-progress items (AC7), accessibility, and feasibility
-      with the existing vanilla Jinja2 + CSS + JS stack. Select the winner with
-      written rationale.
-
-      '
+      with the existing vanilla Jinja2 + CSS + JS stack. Select the winner with written
+      rationale.
   - id: '0.5'
     name: Bridge winning design to implementation tasks
     agent: planner
     dependencies:
     - '0.4'
     status: pending
-    description: 'Read the winning UI design from the design competition (task 0.4)
+    description: >
+      Read the winning UI design from the design competition (task 0.4)
       and extend this YAML plan with concrete implementation details for the frontend
       task in section 1. Work item: tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
       Requirements: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-requirements.md
@@ -144,8 +145,6 @@ sections:
 
       The frontend task 1.1 should be refined with specifics from the winning design
       including exact CSS values, template markup, and JS handler details.
-
-      '
 - id: '1'
   name: 'Implementation: Outcome Badge Backend and Frontend'
   status: pending
@@ -164,8 +163,10 @@ sections:
     - AC5
     - AC6
     - AC7
-    description: 'Implement P1, UC1, FR1 per D1, D2, D3, D4, D5 from work item:
-      tmp/plans/.claimed/84-item-page-missing-outcome-badge.md Design: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-design.md
+    description: >
+      Implement P1, UC1, FR1 per D1, D2, D3, D4, D5 from work item:
+      tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
+      Design: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-design.md
       Requirements: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-requirements.md
 
       In langgraph_pipeline/web/routes/item.py:
@@ -185,15 +186,13 @@ sections:
       not None. Badge text is the outcome value. Add CSS class outcome-{{ outcome }}.
 
       D4: Add CSS classes: outcome-success (green), outcome-warn (amber), outcome-fail
-      (red). Use font-weight 700 to make these more prominent than other badges.
-      Follow the winning design from Phase 0 for exact color values.
+      (red). Use font-weight 700 to make these more prominent than other badges. Follow
+      the winning design from Phase 0 for exact color values.
 
       D5: In the selective-refresh JS, add a handler for data.outcome that updates
       the outcome-badge element. When outcome is non-null, set innerHTML to a span
       with the appropriate class. When null, clear the element.
 
-      Write tests in tests/langgraph/web/test_item_outcome_badge.py covering:
-      _derive_outcome returns latest completion outcome, returns None for empty list,
-      and handles multiple completions correctly.
-
-      '
+      Write tests in tests/langgraph/web/test_item_outcome_badge.py covering: _derive_outcome
+      returns latest completion outcome, returns None for empty list, and handles
+      multiple completions correctly.
