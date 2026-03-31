@@ -12,14 +12,15 @@ meta:
     - validator
     max_validation_attempts: 2
 sections:
-- id: '1'
-  name: Outcome Badge Backend and Frontend
+- id: '0'
+  name: 'Phase 0: Outcome Badge UI Design'
   status: pending
   tasks:
-  - id: '1.1'
-    name: Add outcome derivation, template badge, CSS, and dynamic-refresh support
-    agent: frontend-coder
-    status: in_progress
+  - id: '0.1'
+    name: Systems design for outcome badge
+    agent: systems-designer
+    parallel_group: design-phase0
+    status: pending
     target_acs:
     - AC1
     - AC2
@@ -28,8 +29,142 @@ sections:
     - AC5
     - AC6
     - AC7
-    - AC8
-    description: 'Implement P1, P2, UC1, FR1 per D1, D2, D3, D4, D5 from work item:
+    description: 'Produce a systems/architecture design for the outcome badge on the
+      work item detail page. Covers P1, UC1, FR1 per D1, D2, D3 from work item: tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
+      Design: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-design.md
+      Requirements: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-requirements.md
+
+      Context: The work item detail page (item.py route + item.html template) already
+      fetches completion records via proxy.list_completions_by_slug(). The completions
+      contain an outcome field (success/warn/fail). The page renders status badges in
+      an item-badges div but does not display the outcome.
+
+      Focus on: data flow from completions list through a derivation helper to the
+      template context and dynamic JSON response, how the outcome integrates with the
+      existing badge rendering pipeline, the contract between item_detail()/item_dynamic()
+      and the template, and the edge case when no completion record exists.
+
+      '
+  - id: '0.2'
+    name: UX design for outcome badge
+    agent: ux-designer
+    parallel_group: design-phase0
+    status: pending
+    target_acs:
+    - AC1
+    - AC3
+    - AC4
+    - AC5
+    - AC6
+    - AC7
+    description: 'Produce a UX design for the outcome badge on the work item detail
+      page. Covers UC1, FR1 per D3, D4 from work item: tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
+      Design: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-design.md
+      Requirements: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-requirements.md
+
+      Context: The item detail page shows badges for item type, pipeline stage, and
+      velocity in an item-badges div. The outcome badge must be the first badge (most
+      prominent) and represent three states: success, warn, fail.
+
+      Focus on: visual hierarchy and placement as first badge, color coding for the
+      three outcome values (success=green, warn=amber, fail=red), font weight and
+      sizing to make outcome the primary visual indicator, graceful absence when no
+      completion exists (in-progress items), accessibility (color contrast ratios,
+      screen reader text), and consistency with the existing badge styling conventions
+      in the project.
+
+      '
+  - id: '0.3'
+    name: Frontend implementation design for outcome badge
+    agent: frontend-coder
+    parallel_group: design-phase0
+    status: pending
+    target_acs:
+    - AC1
+    - AC2
+    - AC5
+    - AC6
+    - AC7
+    description: 'Produce a concrete frontend implementation design for the outcome
+      badge. Covers P1, FR1 per D1, D2, D3, D4, D5 from work item: tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
+      Design: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-design.md
+      Requirements: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-requirements.md
+
+      Context: The page uses Jinja2 templates with vanilla CSS and JS. The item_detail()
+      route passes template context, and item_dynamic() returns JSON for auto-refresh.
+      Existing badges use span elements with CSS classes inside a div.item-badges.
+
+      Focus on: the _derive_outcome() helper function signature and logic in item.py,
+      Jinja2 template markup for the badge with data-dynamic="outcome-badge" wrapper,
+      CSS class definitions for outcome-success/outcome-warn/outcome-fail, the JS
+      handler in the selective-refresh block to update the badge on dynamic refresh,
+      and the empty/null handling for in-progress items without completions.
+
+      '
+  - id: '0.4'
+    name: Judge outcome badge design competition
+    agent: design-judge
+    dependencies:
+    - '0.1'
+    - '0.2'
+    - '0.3'
+    status: pending
+    target_acs:
+    - AC1
+    - AC2
+    - AC3
+    - AC4
+    - AC5
+    - AC6
+    - AC7
+    description: 'Evaluate the three competing designs for the outcome badge. Score
+      each against acceptance criteria from work item: tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
+      Requirements: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-requirements.md
+      Design: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-design.md
+
+      Key criteria: outcome displayed from completion record (AC1, AC2), visible at
+      a glance without extra clicks (AC3), visible without scrolling past other status
+      (AC4), appears as first badge (AC5), renders all three values correctly (AC6),
+      gracefully absent for in-progress items (AC7), accessibility, and feasibility
+      with the existing vanilla Jinja2 + CSS + JS stack. Select the winner with
+      written rationale.
+
+      '
+  - id: '0.5'
+    name: Bridge winning design to implementation tasks
+    agent: planner
+    dependencies:
+    - '0.4'
+    status: pending
+    description: 'Read the winning UI design from the design competition (task 0.4)
+      and extend this YAML plan with concrete implementation details for the frontend
+      task in section 1. Work item: tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
+      Requirements: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-requirements.md
+      Design: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-design.md
+
+      The frontend task 1.1 should be refined with specifics from the winning design
+      including exact CSS values, template markup, and JS handler details.
+
+      '
+- id: '1'
+  name: 'Implementation: Outcome Badge Backend and Frontend'
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add outcome derivation, template badge, CSS, and dynamic-refresh support
+    agent: frontend-coder
+    dependencies:
+    - '0.5'
+    status: pending
+    target_acs:
+    - AC1
+    - AC2
+    - AC3
+    - AC4
+    - AC5
+    - AC6
+    - AC7
+    description: 'Implement P1, UC1, FR1 per D1, D2, D3, D4, D5 from work item:
       tmp/plans/.claimed/84-item-page-missing-outcome-badge.md Design: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-design.md
       Requirements: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-requirements.md
 
@@ -45,23 +180,20 @@ sections:
 
       In langgraph_pipeline/web/templates/item.html:
 
-      D3: Inside the item-badges div (around line 1046), insert a new outcome badge
-      BEFORE the item_type badge. Use data-dynamic="outcome-badge" wrapper. Render
-      only when outcome is not None. Badge text is the outcome value. Add CSS class
-      outcome-{{ outcome }}.
+      D3: Inside the item-badges div, insert a new outcome badge BEFORE the item_type
+      badge. Use data-dynamic="outcome-badge" wrapper. Render only when outcome is
+      not None. Badge text is the outcome value. Add CSS class outcome-{{ outcome }}.
 
-      D4: Add CSS classes: outcome-success (green: bg #d1fae5, text #065f46, border
-      #6ee7b7), outcome-warn (amber: bg #fef3c7, text #92400e, border #fcd34d), outcome-fail
-      (red: bg #fee2e2, text #991b1b, border #fca5a5). Use font-weight 700 to make
-      these more prominent than other badges.
+      D4: Add CSS classes: outcome-success (green), outcome-warn (amber), outcome-fail
+      (red). Use font-weight 700 to make these more prominent than other badges.
+      Follow the winning design from Phase 0 for exact color values.
 
       D5: In the selective-refresh JS, add a handler for data.outcome that updates
       the outcome-badge element. When outcome is non-null, set innerHTML to a span
       with the appropriate class. When null, clear the element.
 
-      Write tests in tests/langgraph/web/test_item_outcome_badge.py covering: _derive_outcome
-      returns latest completion outcome, returns None for empty list, and handles
-      multiple completions correctly.'
-    last_attempt: '2026-03-31T15:51:04.826264'
-    attempts: 1
-    model_used: sonnet
+      Write tests in tests/langgraph/web/test_item_outcome_badge.py covering:
+      _derive_outcome returns latest completion outcome, returns None for empty list,
+      and handles multiple completions correctly.
+
+      '
