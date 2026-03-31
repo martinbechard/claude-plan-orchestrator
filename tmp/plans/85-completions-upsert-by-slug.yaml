@@ -1,0 +1,68 @@
+meta:
+  name: 85-completions-upsert-by-slug
+  source_item: "tmp/plans/.claimed/85-completions-upsert-by-slug.md"
+  requirements_path: "docs/plans/2026-03-31-85-completions-upsert-by-slug-requirements.md"
+  validation:
+    enabled: true
+    run_after:
+      - coder
+      - e2e-test-agent
+      - frontend-coder
+    validators:
+      - validator
+    max_validation_attempts: 2
+sections:
+  - id: '1'
+    name: 'Migration, Upsert Logic, and UNIQUE Constraint'
+    status: pending
+    tasks:
+      - id: '1.1'
+        name: Implement deduplication migration, UNIQUE constraint, and upsert in record_completion
+        agent: coder
+        status: pending
+        target_acs:
+          - AC1
+          - AC2
+          - AC3
+          - AC4
+          - AC5
+          - AC6
+          - AC7
+          - AC8
+          - AC9
+          - AC10
+          - AC11
+          - AC12
+        description: >
+          Implement P1, P2, FR1, FR2, FR3 per D1, D2, D3, D4 from work item:
+          tmp/plans/.claimed/85-completions-upsert-by-slug.md
+          Design: docs/plans/2026-03-31-85-completions-upsert-by-slug-design.md
+          Requirements: docs/plans/2026-03-31-85-completions-upsert-by-slug-requirements.md
+
+          All changes are in langgraph_pipeline/web/proxy.py:
+
+          D1: Add _DEDUPLICATE_COMPLETIONS_SQL constant that for each slug with
+          multiple rows keeps only the row with the latest finished_at (use
+          MAX(id) as tiebreaker). Follow the existing _DEDUPLICATE_RUN_IDS_SQL
+          pattern. Call it in _init_db before creating the unique index.
+
+          D2: Add _CREATE_UNIQUE_INDEX_SLUG_SQL constant with CREATE UNIQUE
+          INDEX IF NOT EXISTS idx_completions_slug_unique ON completions (slug).
+          Call it in _init_db after deduplication. Add it to _CREATE_INDEXES_SQL
+          or call it separately.
+
+          D3: Replace the plain INSERT in record_completion with INSERT INTO
+          completions (...) VALUES (...) ON CONFLICT(slug) DO UPDATE SET
+          item_type=excluded.item_type, outcome=excluded.outcome,
+          cost_usd=excluded.cost_usd, duration_s=excluded.duration_s,
+          finished_at=excluded.finished_at, run_id=excluded.run_id,
+          tokens_per_minute=excluded.tokens_per_minute,
+          verification_notes=excluded.verification_notes.
+
+          D4: No code change needed for dashboard (AC2). Verified by tests.
+
+          Write tests in tests/langgraph/web/test_proxy.py covering:
+          - Upsert overwrites existing row on same slug (AC3, AC5, AC6)
+          - Insert works for new slug (AC4)
+          - Migration deduplicates existing rows (AC7, AC8, AC9, AC10)
+          - UNIQUE constraint raises IntegrityError on raw duplicate INSERT (AC12)
