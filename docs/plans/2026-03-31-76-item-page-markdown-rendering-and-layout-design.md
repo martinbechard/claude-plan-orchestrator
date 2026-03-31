@@ -84,7 +84,7 @@ No backend changes required.
 ### D2: CSS layout constraints for two-column stability
 
 - Addresses: P2, FR2
-- Satisfies: AC3, AC4, AC7, AC8, AC9
+- Satisfies: AC3, AC4, AC7, AC8
 - Approach: Apply three CSS fixes:
   (a) Add min-width: 0 to .item-layout > * (grid children). This is the standard
       fix for CSS Grid blowout -- without it, grid items default to min-width:
@@ -103,8 +103,8 @@ No backend changes required.
   + max-width: 100%.
   AC8 is satisfied because sidebar layout is unaffected -- CSS constraints are
   static rules independent of expand/collapse state.
-  AC9 is satisfied because wide content (e.g. code blocks) gets overflow-x: auto
-  for horizontal scrolling instead of breaking layout.
+  Wide content (e.g. code blocks) gets overflow-x: auto for horizontal scrolling
+  instead of breaking layout, further ensuring AC7 containment.
 - Files: langgraph_pipeline/web/templates/item.html (inline styles section)
 
 ### D3: Dark-theme markdown content styling
@@ -138,6 +138,5 @@ No backend changes required.
 | AC4: Right column remains visible and in position | D2 | Grid constraints keep left column within 1fr allocation; 360px sidebar unaffected |
 | AC5: Markdown-to-HTML applied to every artifact section | D1 | Both loadStageArtifacts() and artifact-link handler share renderArtifactContent() helper with identical .md detection |
 | AC6: All common markdown elements rendered correctly | D1, D3 | marked.js supports full GFM (headings, lists, code, bold, italic, links, tables, blockquotes); D3 provides dark-theme CSS for each |
-| AC7: Expanded content within column bounds | D2 | min-width: 0 + max-width: 100% + overflow: hidden on step-explorer constrain content |
+| AC7: Expanded content within column bounds | D2 | min-width: 0 + max-width: 100% + overflow: hidden on step-explorer constrain content; overflow-x: auto for horizontal scrolling |
 | AC8: Sidebar unaffected on expand/collapse | D2 | CSS grid constraints are static rules -- stable regardless of toggle state |
-| AC9: Overflow handled gracefully | D2 | overflow-x: auto on content containers provides horizontal scrolling for wide content |
