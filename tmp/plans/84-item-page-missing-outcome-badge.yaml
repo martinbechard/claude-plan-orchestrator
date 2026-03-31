@@ -1,0 +1,66 @@
+meta:
+  name: 84-item-page-missing-outcome-badge
+  source_item: tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
+  requirements_path: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-requirements.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: Outcome Badge Backend and Frontend
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add outcome derivation, template badge, CSS, and dynamic-refresh support
+    agent: frontend-coder
+    status: pending
+    target_acs:
+    - AC1
+    - AC2
+    - AC3
+    - AC4
+    - AC5
+    - AC6
+    - AC7
+    - AC8
+    description: >-
+      Implement P1, P2, UC1, FR1 per D1, D2, D3, D4, D5 from work item:
+      tmp/plans/.claimed/84-item-page-missing-outcome-badge.md
+      Design: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-design.md
+      Requirements: docs/plans/2026-03-31-84-item-page-missing-outcome-badge-requirements.md
+
+      In langgraph_pipeline/web/routes/item.py:
+
+      D1: Add _derive_outcome(completions: list[dict]) -> Optional[str] that returns
+      the outcome from the most recent completion record (highest finished_at), or
+      None if completions is empty.
+
+      D2: In item_detail(), call _derive_outcome(completions) and add "outcome" to
+      the template context. In item_dynamic(), call _derive_outcome(completions) and
+      add "outcome" to the JSON response dict.
+
+      In langgraph_pipeline/web/templates/item.html:
+
+      D3: Inside the item-badges div (around line 1046), insert a new outcome badge
+      BEFORE the item_type badge. Use data-dynamic="outcome-badge" wrapper. Render
+      only when outcome is not None. Badge text is the outcome value. Add CSS class
+      outcome-{{ outcome }}.
+
+      D4: Add CSS classes: outcome-success (green: bg #d1fae5, text #065f46, border
+      #6ee7b7), outcome-warn (amber: bg #fef3c7, text #92400e, border #fcd34d),
+      outcome-fail (red: bg #fee2e2, text #991b1b, border #fca5a5). Use font-weight
+      700 to make these more prominent than other badges.
+
+      D5: In the selective-refresh JS, add a handler for data.outcome that updates
+      the outcome-badge element. When outcome is non-null, set innerHTML to a span
+      with the appropriate class. When null, clear the element.
+
+      Write tests in tests/langgraph/web/test_item_outcome_badge.py covering:
+      _derive_outcome returns latest completion outcome, returns None for empty list,
+      and handles multiple completions correctly.
