@@ -43,6 +43,7 @@ MAX_INTAKES_PER_HOUR: dict[str, int] = {
     "defect": 50,
     "feature": 50,
     "analysis": 50,
+    "investigation": 50,
 }
 
 # Seconds between re-checks when the throttle wait loop is active.
@@ -829,6 +830,20 @@ def intake_analyze(state: PipelineState) -> dict:
         state_updates["intake_count_features"] = (
             state.get("intake_count_features", 0) + 1
         )
+
+    elif item_type == "investigation" and item_path:
+        # Investigation reuses analysis intake: clause extraction + 5 Whys + validation.
+        # The structured context produced here feeds the investigation runner node.
+        clause_path, whys_path, analysis_cost, analysis_quota = _run_intake_analysis(
+            item_path, item_slug, item_type="investigation",
+        )
+        total_cost_usd += analysis_cost
+        if analysis_quota:
+            return {"quota_exhausted": True}
+        if clause_path:
+            state_updates["clause_register_path"] = clause_path
+        if whys_path:
+            state_updates["five_whys_path"] = whys_path
 
     # Record this intake for throttle tracking.
     _record_intake(item_type)

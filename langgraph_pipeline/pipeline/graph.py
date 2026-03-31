@@ -4,19 +4,22 @@
 
 """Pipeline StateGraph for the Claude plan orchestrator.
 
-Assembles the pipeline graph (intake_analyze, create_plan, execute_plan,
-verify_fix, archive) with conditional edges and SQLite-backed
+Assembles the pipeline graph (intake_analyze, structure_requirements, create_plan,
+execute_plan, verify_fix, archive) with conditional edges and SQLite-backed
 checkpointing for crash recovery.
 
 The CLI pre-scans the backlog via scan_backlog_fn() before invoking the graph,
 so the graph entry point is intake_analyze (item_path is always pre-populated).
 
 Graph topology:
-  intake_analyze --[route_after_intake]--> create_plan | END
+  intake_analyze --[route_after_intake]--> structure_requirements | run_investigation | END
+  structure_requirements --[route_after_requirements]--> create_plan | END
   create_plan --[route_after_plan]--> execute_plan | END
   execute_plan --[route_after_execution]--> verify_fix | archive
   verify_fix --[verify_result]--> archive | create_plan
   archive --> END
+  run_investigation --[route_after_investigation]--> process_investigation
+  process_investigation --[route_after_process_investigation]--> archive | END
 """
 
 from contextlib import contextmanager
@@ -26,12 +29,23 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from langgraph_pipeline.pipeline.edges import route_after_execution, route_after_intake, route_after_plan, verify_result
+from langgraph_pipeline.pipeline.edges import (
+    route_after_execution,
+    route_after_intake,
+    route_after_investigation,
+    route_after_plan,
+    route_after_process_investigation,
+    route_after_requirements,
+    verify_result,
+)
 from langgraph_pipeline.pipeline.nodes import (
     archive,
     create_plan,
     execute_plan,
     intake_analyze,
+    process_investigation,
+    run_investigation,
+    structure_requirements,
     verify_fix,
 )
 from langgraph_pipeline.pipeline.state import PipelineState
@@ -46,10 +60,13 @@ PIPELINE_THREAD_ID = "pipeline-main"
 # These must match the string names registered with add_node() below.
 
 NODE_INTAKE_ANALYZE = "intake_analyze"
+NODE_STRUCTURE_REQS = "structure_requirements"
 NODE_CREATE_PLAN = "create_plan"
 NODE_EXECUTE_PLAN = "execute_plan"
 NODE_VERIFY_FIX = "verify_fix"
 NODE_ARCHIVE = "archive"
+NODE_RUN_INVESTIGATION = "run_investigation"
+NODE_PROCESS_INVESTIGATION = "process_investigation"
 
 
 # ─── Graph assembly ───────────────────────────────────────────────────────────
@@ -66,15 +83,21 @@ def build_graph() -> StateGraph:
     graph = StateGraph(PipelineState)
 
     graph.add_node(NODE_INTAKE_ANALYZE, intake_analyze)
+    graph.add_node(NODE_STRUCTURE_REQS, structure_requirements)
     graph.add_node(NODE_CREATE_PLAN, create_plan)
     graph.add_node(NODE_EXECUTE_PLAN, execute_plan)
     graph.add_node(NODE_VERIFY_FIX, verify_fix)
     graph.add_node(NODE_ARCHIVE, archive)
+    graph.add_node(NODE_RUN_INVESTIGATION, run_investigation)
+    graph.add_node(NODE_PROCESS_INVESTIGATION, process_investigation)
 
     graph.set_entry_point(NODE_INTAKE_ANALYZE)
 
-    # intake_analyze → route_after_intake → create_plan | END
+    # intake_analyze → route_after_intake → structure_requirements | run_investigation | END
     graph.add_conditional_edges(NODE_INTAKE_ANALYZE, route_after_intake)
+
+    # structure_requirements → route_after_requirements → create_plan | END
+    graph.add_conditional_edges(NODE_STRUCTURE_REQS, route_after_requirements)
 
     # create_plan → route_after_plan → execute_plan | END
     graph.add_conditional_edges(NODE_CREATE_PLAN, route_after_plan)
@@ -87,6 +110,12 @@ def build_graph() -> StateGraph:
 
     # archive → END (always)
     graph.add_edge(NODE_ARCHIVE, END)
+
+    # run_investigation → route_after_investigation → process_investigation
+    graph.add_conditional_edges(NODE_RUN_INVESTIGATION, route_after_investigation)
+
+    # process_investigation → route_after_process_investigation → archive | END
+    graph.add_conditional_edges(NODE_PROCESS_INVESTIGATION, route_after_process_investigation)
 
     return graph
 

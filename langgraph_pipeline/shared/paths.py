@@ -39,11 +39,13 @@ WORKER_OUTPUT_DIR = Path("docs/reports/worker-output")
 DEFECT_DIR = "docs/defect-backlog"
 FEATURE_DIR = "docs/feature-backlog"
 ANALYSIS_DIR = "docs/analysis-backlog"
+INVESTIGATION_DIR = "docs/investigation-backlog"
 
 BACKLOG_DIRS = {
     "defect": DEFECT_DIR,
     "feature": FEATURE_DIR,
     "analysis": ANALYSIS_DIR,
+    "investigation": INVESTIGATION_DIR,
 }
 
 # ─── Ideas intake directories ─────────────────────────────────────────────────
@@ -61,9 +63,35 @@ WORKER_RESULT_DIR = "tmp/plans"
 COMPLETED_DEFECTS_DIR = "docs/completed-backlog/defects"
 COMPLETED_FEATURES_DIR = "docs/completed-backlog/features"
 COMPLETED_ANALYSES_DIR = "docs/completed-backlog/analyses"
+COMPLETED_INVESTIGATIONS_DIR = "docs/completed-backlog/investigations"
 
 COMPLETED_DIRS = {
     "defect": COMPLETED_DEFECTS_DIR,
     "feature": COMPLETED_FEATURES_DIR,
     "analysis": COMPLETED_ANALYSES_DIR,
+    "investigation": COMPLETED_INVESTIGATIONS_DIR,
 }
+
+# ─── Per-item workspace ─────────────────────────────────────────────────────
+
+WORKSPACE_DIR = Path("tmp/workspace")
+
+
+def workspace_path(slug: str) -> Path:
+    """Return the workspace directory path for a given item slug."""
+    return WORKSPACE_DIR / slug
+
+
+def ensure_workspace(slug: str) -> Path:
+    """Create the per-item workspace directory structure and return the root path.
+
+    Layout:
+        tmp/workspace/{slug}/
+            logs/         -- task execution logs
+            validation/   -- validation result JSON files
+    """
+    ws = workspace_path(slug)
+    ws.mkdir(parents=True, exist_ok=True)
+    (ws / "logs").mkdir(exist_ok=True)
+    (ws / "validation").mkdir(exist_ok=True)
+    return ws

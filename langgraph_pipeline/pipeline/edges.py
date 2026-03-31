@@ -27,18 +27,57 @@ MAX_VERIFICATION_CYCLES = 3
 # These must match the node names used when assembling the StateGraph in graph.py.
 
 NODE_INTAKE_ANALYZE = "intake_analyze"
+NODE_STRUCTURE_REQS = "structure_requirements"
 NODE_CREATE_PLAN = "create_plan"
 NODE_EXECUTE_PLAN = "execute_plan"
 NODE_VERIFY_FIX = "verify_fix"
 NODE_ARCHIVE = "archive"
+NODE_RUN_INVESTIGATION = "run_investigation"
+NODE_PROCESS_INVESTIGATION = "process_investigation"
 
 
 # ─── Edge routing functions ───────────────────────────────────────────────────
 
 
 def route_after_intake(state: PipelineState) -> str:
-    """Route from intake_analyze: END on quota exhaustion, else create_plan."""
+    """Route from intake_analyze: END on quota exhaustion, else branch by item type.
+
+    Investigation items diverge to run_investigation.  All other item types
+    continue to structure_requirements.
+    """
     if state.get("quota_exhausted"):
+        return END
+    if state.get("item_type") == "investigation":
+        return NODE_RUN_INVESTIGATION
+    if not state.get("clause_register_path"):
+        logger.warning("route_after_intake: no clause_register_path — traceability chain incomplete")
+    return NODE_STRUCTURE_REQS
+
+
+def route_after_investigation(state: PipelineState) -> str:
+    """Route from run_investigation to process_investigation."""
+    return NODE_PROCESS_INVESTIGATION
+
+
+def route_after_process_investigation(state: PipelineState) -> str:
+    """Route from process_investigation: END when should_stop is True, else archive.
+
+    should_stop is set True when the investigation is awaiting a Slack reply
+    (the pipeline suspends and resumes on the next cycle).  Once the reply is
+    received and proposals are filed, should_stop is False and the item is
+    moved to the completed-backlog via the archive node.
+    """
+    if state.get("should_stop"):
+        return END
+    return NODE_ARCHIVE
+
+
+def route_after_requirements(state: PipelineState) -> str:
+    """Route from structure_requirements: END on quota/failure, else create_plan."""
+    if state.get("quota_exhausted"):
+        return END
+    if not state.get("requirements_path"):
+        logger.warning("route_after_requirements: no requirements_path — ending pipeline run")
         return END
     return NODE_CREATE_PLAN
 
@@ -57,11 +96,22 @@ def route_after_execution(state: PipelineState) -> str:
     """Route from execute_plan based on the item type.
 
     Quota exhaustion takes priority: return END so the item remains on disk
-    for re-discovery after quota restores.  Otherwise, defects go to
-    verification and all other item types go to archival.
+    for re-discovery after quota restores.  Executor deadlock routes directly
+    to archive (skips verification — there is nothing to verify when tasks
+    never ran).  Otherwise, defects go to verification and all other item
+    types go to archival.
     """
     if state.get("quota_exhausted"):
         return END
+    if state.get("executor_deadlock"):
+        details = state.get("executor_deadlock_details") or []
+        blocked_ids = ", ".join(d.get("task_id", "?") for d in details)
+        logger.warning(
+            "route_after_execution: executor deadlock — routing to archive "
+            "(blocked tasks: %s)",
+            blocked_ids,
+        )
+        return NODE_ARCHIVE
     if state.get("item_type") == "defect":
         return NODE_VERIFY_FIX
     return NODE_ARCHIVE

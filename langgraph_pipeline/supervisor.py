@@ -29,6 +29,8 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
+import yaml
+
 from langgraph_pipeline.pipeline.nodes.idea_classifier import process_ideas
 from langgraph_pipeline.pipeline.nodes.scan import (
     CLAIM_META_SUFFIX,
@@ -37,8 +39,9 @@ from langgraph_pipeline.pipeline.nodes.scan import (
     unclaim_item,
 )
 from langgraph_pipeline.pipeline.state import PipelineState
+from langgraph_pipeline.shared.hot_reload import CodeChangeMonitor, _perform_restart
 from langgraph_pipeline.shared.langsmith import read_trace_id_from_file
-from langgraph_pipeline.shared.paths import BACKLOG_DIRS, CLAIMED_DIR, PLANS_DIR, WORKER_RESULT_DIR
+from langgraph_pipeline.shared.paths import BACKLOG_DIRS, CLAIMED_DIR, PLANS_DIR, WORKER_OUTPUT_DIR, WORKER_RESULT_DIR
 from langgraph_pipeline.slack.notifier import SlackNotifier
 from langgraph_pipeline.web.dashboard_state import get_dashboard_state
 from langgraph_pipeline.web.proxy import get_proxy
@@ -86,6 +89,46 @@ def _make_result_file_path() -> str:
     return os.path.join(WORKER_RESULT_DIR, _RESULT_FILE_TEMPLATE.format(uid=uid))
 
 
+def _save_worker_pid_to_sidecar(claimed_path: str, pid: int) -> None:
+    """Write the worker PID into the claim sidecar so it can be recovered on crash.
+
+    The claim sidecar already contains item_type. This adds worker_pid so that
+    _unclaim_orphaned_items() can transfer it to the plan YAML meta, allowing
+    a new worker to reuse the checkpoint DB and thread ID.
+    """
+    basename = os.path.basename(claimed_path)
+    sidecar_path = os.path.join(os.path.dirname(claimed_path), basename + CLAIM_META_SUFFIX)
+    try:
+        with open(sidecar_path, "r") as f:
+            meta = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        meta = {}
+    meta["worker_pid"] = pid
+    try:
+        with open(sidecar_path, "w") as f:
+            json.dump(meta, f)
+    except OSError as exc:
+        logger.warning("Could not save worker PID to sidecar %s: %s", sidecar_path, exc)
+
+
+def _save_worker_pid_to_plan(slug: str, worker_pid: int) -> None:
+    """Write worker_pid into the plan YAML meta so a resume worker can reuse it."""
+    plan_path = Path(PLANS_DIR) / f"{slug}.yaml"
+    if not plan_path.exists():
+        return
+    try:
+        with open(plan_path, "r") as f:
+            plan = yaml.safe_load(f)
+        if not plan or "meta" not in plan:
+            return
+        plan["meta"]["worker_pid"] = worker_pid
+        with open(plan_path, "w") as f:
+            yaml.dump(plan, f, default_flow_style=False, sort_keys=False)
+        logger.info("Saved worker_pid=%d to plan %s for crash recovery.", worker_pid, plan_path)
+    except (OSError, yaml.YAMLError) as exc:
+        logger.warning("Could not save worker_pid to plan %s: %s", plan_path, exc)
+
+
 def _unclaim_orphaned_items() -> None:
     """Return any items in CLAIMED_DIR to their backlog on supervisor startup.
 
@@ -116,6 +159,7 @@ def _unclaim_orphaned_items() -> None:
     )
     for md_file in orphans:
         sidecar_path = md_file.parent / (md_file.name + CLAIM_META_SUFFIX)
+        worker_pid = None
         if sidecar_path.exists():
             try:
                 with open(sidecar_path, "r") as f:
@@ -123,9 +167,11 @@ def _unclaim_orphaned_items() -> None:
                 source_item = meta.get("source_item", "")
                 item_type = meta.get("item_type") or (
                     "defect" if "defect" in source_item.lower()
+                    else "investigation" if "investigation" in source_item.lower()
                     else "analysis" if "analysis" in source_item.lower()
                     else "feature"
                 )
+                worker_pid = meta.get("worker_pid")
                 sidecar_path.unlink()
             except (OSError, json.JSONDecodeError):
                 item_type = "feature"
@@ -134,13 +180,21 @@ def _unclaim_orphaned_items() -> None:
             path_str = str(md_file).lower()
             if "defect" in path_str:
                 item_type = "defect"
+            elif "investigation" in path_str:
+                item_type = "investigation"
             elif "analysis" in path_str:
                 item_type = "analysis"
             else:
                 item_type = "feature"
+
+        # Transfer worker_pid to plan YAML so a resume worker can reuse the
+        # checkpoint DB and thread ID from the crashed worker.
+        if worker_pid:
+            _save_worker_pid_to_plan(md_file.stem, worker_pid)
+
         try:
             unclaim_item(str(md_file), item_type)
-            logger.info("Returned orphan %s to %s backlog.", md_file.name, item_type)
+            logger.info("Returned orphan %s to %s backlog (worker_pid=%s).", md_file.name, item_type, worker_pid)
         except (OSError, KeyError) as exc:
             logger.warning("Could not return orphan %s: %s", md_file.name, exc)
 
@@ -188,6 +242,14 @@ def _cleanup_orphaned_plan_yamls() -> None:
     removed = 0
     for yaml_file in yaml_files:
         if yaml_file.stem not in active_slugs:
+            # Preserve plan to permanent location before deletion
+            try:
+                import shutil
+                output_dir = Path(WORKER_OUTPUT_DIR) / yaml_file.stem
+                output_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(yaml_file), output_dir / "plan.yaml")
+            except OSError:
+                pass
             try:
                 yaml_file.unlink()
                 removed += 1
@@ -223,11 +285,13 @@ def _build_scan_state() -> PipelineState:
     return state
 
 
-def _scan_next_item() -> Optional[tuple[str, str, str]]:
-    """Scan the backlog and return (item_path, item_slug, item_type) or None.
+def _scan_next_item() -> Optional[tuple[str, str, str, Optional[str], Optional[int]]]:
+    """Scan the backlog and return (item_path, item_slug, item_type, plan_path, worker_pid) or None.
 
     Calls scan_backlog() directly (no graph, no tracing) to find the next
-    candidate item. Returns None when the backlog is empty.
+    candidate item. Returns None when the backlog is empty. plan_path and
+    worker_pid are set when an in-progress plan exists for the item (crash
+    recovery), allowing the new worker to reuse the previous checkpoint.
     """
     scan_state = _build_scan_state()
     result = scan_backlog(scan_state)
@@ -238,6 +302,8 @@ def _scan_next_item() -> Optional[tuple[str, str, str]]:
         item_path,
         result.get("item_slug", ""),
         result.get("item_type", "feature"),
+        result.get("plan_path"),
+        result.get("worker_pid"),
     )
 
 
@@ -260,13 +326,22 @@ def _remove_result_file(result_file: str) -> None:
         logger.warning("Could not remove result file %s: %s", result_file, exc)
 
 
-def _spawn_worker(claimed_path: str, result_file: str, item_type: str, item_slug: str) -> subprocess.Popen:
+def _spawn_worker(
+    claimed_path: str,
+    result_file: str,
+    item_type: str,
+    item_slug: str,
+    plan_path: Optional[str] = None,
+    resume_pid: Optional[int] = None,
+) -> subprocess.Popen:
     """Spawn a worker subprocess for the given claimed item.
 
     Runs `python -m langgraph_pipeline.worker` with --item-path,
     --result-file, --item-type, and --item-slug. The slug and type are
     forwarded explicitly because the claimed path no longer contains the
-    original backlog directory name needed to derive them.
+    original backlog directory name needed to derive them. When resume_pid
+    is set (crash recovery), the worker reuses the crashed worker's
+    checkpoint DB and thread ID to resume from the last completed node.
     Returns the Popen object (PID available via .pid).
     """
     cmd = [
@@ -282,7 +357,9 @@ def _spawn_worker(claimed_path: str, result_file: str, item_type: str, item_slug
         "--item-slug",
         item_slug,
     ]
-    logger.info("Spawning worker: item=%s result=%s", claimed_path, result_file)
+    if resume_pid is not None:
+        cmd.extend(["--resume-pid", str(resume_pid)])
+    logger.info("Spawning worker: item=%s result=%s resume_pid=%s", claimed_path, result_file, resume_pid)
     return subprocess.Popen(cmd)
 
 
@@ -357,7 +434,7 @@ def _reap_one_worker(
             f"Item: {claimed_path} duration={duration_s:.1f}s"
         )
         logger.error(crash_msg)
-        get_dashboard_state().add_error(crash_msg)
+        get_dashboard_state().add_notification(crash_msg)
         get_dashboard_state().remove_active_worker(pid, "fail", 0.0, duration_s)
         proxy = get_proxy()
         if proxy is not None:
@@ -417,7 +494,7 @@ def _reap_one_worker(
             f"warns={current_warns}/{MAX_WARN_RETRIES_PER_ITEM} message={message}"
         )
         logger.warning(failure_msg)
-        get_dashboard_state().add_error(failure_msg)
+        get_dashboard_state().add_notification(failure_msg)
         get_dashboard_state().remove_active_worker(pid, "warn", cost_usd, duration_s)
         proxy = get_proxy()
         if proxy is not None:
@@ -433,7 +510,7 @@ def _reap_one_worker(
                 f"warn completions — archiving instead of retrying."
             )
             logger.error(exhausted_msg)
-            get_dashboard_state().add_error(exhausted_msg)
+            get_dashboard_state().add_notification(exhausted_msg)
             if slack is not None:
                 slack.send_status(exhausted_msg, level="warning")
             # Leave in .claimed/ — the archive node will pick it up,
@@ -521,7 +598,7 @@ def _try_dispatch_one(active_workers: dict[int, WorkerRecord]) -> bool:
     if candidate is None:
         return False
 
-    item_path, item_slug, item_type = candidate
+    item_path, item_slug, item_type, plan_path, resume_pid = candidate
 
     claimed = claim_item(item_path, item_type)
     if not claimed:
@@ -532,8 +609,12 @@ def _try_dispatch_one(active_workers: dict[int, WorkerRecord]) -> bool:
     result_file = _make_result_file_path()
 
     try:
-        proc = _spawn_worker(claimed_path, result_file, item_type, item_slug)
+        proc = _spawn_worker(claimed_path, result_file, item_type, item_slug, resume_pid=resume_pid)
         pid = proc.pid
+        # Store the checkpoint PID (the DB being used), not the worker's own PID.
+        # For resume workers, that's the resume_pid so the chain is preserved.
+        checkpoint_pid = resume_pid if resume_pid is not None else pid
+        _save_worker_pid_to_sidecar(claimed_path, checkpoint_pid)
         start_time = time.monotonic()
         active_workers[pid] = (claimed_path, result_file, item_type, start_time)
         run_id = read_trace_id_from_file(claimed_path)
@@ -632,6 +713,7 @@ def run_supervisor_loop(
     dry_run: bool,
     shutdown_event: threading.Event,
     slack: Optional[SlackNotifier],
+    code_monitor: Optional["CodeChangeMonitor"] = None,
 ) -> int:
     """Run the supervisor dispatch loop until shutdown or budget exhaustion.
 
@@ -729,7 +811,18 @@ def run_supervisor_loop(
                     if not dispatched:
                         break  # Backlog empty or claim lost; don't spin.
 
-            # Step 3: Sleep strategy depends on whether workers are active.
+            # Step 3: Hot-reload check — restart when no workers are active.
+            if code_monitor is not None and code_monitor.restart_pending.is_set():
+                if not active_workers:
+                    logger.info("Code change detected and no active workers — restarting.")
+                    _perform_restart(code_monitor)
+                else:
+                    logger.info(
+                        "Code change detected — waiting for %d active worker(s) to finish before restart.",
+                        len(active_workers),
+                    )
+
+            # Step 4: Sleep strategy depends on whether workers are active.
             if not active_workers:
                 logger.debug(
                     "No active workers and backlog empty. Sleeping %ds.",

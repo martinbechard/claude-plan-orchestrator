@@ -29,6 +29,7 @@ from langgraph_pipeline.shared.paths import (
     CLAIMED_DIR,
     DEFECT_DIR,
     FEATURE_DIR,
+    INVESTIGATION_DIR,
     PLANS_DIR,
     ensure_workspace,
 )
@@ -53,6 +54,7 @@ BACKLOG_SLUG_PATTERN = re.compile(r"^[\w][\w-]*$")
 BACKLOG_SCAN_ORDER = [
     ("defect", DEFECT_DIR),
     ("feature", FEATURE_DIR),
+    ("investigation", INVESTIGATION_DIR),
     ("analysis", ANALYSIS_DIR),
 ]
 

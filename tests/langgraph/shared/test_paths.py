@@ -21,6 +21,9 @@ from langgraph_pipeline.shared.paths import (
     PLANS_DIR,
     STATUS_FILE_PATH,
     TASK_LOG_DIR,
+    WORKSPACE_DIR,
+    ensure_workspace,
+    workspace_path,
 )
 
 
@@ -96,7 +99,7 @@ class TestBacklogDirs:
         assert ANALYSIS_DIR == "docs/analysis-backlog"
 
     def test_backlog_dirs_has_expected_keys(self):
-        assert set(BACKLOG_DIRS.keys()) == {"defect", "feature", "analysis"}
+        assert set(BACKLOG_DIRS.keys()) == {"defect", "feature", "analysis", "investigation"}
 
     def test_backlog_dirs_values_match_individual_constants(self):
         assert BACKLOG_DIRS["defect"] == DEFECT_DIR
@@ -116,7 +119,7 @@ class TestCompletedDirs:
         assert COMPLETED_ANALYSES_DIR == "docs/completed-backlog/analyses"
 
     def test_completed_dirs_has_expected_keys(self):
-        assert set(COMPLETED_DIRS.keys()) == {"defect", "feature", "analysis"}
+        assert set(COMPLETED_DIRS.keys()) == {"defect", "feature", "analysis", "investigation"}
 
     def test_completed_dirs_values_match_individual_constants(self):
         assert COMPLETED_DIRS["defect"] == COMPLETED_DEFECTS_DIR
@@ -126,3 +129,38 @@ class TestCompletedDirs:
     def test_completed_dirs_are_under_completed_backlog(self):
         for path in COMPLETED_DIRS.values():
             assert path.startswith("docs/completed-backlog/")
+
+
+class TestWorkspaceDir:
+    def test_is_path(self):
+        assert isinstance(WORKSPACE_DIR, Path)
+
+    def test_expected_value(self):
+        assert WORKSPACE_DIR == Path("tmp/workspace")
+
+
+class TestWorkspacePath:
+    def test_returns_path(self):
+        result = workspace_path("test-slug")
+        assert isinstance(result, Path)
+
+    def test_includes_slug(self):
+        result = workspace_path("my-feature")
+        assert result == WORKSPACE_DIR / "my-feature"
+
+
+class TestEnsureWorkspace:
+    def test_creates_directory_structure(self, tmp_path):
+        from unittest.mock import patch
+        with patch("langgraph_pipeline.shared.paths.WORKSPACE_DIR", tmp_path / "workspace"):
+            ws = ensure_workspace("test-item")
+            assert ws.exists()
+            assert (ws / "logs").exists()
+            assert (ws / "validation").exists()
+
+    def test_idempotent(self, tmp_path):
+        from unittest.mock import patch
+        with patch("langgraph_pipeline.shared.paths.WORKSPACE_DIR", tmp_path / "workspace"):
+            ws1 = ensure_workspace("test-item")
+            ws2 = ensure_workspace("test-item")
+            assert ws1 == ws2

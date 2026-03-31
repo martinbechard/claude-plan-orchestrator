@@ -14,11 +14,17 @@ from langgraph_pipeline.pipeline.edges import (
     NODE_CREATE_PLAN,
     NODE_EXECUTE_PLAN,
     NODE_INTAKE_ANALYZE,
+    NODE_PROCESS_INVESTIGATION,
+    NODE_RUN_INVESTIGATION,
+    NODE_STRUCTURE_REQS,
     NODE_VERIFY_FIX,
+    cycles_exhausted,
     route_after_execution,
     route_after_intake,
+    route_after_investigation,
     route_after_plan,
-    cycles_exhausted,
+    route_after_process_investigation,
+    route_after_requirements,
     verify_result,
 )
 
@@ -63,6 +69,10 @@ class TestNodeNameConstants:
         assert isinstance(NODE_INTAKE_ANALYZE, str)
         assert NODE_INTAKE_ANALYZE
 
+    def test_structure_reqs_is_string(self):
+        assert isinstance(NODE_STRUCTURE_REQS, str)
+        assert NODE_STRUCTURE_REQS
+
     def test_create_plan_is_string(self):
         assert isinstance(NODE_CREATE_PLAN, str)
         assert NODE_CREATE_PLAN
@@ -103,6 +113,33 @@ class TestRouteAfterExecution:
         # quota_exhausted takes priority over item_type — item must stay on disk
         state = _make_state(item_type="defect", quota_exhausted=True)
         assert route_after_execution(state) == END
+
+    def test_deadlock_routes_defect_to_archive(self):
+        # Deadlock bypasses verification — tasks never ran so there is nothing to verify.
+        state = _make_state(item_type="defect", executor_deadlock=True)
+        assert route_after_execution(state) == NODE_ARCHIVE
+
+    def test_deadlock_routes_feature_to_archive(self):
+        state = _make_state(item_type="feature", executor_deadlock=True)
+        assert route_after_execution(state) == NODE_ARCHIVE
+
+    def test_deadlock_with_details_routes_to_archive(self):
+        details = [{"task_id": "0.4", "task_name": "T", "unsatisfied_deps": ["0.3"]}]
+        state = _make_state(
+            item_type="defect",
+            executor_deadlock=True,
+            executor_deadlock_details=details,
+        )
+        assert route_after_execution(state) == NODE_ARCHIVE
+
+    def test_quota_exhausted_takes_priority_over_deadlock(self):
+        # quota_exhausted must keep the item on disk regardless of deadlock.
+        state = _make_state(item_type="defect", quota_exhausted=True, executor_deadlock=True)
+        assert route_after_execution(state) == END
+
+    def test_deadlock_false_does_not_affect_routing(self):
+        state = _make_state(item_type="defect", executor_deadlock=False)
+        assert route_after_execution(state) == NODE_VERIFY_FIX
 
 
 class TestCyclesExhausted:
@@ -242,19 +279,39 @@ class TestVerifyResultTraceMetadata:
 
 
 class TestRouteAfterIntake:
-    """route_after_intake routes to END on quota exhaustion, else create_plan."""
+    """route_after_intake routes to END on quota exhaustion, else structure_requirements."""
 
     def test_quota_exhausted_routes_to_end(self):
         state = _make_state(quota_exhausted=True)
         assert route_after_intake(state) == END
 
-    def test_normal_state_routes_to_create_plan(self):
+    def test_normal_state_routes_to_structure_requirements(self):
         state = _make_state(quota_exhausted=False)
-        assert route_after_intake(state) == NODE_CREATE_PLAN
+        assert route_after_intake(state) == NODE_STRUCTURE_REQS
 
-    def test_missing_quota_exhausted_routes_to_create_plan(self):
+    def test_missing_quota_exhausted_routes_to_structure_requirements(self):
         state = _make_state()
-        assert route_after_intake(state) == NODE_CREATE_PLAN
+        assert route_after_intake(state) == NODE_STRUCTURE_REQS
+
+
+class TestRouteAfterRequirements:
+    """route_after_requirements routes to END on quota/failure, else create_plan."""
+
+    def test_quota_exhausted_routes_to_end(self):
+        state = _make_state(quota_exhausted=True)
+        assert route_after_requirements(state) == END
+
+    def test_normal_state_routes_to_create_plan(self):
+        state = _make_state(requirements_path="docs/plans/2026-03-28-test-requirements.md")
+        assert route_after_requirements(state) == NODE_CREATE_PLAN
+
+    def test_no_requirements_path_routes_to_end(self):
+        state = _make_state(requirements_path=None)
+        assert route_after_requirements(state) == END
+
+    def test_empty_requirements_path_routes_to_end(self):
+        state = _make_state(requirements_path="")
+        assert route_after_requirements(state) == END
 
 
 class TestRouteAfterPlan:
@@ -275,3 +332,61 @@ class TestRouteAfterPlan:
     def test_no_plan_path_routes_to_end(self):
         state = _make_state(quota_exhausted=False, plan_path=None)
         assert route_after_plan(state) == END
+
+
+class TestRouteAfterIntakeInvestigation:
+    """route_after_intake diverges investigation items to run_investigation."""
+
+    def test_investigation_routes_to_run_investigation(self):
+        state = _make_state(item_type="investigation")
+        assert route_after_intake(state) == NODE_RUN_INVESTIGATION
+
+    def test_investigation_with_quota_exhausted_routes_to_end(self):
+        state = _make_state(item_type="investigation", quota_exhausted=True)
+        assert route_after_intake(state) == END
+
+    def test_feature_still_routes_to_structure_requirements(self):
+        state = _make_state(item_type="feature")
+        assert route_after_intake(state) == NODE_STRUCTURE_REQS
+
+    def test_defect_still_routes_to_structure_requirements(self):
+        state = _make_state(item_type="defect")
+        assert route_after_intake(state) == NODE_STRUCTURE_REQS
+
+    def test_analysis_still_routes_to_structure_requirements(self):
+        state = _make_state(item_type="analysis")
+        assert route_after_intake(state) == NODE_STRUCTURE_REQS
+
+
+class TestRouteAfterInvestigation:
+    """route_after_investigation always routes to process_investigation."""
+
+    def test_routes_to_process_investigation(self):
+        state = _make_state(item_type="investigation")
+        assert route_after_investigation(state) == NODE_PROCESS_INVESTIGATION
+
+    def test_routes_to_process_investigation_regardless_of_should_stop(self):
+        state = _make_state(item_type="investigation", should_stop=True)
+        assert route_after_investigation(state) == NODE_PROCESS_INVESTIGATION
+
+    def test_routes_to_process_investigation_with_empty_state(self):
+        assert route_after_investigation({}) == NODE_PROCESS_INVESTIGATION
+
+
+class TestRouteAfterProcessInvestigation:
+    """route_after_process_investigation returns END when suspended, else archive."""
+
+    def test_should_stop_true_routes_to_end(self):
+        state = _make_state(item_type="investigation", should_stop=True)
+        assert route_after_process_investigation(state) == END
+
+    def test_should_stop_false_routes_to_archive(self):
+        state = _make_state(item_type="investigation", should_stop=False)
+        assert route_after_process_investigation(state) == NODE_ARCHIVE
+
+    def test_missing_should_stop_routes_to_archive(self):
+        state = _make_state(item_type="investigation")
+        assert route_after_process_investigation(state) == NODE_ARCHIVE
+
+    def test_empty_state_routes_to_archive(self):
+        assert route_after_process_investigation({}) == NODE_ARCHIVE

@@ -7,24 +7,34 @@
 Each module in this package exports one LangGraph node function:
   scan          → scan_backlog
   intake        → intake_analyze
+  requirements  → structure_requirements
   plan_creation → create_plan
   execute_plan  → execute_plan
   verification  → verify_fix
   archival      → archive
+  investigation → run_investigation, process_investigation
 """
 
 from langgraph_pipeline.pipeline.nodes.archival import archive
 from langgraph_pipeline.pipeline.nodes.execute_plan import execute_plan
 from langgraph_pipeline.pipeline.nodes.intake import intake_analyze
+from langgraph_pipeline.pipeline.nodes.investigation import (
+    process_investigation,
+    run_investigation,
+)
 from langgraph_pipeline.pipeline.nodes.plan_creation import create_plan
+from langgraph_pipeline.pipeline.nodes.requirements import structure_requirements
 from langgraph_pipeline.pipeline.nodes.scan import scan_backlog
 from langgraph_pipeline.pipeline.nodes.verification import verify_fix
 
 __all__ = [
     "scan_backlog",
     "intake_analyze",
+    "structure_requirements",
     "create_plan",
     "execute_plan",
     "verify_fix",
     "archive",
+    "run_investigation",
+    "process_investigation",
 ]
