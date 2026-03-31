@@ -11,7 +11,6 @@ meta:
     validators:
     - validator
     max_validation_attempts: 2
-  worker_pid: 4963
 sections:
 - id: '1'
   name: Pipeline Type Registration and Routing
@@ -26,6 +25,7 @@ sections:
     - AC2
     - AC3
     - AC6
+    - AC9
     description: 'Implement UC1, FR1 per D1, D2, D10 from work item: tmp/plans/.claimed/82-investigation-workflow-with-slack-proposals.md
       Design: docs/plans/2026-03-31-82-investigation-workflow-with-slack-proposals-design.md
       Requirements: docs/plans/2026-03-31-82-investigation-workflow-with-slack-proposals-requirements.md
@@ -81,9 +81,6 @@ sections:
     depends_on:
     - '1.1'
     target_acs:
-    - AC14
-    - AC16
-    - AC17
     - AC18
     - AC19
     - AC20
@@ -92,6 +89,8 @@ sections:
     - AC23
     - AC24
     - AC25
+    - AC26
+    - AC27
     description: "Implement FR4, FR5 per D4, D7 from work item: tmp/plans/.claimed/82-investigation-workflow-with-slack-proposals.md\
       \ Design: docs/plans/2026-03-31-82-investigation-workflow-with-slack-proposals-design.md\
       \ Requirements: docs/plans/2026-03-31-82-investigation-workflow-with-slack-proposals-requirements.md\n\
@@ -139,12 +138,12 @@ sections:
     depends_on:
     - '2.1'
     target_acs:
-    - AC4
-    - AC5
     - AC7
     - AC8
-    - AC9
     - AC10
+    - AC11
+    - AC12
+    - AC13
     description: "Implement FR1, FR2 per D3 from work item: tmp/plans/.claimed/82-investigation-workflow-with-slack-proposals.md\
       \ Design: docs/plans/2026-03-31-82-investigation-workflow-with-slack-proposals-design.md\
       \ Requirements: docs/plans/2026-03-31-82-investigation-workflow-with-slack-proposals-requirements.md\n\
@@ -180,17 +179,21 @@ sections:
     depends_on:
     - '3.1'
     target_acs:
-    - AC11
-    - AC12
-    - AC13
+    - AC4
+    - AC5
     - AC14
     - AC15
-    - AC26
-    - AC27
+    - AC16
+    - AC17
     - AC28
     - AC29
     - AC30
     - AC31
+    - AC32
+    - AC33
+    - AC34
+    - AC35
+    - AC36
     description: 'Implement FR3, UC2, FR6, FR7 per D5, D6, D8, D9 from work item:
       tmp/plans/.claimed/82-investigation-workflow-with-slack-proposals.md Design:
       docs/plans/2026-03-31-82-investigation-workflow-with-slack-proposals-design.md
@@ -230,6 +233,8 @@ sections:
 
       D9: After filing, update each proposal''s status field to "accepted" or "rejected".
       Set ProposalSet.status to "approved"/"rejected"/"partial". Save the final proposals.yaml.
+      The proposals.yaml serves as the complete audit trail linking investigation slug,
+      proposal dispositions, and filed_paths for full traceability (AC36).
 
       Write tests in tests/langgraph/pipeline/nodes/test_investigation.py (extend
       existing file): - process_investigation posts to Slack when no thread_ts (mock
@@ -237,6 +242,8 @@ sections:
       parses reply and files accepted proposals - file_accepted_proposals writes correct
       markdown format - file_accepted_proposals routes defects to defect-backlog/
       - file_accepted_proposals routes enhancements to feature-backlog/ - Outcome
-      recording: accepted/rejected status persisted in proposals.yaml
+      recording: accepted/rejected status persisted in proposals.yaml - Rejected proposals
+      recorded with status="rejected" (AC32) - Full traceability: proposals.yaml links
+      slug, proposal IDs, statuses, filed_paths (AC36)
 
       '
