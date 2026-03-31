@@ -17,9 +17,10 @@ sections:
   status: pending
   tasks:
   - id: '1.1'
-    name: Add attempts_history column, merge duplicates, add UNIQUE index, implement upsert
+    name: Add attempts_history column, merge duplicates, add UNIQUE index, implement
+      upsert
     agent: coder
-    status: pending
+    status: in_progress
     target_acs:
     - AC1
     - AC2
@@ -46,52 +47,47 @@ sections:
     - AC24
     - AC25
     - AC26
-    description: >
-      Implement P1, P2, P4, FR1, FR2, FR3 per D1, D2, D3, D4 from work item:
-      tmp/plans/.claimed/85-completions-upsert-by-slug.md
-      Design: docs/plans/2026-03-31-85-completions-upsert-by-slug-design.md
+    description: 'Implement P1, P2, P4, FR1, FR2, FR3 per D1, D2, D3, D4 from work
+      item: tmp/plans/.claimed/85-completions-upsert-by-slug.md Design: docs/plans/2026-03-31-85-completions-upsert-by-slug-design.md
       Requirements: docs/plans/2026-03-31-85-completions-upsert-by-slug-requirements.md
 
       All changes in langgraph_pipeline/web/proxy.py:
 
-      D1: Add _ALTER_ADD_COMPLETIONS_ATTEMPTS_HISTORY_SQL constant. Execute in
-      _init_db with try/except OperationalError, following the existing ALTER
-      TABLE migration pattern.
+      D1: Add _ALTER_ADD_COMPLETIONS_ATTEMPTS_HISTORY_SQL constant. Execute in _init_db
+      with try/except OperationalError, following the existing ALTER TABLE migration
+      pattern.
 
-      D2: Add _migrate_completion_duplicates(self, conn) method called from
-      _init_db after D1 and before D3. For each slug with COUNT(*) > 1: fetch
-      all rows ordered by finished_at ASC, compute cost_usd = SUM, duration_s
-      = SUM, build attempts_history JSON array from all rows (each entry:
-      outcome, cost_usd, duration_s, finished_at, run_id, tokens_per_minute),
-      update the row with latest finished_at (MAX(id) tiebreaker) with
-      accumulated values and history, delete other rows. For non-duplicate rows
-      with NULL attempts_history, set to a single-entry JSON array. Must be
-      idempotent.
+      D2: Add _migrate_completion_duplicates(self, conn) method called from _init_db
+      after D1 and before D3. For each slug with COUNT(*) > 1: fetch all rows ordered
+      by finished_at ASC, compute cost_usd = SUM, duration_s = SUM, build attempts_history
+      JSON array from all rows (each entry: outcome, cost_usd, duration_s, finished_at,
+      run_id, tokens_per_minute), update the row with latest finished_at (MAX(id)
+      tiebreaker) with accumulated values and history, delete other rows. For non-duplicate
+      rows with NULL attempts_history, set to a single-entry JSON array. Must be idempotent.
 
-      D3: Add _CREATE_UNIQUE_INDEX_SLUG_SQL = CREATE UNIQUE INDEX IF NOT EXISTS
-      idx_completions_slug_unique ON completions (slug). Execute in _init_db
-      after D2 migration.
+      D3: Add _CREATE_UNIQUE_INDEX_SLUG_SQL = CREATE UNIQUE INDEX IF NOT EXISTS idx_completions_slug_unique
+      ON completions (slug). Execute in _init_db after D2 migration.
 
-      D4: Replace the plain INSERT in record_completion with INSERT INTO
-      completions (..., attempts_history) VALUES (..., ?) ON CONFLICT(slug) DO
-      UPDATE SET item_type=excluded.item_type, outcome=excluded.outcome,
-      cost_usd=completions.cost_usd + excluded.cost_usd,
-      duration_s=completions.duration_s + excluded.duration_s,
-      finished_at=excluded.finished_at, run_id=excluded.run_id,
-      tokens_per_minute=excluded.tokens_per_minute,
-      verification_notes=excluded.verification_notes,
-      attempts_history=json_insert(completions.attempts_history, '$[#]',
-      json(?)). On first insert, initialize attempts_history to a single-entry
-      JSON array.
+      D4: Replace the plain INSERT in record_completion with INSERT INTO completions
+      (..., attempts_history) VALUES (..., ?) ON CONFLICT(slug) DO UPDATE SET item_type=excluded.item_type,
+      outcome=excluded.outcome, cost_usd=completions.cost_usd + excluded.cost_usd,
+      duration_s=completions.duration_s + excluded.duration_s, finished_at=excluded.finished_at,
+      run_id=excluded.run_id, tokens_per_minute=excluded.tokens_per_minute, verification_notes=excluded.verification_notes,
+      attempts_history=json_insert(completions.attempts_history, ''$[#]'', json(?)).
+      On first insert, initialize attempts_history to a single-entry JSON array.
 
-      Write tests covering: first insert creates row with single-entry
-      attempts_history (AC7, AC16, AC18), retry accumulates cost/duration
-      (AC8, AC9), retry replaces outcome/finished_at/run_id/tpm/notes
-      (AC10-AC14), retry appends to attempts_history (AC17), only one row
-      after retry (AC1, AC2), migration merges duplicates correctly (AC19-AC24),
-      migration builds attempts_history from all rows (AC22), migration is
-      idempotent, UNIQUE constraint raises IntegrityError on raw duplicate
-      INSERT (AC3, AC4), migration runs in proxy.py _init_db (AC26).
+      Write tests covering: first insert creates row with single-entry attempts_history
+      (AC7, AC16, AC18), retry accumulates cost/duration (AC8, AC9), retry replaces
+      outcome/finished_at/run_id/tpm/notes (AC10-AC14), retry appends to attempts_history
+      (AC17), only one row after retry (AC1, AC2), migration merges duplicates correctly
+      (AC19-AC24), migration builds attempts_history from all rows (AC22), migration
+      is idempotent, UNIQUE constraint raises IntegrityError on raw duplicate INSERT
+      (AC3, AC4), migration runs in proxy.py _init_db (AC26).
+
+      '
+    last_attempt: '2026-03-31T16:58:35.739304'
+    attempts: 1
+    model_used: sonnet
 - id: '2'
   name: 'Backend: Query and Grouping Adaptation'
   status: pending
@@ -107,25 +103,24 @@ sections:
     - AC27
     - AC28
     - AC29
-    description: >
-      Implement P3, UC1 per D5 from work item:
-      tmp/plans/.claimed/85-completions-upsert-by-slug.md
-      Design: docs/plans/2026-03-31-85-completions-upsert-by-slug-design.md
-      Requirements: docs/plans/2026-03-31-85-completions-upsert-by-slug-requirements.md
+    description: 'Implement P3, UC1 per D5 from work item: tmp/plans/.claimed/85-completions-upsert-by-slug.md
+      Design: docs/plans/2026-03-31-85-completions-upsert-by-slug-design.md Requirements:
+      docs/plans/2026-03-31-85-completions-upsert-by-slug-requirements.md
 
-      Update SELECT queries in list_completions, list_completions_grouped, and
-      list_completions_by_slug to include the attempts_history column.
+      Update SELECT queries in list_completions, list_completions_grouped, and list_completions_by_slug
+      to include the attempts_history column.
 
-      Update completion_grouping.py to parse attempts_history JSON from each
-      row and derive attempt_count (len of array) and retries (all but last
-      entry) from it, instead of building retries from multiple database rows.
-      The dashboard already has retry drill-down UI (toggleRetryRows,
-      tpl-retry-row template) that renders per-attempt details -- no template
-      changes needed.
+      Update completion_grouping.py to parse attempts_history JSON from each row and
+      derive attempt_count (len of array) and retries (all but last entry) from it,
+      instead of building retries from multiple database rows. The dashboard already
+      has retry drill-down UI (toggleRetryRows, tpl-retry-row template) that renders
+      per-attempt details -- no template changes needed.
 
-      Since the DB now has one row per slug, list_completions_grouped no longer
-      needs to over-fetch by GROUPED_QUERY_MULTIPLIER. Simplify the query.
+      Since the DB now has one row per slug, list_completions_grouped no longer needs
+      to over-fetch by GROUPED_QUERY_MULTIPLIER. Simplify the query.
 
-      Update tests in tests/langgraph/web/test_completion_grouping.py for the
-      new single-row-with-history data format. Verify that attempt_count and
-      retries are correctly derived from attempts_history (AC5, AC27-AC29).
+      Update tests in tests/langgraph/web/test_completion_grouping.py for the new
+      single-row-with-history data format. Verify that attempt_count and retries are
+      correctly derived from attempts_history (AC5, AC27-AC29).
+
+      '
