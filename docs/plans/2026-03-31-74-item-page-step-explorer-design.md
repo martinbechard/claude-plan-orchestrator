@@ -5,11 +5,11 @@ Requirements: docs/plans/2026-03-31-74-item-page-step-explorer-requirements.md
 
 ## Architecture Overview
 
-The item detail page is restructured from a flat two-column layout into a
-stage-based step explorer. A server-side data model groups all work item
-artifacts under six ordered pipeline stages (Intake, Requirements, Planning,
-Execution, Verification, Archive). Each stage carries its own status and
-completion timestamp, and each artifact carries a created/modified timestamp.
+The item detail page is restructured from a flat layout into a stage-based step
+explorer. A server-side data model groups all work item artifacts under six
+ordered pipeline stages (Intake, Requirements, Planning, Execution, Verification,
+Archive). Each stage carries its own status and completion timestamp, and each
+artifact carries a created/modified timestamp.
 
 The Jinja2 template renders a vertical accordion of collapsible stage sections.
 Artifact content is not embedded at page load; instead, stage expansion triggers
@@ -31,7 +31,7 @@ stage-level status so the accordion updates live while a worker is active.
 | File | Action |
 |---|---|
 | langgraph_pipeline/web/routes/item.py | Modify: add stage data model, build_stages(), status matrix, extend /dynamic |
-| langgraph_pipeline/web/templates/item.html | Modify: replace two-column layout with step explorer accordion |
+| langgraph_pipeline/web/templates/item.html | Modify: replace layout with step explorer accordion |
 
 ---
 
@@ -39,13 +39,13 @@ stage-level status so the accordion updates live while a worker is active.
 
 ### D1: Stage-based artifact grouping data model
 
-Addresses: P1, FR1, FR2
-Satisfies: AC1, AC2, AC9, AC10, AC11, AC13, AC15, AC16, AC17, AC18, AC19, AC20, AC21
+Addresses: P1, P2, FR1
+Satisfies: AC1, AC2, AC5, AC6, AC7, AC8, AC9, AC10, AC11, AC12, AC17
 
 Approach: Define a StageInfo TypedDict and an ArtifactInfo TypedDict in item.py.
 A build_stages() function maps existing artifact discovery results into six
 ordered StageInfo dicts. The Verification stage is omitted when the item type
-is "feature" (no verification for features, per AC20).
+is "feature" (AC11 specifies verification shown for defects only).
 
 ArtifactInfo fields: name (display label), path (for lazy fetch), timestamp
 (file mtime epoch), timestamp_display (pre-formatted string).
@@ -55,26 +55,30 @@ artifacts (list of ArtifactInfo), completion_ts (formatted), completion_epoch (r
 
 The six stages and their artifact mappings:
 
-1. Intake: User Request (raw backlog file), Clause Register, 5 Whys Analysis
-2. Requirements: Structured Requirements document
-3. Planning: Design Document, YAML Plan
-4. Execution: per-task log files, validation JSON files
-5. Verification: final verification report (defects only)
-6. Archive: completion record from completed backlog dirs
+1. Intake: User Request (raw backlog file), Clause Register, 5 Whys Analysis (AC7)
+2. Requirements: Structured Requirements document (AC8)
+3. Planning: Design Document, YAML Plan (AC9)
+4. Execution: per-task log files, validation JSON files (AC10)
+5. Verification: final verification report, defects only (AC11)
+6. Archive: completion record from completed backlog dirs (AC12)
 
-STAGE_ORDER constant enforces chronological pipeline ordering (AC10) and
+STAGE_ORDER constant enforces chronological pipeline ordering (AC6) and
 is the single source of truth for stage identity and display names.
+Artifacts are nested under their parent stage with timestamps (AC17).
+The page shows artifacts grouped under stage headings (AC5), displayed
+as a visual hierarchy showing pipeline stage origin (AC2), instead of
+a flat page (AC1).
 
 Files: langgraph_pipeline/web/routes/item.py
 
 ### D2: Stage status computation
 
-Addresses: FR1
-Satisfies: AC11
+Addresses: UC1
+Satisfies: AC15
 
-Approach: Each stage's status is one of: "not_started", "in_progress", "done".
-A _compute_stage_statuses() function uses the item's pipeline_stage (from
-_derive_pipeline_stage()) and a lookup matrix mapping 9 pipeline states
+Approach: Each stage's status is one of: "not_started", "in_progress", "done"
+(AC15). A _compute_stage_statuses() function uses the item's pipeline_stage
+(from _derive_pipeline_stage()) and a lookup matrix mapping 9 pipeline states
 (queued, unknown, claimed, designing, planning, executing, validating,
 completed, stuck) to expected status per stage index.
 
@@ -86,28 +90,34 @@ Files: langgraph_pipeline/web/routes/item.py
 
 ### D3: Timestamps on stages and artifacts
 
-Addresses: P3
-Satisfies: AC3, AC12, AC13, AC14
+Addresses: P3, UC1, FR3
+Satisfies: AC3, AC16, AC17, AC20, AC21
 
 Approach: Each artifact's timestamp is its file modification time (st_mtime),
 formatted as "YYYY-MM-DD HH:MM" (local time) server-side. Each stage's
 completion timestamp is the latest mtime among its artifacts, shown only when
-status is "done". Server-side formatting avoids client-side date logic.
+status is "done" (AC16). Server-side formatting avoids client-side date logic.
+
+Each artifact document displays its created/modified timestamp (AC20), visible
+without additional interaction beyond expanding the parent stage (AC21).
+Artifacts are nested under their parent stage with their own timestamps (AC17).
+Timestamps are shown on both stages and artifacts (AC3).
 
 Files: langgraph_pipeline/web/routes/item.py, langgraph_pipeline/web/templates/item.html
 
 ### D4: Collapsible stage accordion with persistence
 
 Addresses: P4, UC1
-Satisfies: AC2, AC4, AC6, AC7, AC8
+Satisfies: AC4, AC13, AC14
 
 Approach: Each stage renders as a section with a clickable button header that
 toggles body visibility. CSS class "collapsed" hides the body. JavaScript
 manages toggle and persists open/closed state in localStorage keyed by
 slug + stage id.
 
-The most recent active stage defaults to expanded on first visit; all others
-default to collapsed. Subsequent visits restore persisted state.
+Users can collapse (AC13) and expand (AC14) each stage section independently
+(AC4). The most recent active stage defaults to expanded on first visit; all
+others default to collapsed. Subsequent visits restore persisted state.
 
 Stage headers use button elements with aria-expanded and aria-controls for
 accessibility. Keyboard navigation supported natively via button semantics.
@@ -116,14 +126,17 @@ Files: langgraph_pipeline/web/templates/item.html
 
 ### D5: On-demand artifact loading
 
-Addresses: P5, FR3
-Satisfies: AC5, AC22, AC23, AC24
+Addresses: FR2
+Satisfies: AC18, AC19
 
 Approach: At page load, the template renders only stage headers and artifact
 metadata (name, timestamp) but not artifact content. When a user expands a
 stage, JavaScript fetches each artifact's content via the existing
 /item/{slug}/artifact-content?path={path} endpoint. Fetched content is cached
 via a data-loaded DOM attribute; re-expanding does not re-fetch.
+
+Artifact contents are deferred until the user expands the parent stage (AC18).
+The initial page load avoids fetching all artifact content upfront (AC19).
 
 The /dynamic endpoint is extended to include a stages array with status,
 timestamps, and artifact_count so live polling can detect new artifacts and
@@ -134,11 +147,12 @@ Files: langgraph_pipeline/web/routes/item.py, langgraph_pipeline/web/templates/i
 ### D6: Rename Raw Input to User Request
 
 Addresses: FR4
-Satisfies: AC25, AC26
+Satisfies: AC22, AC23
 
 Approach: The artifact display name for the original backlog file is "User
-Request" in build_stages(). The label "Raw Input" is removed from all template
-text. The underlying file path and data key remain unchanged.
+Request" in build_stages() (AC22). The label "Raw Input" is removed from all
+template text and heading references (AC23). The underlying file path and data
+key remain unchanged.
 
 Files: langgraph_pipeline/web/routes/item.py, langgraph_pipeline/web/templates/item.html
 
@@ -148,29 +162,26 @@ Files: langgraph_pipeline/web/routes/item.py, langgraph_pipeline/web/templates/i
 
 | AC | Design Decision(s) | Approach |
 |---|---|---|
-| AC1 | D1 | Artifacts grouped under parent pipeline stage via StageInfo.artifacts |
-| AC2 | D1, D4 | Visual hierarchy via stage headers + indented artifacts + accordion |
-| AC3 | D3 | Timestamps on stage headers (completion_ts) and artifacts (timestamp_display) |
-| AC4 | D4 | Collapsible accordion sections with CSS "collapsed" class |
-| AC5 | D5 | On-demand loading; no artifact content at page load |
-| AC6 | D4 | Click button header toggles collapsed class off |
-| AC7 | D4 | Click expanded header toggles collapsed class on |
-| AC8 | D4 | Collapsed state hides stage body containing all nested artifacts |
-| AC9 | D1 | STAGE_ORDER constant defines the six stages; build_stages() returns ordered list |
-| AC10 | D1 | STAGE_ORDER is in chronological pipeline order |
-| AC11 | D1, D2 | Stage header renders name from StageInfo.name and status badge from StageInfo.status |
-| AC12 | D3 | Stage header shows completion_ts when status is done |
-| AC13 | D1, D3 | Artifacts nested under stages; each ArtifactInfo has timestamp_display |
-| AC14 | D3 | ArtifactInfo.timestamp_display from file st_mtime |
-| AC15 | D1 | Intake stage discovers: User Request, Clause Register, 5 Whys Analysis |
-| AC16 | D1 | Requirements stage discovers: Structured Requirements document |
-| AC17 | D1 | Planning stage discovers: Design Document, YAML Plan |
-| AC18 | D1 | Execution stage discovers: log files, validation JSON files |
-| AC19 | D1 | Verification stage discovers: verification-report.md |
-| AC20 | D1 | Verification stage omitted entirely when item_type == "feature" |
-| AC21 | D1 | Archive stage discovers: completion record from COMPLETED_DIRS |
-| AC22 | D5 | AJAX fetch triggered only when stage expanded; content not preloaded |
-| AC23 | D5 | Expanding previously-unloaded stage triggers fetch for each artifact |
-| AC24 | D5 | Initial page renders only headers + metadata; faster than eager loading |
-| AC25 | D6 | "User Request" label in build_stages() replaces "Raw Input" |
-| AC26 | D6 | Intake stage artifact name is "User Request" |
+| AC1 | D1 | Artifacts organized into distinct navigable stage sections instead of flat page |
+| AC2 | D1 | Visual hierarchy: stage headers group artifacts, showing pipeline stage origin |
+| AC3 | D3 | Timestamps on both stage headers (completion_ts) and artifacts (timestamp_display) |
+| AC4 | D4 | Collapsible stage sections with CSS collapsed class and JS toggle |
+| AC5 | D1 | Step explorer with artifacts grouped under pipeline stage headings |
+| AC6 | D1 | STAGE_ORDER constant defines six stages in chronological pipeline order |
+| AC7 | D1 | Intake stage discovers: User Request, Clause Register, 5 Whys Analysis |
+| AC8 | D1 | Requirements stage discovers: Structured Requirements document |
+| AC9 | D1 | Planning stage discovers: Design Document, YAML Plan |
+| AC10 | D1 | Execution stage discovers: per-task log files, validation JSON files |
+| AC11 | D1 | Verification stage discovers: verification report; omitted for feature items |
+| AC12 | D1 | Archive stage discovers: completion record from COMPLETED_DIRS |
+| AC13 | D4 | Click stage header to collapse and hide artifacts independently |
+| AC14 | D4 | Click collapsed stage header to expand and reveal artifacts |
+| AC15 | D2 | Three-state status indicator (not_started / in_progress / done) per stage |
+| AC16 | D3 | Stage completion timestamp from latest artifact mtime when status is done |
+| AC17 | D1, D3 | Artifacts nested under parent stage, each with its own timestamp |
+| AC18 | D5 | AJAX fetch triggered only when parent stage expanded; content deferred |
+| AC19 | D5 | Initial page load renders headers and metadata only; no artifact content upfront |
+| AC20 | D3 | Each artifact document displays file mtime as created/modified timestamp |
+| AC21 | D3 | Timestamp visible within expanded stage without additional user interaction |
+| AC22 | D6 | Former "Raw Input" now labeled "User Request" in build_stages() |
+| AC23 | D6 | All "Raw Input" label references removed from template and backend |
