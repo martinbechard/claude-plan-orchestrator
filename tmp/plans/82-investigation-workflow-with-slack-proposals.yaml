@@ -11,6 +11,7 @@ meta:
     validators:
     - validator
     max_validation_attempts: 2
+  worker_pid: 88669
 sections:
 - id: '1'
   name: Pipeline Type Registration and Routing
@@ -233,8 +234,8 @@ sections:
 
       D9: After filing, update each proposal''s status field to "accepted" or "rejected".
       Set ProposalSet.status to "approved"/"rejected"/"partial". Save the final proposals.yaml.
-      The proposals.yaml serves as the complete audit trail linking investigation slug,
-      proposal dispositions, and filed_paths for full traceability (AC36).
+      The proposals.yaml serves as the complete audit trail linking investigation
+      slug, proposal dispositions, and filed_paths for full traceability (AC36).
 
       Write tests in tests/langgraph/pipeline/nodes/test_investigation.py (extend
       existing file): - process_investigation posts to Slack when no thread_ts (mock
