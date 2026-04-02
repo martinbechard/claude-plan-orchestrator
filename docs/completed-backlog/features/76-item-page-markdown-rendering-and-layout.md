@@ -34,5 +34,3 @@ Because the CSS or layout constraints on the artifact section don't enforce widt
 **Root Need:** Restore markdown rendering in artifact sections (C3) and implement layout constraints that preserve the two-column page structure during expansion (C5), while fixing the raw text display problem (C1) and the layout overflow issue (C4).
 
 **Summary:** Users need artifacts to display as properly formatted markdown while maintaining stable two-column layout integrity when expanding sections.
-
-## LangSmith Trace: f9637c15-a7c1-45ca-8c13-3efce96b678a
