@@ -198,7 +198,7 @@ sections:
     name: Implement stage data model, build_stages(), status matrix, and /dynamic
       extension
     agent: coder
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -251,6 +251,13 @@ sections:
     last_attempt: '2026-04-02T15:18:33.073423'
     attempts: 1
     model_used: opus
+    completed_at: '2026-04-02T15:23:43.983883'
+    result_message: Stage data model (StageInfo/ArtifactInfo TypedDicts), build_stages(),
+      _compute_stage_statuses() with status matrix, /dynamic stage summaries, and
+      User Request label were already implemented. Fixed a positional indexing bug
+      where feature items (without Verification stage) mapped archive to the wrong
+      matrix column. Added _STAGE_ID_TO_ORDER_INDEX for canonical column lookup. 29
+      unit tests covering all design decisions D1-D5, D7.
 - id: '2'
   name: 'Frontend: Step Explorer Accordion'
   status: pending
