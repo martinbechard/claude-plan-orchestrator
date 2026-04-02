@@ -13,7 +13,7 @@ The change touches four layers:
 1. **UI layer** -- template text, nav links, page headings
 2. **Routing layer** -- URL path and internal link references
 3. **Persistence layer** -- SQLite table name, indexes, queries
-4. **Code layer** -- Python module names, class/function names, variable names, comments
+4. **Code layer** -- Python module names, class/function names, variable names, comments, documentation
 
 SQLite supports ALTER TABLE ... RENAME TO which preserves all data and indexes.
 The rename is atomic within a single DDL statement.
@@ -87,22 +87,33 @@ The rename is atomic within a single DDL statement.
 - **Files:** completion_grouping.py (renamed), dashboard_state.py, proxy.py,
   supervisor.py, test_completion_grouping.py (renamed), all importing modules
 
+### D5: Update documentation to use "work item" terminology
+- **Addresses:** FR5
+- **Satisfies:** AC16
+- **Approach:** Search all documentation files (docs/, README, inline docstrings) for
+  references to "completions" in the work-item entity context and update them to
+  "work items". This includes any references in design documents, backlog items,
+  and code docstrings. Preserve references to "completions" that genuinely mean
+  LLM completions.
+- **Files:** Any documentation files referencing the entity
+
 ## Design -> AC Traceability Grid
 
 | AC | Design Decision(s) | Approach |
 |---|---|---|
 | AC1 | D1 | Remove "Completions" from all UI labels (nav, title, heading) |
-| AC2 | D1 | Replace all user-facing labels with "Work Item(s)" |
-| AC3 | D1 | Nav menu link text changed to "Work Items" |
+| AC2 | D1 | Replace all user-facing labels with "Work Item(s)" covering all lifecycle states |
+| AC3 | D1 | Nav menu link text changed to "Work Items", matching detail page terminology |
 | AC4 | D1 | List page and detail pages use consistent "Work Item(s)" terminology |
 | AC5 | D1 | Nav menu in base.html displays "Work Items" as link text |
-| AC6 | D1 | Page title/heading on list page reads "Work Items" |
-| AC7 | D1 | No remaining "Completions" references in list page template |
+| AC6 | D1 | Page heading on list page reads "Work Items" |
+| AC7 | D1 | Browser tab title on list page uses "Work Items" |
 | AC8 | D2 | /work-items route serves the listing page |
-| AC9 | D2 | /completions permanently redirects (301) to /work-items |
-| AC10 | D2 | All internal links updated to /work-items |
+| AC9 | D2 | All internal links and navigation elements point to /work-items |
+| AC10 | D2 | /completions permanently redirects (301) to /work-items |
 | AC11 | D3 | Database contains work_items table, no completions table |
 | AC12 | D3 | All queries and ORM references use work_items table name |
-| AC13 | D3 | ALTER TABLE RENAME TO preserves all data without loss |
-| AC14 | D4 | Codebase search for "completion(s)" in work-item context returns zero |
-| AC15 | D4 | Variable, class, and module names aligned to work_item terminology |
+| AC13 | D3 | ALTER TABLE RENAME TO preserves all data; idempotent migration |
+| AC14 | D4 | Variable/function names using "completion(s)" renamed to "work_item(s)" |
+| AC15 | D4 | Code comments referencing "completions" updated to "work item(s)" |
+| AC16 | D5 | Documentation updated to use "work item" terminology consistently |
