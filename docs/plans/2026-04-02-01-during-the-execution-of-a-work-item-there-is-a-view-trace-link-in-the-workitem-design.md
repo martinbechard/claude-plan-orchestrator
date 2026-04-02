@@ -5,14 +5,19 @@ Requirements: docs/plans/2026-04-02-01-during-the-execution-of-a-work-item-there
 
 ## Architecture Overview
 
-The frontend (dashboard.js, item.html) generates "View Trace" links pointing to
-/proxy?trace_id={run_id}. However, no GET /proxy endpoint exists in the backend.
-The actual trace viewing page is served at /execution-history/{run_id}.
+The frontend (item.html templates and JavaScript) generates "View Trace" links
+pointing to /proxy?trace_id={run_id}. The actual trace viewing page is served at
+/execution-history/{run_id}. The defect is that no GET /proxy endpoint existed in
+the backend, so all trace links returned {"detail":"Not Found"}.
 
-The fix is a single backend route that accepts GET /proxy?trace_id=X and redirects
-(HTTP 302) to /execution-history/X. This is the minimal, correct fix that connects
-the existing frontend links to the existing trace viewer without touching any
-frontend code or modifying the trace viewing infrastructure.
+The fix adds a single backend route in server.py that accepts GET /proxy?trace_id=X,
+validates the trace exists via the local proxy database, and redirects (HTTP 302)
+to /execution-history/X. This connects existing frontend links to the existing
+trace viewer without modifying any frontend template code or the trace viewing
+infrastructure.
+
+UC1 is tagged UI but is satisfied entirely by the backend redirect -- the
+execution-history page already renders trace data. No visual design changes needed.
 
 ## Key Files
 
@@ -22,37 +27,47 @@ frontend code or modifying the trace viewing infrastructure.
 ## Design Decisions
 
 ### D1: Add GET /proxy redirect endpoint in server.py
-Addresses: P1, UC1
-Satisfies: AC1, AC2, AC3
+Addresses: P1, P2, UC1, FR1
+Satisfies: AC1, AC2, AC3, AC7, AC9
 Approach: Add a GET /proxy route in create_app() that reads the trace_id query
 parameter and returns a RedirectResponse(302) to /execution-history/{trace_id}.
-If trace_id is missing, return a 400 error. This connects the existing frontend
-links to the existing execution history page without modifying any frontend code.
+If trace_id is missing, return a 400 error. This establishes the working path
+from frontend trace links to backend trace retrieval (FR1), ensures the frontend
+link URL targets a valid implemented endpoint (AC7), and eliminates the 404 error
+(AC2, AC3). The redirect serves the existing execution-history HTML page (AC1).
 Files: langgraph_pipeline/web/server.py
 
 ### D2: Validate trace_id exists before redirecting
-Addresses: P1, UC1
-Satisfies: AC1, AC2, AC4, AC5
+Addresses: P1, P2, UC1
+Satisfies: AC1, AC4, AC5, AC6, AC8, AC9
 Approach: Before redirecting, call proxy.get_run(trace_id) to verify the trace
-exists in the local database. If not found, return a user-friendly HTML error
-page (or a 404 with a meaningful message) instead of silently redirecting to
-another 404 page. This ensures the user sees actionable feedback.
+exists in the local database. If not found, return a 404 with a user-friendly
+message instead of silently redirecting to another 404 page. This validates that
+the trace ID embedded in the frontend link correctly maps to a real LangSmith
+trace (AC8), ensures LangSmith trace data is accessible during execution (AC5),
+unblocks visibility into LangSmith data (AC6), and confirms the backend returns
+trace details for valid links (AC9).
 Files: langgraph_pipeline/web/server.py
 
 ### D3: Unit tests for the proxy redirect
-Addresses: P1
-Satisfies: AC1, AC2
-Approach: Add tests covering: (1) valid trace_id redirects to /execution-history/{id},
-(2) missing trace_id returns 400, (3) unknown trace_id returns 404 with message.
-Use FastAPI TestClient against the app.
+Addresses: P1, FR1
+Satisfies: AC2, AC3, AC7, AC9
+Approach: Add tests covering: (1) valid trace_id redirects to /execution-history/{id}
+with 302 status, (2) missing trace_id returns 400, (3) unknown trace_id returns 404
+with descriptive message, (4) endpoint is reachable and responds correctly. Use
+FastAPI TestClient against the app.
 Files: tests/langgraph/web/test_proxy_redirect.py
 
 ## Design -> AC Traceability Grid
 
 | AC | Design Decision(s) | Approach |
 |---|---|---|
-| AC1 (non-404 response) | D1, D2 | GET /proxy redirects to execution-history when trace exists |
-| AC2 (no JSON error) | D1, D2, D3 | Redirect serves HTML page, not raw JSON; tested |
-| AC3 (rendered web page) | D1 | Redirect leads to the existing execution-history HTML page |
-| AC4 (correct trace data) | D2 | Validates trace_id maps to a real trace before redirecting |
-| AC5 (specific trace ID works) | D2 | Same validation path works for any trace_id including the reported one |
+| AC1 (trace displays when link clicked) | D1, D2 | GET /proxy redirects to execution-history page which renders the trace |
+| AC2 (successful HTTP response, no 404) | D1, D3 | Redirect returns 302 for valid traces; tested |
+| AC3 (backend resolves without 404) | D1, D3 | GET /proxy endpoint handles requests, returns 302 or meaningful error |
+| AC4 (users access traces for behavior) | D2 | Validates trace exists before redirect, ensuring correct data |
+| AC5 (LangSmith data accessible during execution) | D2 | Proxy validates trace_id against local LangSmith trace DB |
+| AC6 (LangSmith data visibility unblocked) | D2 | Working redirect path connects frontend links to trace viewer |
+| AC7 (frontend link targets valid endpoint) | D1, D3 | GET /proxy endpoint is implemented and reachable; tested |
+| AC8 (trace ID maps to LangSmith trace) | D2 | proxy.get_run(trace_id) validates ID against LangSmith trace store |
+| AC9 (backend returns details for valid links) | D1, D2, D3 | Valid trace_id -> 302 -> execution-history page with trace data; tested |
