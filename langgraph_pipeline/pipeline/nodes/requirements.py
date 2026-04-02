@@ -23,6 +23,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 from langgraph_pipeline.pipeline.state import PipelineState
+from langgraph_pipeline.shared.artifact_cache import is_artifact_fresh, record_artifact
 from langgraph_pipeline.shared.claude_cli import call_claude
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.quota import detect_quota_exhaustion
@@ -356,7 +357,17 @@ def structure_requirements(state: PipelineState) -> dict:
     if plan_path:
         return {}
 
+    workspace_path: Optional[str] = state.get("workspace_path")
     clause_register_path: Optional[str] = state.get("clause_register_path")
+    five_whys_path: Optional[str] = state.get("five_whys_path")
+
+    # Freshness check: skip if workspace/requirements.md is up-to-date relative to inputs.
+    if workspace_path and clause_register_path and five_whys_path:
+        if is_artifact_fresh(workspace_path, "requirements.md", [clause_register_path, five_whys_path]):
+            existing_reqs = sorted(Path(REQUIREMENTS_DIR).glob(f"*-{item_slug}-requirements.md"))
+            if existing_reqs:
+                logger.info("Requirements fresh for %s — skipping step", item_slug)
+                return {"requirements_path": str(existing_reqs[-1])}
 
     raw_content = _read_file_content(item_path)
     if not raw_content:
@@ -475,10 +486,9 @@ def structure_requirements(state: PipelineState) -> dict:
         return {}
 
     # Also write to workspace if available
-    ws_path = state.get("workspace_path")
-    if ws_path:
+    if workspace_path:
         try:
-            ws_req = Path(ws_path) / "requirements.md"
+            ws_req = Path(workspace_path) / "requirements.md"
             ws_req.write_text(requirements_doc, encoding="utf-8")
         except OSError:
             pass  # Non-fatal
@@ -519,9 +529,9 @@ def structure_requirements(state: PipelineState) -> dict:
                     f.write(f"\n\n{ac_section}\n")
                 logger.info("AC Register appended to %s", requirements_file)
                 # Update workspace copy.
-                if ws_path:
+                if workspace_path:
                     try:
-                        ws_req = Path(ws_path) / "requirements.md"
+                        ws_req = Path(workspace_path) / "requirements.md"
                         with open(ws_req, "a", encoding="utf-8") as f:
                             f.write(f"\n\n{ac_section}\n")
                     except OSError:
@@ -541,6 +551,13 @@ def structure_requirements(state: PipelineState) -> dict:
                 step_number=4,
                 step_name="ac-generation",
             )
+
+    # Record input hashes so future restarts can detect staleness.
+    if workspace_path and clause_register_path and five_whys_path:
+        try:
+            record_artifact(workspace_path, "requirements.md", [clause_register_path, five_whys_path])
+        except Exception:
+            pass  # Non-fatal
 
     add_trace_metadata({
         "node_name": "structure_requirements",

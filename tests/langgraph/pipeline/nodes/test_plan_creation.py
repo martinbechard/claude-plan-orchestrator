@@ -11,6 +11,7 @@ import pytest
 import yaml
 
 from langgraph_pipeline.pipeline.nodes.plan_creation import (
+    DESIGN_DIR,
     PLANNER_ALLOWED_TOOLS,
     PLAN_CREATION_TIMEOUT_SECONDS,
     PLANS_DIR,
@@ -33,6 +34,8 @@ def _make_state(**overrides) -> dict:
         "item_name": "01 Bug",
         "plan_path": None,
         "design_doc_path": None,
+        "workspace_path": None,
+        "requirements_path": "",
         "verification_cycle": 0,
         "verification_history": [],
         "should_stop": False,
@@ -292,3 +295,165 @@ class TestCreatePlan:
         design_path = result.get("design_doc_path", "")
         assert slug in design_path
         assert "docs/plans" in design_path
+
+
+# ─── Freshness skip tests ─────────────────────────────────────────────────────
+
+PLAN_CREATION_MODULE = "langgraph_pipeline.pipeline.nodes.plan_creation"
+
+
+class TestFreshnessSkip:
+    """create_plan skips when workspace design.md and plan.yaml are both fresh."""
+
+    def test_skips_when_both_artifacts_fresh(self, tmp_path, monkeypatch):
+        """When is_artifact_fresh returns True for both, Claude is not invoked."""
+        slug = "01-fresh-bug"
+        plan_file = tmp_path / f"{slug}.yaml"
+        plan_file.write_text("meta:\n  name: Fresh\n")
+        design_file = tmp_path / f"2026-01-01-{slug}-design.md"
+        design_file.write_text("# Design\n")
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        requirements = tmp_path / "requirements.md"
+        requirements.write_text("# Requirements\n")
+
+        monkeypatch.setattr(PLAN_CREATION_MODULE + ".PLANS_DIR", str(tmp_path))
+        monkeypatch.setattr(PLAN_CREATION_MODULE + ".DESIGN_DIR", str(tmp_path))
+
+        state = _make_state(
+            item_slug=slug,
+            workspace_path=str(workspace),
+            requirements_path=str(requirements),
+        )
+
+        with patch(
+            PLAN_CREATION_MODULE + ".is_artifact_fresh", return_value=True
+        ) as mock_fresh, patch(
+            PLAN_CREATION_MODULE + "._run_subprocess"
+        ) as mock_run:
+            result = create_plan(state)
+
+        mock_run.assert_not_called()
+        assert result["plan_path"] == str(tmp_path / f"{slug}.yaml")
+        assert slug in result["design_doc_path"]
+
+    def test_reruns_when_design_stale(self, tmp_path, monkeypatch):
+        """When design is stale (is_artifact_fresh returns False), Claude runs."""
+        slug = "01-stale-bug"
+        monkeypatch.setattr(PLAN_CREATION_MODULE + ".PLANS_DIR", str(tmp_path))
+
+        state = _make_state(
+            item_slug=slug,
+            workspace_path=str(tmp_path / "workspace"),
+            requirements_path=str(tmp_path / "requirements.md"),
+        )
+
+        with patch(
+            PLAN_CREATION_MODULE + ".is_artifact_fresh", return_value=False
+        ), patch(
+            PLAN_CREATION_MODULE + "._run_subprocess",
+            return_value=(1, "", "fail"),
+        ) as mock_run:
+            result = create_plan(state)
+
+        mock_run.assert_called_once()
+        assert result == {}
+
+    def test_reruns_when_plan_file_missing_despite_fresh_workspace(self, tmp_path, monkeypatch):
+        """Fresh workspace but plan YAML doesn't exist on disk → must re-run."""
+        slug = "01-missing-plan"
+        design_file = tmp_path / f"2026-01-01-{slug}-design.md"
+        design_file.write_text("# Design\n")
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        requirements = tmp_path / "requirements.md"
+        requirements.write_text("# Requirements\n")
+
+        monkeypatch.setattr(PLAN_CREATION_MODULE + ".PLANS_DIR", str(tmp_path))
+        monkeypatch.setattr(PLAN_CREATION_MODULE + ".DESIGN_DIR", str(tmp_path))
+
+        state = _make_state(
+            item_slug=slug,
+            workspace_path=str(workspace),
+            requirements_path=str(requirements),
+        )
+
+        with patch(
+            PLAN_CREATION_MODULE + ".is_artifact_fresh", return_value=True
+        ), patch(
+            PLAN_CREATION_MODULE + "._run_subprocess",
+            return_value=(1, "", "fail"),
+        ) as mock_run:
+            # Plan file does NOT exist, so freshness skip is bypassed
+            result = create_plan(state)
+
+        mock_run.assert_called_once()
+
+    def test_skips_freshness_check_when_no_workspace(self):
+        """No freshness check when workspace_path is absent."""
+        state = _make_state(requirements_path="some-req.md")
+        with patch(
+            PLAN_CREATION_MODULE + "._run_subprocess",
+            return_value=(1, "", "fail"),
+        ) as mock_run, patch(
+            PLAN_CREATION_MODULE + ".is_artifact_fresh"
+        ) as mock_fresh:
+            create_plan(state)
+
+        mock_fresh.assert_not_called()
+
+    def test_skips_freshness_check_when_no_requirements_path(self, tmp_path):
+        """No freshness check when requirements_path is absent."""
+        state = _make_state(
+            workspace_path=str(tmp_path),
+            requirements_path="",
+        )
+        with patch(
+            PLAN_CREATION_MODULE + "._run_subprocess",
+            return_value=(1, "", "fail"),
+        ), patch(
+            PLAN_CREATION_MODULE + ".is_artifact_fresh"
+        ) as mock_fresh:
+            create_plan(state)
+
+        mock_fresh.assert_not_called()
+
+    def test_records_artifact_after_producing_plan(self, tmp_path, monkeypatch):
+        """record_artifact is called for both design.md and plan.yaml after successful run."""
+        slug = "01-record-test"
+        plan_file = tmp_path / f"{slug}.yaml"
+        plan_file.write_text("meta:\n  name: Test\n")
+        design_file = tmp_path / f"2026-01-01-{slug}-design.md"
+        design_file.write_text("# Design\n")
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        requirements = tmp_path / "requirements.md"
+        requirements.write_text("# Requirements\n")
+
+        monkeypatch.setattr(PLAN_CREATION_MODULE + ".PLANS_DIR", str(tmp_path))
+        monkeypatch.setattr(PLAN_CREATION_MODULE + ".DESIGN_DIR", str(tmp_path))
+
+        state = _make_state(
+            item_slug=slug,
+            workspace_path=str(workspace),
+            requirements_path=str(requirements),
+        )
+
+        with patch(
+            PLAN_CREATION_MODULE + ".is_artifact_fresh", return_value=False
+        ), patch(
+            PLAN_CREATION_MODULE + "._run_subprocess",
+            return_value=(0, "done", ""),
+        ), patch(
+            PLAN_CREATION_MODULE + ".record_artifact"
+        ) as mock_record:
+            create_plan(state)
+
+        # Should record both design.md and plan.yaml
+        assert mock_record.call_count == 2
+        calls = [call.args[1] for call in mock_record.call_args_list]
+        assert "design.md" in calls
+        assert "plan.yaml" in calls

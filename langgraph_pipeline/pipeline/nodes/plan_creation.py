@@ -24,6 +24,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 from langgraph_pipeline.pipeline.state import PipelineState
+from langgraph_pipeline.shared.artifact_cache import is_artifact_fresh, record_artifact
 from langgraph_pipeline.shared.config import DEFAULT_AGENTS_DIR, load_orchestrator_config
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.paths import PLANS_DIR
@@ -357,6 +358,7 @@ def create_plan(state: PipelineState) -> dict:
     item_type: str = state.get("item_type", "feature")
     plan_path: Optional[str] = state.get("plan_path")
     requirements_path: str = state.get("requirements_path", "")
+    workspace_path: Optional[str] = state.get("workspace_path")
 
     # Short-circuit: plan already exists (in-progress plan resumption).
     if plan_path and _plan_exists(plan_path):
@@ -368,6 +370,23 @@ def create_plan(state: PipelineState) -> dict:
 
     expected_plan_path = f"{PLANS_DIR}/{item_slug}.yaml"
     expected_design_doc_path = f"{DESIGN_DIR}/{date_str}-{item_slug}-design.md"
+
+    # Freshness check: skip if workspace/design.md and workspace/plan.yaml are up-to-date.
+    if workspace_path and requirements_path:
+        workspace = Path(workspace_path)
+        design_fresh = is_artifact_fresh(workspace_path, "design.md", [requirements_path])
+        plan_fresh = design_fresh and is_artifact_fresh(
+            workspace_path, "plan.yaml", [str(workspace / "design.md")]
+        )
+        if plan_fresh:
+            plan_path_p = Path(expected_plan_path)
+            existing_designs = sorted(Path(DESIGN_DIR).glob(f"*-{item_slug}-design.md"))
+            if plan_path_p.exists() and existing_designs:
+                logger.info("Design and plan fresh for %s — skipping step", item_slug)
+                return {
+                    "plan_path": expected_plan_path,
+                    "design_doc_path": str(existing_designs[-1]),
+                }
 
     # Build the agent catalog from agent definition files
     agent_catalog = _build_agent_catalog(agents_dir)
@@ -526,10 +545,9 @@ def create_plan(state: PipelineState) -> dict:
         "tags": [item_slug, item_type],
     })
     # Copy plan and design to workspace if available
-    ws_path = state.get("workspace_path")
-    if ws_path:
+    if workspace_path:
         import shutil
-        ws = Path(ws_path)
+        ws = Path(workspace_path)
         try:
             if Path(expected_plan_path).exists():
                 shutil.copy2(expected_plan_path, ws / "plan.yaml")
@@ -537,6 +555,13 @@ def create_plan(state: PipelineState) -> dict:
                 shutil.copy2(expected_design_doc_path, ws / "design.md")
         except OSError:
             pass  # Non-fatal
+        # Record input hashes so future restarts can detect staleness.
+        if requirements_path:
+            try:
+                record_artifact(workspace_path, "design.md", [requirements_path])
+                record_artifact(workspace_path, "plan.yaml", [str(ws / "design.md")])
+            except Exception:
+                pass  # Non-fatal
 
     prior_cost = float(state.get("session_cost_usd") or 0.0)
     return {
