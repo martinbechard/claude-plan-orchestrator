@@ -1,7 +1,7 @@
 meta:
   name: 83-trace-links-empty-or-missing
   source_item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md
-  requirements_path: docs/plans/2026-03-31-83-trace-links-empty-or-missing-requirements.md
+  requirements_path: docs/plans/2026-04-02-83-trace-links-empty-or-missing-requirements.md
   validation:
     enabled: true
     run_after:
@@ -11,7 +11,6 @@ meta:
     validators:
     - validator
     max_validation_attempts: 2
-  worker_pid: 58912
 sections:
 - id: '0'
   name: 'Phase 0: Execution History Tree Rendering Design'
@@ -21,99 +20,85 @@ sections:
     name: Systems design for execution history tree rendering
     agent: systems-designer
     parallel_group: design-phase0
-    status: failed
+    status: pending
     target_acs:
     - AC2
     - AC3
-    - AC6
-    - AC7
-    - AC8
-    description: 'Produce a systems/architecture design for the client-side execution
-      tree rendering on the execution history page. Covers UC1 per D4 from work item:
-      tmp/plans/.claimed/83-trace-links-empty-or-missing.md Design: docs/plans/2026-03-31-83-trace-links-empty-or-missing-design.md
-      Requirements: docs/plans/2026-03-31-83-trace-links-empty-or-missing-requirements.md
+    - AC4
+    - AC5
+    description: >
+      Produce a systems/architecture design for the client-side execution
+      tree rendering on the execution history page. Covers UC1 per D4 from
+      work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md
+      Design: docs/plans/2026-04-02-83-trace-links-empty-or-missing-design.md
+      Requirements: docs/plans/2026-04-02-83-trace-links-empty-or-missing-requirements.md
 
-      Context: The /execution-history/{run_id} page is an HTML shell that shows "Loading
-      execution tree..." but has NO JavaScript to fetch or render the tree. The JSON
-      API at /api/execution-tree/{run_id} already exists and returns a nested tree
-      of TreeNode objects with: run_id, name, display_name, node_type, status, duration,
-      cost, model, token_count, inputs_json, outputs_json, metadata_json, children[].
+      Context: The /execution-history/{run_id} page is an HTML shell that shows
+      "Loading execution tree..." but has NO JavaScript to fetch or render the
+      tree. The JSON API at /api/execution-tree/{run_id} already exists and
+      returns a nested tree of TreeNode objects with: run_id, name, display_name,
+      node_type, status, duration, cost, model, token_count, inputs_json,
+      outputs_json, metadata_json, children[].
 
-      Focus on: data flow from API to DOM, tree node component structure, collapse/
-      expand state management, empty-tree fallback when only root trace exists (no
-      descendants), CSS class conventions matching existing style.css, and how the
-      run metadata from template context bootstraps the initial display.
-
-      '
-    last_attempt: '2026-03-31T16:36:05.196317'
-    attempts: 1
-    model_used: opus
-    result_message: Failed to create git worktree
+      Focus on: data flow from API to DOM, tree node component structure,
+      collapse/expand state management, empty-tree fallback when only root trace
+      exists (no descendants), CSS class conventions matching existing style.css,
+      and how the run metadata from template context bootstraps the initial display.
   - id: '0.2'
     name: UX design for execution history tree rendering
     agent: ux-designer
     parallel_group: design-phase0
-    status: failed
+    status: pending
     target_acs:
     - AC2
     - AC3
-    - AC6
-    - AC7
-    - AC8
-    description: 'Produce a UX design for the execution history tree view. Covers
-      UC1 per D4 from work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md
-      Design: docs/plans/2026-03-31-83-trace-links-empty-or-missing-design.md Requirements:
-      docs/plans/2026-03-31-83-trace-links-empty-or-missing-requirements.md
+    - AC4
+    - AC5
+    description: >
+      Produce a UX design for the execution history tree view. Covers UC1 per
+      D4 from work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md
+      Design: docs/plans/2026-04-02-83-trace-links-empty-or-missing-design.md
+      Requirements: docs/plans/2026-04-02-83-trace-links-empty-or-missing-requirements.md
 
       Context: The page currently shows only "Loading execution tree..." and never
-      renders content. The JSON API returns a nested tree with node_type (graph_node,
-      subgraph, agent, tool_call), status (success, error, running, unknown), display_name,
-      duration, cost, model, and token_count per node.
+      renders content. The JSON API returns a nested tree with node_type
+      (graph_node, subgraph, agent, tool_call), status (success, error, running,
+      unknown), display_name, duration, cost, model, and token_count per node.
 
-      Focus on: visual hierarchy for nested execution steps, node type differentiation
-      (icons/badges for graph_node vs tool_call vs agent), status indicators (color-coded
-      badges), duration and cost display format, collapse/expand affordances, empty-tree
-      state messaging when no detailed trace data exists, loading state, error state,
-      keyboard accessibility, and responsive layout using the existing vanilla HTML/CSS/JS
-      stack.
-
-      '
-    last_attempt: '2026-03-31T16:36:05.181008'
-    attempts: 1
-    model_used: opus
-    result_message: Failed to create git worktree
+      Focus on: visual hierarchy for nested execution steps, node type
+      differentiation (icons/badges for graph_node vs tool_call vs agent), status
+      indicators (color-coded badges), duration and cost display format,
+      collapse/expand affordances, empty-tree state messaging when no detailed
+      trace data exists, loading state, error state, keyboard accessibility, and
+      responsive layout using the existing vanilla HTML/CSS/JS stack.
   - id: '0.3'
     name: Frontend implementation design for execution history tree
     agent: frontend-coder
     parallel_group: design-phase0
-    status: failed
+    status: pending
     target_acs:
     - AC2
     - AC3
-    - AC6
-    - AC7
-    - AC8
-    description: 'Produce a concrete frontend implementation design for the execution
-      history tree rendering. Covers UC1 per D4 from work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md
-      Design: docs/plans/2026-03-31-83-trace-links-empty-or-missing-design.md Requirements:
-      docs/plans/2026-03-31-83-trace-links-empty-or-missing-requirements.md
+    - AC4
+    - AC5
+    description: >
+      Produce a concrete frontend implementation design for the execution history
+      tree rendering. Covers UC1 per D4 from work item:
+      tmp/plans/.claimed/83-trace-links-empty-or-missing.md
+      Design: docs/plans/2026-04-02-83-trace-links-empty-or-missing-design.md
+      Requirements: docs/plans/2026-04-02-83-trace-links-empty-or-missing-requirements.md
 
-      Context: The page extends base.html (vanilla Jinja2 + CSS, no framework). Existing
-      JS files (dashboard.js, analysis.js) use plain fetch() and DOM manipulation.
-      The JSON API at /api/execution-tree/{run_id} returns nested tree data.
+      Context: The page extends base.html (vanilla Jinja2 + CSS, no framework).
+      Existing JS files (dashboard.js, analysis.js) use plain fetch() and DOM
+      manipulation. The JSON API at /api/execution-tree/{run_id} returns nested
+      tree data.
 
-      Focus on: execution-history.js file structure, fetch call to the tree API, recursive
-      DOM builder for tree nodes, CSS classes for indentation and node types, collapse/expand
-      toggle with aria-expanded/aria-controls, empty-tree fallback rendering using
-      run data from template context (passed via data attributes), loading spinner
-      replacement, error handling for failed API calls, and integration with base.html
-      via extra_head block.
-
-      '
-    last_attempt: '2026-03-31T16:36:05.166164'
-    attempts: 1
-    model_used: opus
-    result_message: Failed to create git worktree
+      Focus on: execution-history.js file structure, fetch call to the tree API,
+      recursive DOM builder for tree nodes, CSS classes for indentation and node
+      types, collapse/expand toggle with aria-expanded/aria-controls, empty-tree
+      fallback rendering using run data from template context (passed via data
+      attributes), loading spinner replacement, error handling for failed API
+      calls, and integration with base.html via extra_head block.
   - id: '0.4'
     name: Judge execution history tree design competition
     agent: design-judge
@@ -125,37 +110,34 @@ sections:
     target_acs:
     - AC2
     - AC3
-    - AC6
-    - AC7
-    - AC8
-    description: 'Evaluate the three competing designs for the execution history tree
-      rendering. Score each against acceptance criteria from work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md
-      Requirements: docs/plans/2026-03-31-83-trace-links-empty-or-missing-requirements.md
-      Design: docs/plans/2026-03-31-83-trace-links-empty-or-missing-design.md
+    - AC4
+    - AC5
+    description: >
+      Evaluate the three competing designs for the execution history tree
+      rendering. Score each against acceptance criteria from work item:
+      tmp/plans/.claimed/83-trace-links-empty-or-missing.md
+      Requirements: docs/plans/2026-04-02-83-trace-links-empty-or-missing-requirements.md
+      Design: docs/plans/2026-04-02-83-trace-links-empty-or-missing-design.md
 
-      Key criteria: tree displays content not empty page (AC2), renders top-level
-      execution info (AC3), clicking trace link navigates to view (AC6), displays
-      hierarchy (AC7), user can identify sequence and nesting (AC8), accessibility,
-      and feasibility with existing vanilla JS + Jinja2 stack. Select the winner with
-      written rationale.
-
-      '
+      Key criteria: tree displays content not empty page (AC2), clicking trace
+      link navigates to view (AC3), displays hierarchy (AC4), trace data from
+      LangSmith (AC5), accessibility, and feasibility with existing vanilla
+      JS + Jinja2 stack. Select the winner with written rationale.
   - id: '0.5'
     name: Bridge winning design to implementation tasks
     agent: planner
     dependencies:
     - '0.4'
     status: pending
-    description: 'Read the winning UI design from the design competition (task 0.4)
-      and extend this YAML plan with concrete implementation details for frontend
-      tasks. Work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md Requirements:
-      docs/plans/2026-03-31-83-trace-links-empty-or-missing-requirements.md Design:
-      docs/plans/2026-03-31-83-trace-links-empty-or-missing-design.md
+    description: >
+      Read the winning UI design from the design competition (task 0.4) and
+      extend this YAML plan with concrete implementation details for frontend
+      tasks. Work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md
+      Requirements: docs/plans/2026-04-02-83-trace-links-empty-or-missing-requirements.md
+      Design: docs/plans/2026-04-02-83-trace-links-empty-or-missing-design.md
 
       Frontend task 2.1 should be refined with specifics from the winning design.
       Backend task 1.1 is already specified.
-
-      '
 - id: '1'
   name: 'Backend: Trace ID Capture, Persistence, and Backfill'
   status: pending
@@ -167,35 +149,36 @@ sections:
     target_acs:
     - AC1
     - AC2
-    - AC3
-    - AC4
     - AC5
-    description: 'Implement P1, P2, FR1 per D1, D2, D3 from work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md
-      Design: docs/plans/2026-03-31-83-trace-links-empty-or-missing-design.md Requirements:
-      docs/plans/2026-03-31-83-trace-links-empty-or-missing-requirements.md
+    - AC6
+    - AC7
+    description: >
+      Implement P1, P2, FR1 per D1, D2, D3 from work item:
+      tmp/plans/.claimed/83-trace-links-empty-or-missing.md
+      Design: docs/plans/2026-04-02-83-trace-links-empty-or-missing-design.md
+      Requirements: docs/plans/2026-04-02-83-trace-links-empty-or-missing-requirements.md
 
-      D1: Modify create_root_run() in langgraph_pipeline/shared/langsmith.py so it
-      always generates a UUID and writes the marker line to the item file, even when
-      _tracing_active is False or langsmith is not installed. When tracing IS active,
-      continue creating RunTree and posting. When inactive, generate UUID and write
-      file marker only. Return (None, trace_id) instead of (None, None) in the inactive
-      case.
+      D1: Modify create_root_run() in langgraph_pipeline/shared/langsmith.py so
+      it always generates a UUID and writes the marker line to the item file,
+      even when _tracing_active is False or langsmith is not installed. When
+      tracing IS active, continue creating RunTree and posting. When inactive,
+      generate UUID and write file marker only. Return (None, trace_id) instead
+      of (None, None) in the inactive case.
 
-      D2: Modify record_completion() in langgraph_pipeline/web/proxy.py to check whether
-      a trace row exists for the given run_id (when non-null). If no trace row exists,
-      insert a synthetic root trace row with: run_id, parent_run_id=NULL, name=slug,
-      start_time and end_time from the completion timestamp, created_at from now,
-      and metadata_json containing outcome and cost_usd. This prevents /execution-history/{run_id}
-      from returning 404.
+      D2: Modify record_completion() in langgraph_pipeline/web/proxy.py to check
+      whether a trace row exists for the given run_id (when non-null). If no
+      trace row exists, insert a synthetic root trace row with: run_id,
+      parent_run_id=NULL, name=slug, start_time and end_time from the completion
+      timestamp, created_at from now, and metadata_json containing outcome and
+      cost_usd. This prevents /execution-history/{run_id} from returning 404.
 
-      D3: Add a migration in _init_db() that queries all completions with NULL run_id,
-      generates a UUID for each, updates the completion row, and inserts a synthetic
-      root trace row. The migration is idempotent.
+      D3: Add a migration in _init_db() that queries all completions with NULL
+      run_id, generates a UUID for each, updates the completion row, and inserts
+      a synthetic root trace row. The migration is idempotent.
 
-      Write tests covering: create_root_run returns UUID when tracing inactive, record_completion
-      creates synthetic trace row, backfill migration populates NULL run_ids.
-
-      '
+      Write tests covering: create_root_run returns UUID when tracing inactive,
+      record_completion creates synthetic trace row, backfill migration populates
+      NULL run_ids.
 - id: '2'
   name: 'Frontend: Execution History Tree Rendering'
   status: pending
@@ -210,19 +193,26 @@ sections:
     target_acs:
     - AC2
     - AC3
-    - AC6
-    - AC7
-    - AC8
-    description: "Implement UC1 per D4 from work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md\
-      \ Design: docs/plans/2026-03-31-83-trace-links-empty-or-missing-design.md Requirements:\
-      \ docs/plans/2026-03-31-83-trace-links-empty-or-missing-requirements.md\nCreate\
-      \ langgraph_pipeline/web/static/execution-history.js that: (a) reads run_id\
-      \ from the #execution-tree data-run-id attribute, (b) fetches /api/execution-tree/{run_id},\
-      \ (c) renders the tree as a nested collapsible hierarchy with display_name,\n\
-      \    status badge, duration, cost, and token count for each node,\n(d) handles\
-      \ empty tree (no descendants) by showing root run info.\nUpdate execution_history.html\
-      \ to include the script via extra_head block and pass initial run data to JS\
-      \ via a data attribute.\nUpdate execution_history.py route to pass completion/run\
-      \ context data that the template can embed for the empty-tree fallback.\nFollow\
-      \ the winning design from Phase 0 (task 0.5) for visual structure, CSS classes,\
-      \ and interaction patterns.\n"
+    - AC4
+    - AC5
+    description: >
+      Implement UC1 per D4 from work item:
+      tmp/plans/.claimed/83-trace-links-empty-or-missing.md
+      Design: docs/plans/2026-04-02-83-trace-links-empty-or-missing-design.md
+      Requirements: docs/plans/2026-04-02-83-trace-links-empty-or-missing-requirements.md
+
+      Create langgraph_pipeline/web/static/execution-history.js that:
+      (a) reads run_id from the #execution-tree data-run-id attribute,
+      (b) fetches /api/execution-tree/{run_id},
+      (c) renders the tree as a nested collapsible hierarchy with display_name,
+          status badge, duration, cost, and token count for each node,
+      (d) handles empty tree (no descendants) by showing root run info.
+
+      Update execution_history.html to include the script via extra_head block
+      and pass initial run data to JS via a data attribute.
+
+      Update execution_history.py route to pass completion/run context data that
+      the template can embed for the empty-tree fallback.
+
+      Follow the winning design from Phase 0 (task 0.5) for visual structure,
+      CSS classes, and interaction patterns.
