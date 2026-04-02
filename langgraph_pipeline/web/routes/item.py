@@ -92,6 +92,13 @@ STAGE_ORDER: list[tuple[str, str]] = [
     ("archive", "Archive"),
 ]
 
+# Maps stage id -> canonical index in STAGE_ORDER for status matrix lookup.
+# Used instead of positional indexing so that omitting Verification for
+# features does not shift the archive column to the wrong matrix position.
+_STAGE_ID_TO_ORDER_INDEX: dict[str, int] = {
+    sid: i for i, (sid, _) in enumerate(STAGE_ORDER)
+}
+
 # ─── Data Models ──────────────────────────────────────────────────────────────
 
 
@@ -534,15 +541,12 @@ def _compute_stage_statuses(
         stages: List of StageInfo dicts to update in place.
         pipeline_stage: Current pipeline stage string from _derive_pipeline_stage().
     """
-    # Stage index order mirrors STAGE_ORDER (without any omitted stages).
-    # Statuses are indexed by position: intake, requirements, planning,
-    # execution, verification, archive.  When verification is omitted for
-    # features, the list has one fewer entry and indices shift accordingly.
-    stage_ids = [s["id"] for s in stages]
-
     # Base status assignments per pipeline_stage (before artifact-presence
     # adjustment).  "done*" is represented as DONE here; the adjustment below
     # downgrades to IN_PROGRESS when the stage has no artifacts.
+    # Matrix columns are indexed by canonical STAGE_ORDER position via
+    # _STAGE_ID_TO_ORDER_INDEX, so omitting Verification for features does
+    # not shift archive to the wrong column.
     D = _STAGE_STATUS_DONE
     P = _STAGE_STATUS_IN_PROGRESS
     N = _STAGE_STATUS_NOT_STARTED
@@ -576,13 +580,13 @@ def _compute_stage_statuses(
                 stage["status"] = N
         return
 
-    # Apply base matrix, adjusting done* stages by artifact presence
+    # Apply base matrix using canonical STAGE_ORDER index (not filtered position)
     for stage in stages:
-        idx = stage_ids.index(stage["id"]) if stage["id"] in stage_ids else -1
-        if idx < 0 or idx >= len(base_statuses):
+        order_idx = _STAGE_ID_TO_ORDER_INDEX.get(stage["id"], -1)
+        if order_idx < 0 or order_idx >= len(base_statuses):
             stage["status"] = N
             continue
-        assigned = base_statuses[idx]
+        assigned = base_statuses[order_idx]
         if (
             assigned == D
             and stage["id"] in _DONE_STAR_STAGES
