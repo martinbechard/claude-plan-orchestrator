@@ -198,7 +198,7 @@ sections:
     name: Implement stage data model, build_stages(), status matrix, and /dynamic
       extension
     agent: coder
-    status: completed
+    status: verified
     target_acs:
     - AC1
     - AC2
@@ -258,6 +258,12 @@ sections:
       where feature items (without Verification stage) mapped archive to the wrong
       matrix column. Added _STAGE_ID_TO_ORDER_INDEX for canonical column lookup. 29
       unit tests covering all design decisions D1-D5, D7.
+    validation_attempts: 1
+    validation_findings: All design decisions D1-D5, D7 implemented correctly. StageInfo/ArtifactInfo
+      TypedDicts, build_stages() 3-pass algorithm, _compute_stage_statuses() with
+      _BASE_MATRIX, /dynamic stage_summaries, and User Request label all verified.
+      Bug fix for canonical stage index lookup confirmed working. 29 task-specific
+      tests pass, 1878 full suite tests pass, no regressions.
 - id: '2'
   name: 'Frontend: Step Explorer Accordion'
   status: pending
@@ -269,7 +275,7 @@ sections:
     dependencies:
     - '0.5'
     - '1.1'
-    status: pending
+    status: in_progress
     target_acs:
     - AC1
     - AC2
@@ -326,3 +332,6 @@ sections:
       D4: Each artifact displays timestamp (AC6, AC21).
 
       D7: "User Request" label in Intake stage (AC26, AC27).'
+    last_attempt: '2026-04-02T15:26:27.160223'
+    attempts: 1
+    model_used: opus

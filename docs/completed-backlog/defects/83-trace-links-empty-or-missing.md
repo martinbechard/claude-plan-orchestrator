@@ -2,7 +2,7 @@
 
 Most work items in the Recent Completions table have nothing in the Trace column. The few that do have a "Trace" link open to an empty page. Expected: every completion should have a trace link that drills down to a hierarchical traces view showing the execution tree.
 
-## LangSmith Trace: 7a591155-8a4b-4aa0-9d1a-31812b62d801
+
 
 
 ## 5 Whys Analysis
