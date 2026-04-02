@@ -196,7 +196,7 @@ sections:
   - id: '1.1'
     name: Always capture trace UUIDs and ensure trace rows exist in DB
     agent: coder
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -231,6 +231,10 @@ sections:
     last_attempt: '2026-04-02T15:09:34.985267'
     attempts: 1
     model_used: opus
+    completed_at: '2026-04-02T15:16:05.427340'
+    result_message: 'D1: create_root_run() always generates UUID even when tracing
+      inactive. D2: record_completion() creates synthetic trace row when none exists.
+      D3: _init_db() backfills NULL run_ids with generated UUIDs. All 1843 tests pass.'
 - id: '2'
   name: 'Frontend: Execution History Tree Rendering'
   status: pending
