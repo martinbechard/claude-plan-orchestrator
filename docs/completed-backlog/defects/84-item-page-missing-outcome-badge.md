@@ -2,7 +2,7 @@
 
 The work item detail page shows status badges but does not display the outcome (success/warn/fail) from the completion record. The outcome should appear as the first badge in the status badge list so users can immediately see how the item finished.
 
-## LangSmith Trace: 20b91bab-33c5-438c-b411-00f894841fa2
+
 
 
 ## 5 Whys Analysis

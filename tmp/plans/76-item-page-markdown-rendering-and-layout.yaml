@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Implement markdown rendering, dark-theme styling, and layout constraints
     agent: frontend-coder
-    status: pending
+    status: in_progress
     target_acs:
     - AC1
     - AC2
@@ -55,3 +55,6 @@ sections:
       (#1a1a2e), text color (#e2e8f0), padding, and border-radius as pre.step-artifact-content.
 
       '
+    last_attempt: '2026-04-02T14:34:47.638116'
+    attempts: 1
+    model_used: sonnet
