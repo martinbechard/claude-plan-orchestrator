@@ -130,7 +130,7 @@ sections:
   - id: '2.1'
     name: Implement run_investigation node with Claude analysis and proposal generation
     agent: coder
-    status: in_progress
+    status: completed
     depends_on:
     - '1.1'
     target_acs:
@@ -168,6 +168,11 @@ sections:
     last_attempt: '2026-04-02T14:46:37.381093'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-04-02T14:51:39.561136'
+    result_message: Implemented run_investigation node with Claude Opus subprocess
+      invocation, JSON proposal parsing, idempotency check, and error handling. Added
+      4 TDD tests covering idempotency, successful generation, parse failure, and
+      subprocess failure. All 1815 tests pass.
 - id: '3'
   name: Slack Delivery, Approval Flow, Filing, and Outcome Recording
   status: pending
