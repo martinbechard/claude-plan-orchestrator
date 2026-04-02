@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Add find_real_trace_for_completion() and migration to proxy.py
     agent: coder
-    status: pending
+    status: in_progress
     target_acs:
     - AC2
     - AC3
@@ -36,6 +36,9 @@ sections:
 
       Also add is_synthetic_trace(run_id) helper that checks metadata_json for the
       "synthetic" flag.'
+    last_attempt: '2026-04-02T17:53:37.559640'
+    attempts: 1
+    model_used: sonnet
   - id: '1.2'
     name: Update execution history route to redirect synthetic traces to real ones
     agent: coder

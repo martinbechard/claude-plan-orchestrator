@@ -19,7 +19,7 @@ sections:
   - id: '0.1'
     name: 'Systems design: completions-to-work-items UI rename'
     agent: systems-designer
-    status: pending
+    status: failed
     parallel_group: design-competition
     target_acs:
     - AC1
@@ -31,22 +31,27 @@ sections:
     - AC9
     - AC10
     - AC11
-    description: >
-      Produce a systems design for renaming "Completions" to "Work Items" in the UI layer.
-      Work item: tmp/plans/.claimed/01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e.md
+    description: 'Produce a systems design for renaming "Completions" to "Work Items"
+      in the UI layer. Work item: tmp/plans/.claimed/01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e.md
       Requirements: docs/plans/2026-04-02-01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e-requirements.md
       Design: docs/plans/2026-04-02-01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e-design.md
 
       Focus on P1 (misleading terminology), FR1 (nav menu rename), FR2 (page title/heading),
-      and FR3 (route path rename). Design decisions D1 and D2. Key files: base.html (nav
-      link text and href), completions.html (rename to work_items.html, update title/heading),
-      routes/completions.py (route path, redirect from old path). Address the 301 redirect
-      strategy for /completions -> /work-items and the active-page detection in base.html.
+      and FR3 (route path rename). Design decisions D1 and D2. Key files: base.html
+      (nav link text and href), completions.html (rename to work_items.html, update
+      title/heading), routes/completions.py (route path, redirect from old path).
+      Address the 301 redirect strategy for /completions -> /work-items and the active-page
+      detection in base.html.
 
+      '
+    last_attempt: '2026-04-02T17:53:39.743808'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.2'
     name: 'UX design: work items page naming and navigation'
     agent: ux-designer
-    status: pending
+    status: failed
     parallel_group: design-competition
     target_acs:
     - AC1
@@ -54,23 +59,27 @@ sections:
     - AC5
     - AC7
     - AC8
-    description: >
-      Produce a UX design for the "Completions" to "Work Items" terminology rename.
-      Work item: tmp/plans/.claimed/01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e.md
+    description: 'Produce a UX design for the "Completions" to "Work Items" terminology
+      rename. Work item: tmp/plans/.claimed/01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e.md
       Requirements: docs/plans/2026-04-02-01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e-requirements.md
       Design: docs/plans/2026-04-02-01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e-design.md
 
       Focus on P1 (user confusion from "Completions" label) and FR1/FR2 (nav and page
       heading rename). Consider: label clarity for full-lifecycle scope (queued, in-progress,
-      failed, completed), consistency with existing "work item" references in detail pages,
-      nav menu active state visual treatment, and page heading hierarchy. The dark theme
-      uses #1a1a2e background. Evaluate whether any sub-labels or contextual hints are
-      needed alongside "Work Items" to maintain discoverability.
+      failed, completed), consistency with existing "work item" references in detail
+      pages, nav menu active state visual treatment, and page heading hierarchy. The
+      dark theme uses #1a1a2e background. Evaluate whether any sub-labels or contextual
+      hints are needed alongside "Work Items" to maintain discoverability.
 
+      '
+    last_attempt: '2026-04-02T17:53:39.778104'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.3'
     name: 'Frontend design: template and route rename implementation'
     agent: frontend-coder
-    status: pending
+    status: failed
     parallel_group: design-competition
     target_acs:
     - AC1
@@ -81,19 +90,23 @@ sections:
     - AC9
     - AC10
     - AC11
-    description: >
-      Produce a frontend implementation design for renaming completions to work items.
-      Work item: tmp/plans/.claimed/01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e.md
+    description: 'Produce a frontend implementation design for renaming completions
+      to work items. Work item: tmp/plans/.claimed/01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e.md
       Requirements: docs/plans/2026-04-02-01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e-requirements.md
       Design: docs/plans/2026-04-02-01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e-design.md
 
-      Provide concrete code changes for: (1) base.html nav link -- change text to "Work
-      Items", href to "/work-items", active detection to match new path, (2) completions.html
-      rename to work_items.html with updated title/heading, (3) routes/completions.py --
-      change route path to /work-items, add 301 redirect from /completions preserving
-      query params, template_name update. Specify exact before/after diffs. Cover D1, D2
-      from design doc, addressing FR1, FR2, FR3.
+      Provide concrete code changes for: (1) base.html nav link -- change text to
+      "Work Items", href to "/work-items", active detection to match new path, (2)
+      completions.html rename to work_items.html with updated title/heading, (3) routes/completions.py
+      -- change route path to /work-items, add 301 redirect from /completions preserving
+      query params, template_name update. Specify exact before/after diffs. Cover
+      D1, D2 from design doc, addressing FR1, FR2, FR3.
 
+      '
+    last_attempt: '2026-04-02T17:53:39.801525'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.4'
     name: 'Judge: select winning UI rename design'
     agent: design-judge
@@ -112,16 +125,16 @@ sections:
     - AC9
     - AC10
     - AC11
-    description: >
-      Judge the three competing designs for the Completions-to-Work-Items UI rename.
-      Work item: tmp/plans/.claimed/01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e.md
+    description: 'Judge the three competing designs for the Completions-to-Work-Items
+      UI rename. Work item: tmp/plans/.claimed/01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e.md
       Requirements: docs/plans/2026-04-02-01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e-requirements.md
 
       Score each design against AC1, AC2, AC5-AC11 from the requirements file. Consider:
       completeness of label replacement, redirect strategy, template rename approach,
-      active-page detection correctness, and minimal change footprint. Select the winner
-      and write judgment to worker output.
+      active-page detection correctness, and minimal change footprint. Select the
+      winner and write judgment to worker output.
 
+      '
   - id: '0.5'
     name: 'Plan: bridge winning design to implementation tasks'
     agent: planner
@@ -138,24 +151,24 @@ sections:
     - AC9
     - AC10
     - AC11
-    description: >
-      Read the winning design from the Phase 0 competition and extend this plan with
-      concrete implementation tasks for the UI layer changes.
-      Work item: tmp/plans/.claimed/01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e.md
+    description: 'Read the winning design from the Phase 0 competition and extend
+      this plan with concrete implementation tasks for the UI layer changes. Work
+      item: tmp/plans/.claimed/01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e.md
       Requirements: docs/plans/2026-04-02-01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e-requirements.md
       Design: docs/plans/2026-04-02-01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e-design.md
 
-      Create implementation sections covering: (1) Rename templates and update UI labels
-      (D1 -- P1, FR1, FR2), (2) Rename route path with redirect (D2 -- FR3), (3) Update
-      server.py imports and all internal template links. Each task should use frontend-coder
-      agent and reference specific P<n>, D<n>.
+      Create implementation sections covering: (1) Rename templates and update UI
+      labels (D1 -- P1, FR1, FR2), (2) Rename route path with redirect (D2 -- FR3),
+      (3) Update server.py imports and all internal template links. Each task should
+      use frontend-coder agent and reference specific P<n>, D<n>.
 
+      '
 - id: '1'
-  name: 'Database Table Rename'
+  name: Database Table Rename
   status: pending
   tasks:
   - id: '1.1'
-    name: 'Rename completions table to work_items with migration'
+    name: Rename completions table to work_items with migration
     agent: coder
     status: pending
     target_acs:
@@ -163,26 +176,26 @@ sections:
     - AC13
     - AC14
     - AC15
-    description: >
-      Implement requirement FR4 and design decision D3 from work item:
+    description: 'Implement requirement FR4 and design decision D3 from work item:
       tmp/plans/.claimed/01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e.md
       Requirements: docs/plans/2026-04-02-01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e-requirements.md
       Design: docs/plans/2026-04-02-01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e-design.md
 
-      In proxy.py: (1) Update CREATE TABLE to use work_items as the table name,
-      (2) Add idempotent migration that renames completions to work_items for existing
-      databases (check if old table exists, rename if so), (3) Rename all indexes from
-      idx_completions_* to idx_work_items_*, (4) Update every SQL query in proxy.py
-      to reference work_items instead of completions. SQLite ALTER TABLE ... RENAME TO
-      preserves all data and is atomic. Ensure the migration handles both fresh and
-      existing databases.
+      In proxy.py: (1) Update CREATE TABLE to use work_items as the table name, (2)
+      Add idempotent migration that renames completions to work_items for existing
+      databases (check if old table exists, rename if so), (3) Rename all indexes
+      from idx_completions_* to idx_work_items_*, (4) Update every SQL query in proxy.py
+      to reference work_items instead of completions. SQLite ALTER TABLE ... RENAME
+      TO preserves all data and is atomic. Ensure the migration handles both fresh
+      and existing databases.
 
+      '
 - id: '2'
-  name: 'Python Module and Symbol Rename'
+  name: Python Module and Symbol Rename
   status: pending
   tasks:
   - id: '2.1'
-    name: 'Rename Python modules, classes, and functions'
+    name: Rename Python modules, classes, and functions
     agent: coder
     status: pending
     target_acs:
@@ -191,21 +204,21 @@ sections:
     - AC14
     - AC16
     - AC17
-    description: >
-      Implement requirements P2, FR5 and design decision D4 from work item:
-      tmp/plans/.claimed/01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e.md
+    description: 'Implement requirements P2, FR5 and design decision D4 from work
+      item: tmp/plans/.claimed/01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e.md
       Requirements: docs/plans/2026-04-02-01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e-requirements.md
       Design: docs/plans/2026-04-02-01-instead-of-completions-we-should-use-work-item-as-the-title-in-the-ui-and-the-e-design.md
 
-      Rename all Python symbols related to the work-item entity: (1) Rename
-      completion_grouping.py to work_item_grouping.py, update group_completions_by_slug
-      to group_work_items_by_slug and all related symbols, (2) In dashboard_state.py
-      rename CompletionRecord to WorkItemRecord, (3) In proxy.py rename methods:
-      record_completion -> record_work_item, list_completions -> list_work_items,
-      list_completions_grouped -> list_work_items_grouped, count_completions ->
-      count_work_items, sum_completions_cost -> sum_work_items_cost,
-      _completions_filter -> _work_items_filter, (4) Update all call sites in
-      supervisor.py, routes, server.py, and templates, (5) Rename test file
-      test_completion_grouping.py to test_work_item_grouping.py with updated
-      references, (6) Update code comments, log messages, and variable names.
-      Preserve "completion" references that genuinely refer to LLM completions.
+      Rename all Python symbols related to the work-item entity: (1) Rename completion_grouping.py
+      to work_item_grouping.py, update group_completions_by_slug to group_work_items_by_slug
+      and all related symbols, (2) In dashboard_state.py rename CompletionRecord to
+      WorkItemRecord, (3) In proxy.py rename methods: record_completion -> record_work_item,
+      list_completions -> list_work_items, list_completions_grouped -> list_work_items_grouped,
+      count_completions -> count_work_items, sum_completions_cost -> sum_work_items_cost,
+      _completions_filter -> _work_items_filter, (4) Update all call sites in supervisor.py,
+      routes, server.py, and templates, (5) Rename test file test_completion_grouping.py
+      to test_work_item_grouping.py with updated references, (6) Update code comments,
+      log messages, and variable names. Preserve "completion" references that genuinely
+      refer to LLM completions.
+
+      '
