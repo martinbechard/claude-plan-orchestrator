@@ -933,3 +933,239 @@ svg.gantt text { font-family: inherit; }
     opacity: 0.75;
     font-size: 10px;
 }
+
+/* ── Execution History Tree ────────────────────────────────────────────────── */
+
+.exec-loading {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #888;
+    font-size: 14px;
+}
+
+.exec-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #d1d5db;
+    border-top-color: #3b6fcf;
+    border-radius: 50%;
+    animation: exec-spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-right: 0.5rem;
+}
+
+@keyframes exec-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .exec-spinner { animation: none; opacity: 0.5; }
+}
+
+/* Skeleton loading */
+.exec-skeleton {
+    padding: 1rem 0;
+}
+
+.exec-skeleton-line {
+    height: 28px;
+    background: linear-gradient(90deg, #e2e8f0 25%, #f0f3f7 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+    animation: exec-skeleton-shimmer 1.5s ease-in-out infinite;
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+@keyframes exec-skeleton-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .exec-skeleton-line { animation: none; background: #e2e8f0; }
+}
+
+/* Toolbar */
+.exec-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.exec-toolbar-btn {
+    height: 28px;
+    padding: 0 12px;
+    background: #fff;
+    color: #3b6fcf;
+    border: 1px solid #d0d5dd;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease;
+}
+
+.exec-toolbar-btn:hover {
+    background: #eff4ff;
+    border-color: #3b6fcf;
+}
+
+.exec-toolbar-btn:focus-visible {
+    outline: 2px solid #3b6fcf;
+    outline-offset: 1px;
+}
+
+/* Tree structure */
+.exec-tree {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.exec-node {
+    list-style: none;
+    border-left: 2px solid #e2e8f0;
+    margin-left: 8px;
+}
+
+.exec-node-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.exec-node-header:hover {
+    background: #f8fafc;
+}
+
+/* Toggle button */
+.exec-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 9px;
+    color: #6b7280;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 3px;
+    padding: 0;
+}
+
+.exec-toggle:hover {
+    background: #e2e8f0;
+}
+
+.exec-toggle:focus-visible {
+    outline: 2px solid #3b6fcf;
+    outline-offset: 1px;
+}
+
+.exec-toggle-spacer {
+    width: 18px;
+    flex-shrink: 0;
+}
+
+/* Node type badges */
+.exec-type {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    flex-shrink: 0;
+}
+
+.exec-type-graph_node { background: #dbeafe; color: #1e40af; }
+.exec-type-subgraph   { background: #ede9fe; color: #5b21b6; }
+.exec-type-agent      { background: #fef3c7; color: #92400e; }
+.exec-type-tool_call  { background: #d1fae5; color: #065f46; }
+
+/* Node name */
+.exec-name {
+    font-weight: 500;
+    color: #1a1a2e;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Metrics */
+.exec-duration,
+.exec-cost,
+.exec-tokens,
+.exec-model {
+    font-size: 11px;
+    color: #6b7280;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.exec-cost { color: #065f46; }
+
+/* Running status badge (supplement to existing badge-*) */
+.badge-running {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+/* Children list */
+.exec-children {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* Empty tree fallback — follows .empty-state pattern from style guide */
+.exec-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #888;
+    font-size: 14px;
+}
+
+.exec-empty .icon {
+    font-size: 32px;
+    margin-bottom: 0.5rem;
+}
+
+.exec-empty-meta {
+    font-size: 13px;
+    color: #555;
+}
+
+/* Error state */
+.exec-error {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: #991b1b;
+    font-size: 14px;
+}
+
+.exec-error-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: #fee2e2;
+    color: #991b1b;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 14px;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+}
