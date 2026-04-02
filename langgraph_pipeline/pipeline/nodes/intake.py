@@ -28,6 +28,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 from langgraph_pipeline.pipeline.state import PipelineState
+from langgraph_pipeline.shared.artifact_cache import is_artifact_fresh, record_artifact
 from langgraph_pipeline.shared.claude_cli import call_claude
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.quota import detect_quota_exhaustion
@@ -625,34 +626,59 @@ def _run_intake_analysis(
     five_whys_path = ""
     clause_register_content = ""
 
-    # Step 1: Clause extraction.
-    logger.info("Running clause extraction for %s...", item_slug)
-    clause_result = _run_clause_extraction(item_path, slug=item_slug)
-    if clause_result.get("failed"):
-        logger.warning("Clause extraction failed for %s: %s", item_slug, clause_result.get("failure_reason", ""))
+    from langgraph_pipeline.shared.paths import workspace_path
+    workspace = workspace_path(item_slug)
+
+    # Step 1: Clause extraction — skip if workspace artifact is still fresh.
+    if is_artifact_fresh(workspace, "clauses.md", [item_path]):
+        logger.info("Clause extraction fresh for %s — loading cached clauses.md", item_slug)
+        clause_path_obj = workspace / "clauses.md"
+        clause_register_content = clause_path_obj.read_text(encoding="utf-8")
+        clause_register_path = str(clause_path_obj)
     else:
-        total_cost += float(clause_result.get("total_cost_usd", 0.0))
-        clause_register_content = str(clause_result["raw_output"])
-        clause_register_path = _save_clause_register(item_slug, clause_register_content)
-
-        # Validate clause extraction with skill.
-        raw_content = _read_file_content(item_path)
-        valid, reason, val_cost = _validate_with_skill(
-            "clause-extraction-validation.md",
-            {"Raw Backlog Item": raw_content},
-            clause_register_content,
-            slug=item_slug,
-            step_number=1,
-            step_name="clause-extraction",
-        )
-        total_cost += val_cost
-        if valid:
-            logger.info("Step 1 (clause extraction) validation PASSED for %s", item_slug)
+        logger.info("Running clause extraction for %s...", item_slug)
+        clause_result = _run_clause_extraction(item_path, slug=item_slug)
+        if clause_result.get("failed"):
+            logger.warning(
+                "Clause extraction failed for %s: %s",
+                item_slug, clause_result.get("failure_reason", ""),
+            )
         else:
-            logger.warning("Step 1 (clause extraction) validation issue for %s: %s", item_slug, reason)
+            total_cost += float(clause_result.get("total_cost_usd", 0.0))
+            clause_register_content = str(clause_result["raw_output"])
+            clause_register_path = _save_clause_register(item_slug, clause_register_content)
+            record_artifact(workspace, "clauses.md", [item_path])
 
-    # Step 2: 5 Whys analysis (skip if already present).
-    if not _has_five_whys(item_path):
+            # Validate clause extraction with skill.
+            raw_content = _read_file_content(item_path)
+            valid, reason, val_cost = _validate_with_skill(
+                "clause-extraction-validation.md",
+                {"Raw Backlog Item": raw_content},
+                clause_register_content,
+                slug=item_slug,
+                step_number=1,
+                step_name="clause-extraction",
+            )
+            total_cost += val_cost
+            if valid:
+                logger.info("Step 1 (clause extraction) validation PASSED for %s", item_slug)
+            else:
+                logger.warning(
+                    "Step 1 (clause extraction) validation issue for %s: %s", item_slug, reason
+                )
+
+    # Step 2: 5 Whys — skip if workspace artifact is still fresh.
+    if is_artifact_fresh(workspace, "five-whys.md", [item_path]):
+        logger.info("5 Whys fresh for %s — skipping analysis", item_slug)
+        five_whys_path = str(workspace / "five-whys.md")
+    elif _has_five_whys(item_path):
+        # Fallback: sidecar has no entry but LLM confirms 5 Whys already in item
+        # (migration case for items processed before the sidecar was introduced).
+        logger.info("5 Whys already present for %s (no sidecar entry)", item_slug)
+        existing_whys = workspace / "five-whys.md"
+        if existing_whys.exists():
+            five_whys_path = str(existing_whys)
+    else:
         logger.info("Running 5 Whys analysis for %s...", item_slug)
         whys_result = _run_five_whys_analysis(
             item_path, item_type=item_type,
@@ -669,6 +695,7 @@ def _run_intake_analysis(
             total_cost += float(whys_result.get("total_cost_usd", 0.0))
             whys_content = str(whys_result["raw_output"])
             five_whys_path = _save_five_whys(item_slug, whys_content)
+            record_artifact(workspace, "five-whys.md", [item_path])
             # Keep appending summary to item file for backward compatibility.
             _append_analysis_to_item(item_path, whys_content)
 
@@ -686,7 +713,9 @@ def _run_intake_analysis(
                 if valid:
                     logger.info("Step 2 (5 Whys) validation PASSED for %s", item_slug)
                 else:
-                    logger.warning("Step 2 (5 Whys) validation issue for %s: %s", item_slug, reason)
+                    logger.warning(
+                        "Step 2 (5 Whys) validation issue for %s: %s", item_slug, reason
+                    )
             else:
                 # Fallback: use legacy validation when no clause register available.
                 valid, reason, val_cost = _validate_five_whys(item_path)
@@ -695,13 +724,6 @@ def _run_intake_analysis(
                     logger.info("5 Whys validation PASSED for %s (legacy)", item_slug)
                 else:
                     logger.warning("5 Whys validation FAILED for %s: %s", item_slug, reason)
-    else:
-        logger.info("5 Whys already present for %s", item_slug)
-        # Try to load existing 5 Whys from workspace if available.
-        from langgraph_pipeline.shared.paths import workspace_path
-        existing_whys = workspace_path(item_slug) / "five-whys.md"
-        if existing_whys.exists():
-            five_whys_path = str(existing_whys)
 
     return clause_register_path, five_whys_path, total_cost, quota_exhausted
 

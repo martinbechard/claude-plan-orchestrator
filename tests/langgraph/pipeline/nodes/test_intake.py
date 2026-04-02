@@ -25,6 +25,7 @@ from langgraph_pipeline.pipeline.nodes.intake import (
     _record_intake,
     _report_intake_error,
     _run_five_whys_analysis,
+    _run_intake_analysis,
     _verify_defect_symptoms,
     _write_throttle,
     intake_analyze,
@@ -335,14 +336,14 @@ class TestRunFiveWhysAnalysis:
 
 
 class TestReportIntakeError:
-    def test_calls_add_error_when_dashboard_available(self):
+    def test_calls_add_notification_when_dashboard_available(self):
         mock_state = MagicMock()
         with patch(
             "langgraph_pipeline.web.dashboard_state.get_dashboard_state",
             return_value=mock_state,
         ):
             _report_intake_error("test error message")
-        mock_state.add_error.assert_called_once_with("test error message")
+        mock_state.add_notification.assert_called_once_with("test error message")
 
     def test_does_not_raise_when_dashboard_unavailable(self):
         with patch(
@@ -414,23 +415,27 @@ class TestIntakeAnalyzeNode:
         item.write_text("Some feature request")
         state = _make_state(item_path=str(item), item_type="feature")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("NO", 0.001, ""),
-        ) as mock_check, patch(
-            "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
-            return_value={"clarity": 4, "raw_output": "Title: T\nClarity: 4", "total_cost_usd": 0.02},
-        ) as mock_whys:
-            intake_analyze(state)
-        mock_check.assert_called_once()  # _has_five_whys check
-        mock_whys.assert_called_once()   # actual 5 Whys
+            "langgraph_pipeline.pipeline.nodes.intake._run_intake_analysis",
+            return_value=("", "", 0.02, False),
+        ) as mock_analysis:
+            result = intake_analyze(state)
+        mock_analysis.assert_called_once()
+        assert result.get("intake_count_features") == 1
 
     def test_skips_five_whys_when_already_present(self, tmp_path, monkeypatch):
+        """_has_five_whys fallback: when no sidecar entry but LLM says YES, skip analysis."""
         import langgraph_pipeline.pipeline.nodes.intake as intake_mod
         monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
         item = tmp_path / "01-feature.md"
         item.write_text("5 Whys:\n1. Why\nRoot Need: something")
         state = _make_state(item_path=str(item), item_type="feature")
+        # is_artifact_fresh returns False (no sidecar), _has_five_whys returns True via _call_llm.
         with patch(
+            "langgraph_pipeline.pipeline.nodes.intake.is_artifact_fresh",
+            return_value=False,
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake.record_artifact",
+        ), patch(
             "langgraph_pipeline.pipeline.nodes.intake._call_llm",
             return_value=("YES", 0.001, ""),
         ), patch(
@@ -456,12 +461,12 @@ class TestIntakeAnalyzeNode:
         assert len(data["feature"]) == 1
 
 
-# ─── intake_analyze: LLM failure → add_error ─────────────────────────────────
+# ─── intake_analyze: LLM failure → add_notification ─────────────────────────────────
 
 
 class TestIntakeAnalyzeLlmFailure:
-    def test_defect_symptom_failure_calls_add_error(self, tmp_path, monkeypatch):
-        """When _verify_defect_symptoms fails, add_error is called with the failure reason."""
+    def test_defect_symptom_failure_calls_add_notification(self, tmp_path, monkeypatch):
+        """When _verify_defect_symptoms fails, add_notification is called with the failure reason."""
         import langgraph_pipeline.pipeline.nodes.intake as intake_mod
         monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
         item = tmp_path / "01-bug.md"
@@ -479,13 +484,13 @@ class TestIntakeAnalyzeLlmFailure:
             return_value=False,
         ):
             intake_analyze(state)
-        mock_state.add_error.assert_called()
+        mock_state.add_notification.assert_called()
         # Find the call with the symptom check error message
-        all_error_msgs = [call[0][0] for call in mock_state.add_error.call_args_list]
+        all_error_msgs = [call[0][0] for call in mock_state.add_notification.call_args_list]
         assert any("defect symptom check failed" in msg and "01-bug" in msg for msg in all_error_msgs)
 
-    def test_five_whys_failure_calls_add_error_for_feature(self, tmp_path, monkeypatch):
-        """When 5 Whys analysis fails for a feature, add_error is called."""
+    def test_five_whys_failure_calls_add_notification_for_feature(self, tmp_path, monkeypatch):
+        """When 5 Whys analysis fails for a feature, add_notification is called."""
         import langgraph_pipeline.pipeline.nodes.intake as intake_mod
         monkeypatch.setattr(intake_mod, "THROTTLE_FILE_PATH", str(tmp_path / "t.json"))
         item = tmp_path / "01-feature.md"
@@ -506,8 +511,8 @@ class TestIntakeAnalyzeLlmFailure:
             return_value=False,
         ):
             intake_analyze(state)
-        mock_state.add_error.assert_called()
-        error_msg = mock_state.add_error.call_args[0][0]
+        mock_state.add_notification.assert_called()
+        error_msg = mock_state.add_notification.call_args[0][0]
         assert "5 Whys analysis failed" in error_msg
 
     def test_five_whys_failure_does_not_append_to_item(self, tmp_path, monkeypatch):
@@ -542,16 +547,9 @@ class TestIntakeAnalyzeLlmFailure:
         item = tmp_path / "01-feature.md"
         item.write_text("Some feature request")
         state = _make_state(item_path=str(item), item_type="feature")
-        quota_text = "You've hit your limit"
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=("NO", 0.0, ""),
-        ), patch(
-            "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
-            return_value={"failed": True, "failure_reason": quota_text, "raw_output": "", "clarity": INTAKE_CLARITY_THRESHOLD, "total_cost_usd": 0.0},
-        ), patch(
-            "langgraph_pipeline.pipeline.nodes.intake.detect_quota_exhaustion",
-            side_effect=lambda text: quota_text in text,
+            "langgraph_pipeline.pipeline.nodes.intake._run_intake_analysis",
+            return_value=("", "", 0.0, True),
         ):
             result = intake_analyze(state)
         assert result == {"quota_exhausted": True}
@@ -590,8 +588,8 @@ class TestIntakeAnalyzeQuotaDetection:
         item.write_text("## Analysis\nSome analysis.\n")
         state = _make_state(item_path=str(item), item_type="analysis")
         with patch(
-            "langgraph_pipeline.pipeline.nodes.intake._call_llm",
-            return_value=(QUOTA_EXHAUSTION_OUTPUT, 0.0, ""),
+            "langgraph_pipeline.pipeline.nodes.intake._run_intake_analysis",
+            return_value=("", "", 0.0, True),
         ):
             result = intake_analyze(state)
         assert result == {"quota_exhausted": True}
@@ -695,3 +693,158 @@ class TestBlockingThrottleWait:
             result = intake_analyze(state)
 
         assert result.get("intake_count_features") == 1
+
+
+# ─── _run_intake_analysis idempotency (freshness checks) ─────────────────────
+
+
+class TestRunIntakeAnalysisIdempotency:
+    """Tests for freshness-check idempotency in _run_intake_analysis."""
+
+    def _make_workspace(self, tmp_path: Path) -> Path:
+        """Create a minimal workspace directory for a test item."""
+        ws = tmp_path / "workspace" / "01-feature"
+        ws.mkdir(parents=True)
+        return ws
+
+    def test_clause_extraction_skipped_when_fresh(self, tmp_path):
+        """When clauses.md is fresh, _run_clause_extraction is not called."""
+        item = tmp_path / "01-feature.md"
+        item.write_text("Some feature request")
+        ws = self._make_workspace(tmp_path)
+        (ws / "clauses.md").write_text("## Clause Register\n\nC1 [C-GOAL]: Some feature")
+        (ws / "five-whys.md").write_text("W1: because\nRoot Need: something")
+
+        with patch(
+            "langgraph_pipeline.shared.paths.workspace_path", return_value=ws
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake.is_artifact_fresh",
+            return_value=True,
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._run_clause_extraction",
+        ) as mock_extract, patch(
+            "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
+        ) as mock_whys:
+            _run_intake_analysis(str(item), "01-feature", "feature")
+
+        mock_extract.assert_not_called()
+        mock_whys.assert_not_called()
+
+    def test_five_whys_skipped_when_fresh(self, tmp_path):
+        """When five-whys.md is fresh, _run_five_whys_analysis is not called."""
+        item = tmp_path / "01-feature.md"
+        item.write_text("Some feature request")
+        ws = self._make_workspace(tmp_path)
+        (ws / "five-whys.md").write_text("W1: because\nRoot Need: something")
+
+        def fresh_for_five_whys(workspace_dir, output_name, input_paths):
+            return output_name == "five-whys.md"
+
+        with patch(
+            "langgraph_pipeline.shared.paths.workspace_path", return_value=ws
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake.is_artifact_fresh",
+            side_effect=fresh_for_five_whys,
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake.record_artifact",
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._run_clause_extraction",
+            return_value={"failed": False, "raw_output": "C1 [C-GOAL]: test", "total_cost_usd": 0.01},
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._save_clause_register",
+            return_value=str(ws / "clauses.md"),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._validate_with_skill",
+            return_value=(True, "", 0.0),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
+        ) as mock_whys:
+            _run_intake_analysis(str(item), "01-feature", "feature")
+
+        mock_whys.assert_not_called()
+
+    def test_both_rerun_when_item_changes(self, tmp_path):
+        """When item hash changes (is_artifact_fresh False), both steps re-run."""
+        item = tmp_path / "01-feature.md"
+        item.write_text("Updated feature request")
+        ws = self._make_workspace(tmp_path)
+
+        with patch(
+            "langgraph_pipeline.shared.paths.workspace_path", return_value=ws
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake.is_artifact_fresh",
+            return_value=False,
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake.record_artifact",
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._run_clause_extraction",
+            return_value={"failed": False, "raw_output": "C1 [C-GOAL]: updated", "total_cost_usd": 0.01},
+        ) as mock_extract, patch(
+            "langgraph_pipeline.pipeline.nodes.intake._save_clause_register",
+            return_value=str(ws / "clauses.md"),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._validate_with_skill",
+            return_value=(True, "", 0.0),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._has_five_whys",
+            return_value=False,
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
+            return_value={
+                "failed": False,
+                "raw_output": "W1: because\nRoot Need: x",
+                "clarity": 4,
+                "total_cost_usd": 0.02,
+            },
+        ) as mock_whys, patch(
+            "langgraph_pipeline.pipeline.nodes.intake._save_five_whys",
+            return_value=str(ws / "five-whys.md"),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._append_analysis_to_item",
+        ):
+            _run_intake_analysis(str(item), "01-feature", "feature")
+
+        mock_extract.assert_called_once()
+        mock_whys.assert_called_once()
+
+    def test_has_five_whys_fallback_when_no_sidecar(self, tmp_path):
+        """When is_artifact_fresh is False but _has_five_whys returns True, skip analysis."""
+        item = tmp_path / "01-feature.md"
+        item.write_text("Some feature request\n5 Whys:\n1. Why")
+        ws = self._make_workspace(tmp_path)
+        existing_whys = ws / "five-whys.md"
+        existing_whys.write_text("W1: because\nRoot Need: something")
+
+        def stale_for_both(workspace_dir, output_name, input_paths):
+            return False
+
+        with patch(
+            "langgraph_pipeline.shared.paths.workspace_path", return_value=ws
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake.is_artifact_fresh",
+            side_effect=stale_for_both,
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake.record_artifact",
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._run_clause_extraction",
+            return_value={"failed": False, "raw_output": "C1 [C-GOAL]: test", "total_cost_usd": 0.01},
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._save_clause_register",
+            return_value=str(ws / "clauses.md"),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._validate_with_skill",
+            return_value=(True, "", 0.0),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.intake._has_five_whys",
+            return_value=True,
+        ) as mock_has_whys, patch(
+            "langgraph_pipeline.pipeline.nodes.intake._run_five_whys_analysis",
+        ) as mock_whys:
+            clause_path, five_whys_path, cost, quota = _run_intake_analysis(
+                str(item), "01-feature", "feature"
+            )
+
+        # _has_five_whys fallback used; no new analysis spawned.
+        mock_has_whys.assert_called_once()
+        mock_whys.assert_not_called()
+        assert five_whys_path == str(existing_whys)
