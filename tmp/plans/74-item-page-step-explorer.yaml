@@ -172,7 +172,7 @@ sections:
     agent: planner
     dependencies:
     - '0.4'
-    status: completed
+    status: verified
     description: 'Read the winning UI design from the design competition (task 0.4)
       and extend this YAML plan with concrete implementation details for frontend
       tasks. Work item: tmp/plans/.claimed/74-item-page-step-explorer.md Requirements:
@@ -198,7 +198,7 @@ sections:
     name: Implement stage data model, build_stages(), status matrix, and /dynamic
       extension
     agent: coder
-    status: pending
+    status: in_progress
     target_acs:
     - AC1
     - AC2
@@ -248,6 +248,9 @@ sections:
 
       D7: "User Request" label replaces "Raw Input" (AC26); underlying data unchanged
       (AC27).'
+    last_attempt: '2026-04-02T15:18:33.073423'
+    attempts: 1
+    model_used: opus
 - id: '2'
   name: 'Frontend: Step Explorer Accordion'
   status: pending

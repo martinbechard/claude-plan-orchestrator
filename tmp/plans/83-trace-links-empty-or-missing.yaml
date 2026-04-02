@@ -196,7 +196,7 @@ sections:
   - id: '1.1'
     name: Always capture trace UUIDs and ensure trace rows exist in DB
     agent: coder
-    status: completed
+    status: verified
     target_acs:
     - AC1
     - AC2
@@ -235,6 +235,11 @@ sections:
     result_message: 'D1: create_root_run() always generates UUID even when tracing
       inactive. D2: record_completion() creates synthetic trace row when none exists.
       D3: _init_db() backfills NULL run_ids with generated UUIDs. All 1843 tests pass.'
+    validation_attempts: 1
+    validation_findings: D1, D2, D3 fully implemented with proper tests. create_root_run()
+      always generates UUID regardless of tracing state. record_completion() creates
+      synthetic trace rows. Backfill migration handles NULL run_ids. All 153 tests
+      pass, build succeeds, no placeholders or test data leaks.
 - id: '2'
   name: 'Frontend: Execution History Tree Rendering'
   status: pending
@@ -245,7 +250,7 @@ sections:
     dependencies:
     - '0.5'
     - '1.1'
-    status: pending
+    status: in_progress
     target_acs:
     - AC2
     - AC3
@@ -264,3 +269,6 @@ sections:
       \ context data that the template can embed for the empty-tree fallback.\nFollow\
       \ the winning design from Phase 0 (task 0.5) for visual structure, CSS classes,\
       \ and interaction patterns.\n"
+    last_attempt: '2026-04-02T15:17:49.941829'
+    attempts: 1
+    model_used: opus
