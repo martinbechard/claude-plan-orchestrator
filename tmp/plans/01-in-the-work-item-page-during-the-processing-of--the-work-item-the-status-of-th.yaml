@@ -1,0 +1,139 @@
+meta:
+  name: 01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th
+  source_item: "tmp/plans/.claimed/01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th.md"
+  requirements_path: "docs/plans/2026-04-02-01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th-requirements.md"
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '0'
+  name: 'Phase 0: Phase Badge Design Competition'
+  status: pending
+  tasks:
+  - id: '0.1'
+    name: 'Systems design: phase badge rendering fix'
+    agent: systems-designer
+    status: pending
+    parallel_group: design-competition
+    target_acs:
+    - AC1
+    - AC3
+    - AC4
+    - AC6
+    description: >
+      Produce a systems design for fixing the phase status badge rendering.
+      Work item: tmp/plans/.claimed/01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th.md
+      Requirements: docs/plans/2026-04-02-01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th-requirements.md
+      Design: docs/plans/2026-04-02-01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th-design.md
+
+      The bug is in langgraph_pipeline/web/templates/item.html. The stage badge
+      (lines 1181-1196 Jinja, lines 1835-1848 JS stageBadgeHtml) currently shows
+      active_worker.current_task (a plan task name like "#0.1 Systems design...")
+      instead of the pipeline phase (executing, validating, etc.). There is also a
+      hardcoded "intake / planning" fallback. Focus on: the data flow from
+      _derive_pipeline_stage() through template rendering to dynamic refresh,
+      ensuring the badge always shows the correct pipeline phase, and how current_task
+      info should be presented (worker banner vs badge).
+  - id: '0.2'
+    name: 'UX design: phase badge visual treatment'
+    agent: ux-designer
+    status: pending
+    parallel_group: design-competition
+    target_acs:
+    - AC1
+    - AC2
+    - AC3
+    - AC5
+    description: >
+      Produce a UX design for the corrected phase status badge.
+      Work item: tmp/plans/.claimed/01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th.md
+      Requirements: docs/plans/2026-04-02-01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th-requirements.md
+      Design: docs/plans/2026-04-02-01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th-design.md
+
+      The badge must show the pipeline phase name (Intake, Requirements, Planning,
+      Execution, Verification, etc.) rather than a plan task name. Consider: visual
+      distinction from plan item content (AC2), badge label clarity for phase names,
+      color coding using existing status-{stage} CSS classes (dark theme: #1a1a2e
+      background), and whether the current task name should appear alongside the
+      phase badge or only in the worker banner below.
+  - id: '0.3'
+    name: 'Frontend design: phase badge implementation approach'
+    agent: frontend-coder
+    status: pending
+    parallel_group: design-competition
+    target_acs:
+    - AC1
+    - AC2
+    - AC4
+    - AC5
+    - AC6
+    description: >
+      Produce a frontend implementation design for the phase badge fix.
+      Work item: tmp/plans/.claimed/01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th.md
+      Requirements: docs/plans/2026-04-02-01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th-requirements.md
+      Design: docs/plans/2026-04-02-01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th-design.md
+
+      Provide concrete code changes for langgraph_pipeline/web/templates/item.html.
+      Two locations need fixing: (1) Jinja template lines 1181-1196 where
+      active_worker.current_task overrides the badge text, and (2) JavaScript
+      stageBadgeHtml function lines 1835-1848 with the same bug. Both must always
+      render pipeline_stage as the badge label. Also fix the hardcoded
+      "intake / planning" fallback. Specify exact before/after code diffs. Ensure
+      the dynamic refresh path (/item/{slug}/dynamic) continues to update the badge
+      correctly as phases transition.
+  - id: '0.4'
+    name: 'Judge: select winning phase badge design'
+    agent: design-judge
+    status: pending
+    dependencies:
+    - '0.1'
+    - '0.2'
+    - '0.3'
+    target_acs:
+    - AC1
+    - AC2
+    - AC3
+    - AC4
+    - AC5
+    - AC6
+    description: >
+      Judge the three competing designs for the phase status badge fix.
+      Work item: tmp/plans/.claimed/01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th.md
+      Requirements: docs/plans/2026-04-02-01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th-requirements.md
+
+      Score each design against AC1-AC6 from the requirements file. Consider:
+      correctness of pipeline phase display, visual distinction from plan items,
+      dynamic refresh behavior, handling of all pipeline stages (queued, claimed,
+      designing, planning, executing, validating, completed, stuck), and minimal
+      change footprint. Select the winner and write judgment to worker output.
+  - id: '0.5'
+    name: 'Plan: bridge winning design to implementation tasks'
+    agent: planner
+    status: pending
+    dependencies:
+    - '0.4'
+    target_acs:
+    - AC1
+    - AC2
+    - AC3
+    - AC4
+    - AC5
+    - AC6
+    description: >
+      Read the winning design from the Phase 0 competition and extend this plan
+      with concrete implementation tasks.
+      Work item: tmp/plans/.claimed/01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th.md
+      Requirements: docs/plans/2026-04-02-01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th-requirements.md
+      Design: docs/plans/2026-04-02-01-in-the-work-item-page-during-the-processing-of--the-work-item-the-status-of-th-design.md
+
+      Create implementation sections covering: (1) Fix Jinja template badge rendering
+      (D1 -- P1, P2), (2) Fix JavaScript stageBadgeHtml function (D2 -- P1, P2),
+      (3) Verify worker banner still shows current_task correctly (D3 -- P2).
+      Each task should use the frontend-coder agent and reference specific P<n>, D<n>.
+      All changes in item.html only.
