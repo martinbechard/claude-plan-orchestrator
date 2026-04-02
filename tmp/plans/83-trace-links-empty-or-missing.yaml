@@ -139,7 +139,7 @@ sections:
     - '0.1'
     - '0.2'
     - '0.3'
-    status: completed
+    status: verified
     target_acs:
     - AC2
     - AC3
@@ -167,7 +167,7 @@ sections:
     agent: planner
     dependencies:
     - '0.4'
-    status: pending
+    status: in_progress
     description: 'Read the winning UI design from the design competition (task 0.4)
       and extend this YAML plan with concrete implementation details for frontend
       tasks. Work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md Requirements:
@@ -178,6 +178,9 @@ sections:
       Backend task 1.1 is already specified.
 
       '
+    last_attempt: '2026-04-02T15:05:38.976203'
+    attempts: 1
+    model_used: opus
 - id: '1'
   name: 'Backend: Trace ID Capture, Persistence, and Backfill'
   status: pending
@@ -222,10 +225,66 @@ sections:
   status: pending
   tasks:
   - id: '2.1'
-    name: Implement client-side execution tree fetch and render
+    name: Add exec-* CSS classes for execution history tree to style.css
+    agent: frontend-coder
+    status: pending
+    target_acs:
+    - AC2
+    - AC4
+    description: 'Add all CSS classes needed by the execution history tree to
+      langgraph_pipeline/web/static/style.css. Append a new section at the end of
+      the file (after all existing CSS) with the heading comment
+      "/* -- Execution History Tree ---- */".
+
+      Winning design: tmp/worker-output/0.3-frontend-design.md (section 5).
+      Style guide: docs/ui-style-guide.md.
+
+      Classes to add (all prefixed exec- to avoid collisions with existing CSS):
+      - .exec-loading: centered loading area, padding 3rem, color #888
+      - .exec-spinner: 16x16 spinning border animation with @keyframes exec-spin,
+        plus @media (prefers-reduced-motion: reduce) override to stop animation
+      - .exec-tree: list-style:none, no margin/padding (outer tree container)
+      - .exec-node: list-style:none, border-left 2px solid #e2e8f0, margin-left 8px
+      - .exec-node-header: display:flex, align-items:center, gap:0.5rem, padding 6px 8px,
+        border-radius 4px, font-size 13px, hover background #f8fafc
+      - .exec-toggle: button reset (no bg/border), 18x18, cursor pointer, 9px font,
+        flexbox centered, border-radius 3px, hover bg #e2e8f0, focus-visible outline
+      - .exec-toggle-spacer: width 18px spacer for leaf nodes without toggle
+      - .exec-type: inline-block pill badge, 10px uppercase font, border-radius 8px
+      - .exec-type-graph_node: blue (#dbeafe bg, #1e40af text)
+      - .exec-type-subgraph: purple (#ede9fe bg, #5b21b6 text)
+      - .exec-type-agent: amber (#fef3c7 bg, #92400e text)
+      - .exec-type-tool_call: green (#d1fae5 bg, #065f46 text)
+      - .exec-name: font-weight 500, flex 1 1 auto, ellipsis overflow
+      - .exec-duration, .exec-cost, .exec-tokens, .exec-model: 11px gray metrics
+      - .exec-cost: green color #065f46
+      - .badge-running: amber badge (#fef3c7 bg, #92400e text)
+      - .exec-children: list-style:none, no margin/padding
+      - .exec-empty: centered fallback container, padding 2rem, max-width 480px
+      - .exec-empty h2, .exec-empty-meta, .exec-empty-note: fallback text styles
+      - .exec-error: centered error container with red text
+      - .exec-error-icon: 24x24 red circle with "!" icon
+      - .exec-toolbar: flex container for Expand All / Collapse All buttons,
+        gap 0.5rem, margin-bottom 0.75rem, padding 4px 0,
+        border-bottom 1px solid #e2e8f0
+      - .exec-toolbar button: small button style (font-size 12px, padding 4px 10px,
+        border 1px solid #d1d5db, border-radius 4px, background white, cursor pointer,
+        hover background #f1f5f9)
+      - .exec-toolbar .exec-node-count: font-size 12px, color #6b7280, margin-left auto
+
+      Acceptance criteria:
+      - Does style.css contain all exec-* classes listed above? YES = pass, NO = fail
+      - Does the .exec-spinner include @keyframes exec-spin and a
+        prefers-reduced-motion media query? YES = pass, NO = fail
+      - Does the file contain .exec-toolbar and .exec-toolbar button styles? YES = pass, NO = fail
+      - Are there zero CSS syntax errors in style.css? YES = pass, NO = fail
+
+      '
+  - id: '2.2'
+    name: Create execution-history.js with core tree fetch, render, and states
     agent: frontend-coder
     dependencies:
-    - '0.5'
+    - '2.1'
     - '1.1'
     status: pending
     target_acs:
@@ -233,16 +292,199 @@ sections:
     - AC3
     - AC4
     - AC5
-    description: "Implement UC1 per D4 from work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md\
-      \ Design: docs/plans/2026-04-02-83-trace-links-empty-or-missing-design.md Requirements:\
-      \ docs/plans/2026-04-02-83-trace-links-empty-or-missing-requirements.md\nCreate\
-      \ langgraph_pipeline/web/static/execution-history.js that: (a) reads run_id\
-      \ from the #execution-tree data-run-id attribute, (b) fetches /api/execution-tree/{run_id},\
-      \ (c) renders the tree as a nested collapsible hierarchy with display_name,\n\
-      \    status badge, duration, cost, and token count for each node,\n(d) handles\
-      \ empty tree (no descendants) by showing root run info.\nUpdate execution_history.html\
-      \ to include the script via extra_head block and pass initial run data to JS\
-      \ via a data attribute.\nUpdate execution_history.py route to pass completion/run\
-      \ context data that the template can embed for the empty-tree fallback.\nFollow\
-      \ the winning design from Phase 0 (task 0.5) for visual structure, CSS classes,\
-      \ and interaction patterns.\n"
+    description: 'Create langgraph_pipeline/web/static/execution-history.js implementing
+      the core execution tree rendering. Also update the HTML template to load it.
+
+      Winning design: tmp/worker-output/0.3-frontend-design.md (sections 3, 4).
+      Style guide: docs/ui-style-guide.md.
+      Design: docs/plans/2026-04-02-83-trace-links-empty-or-missing-design.md (D4).
+
+      ## JavaScript file structure (execution-history.js)
+
+      Follow the IIFE + "use strict" pattern from existing JS files (analysis.js).
+      Constants at the top per CLAUDE.md conventions.
+
+      Constants:
+      - API_PREFIX = "/api/execution-tree/"
+      - INDENT_PX_PER_LEVEL = 20
+      - CHEVRON_RIGHT = "\u25B6" (right-pointing triangle)
+      - CHEVRON_DOWN = "\u25BC" (down-pointing triangle)
+      - DEFAULT_EXPAND_DEPTH = 1 (nodes at depth >= 2 start collapsed, per judge)
+      - NODE_TYPE_LABELS = { graph_node: "Graph", subgraph: "Subgraph",
+        agent: "Agent", tool_call: "Tool" }
+
+      Entry point (IIFE):
+      - Get #execution-tree container, read data-run-id, call fetchAndRender()
+
+      fetchAndRender(container, runId):
+      - fetch(API_PREFIX + encodeURIComponent(runId))
+      - On success: clear container, if tree empty call renderEmptyTree(),
+        else call renderTree()
+      - On error: call renderError()
+
+      renderTree(container, nodes):
+      - Create ul.exec-tree with role="tree"
+      - For each top-level node, call buildNodeEl(node, 0) and append to ul
+      - Append ul to container
+
+      buildNodeEl(node, depth):
+      - Create li.exec-node with role="treeitem"
+      - Set paddingLeft = depth * INDENT_PX_PER_LEVEL + "px"
+      - Create div.exec-node-header containing:
+        - Toggle button (if has children): button.exec-toggle with
+          aria-expanded (true if depth < DEFAULT_EXPAND_DEPTH, false otherwise),
+          aria-controls pointing to children id, aria-label "Toggle {display_name}",
+          chevron text based on expanded state
+        - Spacer span.exec-toggle-spacer (if leaf node)
+        - Type badge: span.exec-type.exec-type-{node_type}
+        - Name: span.exec-name with display_name text
+        - Status badge: span.badge.badge-{status}
+        - Conditional metrics: duration (fmtDuration), cost (fmtCost),
+          tokens (fmtTokens), model -- only when > 0 or non-empty
+      - If has children: create ul.exec-children with role="group",
+        id=nodeId+"-children". If depth >= DEFAULT_EXPAND_DEPTH, set hidden=true.
+        Recurse for each child with depth+1
+
+      makeToggleHandler(toggleBtn, nodeId):
+      - Toggle aria-expanded, swap chevron text, toggle hidden on children element
+
+      renderEmptyTree(container):
+      - Read data-run-name, data-run-status, data-run-start, data-run-end from container
+      - Create div.exec-empty with: h2 "Run: {name}", status badge, start time + duration,
+        explanatory note about synthetic traces
+
+      renderError(container, message):
+      - Create div.exec-error with role="alert", red circle icon, error text
+
+      Formatters (fmtDuration, fmtCost, fmtTokens, makeMetric):
+      - fmtDuration: seconds -> "Xs", "Xm Ys", or "Xh Ym"
+      - fmtCost: "$0.0000" format, plain (no tilde prefix per project convention)
+      - fmtTokens: "X tok" or "X.Xk tok" for >= 1000
+      - makeMetric(className, text): create span with given class and text
+
+      ## Template changes (execution_history.html)
+
+      Update langgraph_pipeline/web/templates/execution_history.html:
+      1. Add extra_head block with: <script src="/static/execution-history.js" defer></script>
+      2. Add data attributes to #execution-tree div:
+         data-run-name="{{ run.get(''name'', '''') }}"
+         data-run-status="{{ run.get(''status'', ''unknown'') }}"
+         data-run-start="{{ run.get(''start_time'', '''') }}"
+         data-run-end="{{ run.get(''end_time'', '''') }}"
+      3. Replace the <p class="empty-state"> loading text with:
+         <div class="exec-loading" role="status" aria-live="polite">
+           <span class="exec-spinner" aria-hidden="true"></span>
+           Loading execution tree&hellip;
+         </div>
+
+      The route (execution_history.py) already passes run_id and run to the
+      template context. No Python changes needed.
+
+      Acceptance criteria:
+      - Does langgraph_pipeline/web/static/execution-history.js exist and contain
+        a fetchAndRender function that calls /api/execution-tree/{run_id}? YES = pass, NO = fail
+      - Does the JS contain a recursive buildNodeEl function that creates nested
+        li elements with role="treeitem"? YES = pass, NO = fail
+      - Does the JS contain renderEmptyTree that reads data-run-* attributes and
+        renders a fallback with run name and status? YES = pass, NO = fail
+      - Does the JS contain renderError with role="alert"? YES = pass, NO = fail
+      - Does execution_history.html include an extra_head block loading
+        execution-history.js with defer? YES = pass, NO = fail
+      - Does the #execution-tree div have data-run-name, data-run-status,
+        data-run-start, data-run-end attributes? YES = pass, NO = fail
+      - Do nodes at depth >= 2 start collapsed (hidden=true, aria-expanded=false)?
+        YES = pass, NO = fail
+      - Does clicking a toggle button flip aria-expanded and toggle the hidden
+        attribute on the children container? YES = pass, NO = fail
+
+      '
+  - id: '2.3'
+    name: Add Expand All / Collapse All toolbar to execution tree
+    agent: frontend-coder
+    dependencies:
+    - '2.2'
+    status: pending
+    target_acs:
+    - AC4
+    description: 'Add an Expand All / Collapse All toolbar above the execution tree.
+      This is judge improvement #2 from the design competition
+      (tmp/worker-output/83-trace-links-empty-or-missing-judgment.md).
+
+      Winning design: tmp/worker-output/0.3-frontend-design.md.
+      Style guide: docs/ui-style-guide.md.
+
+      Modify langgraph_pipeline/web/static/execution-history.js:
+
+      1. In renderTree(), after creating the ul.exec-tree, insert a toolbar div
+         BEFORE the tree list:
+         - Create div.exec-toolbar
+         - Add "Expand All" button: on click, find all .exec-toggle buttons in the
+           tree, set aria-expanded="true", set chevron to CHEVRON_DOWN, remove
+           hidden attribute from all .exec-children elements
+         - Add "Collapse All" button: on click, find all .exec-toggle buttons,
+           set aria-expanded="false", set chevron to CHEVRON_RIGHT, add hidden
+           attribute to all .exec-children elements
+         - Add span.exec-node-count showing total node count (e.g. "42 nodes")
+         - Append toolbar to container before the tree ul
+
+      2. Do NOT show the toolbar for empty trees (renderEmptyTree) or error states.
+         Only show it when renderTree() is called with actual tree nodes.
+
+      The CSS classes .exec-toolbar, .exec-toolbar button, and .exec-node-count
+      were already added in task 2.1.
+
+      Acceptance criteria:
+      - Does the rendered tree page show "Expand All" and "Collapse All" buttons
+        above the tree? YES = pass, NO = fail
+      - Does clicking "Expand All" set all toggle buttons to aria-expanded="true"
+        and remove hidden from all .exec-children? YES = pass, NO = fail
+      - Does clicking "Collapse All" set all toggle buttons to aria-expanded="false"
+        and add hidden to all .exec-children? YES = pass, NO = fail
+      - Does the toolbar show a node count (e.g. "42 nodes")? YES = pass, NO = fail
+      - Is the toolbar absent on empty-tree and error states? YES = pass, NO = fail
+
+      '
+  - id: '2.4'
+    name: Frontend integration verification
+    agent: validator
+    dependencies:
+    - '2.3'
+    status: pending
+    target_acs:
+    - AC2
+    - AC3
+    - AC4
+    - AC5
+    description: 'Verify the complete frontend implementation of the execution history
+      tree rendering. Check all files created/modified in tasks 2.1-2.3.
+
+      Work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md
+      Requirements: docs/plans/2026-04-02-83-trace-links-empty-or-missing-requirements.md
+      Design: docs/plans/2026-04-02-83-trace-links-empty-or-missing-design.md
+      Winning design: tmp/worker-output/0.3-frontend-design.md
+
+      Files to verify:
+      - langgraph_pipeline/web/static/style.css: contains all exec-* CSS classes
+      - langgraph_pipeline/web/static/execution-history.js: contains fetchAndRender,
+        buildNodeEl, renderTree, renderEmptyTree, renderError, makeToggleHandler,
+        fmtDuration, fmtCost, fmtTokens; uses IIFE pattern; has ARIA tree roles
+      - langgraph_pipeline/web/templates/execution_history.html: extra_head block
+        loading execution-history.js with defer; data-run-* attributes on container
+
+      Verification checks:
+      - Does execution-history.js exist and follow "use strict" + IIFE pattern? YES = pass, NO = fail
+      - Does it fetch from /api/execution-tree/{run_id}? YES = pass, NO = fail
+      - Does buildNodeEl create elements with role="treeitem"? YES = pass, NO = fail
+      - Does the tree use role="tree" on the outer ul? YES = pass, NO = fail
+      - Do toggle buttons have aria-expanded and aria-controls? YES = pass, NO = fail
+      - Does renderEmptyTree read data-run-* attributes? YES = pass, NO = fail
+      - Does renderError use role="alert"? YES = pass, NO = fail
+      - Do nodes at depth >= 2 start collapsed? YES = pass, NO = fail
+      - Does the toolbar have Expand All and Collapse All buttons? YES = pass, NO = fail
+      - Does execution_history.html load the JS via extra_head with defer? YES = pass, NO = fail
+      - Does style.css contain the exec-* CSS classes including exec-toolbar? YES = pass, NO = fail
+      - Does .exec-spinner have a prefers-reduced-motion media query? YES = pass, NO = fail
+      - Are there zero JavaScript syntax errors (check with node --check)? YES = pass, NO = fail
+      - Does the python build pass (python3 -c "import py_compile; ...")? YES = pass, NO = fail
+
+      '

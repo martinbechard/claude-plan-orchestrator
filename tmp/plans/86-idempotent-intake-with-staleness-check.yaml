@@ -62,7 +62,7 @@ sections:
     agent: coder
     dependencies:
     - '1.1'
-    status: in_progress
+    status: failed
     target_acs:
     - AC1
     - AC2
@@ -95,6 +95,7 @@ sections:
     last_attempt: '2026-04-02T14:53:52.572712'
     attempts: 1
     model_used: sonnet
+    result_message: Unknown status
 - id: '3'
   name: 'Downstream: Requirements and Plan Creation Idempotency'
   status: pending
@@ -104,7 +105,7 @@ sections:
     agent: coder
     dependencies:
     - '2.1'
-    status: pending
+    status: in_progress
     target_acs:
     - AC12
     - AC13
@@ -131,3 +132,6 @@ sections:
       Update tests for requirements and plan_creation to cover freshness skip and
       staleness re-run scenarios. Verify cascade: changing item_path causes all downstream
       steps to detect staleness and re-run.'
+    last_attempt: '2026-04-02T15:08:53.266288'
+    attempts: 1
+    model_used: sonnet
