@@ -20,7 +20,7 @@ sections:
     name: Systems design for execution history tree rendering
     agent: systems-designer
     parallel_group: design-phase0
-    status: pending
+    status: in_progress
     target_acs:
     - AC2
     - AC3
@@ -43,11 +43,14 @@ sections:
       from template context bootstraps the initial display.
 
       '
+    last_attempt: '2026-04-02T14:42:46.153663'
+    attempts: 1
+    model_used: opus
   - id: '0.2'
     name: UX design for execution history tree rendering
     agent: ux-designer
     parallel_group: design-phase0
-    status: pending
+    status: in_progress
     target_acs:
     - AC2
     - AC3
@@ -71,11 +74,14 @@ sections:
       stack.
 
       '
+    last_attempt: '2026-04-02T14:42:46.167415'
+    attempts: 1
+    model_used: opus
   - id: '0.3'
     name: Frontend implementation design for execution history tree
     agent: frontend-coder
     parallel_group: design-phase0
-    status: pending
+    status: in_progress
     target_acs:
     - AC2
     - AC3
@@ -98,6 +104,9 @@ sections:
       via extra_head block.
 
       '
+    last_attempt: '2026-04-02T14:42:46.184159'
+    attempts: 1
+    model_used: opus
   - id: '0.4'
     name: Judge execution history tree design competition
     agent: design-judge
