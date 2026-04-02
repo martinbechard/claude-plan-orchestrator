@@ -135,3 +135,4 @@ completion metadata when no real trace tree can be found.
 | AC3 | D1, D4 | Redirect to real trace run_id ensures the identifier is correctly resolved end-to-end |
 | AC4 | D1, D2, D3 | Migration (D2) re-links all completions; redirect (D1) catches any remaining; fallback (D3) handles rest |
 | AC5 | D2 | Migration specifically handles the b9036e15 trace ID by re-linking its completion to a real trace |
+| AC6 | D1, D3 | Slug-based resolution (D1) ensures displayed trace data matches the clicked item; completion summary (D3) shows the specific completion's metadata |
