@@ -39,18 +39,18 @@ The rename is atomic within a single DDL statement.
 ## Design Decisions
 
 ### D1: Rename UI labels from "Completions" to "Work Items"
-- **Addresses:** P1, FR1, FR2
-- **Satisfies:** AC1, AC2, AC5, AC6, AC7, AC8
+- **Addresses:** P1, P2, FR1, FR2
+- **Satisfies:** AC1, AC2, AC3, AC4, AC5, AC6, AC7
 - **Approach:** In base.html, change the nav link text from "Completions" to "Work Items"
   and update the href from "/completions" to "/work-items". The active-page detection
   must also match the new path. Rename completions.html to work_items.html and update
   the page title block and visible heading to "Work Items". Update the template_name
-  reference in the route handler.
+  reference in the route handler. This resolves the nav/list vs detail page inconsistency.
 - **Files:** base.html, completions.html (renamed to work_items.html)
 
 ### D2: Rename route path from /completions to /work-items with redirect
 - **Addresses:** FR3
-- **Satisfies:** AC9, AC10, AC11
+- **Satisfies:** AC8, AC9, AC10
 - **Approach:** Rename completions.py to work_items.py. Change the route decorator from
   @router.get("/completions") to @router.get("/work-items"). Add a permanent redirect
   (HTTP 301) from /completions to /work-items to preserve any bookmarks. Update all
@@ -60,7 +60,7 @@ The rename is atomic within a single DDL statement.
 
 ### D3: Rename database table from completions to work_items
 - **Addresses:** FR4
-- **Satisfies:** AC12, AC13, AC14, AC15
+- **Satisfies:** AC11, AC12, AC13
 - **Approach:** Add an ALTER TABLE completions RENAME TO work_items statement in the
   schema initialization, executed after the CREATE TABLE IF NOT EXISTS (which still
   uses the new name work_items). For fresh databases, the table is created as
@@ -71,8 +71,8 @@ The rename is atomic within a single DDL statement.
 - **Files:** proxy.py
 
 ### D4: Rename Python modules, classes, functions, and variables
-- **Addresses:** P2, FR5
-- **Satisfies:** AC3, AC4, AC16, AC17
+- **Addresses:** FR5
+- **Satisfies:** AC14, AC15
 - **Approach:** Rename completion_grouping.py to work_item_grouping.py and update
   the function name from group_completions_by_slug to group_work_items_by_slug.
   Rename CompletionRecord dataclass to WorkItemRecord in dashboard_state.py.
@@ -92,19 +92,17 @@ The rename is atomic within a single DDL statement.
 | AC | Design Decision(s) | Approach |
 |---|---|---|
 | AC1 | D1 | Remove "Completions" from all UI labels (nav, title, heading) |
-| AC2 | D1 | Users navigate via "Work Items" link without seeing "Completions" |
-| AC3 | D4 | Codebase-wide rename of modules, classes, functions, variables |
-| AC4 | D4 | Eliminate split terminology by renaming all layers consistently |
-| AC5 | D1 | Nav menu link text changed to "Work Items" |
-| AC6 | D1 | Nav link href updated to /work-items route |
-| AC7 | D1 | HTML page title updated to include "Work Items" |
-| AC8 | D1 | Visible page heading changed to "Work Items" |
-| AC9 | D2 | /work-items route serves the listing page |
-| AC10 | D2 | /completions permanently redirects (301) to /work-items |
-| AC11 | D2 | All internal links updated to /work-items |
-| AC12 | D3 | ALTER TABLE renames completions to work_items preserving schema |
-| AC13 | D3 | Old completions table removed via rename (no duplicate) |
-| AC14 | D3, D4 | All queries and model references use work_items |
-| AC15 | D3 | ALTER TABLE RENAME TO preserves all data |
-| AC16 | D4 | Codebase sweep eliminates "completion(s)" in work-item context |
-| AC17 | D4 | Comments, variables, log messages updated to "work item" |
+| AC2 | D1 | Replace all user-facing labels with "Work Item(s)" |
+| AC3 | D1 | Nav menu link text changed to "Work Items" |
+| AC4 | D1 | List page and detail pages use consistent "Work Item(s)" terminology |
+| AC5 | D1 | Nav menu in base.html displays "Work Items" as link text |
+| AC6 | D1 | Page title/heading on list page reads "Work Items" |
+| AC7 | D1 | No remaining "Completions" references in list page template |
+| AC8 | D2 | /work-items route serves the listing page |
+| AC9 | D2 | /completions permanently redirects (301) to /work-items |
+| AC10 | D2 | All internal links updated to /work-items |
+| AC11 | D3 | Database contains work_items table, no completions table |
+| AC12 | D3 | All queries and ORM references use work_items table name |
+| AC13 | D3 | ALTER TABLE RENAME TO preserves all data without loss |
+| AC14 | D4 | Codebase search for "completion(s)" in work-item context returns zero |
+| AC15 | D4 | Variable, class, and module names aligned to work_item terminology |

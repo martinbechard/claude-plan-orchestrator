@@ -1,9 +1,0 @@
-{
-  "success": true,
-  "item_path": "tmp/plans/.claimed/11-tool-call-cost-attribution.md",
-  "cost_usd": 0.0,
-  "input_tokens": 0,
-  "output_tokens": 0,
-  "duration_s": 8.538291417004075,
-  "message": "Item processed successfully"
-}

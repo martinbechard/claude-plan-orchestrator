@@ -1,9 +1,0 @@
-{
-  "success": true,
-  "item_path": "tmp/plans/.claimed/03-dashboard-items-stuck-running.md",
-  "cost_usd": 0.7405009499999999,
-  "input_tokens": 38,
-  "output_tokens": 9225,
-  "duration_s": 680.5134841249674,
-  "message": "Item processed successfully"
-}
