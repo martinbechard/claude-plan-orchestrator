@@ -1,72 +1,95 @@
-# Design: Trace Link Returns 404 Instead of Displaying Trace
+# Design: Trace link returns 404 during work item execution
 
 Source: tmp/plans/.claimed/01-during-the-execution-of-a-work-item-there-is-a-view-trace-link-in-the-workitem.md
 Requirements: docs/plans/2026-04-02-01-during-the-execution-of-a-work-item-there-is-a-view-trace-link-in-the-workitem-requirements.md
 
 ## Architecture Overview
 
-The frontend (item.html template and dashboard.js) generates "View Trace" links
-pointing to /proxy?trace_id={run_id}. The actual trace viewing page is served at
-/execution-history/{run_id} which fetches trace data via /api/execution-tree/{run_id}
-and renders a collapsible tree UI. The defect is that no GET /proxy endpoint existed
-in the backend, so all trace links returned {"detail":"Not Found"}.
+The "View trace" link on the work item detail page (item.html) navigates to
+/proxy?trace_id={run_id}. The GET /proxy endpoint in server.py validates the
+trace exists in the local SQLite proxy DB via proxy.get_run(trace_id), then
+returns a 302 redirect to /execution-history/{run_id}. That page also calls
+proxy.get_run(run_id) and returns 404 if not found.
 
-The fix adds a single backend route in server.py that accepts GET /proxy?trace_id=X,
-validates the trace exists via the local proxy database, and redirects (HTTP 302)
-to /execution-history/X. This connects existing frontend links to the existing
-trace viewer without modifying any frontend template code or the trace viewing
-infrastructure.
+Root cause: during execution, the trace UUID is written to the item markdown
+file immediately by create_root_run() in langsmith.py, and the supervisor
+polls this file to populate active_worker.run_id for the template. However,
+the actual trace data only reaches the proxy DB via run_tree.post() -- which
+may be delayed (worker still initializing), may fail silently, or may never
+fire if tracing is inactive. Both the /proxy endpoint (server.py:422-427) and
+the /execution-history page (execution_history.py:68-70) independently return
+404 when the trace is absent from the proxy DB.
 
-UC1 is tagged UI but is satisfied entirely by the backend redirect -- the
-execution-history page already renders trace data. No visual design changes needed.
+The fix removes the strict 404 gates so the user always reaches a useful page.
+When trace data is not yet available locally, the execution-history page shows
+a "trace in progress" state with an auto-refresh mechanism and an optional
+direct LangSmith link.
 
-## Key Files
+## Key Files to Modify
 
-- langgraph_pipeline/web/server.py -- add GET /proxy redirect endpoint
-- tests/langgraph/web/test_proxy_redirect.py -- test the new endpoint
+- langgraph_pipeline/web/server.py (proxy_redirect endpoint, lines 398-429)
+- langgraph_pipeline/web/routes/execution_history.py (page + API endpoints)
+- langgraph_pipeline/web/templates/execution_history.html (in-progress fallback UI)
+- tests/langgraph/web/test_proxy_redirect.py (update existing tests)
 
 ## Design Decisions
 
-### D1: Add GET /proxy redirect endpoint in server.py
-Addresses: P1, P2, UC1, FR1
-Satisfies: AC1, AC2, AC3, AC5, AC7, AC8
-Approach: Add a GET /proxy route in create_app() that reads the trace_id query
-parameter and returns a RedirectResponse(302) to /execution-history/{trace_id}.
-If trace_id is missing, return a 400 error. This establishes the working path
-from frontend trace links to backend trace retrieval (FR1), ensures the frontend
-link URL targets a valid implemented endpoint (AC5), and eliminates the 404 error
-(AC2, AC3). The redirect serves the existing execution-history HTML page (AC1).
-Files: langgraph_pipeline/web/server.py
-
-### D2: Validate trace_id exists before redirecting
-Addresses: P1, P2, UC1
-Satisfies: AC1, AC4, AC5, AC6, AC8
-Approach: Before redirecting, call proxy.get_run(trace_id) to verify the trace
-exists in the local database. If not found, return a 404 with a user-friendly
-message instead of silently redirecting to another 404 page. This validates that
-the trace ID embedded in the frontend link correctly maps to a real LangSmith
-trace (AC4), ensures LangSmith trace data is accessible during execution (AC6),
-and confirms the end-to-end path works without errors (AC8).
-Files: langgraph_pipeline/web/server.py
-
-### D3: Unit tests for the proxy redirect
+### D1: Remove 404 gate from /proxy redirect endpoint
 Addresses: P1, FR1
-Satisfies: AC2, AC3, AC5, AC8
-Approach: Add tests covering: (1) valid trace_id redirects to /execution-history/{id}
-with 302 status, (2) missing trace_id returns 400, (3) unknown trace_id returns 404
-with descriptive message, (4) endpoint is reachable and responds correctly. Use
-FastAPI TestClient against the app.
-Files: tests/langgraph/web/test_proxy_redirect.py
+Satisfies: AC2, AC3, AC6, AC9
+Approach: Change the /proxy endpoint to always redirect to /execution-history/{trace_id}
+when a valid trace_id parameter is provided, regardless of whether the trace exists
+in the proxy DB. Remove the proxy.get_run() check and the HTTPException(404) block.
+The execution-history page becomes the single point of truth for what content to
+display. The existing 400 validation for missing trace_id is retained.
+Files: langgraph_pipeline/web/server.py, tests/langgraph/web/test_proxy_redirect.py
+
+### D2: Execution-history page graceful fallback for missing traces
+Addresses: P1, P2, UC1, FR1
+Satisfies: AC1, AC2, AC3, AC5, AC8, AC10, AC11
+Approach: In execution_history_page(), when proxy.get_run() returns None, render the
+page in a "trace pending" mode instead of returning 404. Pass trace_found=False
+and run_id to the template context. In execution_tree_api(), return an empty tree
+with a "pending" status field and the run_id instead of returning 404. The template
+detects the pending state and shows a "Trace data is being collected" message with
+a meta-refresh or JS auto-refresh (every 5 seconds) so the page updates once data
+arrives.
+Files: langgraph_pipeline/web/routes/execution_history.py,
+       langgraph_pipeline/web/templates/execution_history.html
+
+### D3: Direct LangSmith link fallback
+Addresses: P2, UC1
+Satisfies: AC5, AC8
+Approach: When the trace is not in the local DB, the execution-history page shows a
+direct link to the trace on LangSmith using the workspace ID and project name from
+orchestrator-config.yaml. The link format is:
+https://smith.langsmith.com/o/{workspace_id}/projects/p/{project}/runs/{run_id}
+If workspace_id or project is not configured, the link is omitted. This provides
+immediate access to trace data even when the local proxy has not captured it yet.
+Files: langgraph_pipeline/web/routes/execution_history.py,
+       langgraph_pipeline/web/templates/execution_history.html
+
+### D4: Preserve existing preconditions (link exists during execution)
+Addresses: UC1
+Satisfies: AC7
+Approach: No change needed. The item.html template already displays the "View trace"
+link when active_worker.run_id is present (item.html:1260-1264), and the supervisor
+already polls the item file for the trace UUID (supervisor.py:676-681). AC7 is
+satisfied by existing code.
+Files: (none -- already working)
 
 ## Design -> AC Traceability Grid
 
 | AC | Design Decision(s) | Approach |
 |---|---|---|
-| AC1 (user sees detailed trace when clicking View Trace) | D1, D2 | GET /proxy redirects to execution-history page which renders the trace |
-| AC2 (HTTP 2xx response, no 404) | D1, D3 | Redirect returns 302 for valid traces; tested |
-| AC3 ({"detail":"Not Found"} eliminated) | D1, D3 | GET /proxy endpoint handles requests, returns 302 or meaningful error |
-| AC4 (frontend trace URL contains valid ID mapping to LangSmith trace) | D2 | Validates trace exists via proxy.get_run() before redirect |
-| AC5 (backend exposes working endpoint at frontend link URL) | D1, D2, D3 | GET /proxy endpoint is implemented, validates, and redirects; tested |
-| AC6 (user accesses LangSmith data during execution) | D2 | Working redirect path connects frontend links to trace viewer with validated data |
-| AC7 (View Trace link displayed during execution) | D1 | Frontend already renders link; backend now has matching endpoint |
-| AC8 (end-to-end path returns trace details without errors) | D1, D2, D3 | Valid trace_id -> 302 -> execution-history page with trace data; tested end-to-end |
+| AC1 | D2 | Execution-history page renders in "pending" mode instead of 404 |
+| AC2 | D1, D2 | Both 404 gates removed; user always reaches a page |
+| AC3 | D1, D2 | Backend no longer returns 404 for valid trace UUIDs |
+| AC4 | D1, D2 | Can test with trace ID f63374b7-89e4-463d-adc5-4265ab5c9c95 -- redirect works even if not in DB |
+| AC5 | D2, D3 | Direct LangSmith link provides access to captured data |
+| AC6 | D1, D2 | Frontend link now routes through to a working page |
+| AC7 | D4 | Already working -- link displays during execution |
+| AC8 | D2, D3 | User can view trace details via LangSmith link or local page once data arrives |
+| AC9 | D1 | Frontend URL /proxy?trace_id=X always resolves to a redirect |
+| AC10 | D2 | Backend endpoint returns content (page or pending state) for all trace IDs |
+| AC11 | D1, D2 | End-to-end flow completes without errors |
