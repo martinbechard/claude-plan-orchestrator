@@ -50,7 +50,7 @@ The analysis workflow currently produces a single analysis document. The investi
 
 The investigation could reuse the analysis intake (clause extraction, 5 whys) for the initial request, but the output stage is entirely different.
 
-## LangSmith Trace: 80bd9cf5-f08b-4e1c-a4ef-37b20f6e6d35
+
 
 
 ## 5 Whys Analysis
