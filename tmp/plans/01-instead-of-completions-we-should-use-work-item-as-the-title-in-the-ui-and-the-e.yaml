@@ -19,7 +19,7 @@ sections:
   - id: '0.1'
     name: 'Systems design: completions-to-work-items UI and route rename'
     agent: systems-designer
-    status: pending
+    status: failed
     parallel_group: design-competition
     target_acs:
     - AC1
@@ -45,10 +45,14 @@ sections:
       to /work-items preserving query params), server.py (import update).
 
       '
+    last_attempt: '2026-04-02T19:48:57.391467'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.2'
     name: 'UX design: work items page naming and navigation'
     agent: ux-designer
-    status: pending
+    status: failed
     parallel_group: design-competition
     target_acs:
     - AC1
@@ -70,10 +74,14 @@ sections:
       or contextual hints are needed alongside "Work Items" to maintain discoverability.
 
       '
+    last_attempt: '2026-04-02T19:48:57.464098'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.3'
     name: 'Frontend design: template and route rename implementation'
     agent: frontend-coder
-    status: pending
+    status: failed
     parallel_group: design-competition
     target_acs:
     - AC1
@@ -97,6 +105,10 @@ sections:
       (D2, FR3), (4) server.py import update. Specify exact before/after code diffs.
 
       '
+    last_attempt: '2026-04-02T19:48:57.480497'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.4'
     name: 'Judge: select winning UI rename design'
     agent: design-judge

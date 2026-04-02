@@ -19,7 +19,7 @@ sections:
   - id: '0.1'
     name: 'Systems design: phase badge rendering fix'
     agent: systems-designer
-    status: pending
+    status: failed
     parallel_group: design-competition
     target_acs:
     - AC1
@@ -45,10 +45,14 @@ sections:
       be presented (worker banner only, not in the status badge).
 
       '
+    last_attempt: '2026-04-02T19:50:21.800125'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.2'
     name: 'UX design: phase badge visual treatment'
     agent: ux-designer
-    status: pending
+    status: failed
     parallel_group: design-competition
     target_acs:
     - AC1
@@ -72,10 +76,14 @@ sections:
       name should appear alongside the phase badge or only in the worker banner below.
 
       '
+    last_attempt: '2026-04-02T19:50:21.785984'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.3'
     name: 'Frontend design: phase badge implementation approach'
     agent: frontend-coder
-    status: pending
+    status: failed
     parallel_group: design-competition
     target_acs:
     - AC1
@@ -103,6 +111,10 @@ sections:
       correctly as phases transition.
 
       '
+    last_attempt: '2026-04-02T19:50:21.819392'
+    attempts: 1
+    model_used: opus
+    result_message: Failed to create git worktree
   - id: '0.4'
     name: 'Judge: select winning phase badge design'
     agent: design-judge
