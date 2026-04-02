@@ -1,0 +1,166 @@
+meta:
+  name: 87-item-page-content-type-aware-rendering
+  source_item: tmp/plans/.claimed/87-item-page-content-type-aware-rendering.md
+  requirements_path: docs/plans/2026-04-02-87-item-page-content-type-aware-rendering-requirements.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '0'
+  name: 'Phase 0: Content-Type Rendering Design Competition'
+  status: pending
+  tasks:
+  - id: '0.1'
+    name: 'Systems design: content-type rendering architecture'
+    agent: systems-designer
+    status: pending
+    parallel_group: design-competition
+    target_acs:
+    - AC7
+    - AC8
+    - AC23
+    - AC24
+    - AC25
+    - AC26
+    - AC27
+    - AC28
+    - AC29
+    - AC30
+    - AC31
+    - AC32
+    description: >
+      Produce a systems design for content-type-aware rendering in item.html.
+      Work item: tmp/plans/.claimed/87-item-page-content-type-aware-rendering.md
+      Requirements: docs/plans/2026-04-02-87-item-page-content-type-aware-rendering-requirements.md
+      Design: docs/plans/2026-04-02-87-item-page-content-type-aware-rendering-design.md
+
+      Implements P1, P6, FR5 and design decisions D1, D6. Focus on: extension dispatch
+      architecture in renderArtifactContent(), CDN library selection (highlight.js
+      vs Prism.js vs custom), bundle size and loading strategy, fallback behavior
+      for malformed content, and DOM structure that enables Playwright verification
+      (FR6). All changes must be confined to item.html. The existing marked.js CDN
+      and .md-rendered div pattern from feature 76 must be preserved and extended.
+  - id: '0.2'
+    name: 'UX design: content-type rendering experience'
+    agent: ux-designer
+    status: pending
+    parallel_group: design-competition
+    target_acs:
+    - AC1
+    - AC2
+    - AC3
+    - AC4
+    - AC5
+    - AC6
+    - AC9
+    - AC10
+    - AC13
+    - AC15
+    - AC18
+    - AC20
+    - AC21
+    description: >
+      Produce a UX design for content-type-aware rendering.
+      Work item: tmp/plans/.claimed/87-item-page-content-type-aware-rendering.md
+      Requirements: docs/plans/2026-04-02-87-item-page-content-type-aware-rendering-requirements.md
+      Design: docs/plans/2026-04-02-87-item-page-content-type-aware-rendering-design.md
+
+      Implements P1-P5, FR1-FR4 and design decisions D2-D5. Focus on: visual hierarchy
+      and readability for JSON (pretty-printing with colored tokens per AC9-AC14),
+      YAML (key/value color distinction per AC15-AC17), logs (section headers vs body
+      per AC18-AC19, embedded JSON), and code files (keyword/string/comment coloring
+      per AC20-AC22). Must work with the existing dark theme (#1a1a2e background).
+      Consider the user workflow of expanding artifact sections and scanning content
+      quickly. All rendering happens inside the existing .md-rendered div container.
+  - id: '0.3'
+    name: 'Frontend design: content-type rendering implementation'
+    agent: frontend-coder
+    status: pending
+    parallel_group: design-competition
+    target_acs:
+    - AC9
+    - AC10
+    - AC11
+    - AC12
+    - AC14
+    - AC15
+    - AC18
+    - AC19
+    - AC20
+    - AC22
+    - AC23
+    description: >
+      Produce a frontend implementation design for content-type-aware rendering.
+      Work item: tmp/plans/.claimed/87-item-page-content-type-aware-rendering.md
+      Requirements: docs/plans/2026-04-02-87-item-page-content-type-aware-rendering-requirements.md
+      Design: docs/plans/2026-04-02-87-item-page-content-type-aware-rendering-design.md
+
+      Implements P1-P5, FR1-FR5 and design decisions D1-D5. Provide concrete implementation
+      details for: renderArtifactContent() dispatch (D1), highlight.js integration
+      (CDN URLs, language modules: json, yaml, python, typescript, xml, css), JSON
+      renderer with pretty-printing and fallback (D2), YAML renderer (D3), custom
+      log renderer with header detection regex and embedded JSON extraction (D4),
+      code renderer with language mapping (D5), CSS additions for log headers and
+      highlight.js theme overrides, and DOM structure details (pre > code.hljs pattern).
+      All changes in item.html only. Must extend the existing marked.js and .md-rendered
+      pattern from feature 76.
+  - id: '0.4'
+    name: 'Judge: select winning content-type rendering design'
+    agent: design-judge
+    status: pending
+    dependencies:
+    - '0.1'
+    - '0.2'
+    - '0.3'
+    target_acs:
+    - AC1
+    - AC7
+    - AC9
+    - AC14
+    - AC15
+    - AC18
+    - AC20
+    - AC23
+    - AC25
+    - AC32
+    description: >
+      Judge the three competing designs for content-type-aware rendering.
+      Work item: tmp/plans/.claimed/87-item-page-content-type-aware-rendering.md
+      Requirements: docs/plans/2026-04-02-87-item-page-content-type-aware-rendering-requirements.md
+      Design: docs/plans/2026-04-02-87-item-page-content-type-aware-rendering-design.md
+
+      Score each design against AC1-AC42 from the requirements file. Consider: completeness
+      of content-type coverage (JSON, YAML, logs, code), dark theme consistency, DOM
+      verifiability for Playwright, CDN library choice and bundle impact, malformed
+      content fallback handling, and single-file constraint (item.html only). Select
+      the winner and write judgment to worker output.
+  - id: '0.5'
+    name: 'Plan: bridge winning design to implementation tasks'
+    agent: planner
+    status: pending
+    dependencies:
+    - '0.4'
+    target_acs:
+    - AC1
+    - AC7
+    - AC25
+    description: >
+      Read the winning design from the Phase 0 competition and extend
+      this plan with concrete implementation tasks.
+      Work item: tmp/plans/.claimed/87-item-page-content-type-aware-rendering.md
+      Requirements: docs/plans/2026-04-02-87-item-page-content-type-aware-rendering-requirements.md
+      Design: docs/plans/2026-04-02-87-item-page-content-type-aware-rendering-design.md
+
+      Create implementation sections covering: (1) CDN script/CSS additions and
+      renderArtifactContent() dispatch refactor (P6, FR5, D1), (2) JSON renderer
+      with pretty-printing and highlighting (P2, FR1, D2), (3) YAML renderer with
+      highlighting (P3, FR2, D3), (4) Log file renderer with headers and embedded
+      JSON (P4, FR3, D4), (5) Code file renderer with highlight.js (P5, FR4, D5).
+      Each task should use frontend-coder agent and reference specific P<n>, D<n>.
+      All changes in item.html only.
