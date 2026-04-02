@@ -111,3 +111,5 @@ Files: langgraph_pipeline/web/templates/item.html
 | AC8 | D3, D4 | Badge visible throughout processing via both Jinja initial render and JS updates |
 | AC9 | D3, D4 | Badge updates multiple times as /dynamic returns new phase_label each poll |
 | AC10 | D4, D2, D1 | Badge reflects correct phase via mapping, auto-updates within poll interval |
+| AC11 | D4, D2, D1 | Badge transitions visibly (e.g., Intake -> Requirements -> Planning) via 10s polling without page refresh |
+| AC12 | D1, D4 | Mapping covers all phases: Intake, Requirements, Planning, Execution, Verification; JS renders whichever label backend returns |
