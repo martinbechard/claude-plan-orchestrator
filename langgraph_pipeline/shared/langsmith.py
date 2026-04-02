@@ -288,19 +288,21 @@ def create_root_run(item_slug: str, item_path: str) -> tuple[Any, Optional[str]]
     Returns:
         (run_tree, uuid_str) when tracing is active; (None, None) otherwise.
     """
+    # Always read or generate a trace UUID so the supervisor can store a
+    # run_id in the completion record regardless of tracing state.
+    existing_id = _read_trace_id_from_file(item_path)
+    trace_id = existing_id or str(uuid.uuid4())
+    if not existing_id:
+        _write_trace_id_to_file(item_path, trace_id)
+
     if not _tracing_active:
-        return None, None
+        return None, trace_id
+
     try:
         from langsmith import RunTree  # type: ignore[import]
 
-        existing_id = _read_trace_id_from_file(item_path)
-        if existing_id:
-            run_tree = RunTree(id=existing_id, name=item_slug, run_type="chain")
-            trace_id = existing_id
-        else:
-            trace_id = str(uuid.uuid4())
-            run_tree = RunTree(id=trace_id, name=item_slug, run_type="chain")
-            _write_trace_id_to_file(item_path, trace_id)
+        run_tree = RunTree(id=trace_id, name=item_slug, run_type="chain")
+        if not existing_id:
             # Post immediately so the root run appears in the proxy DB as soon as the
             # worker starts — the dashboard trace link is non-empty from the first poll.
             run_tree.post()
@@ -308,10 +310,10 @@ def create_root_run(item_slug: str, item_path: str) -> tuple[Any, Optional[str]]
         return run_tree, trace_id
 
     except ImportError:
-        return None, None
+        return None, trace_id
     except Exception as exc:
         logger.debug("create_root_run failed (non-fatal): %s", exc)
-        return None, None
+        return None, trace_id
 
 
 def finalize_root_run(

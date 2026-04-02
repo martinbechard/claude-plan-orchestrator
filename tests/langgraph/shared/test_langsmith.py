@@ -607,21 +607,43 @@ class TestCreateRootRun:
         monkeypatch.setattr(ls_mod, "_tracing_active", True)
         monkeypatch.setattr(ls_mod, "_tracing_configured", True)
 
-    def test_returns_none_none_when_tracing_inactive(self, tmp_path):
+    def test_returns_uuid_when_tracing_inactive(self, tmp_path):
+        """D1: create_root_run always returns a UUID even when tracing is off."""
         item_file = tmp_path / "item.md"
         item_file.write_text("# My Feature\n")
         run_tree, run_id = create_root_run("my-feature", str(item_file))
         assert run_tree is None
-        assert run_id is None
+        assert run_id is not None
+        # UUID should match LangSmith trace format
+        assert LANGSMITH_TRACE_PATTERN.search(f"## LangSmith Trace: {run_id}") is not None
 
-    def test_returns_none_none_when_langsmith_not_installed(self, monkeypatch, tmp_path):
+    def test_writes_marker_to_file_when_tracing_inactive(self, tmp_path):
+        """D1: marker line is written even when tracing is off."""
+        item_file = tmp_path / "item.md"
+        item_file.write_text("# My Feature\n")
+        _, run_id = create_root_run("my-feature", str(item_file))
+        content = item_file.read_text()
+        assert f"{LANGSMITH_TRACE_LINE_PREFIX}{run_id}" in content
+
+    def test_recovers_existing_uuid_when_tracing_inactive(self, tmp_path):
+        """D1: reuses existing UUID from file when tracing is off."""
+        existing_uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        item_file = tmp_path / "item.md"
+        item_file.write_text(f"# My Feature\n\n## LangSmith Trace: {existing_uuid}\n")
+        run_tree, run_id = create_root_run("my-feature", str(item_file))
+        assert run_tree is None
+        assert run_id == existing_uuid
+
+    def test_returns_uuid_when_langsmith_not_installed(self, monkeypatch, tmp_path):
+        """D1: UUID generated even when langsmith package is missing."""
         self._set_tracing_active(monkeypatch)
         item_file = tmp_path / "item.md"
         item_file.write_text("# My Feature\n")
         with patch.dict("sys.modules", {"langsmith": None}):
             run_tree, run_id = create_root_run("my-feature", str(item_file))
         assert run_tree is None
-        assert run_id is None
+        assert run_id is not None
+        assert LANGSMITH_TRACE_PATTERN.search(f"## LangSmith Trace: {run_id}") is not None
 
     def test_fresh_creation_writes_uuid_to_file(self, monkeypatch, tmp_path):
         self._set_tracing_active(monkeypatch)
@@ -692,6 +714,7 @@ class TestCreateRootRun:
         assert mock_cls.call_args.kwargs["name"] == "my-feature-slug"
 
     def test_degrades_silently_on_exception(self, monkeypatch, tmp_path):
+        """RunTree failure still returns the UUID (generated before the exception)."""
         self._set_tracing_active(monkeypatch)
         item_file = tmp_path / "item.md"
         item_file.write_text("# My Feature\n")
@@ -700,7 +723,7 @@ class TestCreateRootRun:
             run_tree, run_id = create_root_run("my-feature", str(item_file))
 
         assert run_tree is None
-        assert run_id is None
+        assert run_id is not None  # UUID generated before RunTree constructor
 
 
 # ─── finalize_root_run ────────────────────────────────────────────────────────

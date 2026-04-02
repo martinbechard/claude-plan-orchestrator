@@ -16,6 +16,7 @@ import json
 import logging
 import sqlite3
 import threading
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -397,6 +398,43 @@ class TracingProxy:
             conn.execute(_CREATE_UNIQUE_INDEX_RUN_ID_SQL)
             for index_sql in _CREATE_INDEXES_SQL:
                 conn.execute(index_sql)
+            self._backfill_null_run_ids(conn)
+
+    def _backfill_null_run_ids(self, conn: sqlite3.Connection) -> None:
+        """Generate UUIDs for completions with NULL run_id and insert synthetic trace rows.
+
+        Idempotent: only targets rows where run_id IS NULL. After the first run
+        there are no NULL-run_id completions, so subsequent calls are no-ops.
+        """
+        null_rows = conn.execute(
+            "SELECT id, slug, finished_at, outcome, cost_usd FROM completions WHERE run_id IS NULL"
+        ).fetchall()
+        if not null_rows:
+            return
+        created_at = datetime.now(timezone.utc).isoformat()
+        for row in null_rows:
+            new_run_id = str(uuid.uuid4())
+            conn.execute(
+                "UPDATE completions SET run_id = ? WHERE id = ?",
+                [new_run_id, row["id"]],
+            )
+            metadata = json.dumps({
+                "outcome": row["outcome"],
+                "cost_usd": row["cost_usd"],
+                "synthetic": True,
+                "backfilled": True,
+            })
+            conn.execute(
+                """
+                INSERT INTO traces
+                    (run_id, parent_run_id, name, start_time, end_time,
+                     inputs_json, outputs_json, metadata_json, error, created_at)
+                VALUES (?, NULL, ?, ?, ?, NULL, NULL, ?, NULL, ?)
+                """,
+                [new_run_id, row["slug"], row["finished_at"], row["finished_at"],
+                 metadata, created_at],
+            )
+        logger.info("Backfilled %d completions with NULL run_id", len(null_rows))
 
     def _migrate_completion_duplicates(self, conn: sqlite3.Connection) -> None:
         """Merge duplicate completion rows per slug and backfill attempts_history.
@@ -720,8 +758,54 @@ class TracingProxy:
                         attempt_entry,
                     ],
                 )
+                # Ensure a root trace row exists so /execution-history/{run_id}
+                # never returns 404 for a completion that has a run_id.
+                if run_id:
+                    self._ensure_synthetic_trace_row(
+                        conn, run_id, slug, finished_at, outcome, cost_usd,
+                    )
         except Exception:
             logger.debug("TracingProxy: failed to record completion for %s", slug, exc_info=True)
+
+    def _ensure_synthetic_trace_row(
+        self,
+        conn: sqlite3.Connection,
+        run_id: str,
+        slug: str,
+        timestamp: str,
+        outcome: str,
+        cost_usd: float,
+    ) -> None:
+        """Insert a synthetic root trace row if no trace row exists for run_id.
+
+        This guarantees that /execution-history/{run_id} never returns 404
+        for a completion that has a run_id but was processed without tracing
+        being active (so no RunTree was ever posted to the proxy).
+
+        Args:
+            conn: Active SQLite connection (caller manages the transaction).
+            run_id: The trace UUID to check/insert.
+            slug: Work item slug used as the trace name.
+            timestamp: ISO-8601 timestamp for start_time, end_time, created_at.
+            outcome: Completion outcome (e.g. "success", "warn", "fail").
+            cost_usd: API cost to include in metadata.
+        """
+        existing = conn.execute(
+            "SELECT 1 FROM traces WHERE run_id = ? LIMIT 1", [run_id]
+        ).fetchone()
+        if existing:
+            return
+        metadata = json.dumps({"outcome": outcome, "cost_usd": cost_usd, "synthetic": True})
+        created_at = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            """
+            INSERT INTO traces
+                (run_id, parent_run_id, name, start_time, end_time,
+                 inputs_json, outputs_json, metadata_json, error, created_at)
+            VALUES (?, NULL, ?, ?, ?, NULL, NULL, ?, NULL, ?)
+            """,
+            [run_id, slug, timestamp, timestamp, metadata, created_at],
+        )
 
     def list_completions(
         self,

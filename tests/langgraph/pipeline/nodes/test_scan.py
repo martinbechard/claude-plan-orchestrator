@@ -462,8 +462,8 @@ class TestScanBacklog:
         result = scan_backlog(_make_state())
         assert result["item_name"] == "03 Add Dark Mode"
 
-    def test_langsmith_root_run_id_is_none_when_tracing_inactive(self, tmp_path, monkeypatch):
-        """langsmith_root_run_id is None when tracing is off (create_root_run returns None)."""
+    def test_langsmith_root_run_id_is_set_when_tracing_inactive(self, tmp_path, monkeypatch):
+        """langsmith_root_run_id is a UUID even when tracing is off (D1: always generate UUID)."""
         import langgraph_pipeline.pipeline.nodes.scan as scan_mod
         import langgraph_pipeline.shared.langsmith as ls_mod
         defect_dir = tmp_path / "defects"
@@ -476,7 +476,7 @@ class TestScanBacklog:
         )
         monkeypatch.setattr(ls_mod, "_tracing_active", False)
         result = scan_backlog(_make_state())
-        assert result["langsmith_root_run_id"] is None
+        assert result["langsmith_root_run_id"] is not None
 
     def test_langsmith_root_run_id_populated_when_tracing_active(self, tmp_path, monkeypatch):
         """langsmith_root_run_id receives a UUID when create_root_run succeeds."""

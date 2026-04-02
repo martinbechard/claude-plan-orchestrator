@@ -13,7 +13,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 import langgraph_pipeline.web.proxy as proxy_module
-from langgraph_pipeline.web.proxy import ChildTimeSpan, DailyTotal, Session, TracingProxy, get_proxy, init_proxy
+from langgraph_pipeline.web.proxy import (
+    ChildTimeSpan, DailyTotal, Session, TracingProxy, get_proxy, init_proxy,
+    _CREATE_TABLE_SQL, _CREATE_COMPLETIONS_SQL,
+)
 from langgraph_pipeline.web.server import create_app
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -2154,4 +2157,171 @@ def test_completions_table_has_attempts_history_column(proxy):
         info = conn.execute("PRAGMA table_info(completions)").fetchall()
     column_names = [row[1] for row in info]
     assert "attempts_history" in column_names
+
+
+# ─── D2: record_completion creates synthetic trace row ───────────────────────
+
+SYNTHETIC_SLUG = "83-synthetic-trace-test"
+SYNTHETIC_RUN_ID = "aaaabbbb-cccc-dddd-eeee-ffffffffffff"
+
+
+def test_record_completion_creates_synthetic_trace_row(proxy):
+    """D2: record_completion inserts a synthetic trace row when none exists for the run_id."""
+    proxy.record_completion(
+        slug=SYNTHETIC_SLUG,
+        item_type="feature",
+        outcome="success",
+        cost_usd=2.50,
+        duration_s=120.0,
+        run_id=SYNTHETIC_RUN_ID,
+    )
+    run = proxy.get_run(SYNTHETIC_RUN_ID)
+    assert run is not None, "Synthetic trace row should exist after record_completion"
+    assert run["run_id"] == SYNTHETIC_RUN_ID
+    assert run["parent_run_id"] is None
+    assert run["name"] == SYNTHETIC_SLUG
+    metadata = json.loads(run["metadata_json"])
+    assert metadata["outcome"] == "success"
+    assert abs(metadata["cost_usd"] - 2.50) < 1e-9
+    assert metadata["synthetic"] is True
+
+
+def test_record_completion_does_not_overwrite_real_trace_row(proxy):
+    """D2: if a trace row already exists for the run_id, record_completion leaves it alone."""
+    proxy.record_run(
+        run_id=SYNTHETIC_RUN_ID,
+        parent_run_id=None,
+        name="real-run",
+        inputs={"task": "test"},
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time="2026-04-01T10:00:00",
+        end_time=None,
+    )
+    proxy.record_completion(
+        slug=SYNTHETIC_SLUG,
+        item_type="feature",
+        outcome="success",
+        cost_usd=1.00,
+        duration_s=60.0,
+        run_id=SYNTHETIC_RUN_ID,
+    )
+    run = proxy.get_run(SYNTHETIC_RUN_ID)
+    assert run["name"] == "real-run", "Real trace row should not be overwritten"
+
+
+def test_record_completion_no_synthetic_row_when_run_id_is_none(proxy):
+    """D2: no synthetic trace row when run_id is None."""
+    proxy.record_completion(
+        slug="83-no-run-id",
+        item_type="defect",
+        outcome="fail",
+        cost_usd=0.50,
+        duration_s=30.0,
+        run_id=None,
+    )
+    with sqlite3.connect(str(proxy._db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        count = conn.execute("SELECT COUNT(*) FROM traces WHERE name = '83-no-run-id'").fetchone()[0]
+    assert count == 0
+
+
+# ─── D3: Backfill migration populates NULL run_ids ──────────────────────────
+
+
+def test_backfill_null_run_ids_generates_uuids(tmp_path):
+    """D3: _init_db backfills NULL run_id completions with generated UUIDs."""
+    db_path = str(tmp_path / "backfill-test.db")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(_CREATE_TABLE_SQL)
+        conn.execute(_CREATE_COMPLETIONS_SQL)
+        # Insert two completions with NULL run_id
+        conn.execute(
+            "INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, finished_at) "
+            "VALUES ('item-a', 'feature', 'success', 1.0, 60.0, '2026-04-01T10:00:00')"
+        )
+        conn.execute(
+            "INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, finished_at) "
+            "VALUES ('item-b', 'defect', 'fail', 0.5, 30.0, '2026-04-01T11:00:00')"
+        )
+
+    # Creating TracingProxy triggers _init_db which runs the backfill migration
+    TracingProxy({"db_path": db_path})
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT slug, run_id FROM completions ORDER BY slug"
+        ).fetchall()
+
+    assert len(rows) == 2
+    for row in rows:
+        assert row["run_id"] is not None, f"run_id should be backfilled for {row['slug']}"
+
+    # The two UUIDs should be different
+    assert rows[0]["run_id"] != rows[1]["run_id"]
+
+
+def test_backfill_creates_synthetic_trace_rows(tmp_path):
+    """D3: backfill migration inserts synthetic trace rows for each generated UUID."""
+    db_path = str(tmp_path / "backfill-traces-test.db")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(_CREATE_TABLE_SQL)
+        conn.execute(_CREATE_COMPLETIONS_SQL)
+        conn.execute(
+            "INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, finished_at) "
+            "VALUES ('item-c', 'feature', 'success', 2.0, 90.0, '2026-04-01T12:00:00')"
+        )
+
+    TracingProxy({"db_path": db_path})
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        completion = conn.execute("SELECT run_id FROM completions WHERE slug = 'item-c'").fetchone()
+        trace = conn.execute("SELECT * FROM traces WHERE run_id = ?", [completion["run_id"]]).fetchone()
+
+    assert trace is not None, "Synthetic trace row should exist for backfilled completion"
+    assert trace["parent_run_id"] is None
+    assert trace["name"] == "item-c"
+    metadata = json.loads(trace["metadata_json"])
+    assert metadata["synthetic"] is True
+    assert metadata["backfilled"] is True
+    assert metadata["outcome"] == "success"
+
+
+def test_backfill_is_idempotent(tmp_path):
+    """D3: running the migration twice does not create duplicate rows."""
+    db_path = str(tmp_path / "backfill-idempotent.db")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(_CREATE_TABLE_SQL)
+        conn.execute(_CREATE_COMPLETIONS_SQL)
+        conn.execute(
+            "INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, finished_at) "
+            "VALUES ('item-d', 'feature', 'warn', 1.5, 45.0, '2026-04-01T13:00:00')"
+        )
+
+    # First init backfills the NULL run_id
+    proxy1 = TracingProxy({"db_path": db_path})
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        run_id_after_first = conn.execute(
+            "SELECT run_id FROM completions WHERE slug = 'item-d'"
+        ).fetchone()["run_id"]
+
+    # Second init should be a no-op (no NULL run_ids remain)
+    TracingProxy({"db_path": db_path})
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        run_id_after_second = conn.execute(
+            "SELECT run_id FROM completions WHERE slug = 'item-d'"
+        ).fetchone()["run_id"]
+        trace_count = conn.execute(
+            "SELECT COUNT(*) FROM traces WHERE run_id = ?", [run_id_after_first]
+        ).fetchone()[0]
+
+    assert run_id_after_first == run_id_after_second
+    assert trace_count == 1, "Only one trace row should exist (no duplicates from second init)"
 
