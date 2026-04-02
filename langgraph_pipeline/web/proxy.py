@@ -137,6 +137,16 @@ _CREATE_INDEXES_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_cost_tasks_item_slug ON cost_tasks (item_slug);",
 ]
 
+_FIND_REAL_TRACE_FOR_SLUG_SQL = """
+SELECT run_id FROM traces
+WHERE parent_run_id IS NULL
+  AND name = ?
+  AND run_id != ?
+  AND (metadata_json IS NULL OR metadata_json NOT LIKE '%"synthetic"%')
+ORDER BY start_time DESC
+LIMIT 1
+"""
+
 _LANGSMITH_RUNS_URL = "https://api.smith.langchain.com/runs"
 
 COST_SORT_INCLUSIVE_DESC = "inclusive_desc"
@@ -399,6 +409,7 @@ class TracingProxy:
             for index_sql in _CREATE_INDEXES_SQL:
                 conn.execute(index_sql)
             self._backfill_null_run_ids(conn)
+            self._migrate_completion_run_ids(conn)
 
     def _backfill_null_run_ids(self, conn: sqlite3.Connection) -> None:
         """Generate UUIDs for completions with NULL run_id and insert synthetic trace rows.
@@ -806,6 +817,125 @@ class TracingProxy:
             """,
             [run_id, slug, timestamp, timestamp, metadata, created_at],
         )
+
+    def is_synthetic_trace(self, run_id: str) -> bool:
+        """Return True if the trace row for run_id has the synthetic flag in metadata_json.
+
+        Args:
+            run_id: The trace UUID to check.
+
+        Returns:
+            True when metadata_json contains "synthetic": true, False otherwise (including
+            when the trace row does not exist or metadata_json is NULL).
+        """
+        try:
+            with self._connect() as conn:
+                row = conn.execute(
+                    "SELECT metadata_json FROM traces WHERE run_id = ? LIMIT 1",
+                    [run_id],
+                ).fetchone()
+            if row is None or row["metadata_json"] is None:
+                return False
+            meta = json.loads(row["metadata_json"])
+            return bool(meta.get("synthetic", False))
+        except Exception:
+            logger.debug(
+                "TracingProxy: failed to check synthetic flag for run_id=%s", run_id, exc_info=True
+            )
+            return False
+
+    def find_real_trace_for_completion(self, run_id: str) -> Optional[str]:
+        """Given a synthetic completion run_id, find a real matching root trace run_id.
+
+        Looks up the completion slug from the completions table, then queries for
+        the most recent non-synthetic root trace whose name matches that slug.
+
+        Args:
+            run_id: The synthetic trace run_id linked to a completion.
+
+        Returns:
+            The real trace run_id if found, or None when no matching real trace exists
+            or the run_id is not linked to any completion.
+        """
+        try:
+            with self._connect() as conn:
+                comp_row = conn.execute(
+                    "SELECT slug FROM completions WHERE run_id = ? LIMIT 1",
+                    [run_id],
+                ).fetchone()
+                if comp_row is None:
+                    return None
+                slug = comp_row["slug"]
+                trace_row = conn.execute(
+                    _FIND_REAL_TRACE_FOR_SLUG_SQL,
+                    [slug, run_id],
+                ).fetchone()
+                if trace_row is None:
+                    return None
+                return trace_row["run_id"]
+        except Exception:
+            logger.debug(
+                "TracingProxy: failed to find real trace for run_id=%s", run_id, exc_info=True
+            )
+            return None
+
+    def _migrate_completion_run_ids(self, conn: sqlite3.Connection) -> None:
+        """Re-link completion rows whose run_id points to a synthetic trace.
+
+        For each completion with a synthetic run_id, find a real root trace matching
+        the completion's slug (same query as find_real_trace_for_completion). If found,
+        update the completion's run_id and also update the most recent entry in
+        attempts_history to reflect the new run_id.
+
+        Idempotent: after all synthetic run_ids are re-linked, subsequent calls are
+        no-ops because none of the updated completions point to synthetic traces anymore.
+
+        Args:
+            conn: Active SQLite connection (caller manages the transaction).
+        """
+        synthetic_comps = conn.execute(
+            """
+            SELECT c.id, c.slug, c.run_id, c.attempts_history
+            FROM completions c
+            JOIN traces t ON c.run_id = t.run_id
+            WHERE t.metadata_json LIKE '%"synthetic"%'
+              AND json_extract(t.metadata_json, '$.synthetic') = 1
+            """
+        ).fetchall()
+
+        updated = 0
+        for row in synthetic_comps:
+            real_row = conn.execute(
+                _FIND_REAL_TRACE_FOR_SLUG_SQL,
+                [row["slug"], row["run_id"]],
+            ).fetchone()
+            if real_row is None:
+                continue
+
+            real_run_id = real_row["run_id"]
+
+            # Update the most recent attempts_history entry with the new run_id
+            new_history = row["attempts_history"]
+            if new_history:
+                try:
+                    history_list = json.loads(new_history)
+                    if history_list:
+                        history_list[-1]["run_id"] = real_run_id
+                        new_history = json.dumps(history_list)
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    pass
+
+            conn.execute(
+                "UPDATE completions SET run_id = ?, attempts_history = ? WHERE id = ?",
+                [real_run_id, new_history, row["id"]],
+            )
+            updated += 1
+
+        if updated:
+            logger.info(
+                "TracingProxy: migrated %d completion(s) from synthetic to real trace run_ids",
+                updated,
+            )
 
     def list_completions(
         self,

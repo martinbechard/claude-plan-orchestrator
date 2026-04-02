@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 import langgraph_pipeline.web.proxy as proxy_module
 from langgraph_pipeline.web.proxy import (
     ChildTimeSpan, DailyTotal, Session, TracingProxy, get_proxy, init_proxy,
-    _CREATE_TABLE_SQL, _CREATE_COMPLETIONS_SQL,
+    _CREATE_TABLE_SQL, _CREATE_COMPLETIONS_SQL, _ALTER_ADD_COMPLETIONS_ATTEMPTS_HISTORY_SQL,
 )
 from langgraph_pipeline.web.server import create_app
 
@@ -2324,4 +2324,325 @@ def test_backfill_is_idempotent(tmp_path):
 
     assert run_id_after_first == run_id_after_second
     assert trace_count == 1, "Only one trace row should exist (no duplicates from second init)"
+
+
+# ─── D1: is_synthetic_trace ──────────────────────────────────────────────────
+
+IS_SYNTH_SLUG = "01-is-synthetic-test"
+IS_SYNTH_REAL_RUN_ID = "11112222-3333-4444-5555-666677778888"
+IS_SYNTH_SYNTH_RUN_ID = "aaaabbbb-1111-2222-3333-444455556666"
+
+
+def test_is_synthetic_trace_returns_true_for_synthetic_flag(proxy):
+    """D1: is_synthetic_trace returns True when metadata_json has synthetic=True."""
+    proxy.record_completion(
+        slug=IS_SYNTH_SLUG,
+        item_type="feature",
+        outcome="success",
+        cost_usd=1.00,
+        duration_s=60.0,
+        run_id=IS_SYNTH_SYNTH_RUN_ID,
+    )
+    assert proxy.is_synthetic_trace(IS_SYNTH_SYNTH_RUN_ID) is True
+
+
+def test_is_synthetic_trace_returns_false_for_real_trace(proxy):
+    """D1: is_synthetic_trace returns False for a real trace (no synthetic flag)."""
+    proxy.record_run(
+        run_id=IS_SYNTH_REAL_RUN_ID,
+        parent_run_id=None,
+        name=IS_SYNTH_SLUG,
+        inputs=None,
+        outputs=None,
+        metadata={"item_slug": IS_SYNTH_SLUG},
+        error=None,
+        start_time="2026-04-01T10:00:00",
+        end_time="2026-04-01T10:05:00",
+    )
+    assert proxy.is_synthetic_trace(IS_SYNTH_REAL_RUN_ID) is False
+
+
+def test_is_synthetic_trace_returns_false_for_missing_run_id(proxy):
+    """D1: is_synthetic_trace returns False when run_id does not exist in the DB."""
+    result = proxy.is_synthetic_trace("nonexistent-run-id-00000000")
+    assert result is False
+
+
+def test_is_synthetic_trace_returns_false_for_null_metadata(proxy):
+    """D1: is_synthetic_trace returns False when metadata_json is NULL."""
+    proxy.record_run(
+        run_id="null-meta-run-id-12345",
+        parent_run_id=None,
+        name="null-meta-slug",
+        inputs=None,
+        outputs=None,
+        metadata=None,
+        error=None,
+        start_time="2026-04-01T10:00:00",
+        end_time=None,
+    )
+    assert proxy.is_synthetic_trace("null-meta-run-id-12345") is False
+
+
+# ─── D1: find_real_trace_for_completion ──────────────────────────────────────
+
+FIND_REAL_SLUG = "01-find-real-trace-test"
+FIND_REAL_SYNTH_RUN_ID = "bbbbcccc-dddd-eeee-ffff-000011112222"
+FIND_REAL_REAL_RUN_ID = "ccccdddd-eeee-ffff-0000-111122223333"
+FIND_REAL_OLDER_RUN_ID = "ddddeeee-ffff-0000-1111-222233334444"
+
+
+def test_find_real_trace_returns_real_run_id(proxy):
+    """D1: find_real_trace_for_completion returns the real run_id when a match exists."""
+    # Insert completion with synthetic run_id
+    proxy.record_completion(
+        slug=FIND_REAL_SLUG,
+        item_type="feature",
+        outcome="success",
+        cost_usd=1.00,
+        duration_s=60.0,
+        run_id=FIND_REAL_SYNTH_RUN_ID,
+    )
+    # Insert real root trace with matching slug name
+    proxy.record_run(
+        run_id=FIND_REAL_REAL_RUN_ID,
+        parent_run_id=None,
+        name=FIND_REAL_SLUG,
+        inputs=None,
+        outputs=None,
+        metadata={"item_slug": FIND_REAL_SLUG},
+        error=None,
+        start_time="2026-04-01T10:00:00",
+        end_time="2026-04-01T10:05:00",
+    )
+    result = proxy.find_real_trace_for_completion(FIND_REAL_SYNTH_RUN_ID)
+    assert result == FIND_REAL_REAL_RUN_ID
+
+
+def test_find_real_trace_returns_none_when_no_real_trace_exists(proxy):
+    """D1: find_real_trace_for_completion returns None when only a synthetic trace exists."""
+    proxy.record_completion(
+        slug="01-no-real-trace-slug",
+        item_type="defect",
+        outcome="fail",
+        cost_usd=0.50,
+        duration_s=30.0,
+        run_id="synth-only-run-id-11111",
+    )
+    result = proxy.find_real_trace_for_completion("synth-only-run-id-11111")
+    assert result is None
+
+
+def test_find_real_trace_returns_none_for_unknown_run_id(proxy):
+    """D1: find_real_trace_for_completion returns None when run_id is not in completions."""
+    result = proxy.find_real_trace_for_completion("totally-unknown-run-id-0000")
+    assert result is None
+
+
+def test_find_real_trace_returns_most_recent_when_multiple_exist(proxy):
+    """D1: find_real_trace_for_completion returns the most recent real trace by start_time."""
+    proxy.record_completion(
+        slug=FIND_REAL_SLUG + "-multi",
+        item_type="feature",
+        outcome="success",
+        cost_usd=1.00,
+        duration_s=60.0,
+        run_id=FIND_REAL_SYNTH_RUN_ID + "-multi",
+    )
+    # Older real trace
+    proxy.record_run(
+        run_id=FIND_REAL_OLDER_RUN_ID,
+        parent_run_id=None,
+        name=FIND_REAL_SLUG + "-multi",
+        inputs=None,
+        outputs=None,
+        metadata={"item_slug": FIND_REAL_SLUG},
+        error=None,
+        start_time="2026-04-01T09:00:00",
+        end_time="2026-04-01T09:05:00",
+    )
+    # Newer real trace
+    proxy.record_run(
+        run_id=FIND_REAL_REAL_RUN_ID + "-multi",
+        parent_run_id=None,
+        name=FIND_REAL_SLUG + "-multi",
+        inputs=None,
+        outputs=None,
+        metadata={"item_slug": FIND_REAL_SLUG},
+        error=None,
+        start_time="2026-04-01T11:00:00",
+        end_time="2026-04-01T11:05:00",
+    )
+    result = proxy.find_real_trace_for_completion(FIND_REAL_SYNTH_RUN_ID + "-multi")
+    assert result == FIND_REAL_REAL_RUN_ID + "-multi", "Should return the most recent real trace"
+
+
+# ─── D2: migrate_completion_run_ids startup migration ────────────────────────
+
+
+def test_migrate_completion_run_ids_relinks_synthetic_to_real(tmp_path):
+    """D2: startup migration updates completion run_id from synthetic to real trace."""
+    db_path = str(tmp_path / "migrate-relink.db")
+    synth_run_id = "synth-migrate-run-id-aaaaaa"
+    real_run_id = "real-migrate-run-id-bbbbbb"
+    slug = "01-migrate-relink-slug"
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        conn.execute(_CREATE_TABLE_SQL)
+        conn.execute(_CREATE_COMPLETIONS_SQL)
+        conn.execute(_ALTER_ADD_COMPLETIONS_ATTEMPTS_HISTORY_SQL)
+        # Insert a synthetic trace row
+        conn.execute(
+            "INSERT INTO traces (run_id, parent_run_id, name, metadata_json, created_at) "
+            "VALUES (?, NULL, ?, ?, '2026-04-01T10:00:00')",
+            [synth_run_id, slug, json.dumps({"synthetic": True})],
+        )
+        # Insert completion pointing at synthetic run_id
+        conn.execute(
+            "INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, "
+            "finished_at, run_id, attempts_history) VALUES (?, 'feature', 'success', "
+            "1.0, 60.0, '2026-04-01T10:00:00', ?, ?)",
+            [slug, synth_run_id, json.dumps([{"run_id": synth_run_id, "outcome": "success"}])],
+        )
+        # Insert a real root trace with a matching slug name
+        conn.execute(
+            "INSERT INTO traces (run_id, parent_run_id, name, start_time, metadata_json, created_at) "
+            "VALUES (?, NULL, ?, '2026-04-01T09:55:00', NULL, '2026-04-01T09:55:00')",
+            [real_run_id, slug],
+        )
+
+    # TracingProxy init triggers _migrate_completion_run_ids
+    TracingProxy({"db_path": db_path})
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT run_id FROM completions WHERE slug = ?", [slug]).fetchone()
+
+    assert row["run_id"] == real_run_id, "Completion run_id should be updated to the real trace"
+
+
+def test_migrate_completion_run_ids_updates_attempts_history(tmp_path):
+    """D2: migration updates the most recent attempts_history entry with new run_id."""
+    db_path = str(tmp_path / "migrate-history.db")
+    synth_run_id = "synth-hist-run-id-cccccc"
+    real_run_id = "real-hist-run-id-dddddd"
+    slug = "01-migrate-history-slug"
+    history = json.dumps([
+        {"run_id": "old-run-id", "outcome": "fail"},
+        {"run_id": synth_run_id, "outcome": "success"},
+    ])
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(_CREATE_TABLE_SQL)
+        conn.execute(_CREATE_COMPLETIONS_SQL)
+        conn.execute(_ALTER_ADD_COMPLETIONS_ATTEMPTS_HISTORY_SQL)
+        conn.execute(
+            "INSERT INTO traces (run_id, parent_run_id, name, metadata_json, created_at) "
+            "VALUES (?, NULL, ?, ?, '2026-04-01T10:00:00')",
+            [synth_run_id, slug, json.dumps({"synthetic": True})],
+        )
+        conn.execute(
+            "INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, "
+            "finished_at, run_id, attempts_history) VALUES (?, 'feature', 'success', "
+            "1.0, 60.0, '2026-04-01T10:00:00', ?, ?)",
+            [slug, synth_run_id, history],
+        )
+        conn.execute(
+            "INSERT INTO traces (run_id, parent_run_id, name, start_time, metadata_json, created_at) "
+            "VALUES (?, NULL, ?, '2026-04-01T09:55:00', NULL, '2026-04-01T09:55:00')",
+            [real_run_id, slug],
+        )
+
+    TracingProxy({"db_path": db_path})
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT attempts_history FROM completions WHERE slug = ?", [slug]
+        ).fetchone()
+
+    history_list = json.loads(row["attempts_history"])
+    assert history_list[-1]["run_id"] == real_run_id, "Last attempts_history entry should have real run_id"
+    assert history_list[0]["run_id"] == "old-run-id", "Earlier history entry should be untouched"
+
+
+def test_migrate_completion_run_ids_is_idempotent(tmp_path):
+    """D2: running migration twice does not change an already-relinked completion."""
+    db_path = str(tmp_path / "migrate-idempotent.db")
+    synth_run_id = "synth-idem-run-id-eeeeee"
+    real_run_id = "real-idem-run-id-ffffff"
+    slug = "01-migrate-idempotent-slug"
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(_CREATE_TABLE_SQL)
+        conn.execute(_CREATE_COMPLETIONS_SQL)
+        conn.execute(
+            "INSERT INTO traces (run_id, parent_run_id, name, metadata_json, created_at) "
+            "VALUES (?, NULL, ?, ?, '2026-04-01T10:00:00')",
+            [synth_run_id, slug, json.dumps({"synthetic": True})],
+        )
+        conn.execute(
+            "INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, "
+            "finished_at, run_id) VALUES (?, 'feature', 'success', 1.0, 60.0, "
+            "'2026-04-01T10:00:00', ?)",
+            [slug, synth_run_id],
+        )
+        conn.execute(
+            "INSERT INTO traces (run_id, parent_run_id, name, start_time, metadata_json, created_at) "
+            "VALUES (?, NULL, ?, '2026-04-01T09:55:00', NULL, '2026-04-01T09:55:00')",
+            [real_run_id, slug],
+        )
+
+    # First init migrates the completion
+    TracingProxy({"db_path": db_path})
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        run_id_after_first = conn.execute(
+            "SELECT run_id FROM completions WHERE slug = ?", [slug]
+        ).fetchone()["run_id"]
+
+    # Second init must be a no-op
+    TracingProxy({"db_path": db_path})
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        run_id_after_second = conn.execute(
+            "SELECT run_id FROM completions WHERE slug = ?", [slug]
+        ).fetchone()["run_id"]
+
+    assert run_id_after_first == real_run_id
+    assert run_id_after_second == real_run_id, "Second migration must not change already-relinked run_id"
+
+
+def test_migrate_completion_run_ids_leaves_unresolvable_completions_unchanged(tmp_path):
+    """D2: completions with no matching real trace keep their synthetic run_id."""
+    db_path = str(tmp_path / "migrate-no-real.db")
+    synth_run_id = "synth-nore-run-id-gggggg"
+    slug = "01-migrate-no-real-slug"
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(_CREATE_TABLE_SQL)
+        conn.execute(_CREATE_COMPLETIONS_SQL)
+        conn.execute(
+            "INSERT INTO traces (run_id, parent_run_id, name, metadata_json, created_at) "
+            "VALUES (?, NULL, ?, ?, '2026-04-01T10:00:00')",
+            [synth_run_id, slug, json.dumps({"synthetic": True})],
+        )
+        conn.execute(
+            "INSERT INTO completions (slug, item_type, outcome, cost_usd, duration_s, "
+            "finished_at, run_id) VALUES (?, 'defect', 'fail', 0.5, 30.0, "
+            "'2026-04-01T10:00:00', ?)",
+            [slug, synth_run_id],
+        )
+        # No real trace inserted — migration should leave run_id unchanged
+
+    TracingProxy({"db_path": db_path})
+
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT run_id FROM completions WHERE slug = ?", [slug]).fetchone()
+
+    assert row["run_id"] == synth_run_id, "run_id must remain unchanged when no real trace exists"
 
