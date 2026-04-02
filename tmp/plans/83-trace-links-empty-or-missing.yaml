@@ -250,7 +250,7 @@ sections:
     dependencies:
     - '0.5'
     - '1.1'
-    status: in_progress
+    status: completed
     target_acs:
     - AC2
     - AC3
@@ -272,3 +272,10 @@ sections:
     last_attempt: '2026-04-02T15:17:49.941829'
     attempts: 1
     model_used: opus
+    completed_at: '2026-04-02T15:21:39.321882'
+    result_message: Created execution-history.js with fetch/render, recursive tree
+      builder, depth-based collapse (depth >= 2), expand/collapse toolbar, skeleton
+      loading, empty-tree fallback, error handling. Updated execution_history.html
+      with extra_head script, data-run-* attributes, and loading spinner. Added exec-*
+      CSS classes to style.css including skeleton animation, toolbar, tree structure,
+      node types, metrics, and empty/error states.
