@@ -34,7 +34,7 @@ Existing data has multiple rows per slug. The migration must:
 - langgraph_pipeline/web/proxy.py - _ensure_tables / migration: add attempts_history column, merge existing duplicates
 - Dashboard display: show accumulated cost/duration, optionally expose attempt history
 
-## LangSmith Trace: 5027569c-caa0-45ee-bb4b-ffcf5f6a3c81
+
 
 
 ## 5 Whys Analysis
