@@ -177,7 +177,8 @@ sections:
     - AC1
     - AC2
     - AC5
-    description: 'Implement P1, P2 per D1, D2, D3 from work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md
+    - AC6
+    description: 'Implement P1, P2, FR1 per D1, D2, D3 from work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md
       Design: docs/plans/2026-04-02-83-trace-links-empty-or-missing-design.md Requirements:
       docs/plans/2026-04-02-83-trace-links-empty-or-missing-requirements.md
 

@@ -113,3 +113,4 @@ completions. The template shows a dash instead of a link.
 | AC3 | D4 | JS fetches tree from API and renders in the page shell; link already navigates correctly |
 | AC4 | D4 | JS renders nested collapsible tree showing parent/child hierarchy |
 | AC5 | D1, D2, D4 | UUID always generated (valid LangSmith format); synthetic trace row ensures lookup works; JS renders trace data |
+| AC6 | D1, D2 | UUID is valid LangSmith format (D1); synthetic trace row ensures the ID resolves to data (D2) |
