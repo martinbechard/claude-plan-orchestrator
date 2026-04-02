@@ -20,7 +20,7 @@ sections:
     name: Systems design for execution history tree rendering
     agent: systems-designer
     parallel_group: design-phase0
-    status: in_progress
+    status: completed
     target_acs:
     - AC2
     - AC3
@@ -46,11 +46,17 @@ sections:
     last_attempt: '2026-04-02T14:42:46.153663'
     attempts: 1
     model_used: opus
+    result_message: 'Produced systems/architecture design for execution history tree
+      rendering. Covers: data flow (server bootstrap via data-* attributes -> client
+      fetch -> recursive DOM build), tree node component structure with collapse/expand,
+      empty-tree fallback using existing CSS classes, CSS conventions, and AC traceability.
+      Output: docs/plans/83-design-1-systems.md'
+    completed_at: '2026-04-02T14:45:28.794088'
   - id: '0.2'
     name: UX design for execution history tree rendering
     agent: ux-designer
     parallel_group: design-phase0
-    status: in_progress
+    status: completed
     target_acs:
     - AC2
     - AC3
@@ -77,11 +83,17 @@ sections:
     last_attempt: '2026-04-02T14:42:46.167415'
     attempts: 1
     model_used: opus
+    result_message: UX design document written to docs/plans/83-trace-links-design-2-ux.md.
+      Covers all four page states (loading skeleton, error, empty tree, rendered tree),
+      node type icons (letter-in-circle), status badges reusing existing CSS, expand/collapse
+      via native details/summary, responsive layout, keyboard accessibility, and AC
+      traceability.
+    completed_at: '2026-04-02T14:48:21.013294'
   - id: '0.3'
     name: Frontend implementation design for execution history tree
     agent: frontend-coder
     parallel_group: design-phase0
-    status: in_progress
+    status: completed
     target_acs:
     - AC2
     - AC3
@@ -107,6 +119,12 @@ sections:
     last_attempt: '2026-04-02T14:42:46.184159'
     attempts: 1
     model_used: opus
+    result_message: 'Frontend implementation design for execution history tree written
+      to tmp/worker-output/0.3-frontend-design.md. Covers: execution-history.js structure
+      with recursive DOM builder, CSS classes with exec- prefix, collapse/expand with
+      ARIA tree pattern, empty-tree fallback from data attributes, loading spinner,
+      error handling, and base.html integration via extra_head block.'
+    completed_at: '2026-04-02T14:46:46.775882'
   - id: '0.4'
     name: Judge execution history tree design competition
     agent: design-judge

@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Create proposal data model, persistence, and response parser
     agent: coder
-    status: completed
+    status: verified
     target_acs:
     - AC7
     - AC8
@@ -118,6 +118,11 @@ sections:
       CSS grid blowout fix (min-width:0 on .item-layout>*), overflow:hidden on .step-explorer,
       max-width:100% on content containers, and full dark-theme .md-rendered CSS.
       All 1795 tests pass.
+    validation_attempts: 1
+    validation_findings: All D1 and D2 deliverables implemented correctly. Proposal/ProposalSet
+      dataclasses, YAML persistence, and parse_approval_response with 5-strategy chain
+      all present and tested. 31/31 tests pass, 1795/1795 full suite tests pass, no
+      regressions.
 - id: '2'
   name: Investigation Analysis Engine
   status: pending
@@ -125,7 +130,7 @@ sections:
   - id: '2.1'
     name: Implement run_investigation node with Claude analysis and proposal generation
     agent: coder
-    status: pending
+    status: in_progress
     depends_on:
     - '1.1'
     target_acs:
@@ -160,6 +165,9 @@ sections:
       - run_investigation skips when proposals.yaml exists (idempotent)\n- run_investigation\
       \ calls Claude and produces proposals (mock Claude CLI)\n- run_investigation\
       \ handles Claude output parse failure gracefully\n"
+    last_attempt: '2026-04-02T14:46:37.381093'
+    attempts: 1
+    model_used: sonnet
 - id: '3'
   name: Slack Delivery, Approval Flow, Filing, and Outcome Recording
   status: pending
