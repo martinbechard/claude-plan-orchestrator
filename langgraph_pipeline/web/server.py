@@ -395,6 +395,39 @@ def create_app(config: Optional[dict] = None):
         except Exception:
             return JSONResponse({"quota_exhausted": False})
 
+    @app.get("/proxy")
+    async def proxy_redirect(trace_id: Optional[str] = None):
+        """Redirect a trace_id query parameter to the execution-history viewer.
+
+        Validates that the trace exists in the local proxy database before
+        redirecting so that the user receives a clear 404 instead of landing
+        on another not-found page.
+
+        Args:
+            trace_id: The run identifier captured by the frontend trace links.
+
+        Returns:
+            302 redirect to /execution-history/{trace_id} when the trace exists.
+            400 JSON response when trace_id is absent.
+            404 JSON response when trace_id is not found in the local database.
+        """
+        from fastapi import HTTPException
+        from langgraph_pipeline.web.proxy import get_proxy
+
+        if not trace_id:
+            raise HTTPException(status_code=400, detail="trace_id query parameter is required")
+
+        proxy = get_proxy()
+        if proxy is not None:
+            run = proxy.get_run(trace_id)
+            if run is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Trace '{trace_id}' not found. It may still be in progress or was not captured by this server.",
+                )
+
+        return RedirectResponse(url=f"/execution-history/{trace_id}", status_code=302)
+
     return app
 
 
