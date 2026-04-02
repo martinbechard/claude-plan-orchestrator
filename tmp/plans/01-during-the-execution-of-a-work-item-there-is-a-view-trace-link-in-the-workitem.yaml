@@ -1,0 +1,39 @@
+meta:
+  name: 01-during-the-execution-of-a-work-item-there-is-a-view-trace-link-in-the-workitem
+  source_item: tmp/plans/.claimed/01-during-the-execution-of-a-work-item-there-is-a-view-trace-link-in-the-workitem.md
+  requirements_path: docs/plans/2026-04-02-01-during-the-execution-of-a-work-item-there-is-a-view-trace-link-in-the-workitem-requirements.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: 'Backend: Add GET /proxy redirect endpoint'
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Implement GET /proxy redirect and unit tests
+    agent: coder
+    status: pending
+    target_acs:
+    - AC1
+    - AC2
+    - AC3
+    - AC4
+    - AC5
+    description: >
+      Implement requirements P1, UC1 (D1, D2, D3) from work item:
+      tmp/plans/.claimed/01-during-the-execution-of-a-work-item-there-is-a-view-trace-link-in-the-workitem.md
+      Design: docs/plans/2026-04-02-01-during-the-execution-of-a-work-item-there-is-a-view-trace-link-in-the-workitem-design.md
+
+      In server.py create_app(), add a GET /proxy endpoint that reads the trace_id
+      query parameter, validates the trace exists via proxy.get_run(trace_id), and
+      returns a RedirectResponse(302) to /execution-history/{trace_id}. Return 400
+      if trace_id is missing, 404 with a user-friendly message if the trace is not
+      found. Add unit tests in tests/langgraph/web/test_proxy_redirect.py covering
+      valid redirect, missing param, and unknown trace scenarios.
