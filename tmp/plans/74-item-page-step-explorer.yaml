@@ -275,7 +275,7 @@ sections:
     dependencies:
     - '0.5'
     - '1.1'
-    status: in_progress
+    status: completed
     target_acs:
     - AC1
     - AC2
@@ -335,3 +335,13 @@ sections:
     last_attempt: '2026-04-02T15:26:27.160223'
     attempts: 1
     model_used: opus
+    completed_at: '2026-04-02T15:29:07.102656'
+    result_message: 'Step explorer accordion with collapsible stages and on-demand
+      loading is fully implemented. All 27 acceptance criteria verified in item.html:
+      stages render in chronological order via STAGE_ORDER, each with 3-state status
+      badge, completion timestamp, artifact count, and chevron indicator. Collapsible
+      sections use CSS .collapsed class with localStorage persistence per slug+stageId.
+      On-demand AJAX loading fetches artifact content via /artifact-content only on
+      stage expand, with data-loaded caching. /dynamic polling updates stage status
+      badges and detects new artifacts live. User Request label in Intake stage (AC26/AC27).
+      No code changes needed - implementation was already complete.'
