@@ -166,6 +166,286 @@ Files: langgraph_pipeline/web/routes/item.py
 
 ---
 
+## Systems Architecture
+
+### Architecture Overview
+
+```
++--------------------+      +-----------------+      +------------------+
+|   item_detail()    |----->| build_stages()  |----->| StageInfo[]      |
+| GET /item/{slug}   |      |   Pass 1: Discover     | (6 stages, each  |
+|                    |      |   Pass 2: Status       |  with artifacts) |
++--------------------+      |   Pass 3: Timestamps   +------------------+
+         |                  +-----------------+              |
+         v                          ^                       v
++--------------------+              |              +------------------+
+|   item.html        |              |              | item_dynamic()   |
+| Jinja2 accordion   |              |              | GET /item/{slug} |
+| (stage headers +   |              |              |     /dynamic     |
+|  lazy artifact     |              |              | -> stage_summaries|
+|  loading via AJAX) |              |              +------------------+
++--------------------+              |
+         |                          |
+         v                          |
++--------------------+      +-----------------+
+| artifact-content   |      | _compute_stage_ |
+| GET /item/{slug}/  |      |   statuses()    |
+|   artifact-content |      | _BASE_MATRIX    |
+| ?path=...          |      | done* adjustment|
++--------------------+      +-----------------+
+```
+
+Data flows top-down from the page request through build_stages() which produces
+StageInfo arrays consumed by both the template and the /dynamic polling endpoint.
+
+### Data Models
+
+#### ArtifactInfo (TypedDict)
+
+| Field | Type | Description | Constraints |
+|---|---|---|---|
+| name | str | Human-readable display label (e.g. "User Request") | Always non-empty; unique within a stage |
+| path | str | Relative file path for /artifact-content on-demand loading | Stringified Path; file must exist at discovery time |
+| timestamp | float | Raw epoch float from file st_mtime | 0.0 sentinel when mtime is unavailable |
+| timestamp_display | str | Pre-formatted "YYYY-MM-DD HH:MM" string for Jinja2 | Empty string when timestamp is 0.0 |
+
+Each ArtifactInfo belongs to exactly one StageInfo via the artifacts list.
+Created by _make_artifact() which reads file mtime at discovery time.
+
+#### StageInfo (TypedDict)
+
+| Field | Type | Description | Constraints |
+|---|---|---|---|
+| id | str | Lowercase identifier (e.g. "intake") | Must match first element of a STAGE_ORDER tuple |
+| name | str | Title-case display label (e.g. "Intake") | Must match second element of a STAGE_ORDER tuple |
+| status | str | One of "not_started", "in_progress", "done" | Set by _compute_stage_statuses() in Pass 2 |
+| artifacts | list[ArtifactInfo] | Ordered list of discovered artifacts | May be empty; order is discovery order |
+| completion_ts | Optional[str] | Formatted timestamp when status is "done" | None when status is not "done" or no artifacts |
+| completion_epoch | Optional[float] | Raw epoch float for JSON serialisation | None when completion_ts is None |
+
+STAGE_ORDER defines the canonical list of 6 stages. StageInfo instances are built
+in STAGE_ORDER sequence. The Verification stage is omitted when item_type is "feature".
+
+### build_stages() Algorithm
+
+Signature: build_stages(slug, item_type, pipeline_stage) -> list[StageInfo]
+
+#### Pass 1: Artifact Discovery
+
+For each stage, the function probes specific file paths and populates a
+stage_artifacts dictionary keyed by stage id.
+
+**Intake stage:**
+1. _find_original_request_file(slug) -> "User Request" (searches claimed/, backlog dirs, completed dirs)
+2. workspace_path(slug)/clauses.md -> "Clause Register"
+3. workspace_path(slug)/five-whys.md -> "5 Whys Analysis"
+
+**Requirements stage:**
+1. _find_structured_requirements_file(slug) -> "Structured Requirements" (workspace first, then docs/plans/ glob)
+
+**Planning stage:**
+1. _find_design_doc(slug) -> "Design Document" (workspace first, then docs/plans/ glob)
+2. _find_plan_yaml(slug) -> "YAML Plan" (exact match in tmp/plans/, then prefix glob)
+
+**Execution stage:**
+1. Log files (.log): scans WORKER_OUTPUT_DIR/slug/ then workspace logs/, sorted, deduplicated by filename
+2. Validation JSONs: scans workspace validation/ then WORKER_OUTPUT_DIR/slug/ for validation-*.json, deduplicated
+
+**Verification stage:**
+1. workspace verification-report.md -> "Verification Report" (workspace priority; first match wins)
+
+**Archive stage:**
+1. First match of slug.md across COMPLETED_DIRS values -> "Completion Record"
+
+After discovery, StageInfo dicts are constructed from STAGE_ORDER, skipping
+"verification" when item_type is "feature". Initial status is "not_started".
+
+#### Pass 2: Status Computation
+
+Delegates to _compute_stage_statuses(stages, pipeline_stage). See Status
+Computation Matrix below.
+
+#### Pass 3: Completion Timestamps
+
+For each stage with status "done" and at least one artifact:
+- completion_epoch = max(artifact.timestamp for all artifacts in stage)
+- completion_ts = _format_timestamp(completion_epoch)
+
+Stages with status "done" but no artifacts retain None for both timestamp fields.
+
+### Status Computation Matrix
+
+_compute_stage_statuses() uses _BASE_MATRIX mapping each pipeline_stage to
+per-stage status values.
+
+#### _BASE_MATRIX
+
+| pipeline_stage | intake | requirements | planning | execution | verification | archive |
+|---|---|---|---|---|---|---|
+| queued | N | N | N | N | N | N |
+| unknown | N | N | N | N | N | N |
+| claimed | P | N | N | N | N | N |
+| designing | D* | D* | P | N | N | N |
+| planning | D* | D* | P | N | N | N |
+| executing | D* | D* | D* | P | N | N |
+| validating | D* | D* | D* | D* | P | N |
+| completed | D | D | D | D | D | D |
+
+Legend: N = not_started, P = in_progress, D = done, D* = done with adjustment
+
+#### done* Adjustment Logic
+
+Stages in {intake, requirements, planning, execution, verification} are subject
+to the done* rule: when the base matrix assigns "done" AND pipeline_stage is not
+"completed" AND the stage has zero artifacts, status is downgraded to "in_progress".
+This prevents showing a stage as complete when no evidence of its output exists.
+
+The "archive" stage is excluded from this adjustment because its completion is
+self-evident from pipeline_stage being "completed".
+
+When pipeline_stage is "completed", all stages are unconditionally "done"
+regardless of artifact presence.
+
+#### Fallback for Unrecognised pipeline_stage
+
+When pipeline_stage is "stuck" or any unrecognised value (not in _BASE_MATRIX),
+status is derived from artifact presence: stages with artifacts are "done", the
+first without artifacts is "in_progress", all subsequent are "not_started".
+
+### API Extension: /dynamic Endpoint
+
+GET /item/{slug}/dynamic returns a JSON object. The stages field supports live
+polling of stage status without full page reload.
+
+#### stage_summaries Schema
+
+```
+stages: [
+    {
+        "id": string,              // e.g. "intake"
+        "status": string,          // "not_started" | "in_progress" | "done"
+        "completion_ts": string?,  // "YYYY-MM-DD HH:MM" or null
+        "completion_epoch": float?, // epoch seconds or null
+        "artifact_count": int      // number of discovered artifacts
+    },
+    ...
+]
+```
+
+The array contains one entry per visible stage (5 for features, 6 for defects).
+Each poll returns freshly computed stage data from build_stages(). The frontend
+compares artifact_count to detect new artifacts and clear cached content.
+
+### Artifact-to-Stage Mapping Table
+
+| Stage | Artifact Label | File Path Pattern | Discovery Function |
+|---|---|---|---|
+| intake | User Request | tmp/plans/.claimed/{slug}.md OR backlog/{slug}.md OR completed/{slug}.md | _find_original_request_file() |
+| intake | Clause Register | .worktrees/{slug}/clauses.md | Direct path check |
+| intake | 5 Whys Analysis | .worktrees/{slug}/five-whys.md | Direct path check |
+| requirements | Structured Requirements | .worktrees/{slug}/requirements.md OR docs/plans/*-{slug}-requirements.md | _find_structured_requirements_file() |
+| planning | Design Document | .worktrees/{slug}/design.md OR docs/plans/*-{slug}-design.md | _find_design_doc() |
+| planning | YAML Plan | tmp/plans/{slug}.yaml OR tmp/plans/{slug}*.yaml | _find_plan_yaml() |
+| execution | {filename}.log | docs/reports/worker-output/{slug}/*.log OR .worktrees/{slug}/logs/*.log | Directory scan, deduplicated |
+| execution | validation-*.json | .worktrees/{slug}/validation/*.json OR worker-output/{slug}/*.json | Glob scan, deduplicated |
+| verification | Verification Report | .worktrees/{slug}/verification-report.md OR worker-output/{slug}/verification-report.md | First-match priority |
+| archive | Completion Record | docs/completed-{type}/{slug}.md | First match across COMPLETED_DIRS |
+
+Priority rules: Workspace paths take priority over legacy docs/plans/ paths.
+Workspace verification-report.md takes priority over worker-output copy.
+Worker-output logs are listed before workspace logs. Workspace validation JSONs
+take priority over worker-output copies.
+
+### Timestamp Strategy
+
+```
+File on disk
+    |  stat().st_mtime (epoch float)
+    v
+_make_artifact()
+    |
+    +---> ArtifactInfo.timestamp (raw float, 0.0 on stat error)
+    +---> _format_timestamp(epoch) -> ArtifactInfo.timestamp_display
+
+Pass 3 of build_stages():
+    |  max(artifact.timestamp for all artifacts in stage)
+    |  (only for stages with status == "done" and len(artifacts) > 0)
+    v
+    +---> StageInfo.completion_epoch (raw float)
+    +---> _format_timestamp(max_epoch) -> StageInfo.completion_ts
+```
+
+Key properties:
+- All timestamps are local time (server timezone), not UTC
+- Format is "YYYY-MM-DD HH:MM" via _TIMESTAMP_FORMAT constant
+- 0.0 sentinel for unavailable mtime produces empty display strings
+- Stage completion timestamp is derived (max of artifact mtimes), not stored independently
+- /dynamic exposes both raw epoch and formatted string for display and comparison
+
+### Component Hierarchy
+
+```
+item_detail (FastAPI endpoint)
+    +-- build_stages(slug, item_type, pipeline_stage)
+    |       +-- _find_original_request_file(slug)
+    |       +-- _find_structured_requirements_file(slug)
+    |       +-- _find_design_doc(slug)
+    |       +-- _find_plan_yaml(slug)
+    |       +-- _make_artifact(name, path)  [per discovered file]
+    |       +-- _compute_stage_statuses(stages, pipeline_stage)
+    |       +-- _format_timestamp(epoch)  [Pass 3]
+    |       v
+    |   list[StageInfo] --> template as "stages"
+    +-- item.html template
+            +-- Stage accordion (iterates stages)
+            |       +-- Stage header (name, status badge, completion_ts)
+            |       +-- Stage body (iterates artifacts)
+            |               +-- Artifact row (name, timestamp_display)
+            |               +-- Content area (lazy-loaded via AJAX)
+            +-- JavaScript
+                    +-- Expand/collapse with localStorage persistence
+                    +-- AJAX fetch to /artifact-content?path=...
+                    +-- Polling /dynamic for stage_summaries updates
+```
+
+### Trade-off Analysis
+
+**Chosen: Server-side stage computation with client-side lazy loading**
+
+Pros:
+- Single source of truth for stage/status logic in Python
+- Template receives pre-computed data; no complex client logic
+- Artifact content deferred to AJAX keeps initial payload small
+- Existing /artifact-content endpoint reused without modification
+
+Cons:
+- Every /dynamic poll recomputes all stages (includes filesystem stat calls)
+- Stage computation is not cached between page load and first poll
+
+**Alternative: Client-side stage computation from raw artifact list** - Rejected
+because it duplicates stage-ordering and status-matrix logic in JavaScript,
+harder to maintain, violates existing server-side rendering pattern.
+
+**Alternative: Embed all artifact content at page load** - Rejected because it
+produces slow initial load for items with many execution logs and wastes
+bandwidth for collapsed stages the user never expands.
+
+### Scalability Considerations
+
+- **Artifact count growth:** Execution stage can accumulate unbounded log files.
+  Lazy loading handles this (content fetched only on expand). /dynamic returns
+  only artifact_count. Pagination within a stage could be added without changing
+  the StageInfo model.
+
+- **New pipeline stages:** Adding a stage requires only appending to STAGE_ORDER
+  and adding a row to _BASE_MATRIX. build_stages() and template iterate
+  dynamically over STAGE_ORDER.
+
+- **New artifact types:** Adding an artifact to an existing stage requires only
+  adding a discovery block in Pass 1 of build_stages(). No schema changes needed.
+
+---
+
 ## Design -> AC Traceability Grid
 
 | AC | Design Decision(s) | Approach |

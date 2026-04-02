@@ -20,7 +20,7 @@ sections:
     name: Systems design for execution history tree rendering
     agent: systems-designer
     parallel_group: design-phase0
-    status: failed
+    status: pending
     target_acs:
     - AC2
     - AC3
@@ -43,15 +43,11 @@ sections:
       from template context bootstraps the initial display.
 
       '
-    last_attempt: '2026-04-02T14:31:20.862344'
-    attempts: 1
-    model_used: opus
-    result_message: Failed to create git worktree
   - id: '0.2'
     name: UX design for execution history tree rendering
     agent: ux-designer
     parallel_group: design-phase0
-    status: failed
+    status: pending
     target_acs:
     - AC2
     - AC3
@@ -75,15 +71,11 @@ sections:
       stack.
 
       '
-    last_attempt: '2026-04-02T14:31:20.845809'
-    attempts: 1
-    model_used: opus
-    result_message: Failed to create git worktree
   - id: '0.3'
     name: Frontend implementation design for execution history tree
     agent: frontend-coder
     parallel_group: design-phase0
-    status: failed
+    status: pending
     target_acs:
     - AC2
     - AC3
@@ -106,10 +98,6 @@ sections:
       via extra_head block.
 
       '
-    last_attempt: '2026-04-02T14:31:20.829838'
-    attempts: 1
-    model_used: opus
-    result_message: Failed to create git worktree
   - id: '0.4'
     name: Judge execution history tree design competition
     agent: design-judge
@@ -162,9 +150,7 @@ sections:
     - AC1
     - AC2
     - AC5
-    - AC6
-    - AC7
-    description: 'Implement P1, P2, FR1 per D1, D2, D3 from work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md
+    description: 'Implement P1, P2 per D1, D2, D3 from work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md
       Design: docs/plans/2026-04-02-83-trace-links-empty-or-missing-design.md Requirements:
       docs/plans/2026-04-02-83-trace-links-empty-or-missing-requirements.md
 

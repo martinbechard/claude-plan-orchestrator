@@ -50,8 +50,8 @@ completions. The template shows a dash instead of a link.
 
 ### D1: Always generate and persist a trace UUID
 
-- **Addresses:** P1, FR1
-- **Satisfies:** AC1, AC6, AC7
+- **Addresses:** P1
+- **Satisfies:** AC1, AC5
 - **Approach:** Modify create_root_run() so it always generates a UUID and
   writes the marker line to the item file, regardless of _tracing_active or
   langsmith availability. When tracing IS active, continue creating the
@@ -63,8 +63,8 @@ completions. The template shows a dash instead of a link.
 
 ### D2: Ensure a root trace row exists for every completion
 
-- **Addresses:** P2, FR1
-- **Satisfies:** AC2, AC5, AC6
+- **Addresses:** P2
+- **Satisfies:** AC2, AC5
 - **Approach:** Modify record_completion() in proxy.py so that when called
   with a non-null run_id, it checks whether a trace row exists for that
   run_id. If not, it inserts a synthetic root trace row with the slug as
@@ -76,7 +76,7 @@ completions. The template shows a dash instead of a link.
 ### D3: Backfill NULL run_ids in existing completions
 
 - **Addresses:** P1
-- **Satisfies:** AC1, AC6
+- **Satisfies:** AC1
 - **Approach:** Add a migration step in _init_db() that finds all completions
   rows with NULL run_id, generates a UUID for each, updates the completion
   row, and inserts a synthetic root trace row. This ensures historical
@@ -98,6 +98,8 @@ completions. The template shows a dash instead of a link.
       duration) from the trace row data passed via template context.
   Update execution_history.html to include the script tag and pass initial
   run data to the JS via a data attribute or inline JSON.
+  Update execution_history.py route to pass completion/run context data
+  that the template can embed for the empty-tree fallback.
 - **Files:** langgraph_pipeline/web/static/execution-history.js (new),
   langgraph_pipeline/web/templates/execution_history.html,
   langgraph_pipeline/web/routes/execution_history.py
@@ -110,6 +112,4 @@ completions. The template shows a dash instead of a link.
 | AC2 | D2, D4 | Synthetic trace row prevents 404; JS renders tree content on the page |
 | AC3 | D4 | JS fetches tree from API and renders in the page shell; link already navigates correctly |
 | AC4 | D4 | JS renders nested collapsible tree showing parent/child hierarchy |
-| AC5 | D2, D4 | UUID generated from same code path (valid LangSmith format); synthetic trace row references it; JS renders LangSmith trace data |
-| AC6 | D1, D2, D3 | UUID always written to item file; supervisor always reads it; record_completion always stores it; backfill covers historical rows |
-| AC7 | D1 | UUID stored in completions.run_id populates the Trace column link via template conditional |
+| AC5 | D1, D2, D4 | UUID always generated (valid LangSmith format); synthetic trace row ensures lookup works; JS renders trace data |
