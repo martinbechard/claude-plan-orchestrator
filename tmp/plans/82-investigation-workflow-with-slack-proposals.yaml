@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Create proposal data model, persistence, and response parser
     agent: coder
-    status: in_progress
+    status: completed
     target_acs:
     - AC7
     - AC8
@@ -111,6 +111,13 @@ sections:
     last_attempt: '2026-04-02T14:39:54.530594'
     attempts: 1
     model_used: sonnet
+    completed_at: '2026-04-02T14:43:57.582279'
+    result_message: Implemented markdown rendering (marked.js v9.1.6 via CDN with
+      SRI hash), shared renderArtifactContent() helper for both loadStageArtifacts()
+      and artifact-path-link handler, div.md-rendered sibling elements in both sections,
+      CSS grid blowout fix (min-width:0 on .item-layout>*), overflow:hidden on .step-explorer,
+      max-width:100% on content containers, and full dark-theme .md-rendered CSS.
+      All 1795 tests pass.
 - id: '2'
   name: Investigation Analysis Engine
   status: pending
