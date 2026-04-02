@@ -139,7 +139,7 @@ sections:
     - '0.1'
     - '0.2'
     - '0.3'
-    status: completed
+    status: verified
     target_acs:
     - AC1
     - AC2
@@ -172,7 +172,7 @@ sections:
     agent: planner
     dependencies:
     - '0.4'
-    status: pending
+    status: in_progress
     description: 'Read the winning UI design from the design competition (task 0.4)
       and extend this YAML plan with concrete implementation details for frontend
       tasks. Work item: tmp/plans/.claimed/74-item-page-step-explorer.md Requirements:
@@ -180,6 +180,9 @@ sections:
 
       Frontend tasks in section 2 should be refined with specifics from the winning
       design. Backend task in section 1 is already specified.'
+    last_attempt: '2026-04-02T15:12:37.653881'
+    attempts: 1
+    model_used: opus
 - id: '1'
   name: 'Backend: Stage Data Model, Status Computation, and API'
   status: pending

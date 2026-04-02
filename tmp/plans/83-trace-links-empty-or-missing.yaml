@@ -167,7 +167,7 @@ sections:
     agent: planner
     dependencies:
     - '0.4'
-    status: completed
+    status: verified
     description: 'Read the winning UI design from the design competition (task 0.4)
       and extend this YAML plan with concrete implementation details for frontend
       tasks. Work item: tmp/plans/.claimed/83-trace-links-empty-or-missing.md Requirements:
@@ -196,7 +196,7 @@ sections:
   - id: '1.1'
     name: Always capture trace UUIDs and ensure trace rows exist in DB
     agent: coder
-    status: pending
+    status: in_progress
     target_acs:
     - AC1
     - AC2
@@ -228,6 +228,9 @@ sections:
       creates synthetic trace row, backfill migration populates NULL run_ids.
 
       '
+    last_attempt: '2026-04-02T15:09:34.985267'
+    attempts: 1
+    model_used: opus
 - id: '2'
   name: 'Frontend: Execution History Tree Rendering'
   status: pending
