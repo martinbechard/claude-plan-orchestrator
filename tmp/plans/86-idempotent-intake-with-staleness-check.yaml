@@ -19,7 +19,7 @@ sections:
   - id: '1.1'
     name: Create artifact_cache module with record and freshness functions
     agent: coder
-    status: completed
+    status: verified
     target_acs:
     - AC3
     - AC4
@@ -49,6 +49,10 @@ sections:
       and is_artifact_fresh() using SHA-256 content hashing and a .artifact-meta.json
       sidecar. Created tests/langgraph/shared/test_artifact_cache.py with 16 unit
       tests covering all specified scenarios. All 1815 tests pass.
+    validation_attempts: 1
+    validation_findings: artifact_cache module correctly implements record_artifact
+      and is_artifact_fresh with SHA-256 hashing and .artifact-meta.json sidecar.
+      All 16 unit tests pass, full suite of 1815 tests pass with no regressions.
 - id: '2'
   name: 'Intake: Clause Extraction and Five-Whys Idempotency'
   status: pending
@@ -58,7 +62,7 @@ sections:
     agent: coder
     dependencies:
     - '1.1'
-    status: pending
+    status: in_progress
     target_acs:
     - AC1
     - AC2
@@ -88,6 +92,9 @@ sections:
       Update tests in tests/langgraph/pipeline/nodes/test_intake.py to cover: clause
       extraction skipped when fresh, 5 Whys skipped when fresh, both re-run when item
       changes, and _has_five_whys fallback behavior.'
+    last_attempt: '2026-04-02T14:53:52.572712'
+    attempts: 1
+    model_used: sonnet
 - id: '3'
   name: 'Downstream: Requirements and Plan Creation Idempotency'
   status: pending
