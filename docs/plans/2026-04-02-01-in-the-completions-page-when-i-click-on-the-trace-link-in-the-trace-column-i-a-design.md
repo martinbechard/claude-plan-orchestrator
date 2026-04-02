@@ -41,45 +41,42 @@ The disconnect occurs because:
   doesn't 404, but the trace has no children.
 
 The fix must bridge completions to their real trace trees. Real root
-traces often share the same slug/name as the completion (set in
-create_root_run() via item_slug). A secondary fallback shows meaningful
-completion metadata when no real trace tree can be found.
+traces share the same slug/name as the completion (set in create_root_run()
+via item_slug). A secondary fallback shows meaningful completion metadata
+when no real trace tree can be found.
 
 ## Key Files to Modify
 
 | File | Action |
 |------|--------|
-| langgraph_pipeline/web/proxy.py | Add find_real_trace_for_completion() and migrate_completion_run_ids() |
-| langgraph_pipeline/web/routes/execution_history.py | Modify to redirect to real trace when synthetic detected |
-| langgraph_pipeline/web/static/execution-history.js | Modify renderEmptyTree() to show completion summary data |
-| langgraph_pipeline/web/templates/execution_history.html | Pass completion context data for fallback display |
-| tests/langgraph/web/test_proxy.py | Add tests for find_real_trace_for_completion() |
+| langgraph_pipeline/web/proxy.py | Add find_real_trace_for_completion(), is_synthetic_trace(), migrate_completion_run_ids() |
+| langgraph_pipeline/web/routes/execution_history.py | Redirect synthetic traces to real traces; pass completion context for fallback |
+| langgraph_pipeline/web/static/execution-history.js | Update renderEmptyTree() to show completion summary card |
+| langgraph_pipeline/web/templates/execution_history.html | Add data attributes for completion context |
+| tests/langgraph/web/test_proxy.py | Add tests for new proxy methods |
 | tests/langgraph/web/test_execution_history.py | Add tests for synthetic-to-real redirect |
 
 ## Design Decisions
 
 ### D1: Resolve real trace root by slug matching
 
-- **Addresses:** P1
-- **Satisfies:** AC2, AC3, AC4
-- **Approach:** Add find_real_trace_for_completion() to proxy.py. When the
-  execution history page detects a synthetic trace (metadata_json contains
-  "synthetic": true), it looks up the completion's slug from the completions
-  table, then queries traces for a non-synthetic root run (parent_run_id IS
-  NULL) matching that slug name. If a real trace root is found, the route
-  redirects (HTTP 302) to /execution-history/{real_run_id}. This transparently
-  resolves the empty page for completions that have matching real traces.
+- **Addresses:** P1, UC1
+- **Satisfies:** AC2, AC3, AC4, AC5
+- **Approach:** Add find_real_trace_for_completion(run_id) to proxy.py.
+  Given a synthetic trace run_id, look up the completion's slug from the
+  completions table, then query traces for a non-synthetic root run
+  (parent_run_id IS NULL) matching that slug name. Return the real run_id
+  or None.
 
   Query: SELECT run_id FROM traces WHERE parent_run_id IS NULL
          AND name = ? AND run_id != ?
          AND (metadata_json IS NULL OR metadata_json NOT LIKE '%"synthetic"%')
          ORDER BY start_time DESC LIMIT 1
 
-  The NOT LIKE check avoids matching other synthetic traces. ORDER BY
-  start_time DESC picks the most recent matching trace (in case a work item
-  was retried).
+  Also add is_synthetic_trace(run_id) helper that checks metadata_json for
+  the "synthetic" flag.
 
-- **Files:** langgraph_pipeline/web/proxy.py, langgraph_pipeline/web/routes/execution_history.py
+- **Files:** langgraph_pipeline/web/proxy.py
 
 ### D2: Startup migration to re-link completion run_ids
 
@@ -89,50 +86,48 @@ completion metadata when no real trace tree can be found.
   For each completion whose run_id points to a synthetic trace row, find a
   real root trace by slug (same query as D1). If found, update the
   completion's run_id to the real trace run_id. This permanently fixes the
-  data so future navigations work without the D1 redirect. The migration
+  data so future navigations work without runtime redirect. The migration
   is idempotent and runs at each startup (no-op once all completions are
-  re-linked).
-
-  Also update the completion's attempts_history JSON to reflect the new
-  run_id for the most recent attempt.
+  re-linked). Also update the completion's attempts_history JSON to reflect
+  the new run_id for the most recent attempt.
 
 - **Files:** langgraph_pipeline/web/proxy.py
 
 ### D3: Show completion summary when no real trace exists
 
-- **Addresses:** P1
-- **Satisfies:** AC2, AC4
+- **Addresses:** P1, UC1
+- **Satisfies:** AC2, AC6
 - **Approach:** When the tree is empty and no real trace can be found (D1
-  found no match), show a meaningful completion summary instead of the generic
-  "No detailed trace data available" message. The execution history route
-  passes completion data (outcome, cost, duration, finished_at, attempt
-  history) to the template via data attributes. The JS renderEmptyTree()
-  renders this data as a structured summary card with outcome badge, cost,
-  duration, and timestamp. This ensures the page is never perceived as
-  "empty" even when no trace tree exists.
+  found no match), show a meaningful completion summary instead of the
+  generic "No detailed trace data available" message. The execution history
+  route passes completion data (outcome, cost, duration, finished_at) to
+  the template via data attributes. The JS renderEmptyTree() renders this
+  as a structured summary card with outcome badge, cost, duration, and
+  timestamp. This ensures the page is never perceived as "empty."
 - **Files:** langgraph_pipeline/web/routes/execution_history.py, langgraph_pipeline/web/templates/execution_history.html, langgraph_pipeline/web/static/execution-history.js
 
-### D4: Execution history API tree endpoint handles synthetic redirect
+### D4: Execution history route and API handle synthetic redirect
 
-- **Addresses:** P1
-- **Satisfies:** AC2, AC3
-- **Approach:** The /api/execution-tree/{run_id} endpoint checks if the
-  returned tree is empty and the root trace is synthetic. If so, it applies
-  the same slug-matching logic from D1 to find a real trace root and returns
-  that tree instead. This means the page-level redirect (D1) and the API
-  endpoint both handle the synthetic case, providing defense in depth.
-  The API response includes a "resolved_run_id" field when the run_id was
-  resolved from a synthetic to a real trace, so the client JS can update
-  the URL if needed.
+- **Addresses:** P1, UC1
+- **Satisfies:** AC1, AC2, AC3, AC5
+- **Approach:** In execution_history.py: (1) execution_history_page() checks
+  if the trace is synthetic via is_synthetic_trace(). If so, calls
+  find_real_trace_for_completion(run_id). If a real run_id is found, returns
+  RedirectResponse(302) to /execution-history/{real_run_id}. (2) The
+  /api/execution-tree/{run_id} endpoint applies the same resolution when
+  the tree is empty and the trace is synthetic, returning the real tree
+  with a "resolved_run_id" field. (3) The route passes completion data
+  (outcome, cost, duration, finished_at) to the template context for the
+  D3 fallback display.
 - **Files:** langgraph_pipeline/web/routes/execution_history.py, langgraph_pipeline/web/proxy.py
 
 ## Design -> AC Traceability Grid
 
 | AC | Design Decision(s) | Approach |
 |----|-------------------|----------|
-| AC1 | (already works) | Navigation to Execution History page via Trace link already functions correctly |
+| AC1 | D4 | Navigation already works; redirect (D4) ensures correct trace loads after navigation |
 | AC2 | D1, D2, D3, D4 | Resolve real trace by slug (D1/D2/D4); show completion summary when no real trace (D3) |
-| AC3 | D1, D4 | Redirect to real trace run_id ensures the identifier is correctly resolved end-to-end |
-| AC4 | D1, D2, D3 | Migration (D2) re-links all completions; redirect (D1) catches any remaining; fallback (D3) handles rest |
-| AC5 | D2 | Migration specifically handles the b9036e15 trace ID by re-linking its completion to a real trace |
-| AC6 | D1, D3 | Slug-based resolution (D1) ensures displayed trace data matches the clicked item; completion summary (D3) shows the specific completion's metadata |
+| AC3 | D1, D4 | Multiple items work because slug-matching resolves each completion to its specific real trace |
+| AC4 | D1, D2 | find_real_trace_for_completion() resolves the correct identifier; migration (D2) fixes at startup |
+| AC5 | D1, D2, D4 | Trace identifier resolved via slug match; migration re-links permanently; API endpoint resolves on fetch |
+| AC6 | D1, D3 | Slug-based resolution (D1) ensures displayed trace matches clicked item; fallback (D3) shows correct completion metadata |

@@ -1,0 +1,91 @@
+meta:
+  name: 01-in-the-completions-page-when-i-click-on-the-trace-link-in-the-trace-column-i-a
+  source_item: tmp/plans/.claimed/01-in-the-completions-page-when-i-click-on-the-trace-link-in-the-trace-column-i-a.md
+  requirements_path: docs/plans/2026-04-02-01-in-the-completions-page-when-i-click-on-the-trace-link-in-the-trace-column-i-a-requirements.md
+  validation:
+    enabled: true
+    run_after:
+    - coder
+    - e2e-test-agent
+    - frontend-coder
+    validators:
+    - validator
+    max_validation_attempts: 2
+sections:
+- id: '1'
+  name: 'Backend: resolve real trace roots for synthetic completion run_ids'
+  status: pending
+  tasks:
+  - id: '1.1'
+    name: Add synthetic trace resolution methods and startup migration to proxy.py
+    agent: coder
+    status: pending
+    target_acs:
+    - AC2
+    - AC3
+    - AC4
+    - AC5
+    description: >-
+      Implement requirements P1, UC1 (D1, D2) from work item:
+      tmp/plans/.claimed/01-in-the-completions-page-when-i-click-on-the-trace-link-in-the-trace-column-i-a.md
+      Design: docs/plans/2026-04-02-01-in-the-completions-page-when-i-click-on-the-trace-link-in-the-trace-column-i-a-design.md
+
+      In proxy.py add three methods: (1) is_synthetic_trace(run_id) -- check
+      metadata_json for "synthetic" flag. (2) find_real_trace_for_completion(run_id)
+      -- given a synthetic trace run_id, look up the completion slug, then find a
+      non-synthetic root trace (parent_run_id IS NULL) matching that slug name,
+      return the real run_id or None. (3) migrate_completion_run_ids() -- called
+      from _init_db(), iterate all completions with synthetic run_ids and re-link
+      them to real traces where available.
+  - id: '1.2'
+    name: Update execution history route to redirect synthetic traces to real ones
+    agent: coder
+    status: pending
+    dependencies:
+    - '1.1'
+    target_acs:
+    - AC1
+    - AC2
+    - AC3
+    - AC5
+    description: >-
+      Implement requirements P1, UC1 (D4) from work item:
+      tmp/plans/.claimed/01-in-the-completions-page-when-i-click-on-the-trace-link-in-the-trace-column-i-a.md
+      Design: docs/plans/2026-04-02-01-in-the-completions-page-when-i-click-on-the-trace-link-in-the-trace-column-i-a-design.md
+
+      In execution_history.py: (1) In execution_history_page(), after fetching the
+      run, check if synthetic via proxy.is_synthetic_trace(). If so, call
+      find_real_trace_for_completion(run_id). If real run_id found, return
+      RedirectResponse(302) to /execution-history/{real_run_id}. (2) In
+      execution_tree_api(), if tree is empty and trace is synthetic, resolve to
+      real trace and return that tree with "resolved_run_id" field. (3) Pass
+      completion data (outcome, cost, duration, finished_at) to template context
+      for D3 fallback display.
+- id: '2'
+  name: 'Frontend: completion summary fallback for empty trace pages'
+  status: pending
+  tasks:
+  - id: '2.1'
+    name: Update execution history template and JS for completion summary fallback
+    agent: frontend-coder
+    status: pending
+    dependencies:
+    - '1.2'
+    target_acs:
+    - AC2
+    - AC4
+    - AC6
+    description: >-
+      Implement requirements P1, UC1 (D3) from work item:
+      tmp/plans/.claimed/01-in-the-completions-page-when-i-click-on-the-trace-link-in-the-trace-column-i-a.md
+      Design: docs/plans/2026-04-02-01-in-the-completions-page-when-i-click-on-the-trace-link-in-the-trace-column-i-a-design.md
+
+      In execution_history.html, add data attributes for completion context
+      (data-completion-outcome, data-completion-cost, data-completion-duration,
+      data-completion-finished) populated from the template context.
+
+      In execution-history.js, update renderEmptyTree() to check for completion
+      data attributes. When present, render a structured summary card showing:
+      outcome badge, cost, duration, and timestamp instead of the generic
+      "No detailed trace data available" message. Keep the generic message as
+      fallback only when no completion data is available.
