@@ -100,23 +100,26 @@ class TestInvokeClaude:
         with patch("subprocess.run") as mock_run:
             mock_run.return_value.stdout = '{"result": "Result: PASS\\nNotes: Tests pass.", "total_cost_usd": 0.05}'
             mock_run.return_value.returncode = 0
-            text, cost = _invoke_claude("some prompt")
+            text, cost, infra_error = _invoke_claude("some prompt")
         assert "PASS" in text
         assert cost == 0.05
+        assert infra_error is False
 
     def test_returns_empty_string_on_timeout(self):
         import subprocess
 
         with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("claude", 300)):
-            text, cost = _invoke_claude("some prompt")
+            text, cost, infra_error = _invoke_claude("some prompt")
         assert text == ""
         assert cost == 0.0
+        assert infra_error is True
 
     def test_returns_empty_string_on_os_error(self):
         with patch("subprocess.run", side_effect=OSError("not found")):
-            text, cost = _invoke_claude("some prompt")
+            text, cost, infra_error = _invoke_claude("some prompt")
         assert text == ""
         assert cost == 0.0
+        assert infra_error is True
 
 
 # ─── verify_fix node ──────────────────────────────────────────────────────────
@@ -127,7 +130,7 @@ class TestVerifyFix:
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value=("Result: PASS\nNotes: All tests pass.", 0.0),
+            return_value=("Result: PASS\nNotes: All tests pass.", 0.0, False),
         ):
             result = verify_fix(state)
         assert "verification_history" in result
@@ -137,7 +140,7 @@ class TestVerifyFix:
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value=("Result: PASS\nNotes: Fixed.", 0.0),
+            return_value=("Result: PASS\nNotes: Fixed.", 0.0, False),
         ):
             result = verify_fix(state)
         assert result["verification_history"][0]["outcome"] == "PASS"
@@ -146,7 +149,7 @@ class TestVerifyFix:
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value=("Result: FAIL\nNotes: Tests still failing.", 0.0),
+            return_value=("Result: FAIL\nNotes: Tests still failing.", 0.0, False),
         ):
             result = verify_fix(state)
         assert result["verification_history"][0]["outcome"] == "FAIL"
@@ -155,7 +158,7 @@ class TestVerifyFix:
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value=("", 0.0),
+            return_value=("", 0.0, False),
         ):
             result = verify_fix(state)
         assert result["verification_history"][0]["outcome"] == "FAIL"
@@ -164,7 +167,7 @@ class TestVerifyFix:
         state = _make_state(verification_cycle=1)
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value=("Result: PASS", 0.0),
+            return_value=("Result: PASS", 0.0, False),
         ):
             result = verify_fix(state)
         assert result["verification_cycle"] == 2
@@ -173,7 +176,7 @@ class TestVerifyFix:
         state = _make_state(verification_cycle=0)
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value=("Result: PASS", 0.0),
+            return_value=("Result: PASS", 0.0, False),
         ):
             result = verify_fix(state)
         assert result["verification_cycle"] == 1
@@ -188,7 +191,7 @@ class TestVerifyFix:
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value=("Result: PASS", 0.0),
+            return_value=("Result: PASS", 0.0, False),
         ):
             result = verify_fix(state)
         record = result["verification_history"][0]
@@ -199,7 +202,7 @@ class TestVerifyFix:
         state = _make_state()
         with patch(
             "langgraph_pipeline.pipeline.nodes.verification._invoke_claude",
-            return_value=("Result: PASS\nNotes: Everything is working.", 0.0),
+            return_value=("Result: PASS\nNotes: Everything is working.", 0.0, False),
         ):
             result = verify_fix(state)
         assert "PASS" in result["verification_history"][0]["notes"]

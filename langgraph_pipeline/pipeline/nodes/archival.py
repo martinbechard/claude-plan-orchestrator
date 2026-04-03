@@ -43,6 +43,7 @@ SLACK_LEVEL_ERROR = "error"
 ARCHIVE_OUTCOME_SUCCESS = "completed"
 ARCHIVE_OUTCOME_EXHAUSTED = "exhausted"
 ARCHIVE_OUTCOME_INCOMPLETE = "incomplete"
+ARCHIVE_OUTCOME_DEADLOCK = "deadlock"
 
 ARCHIVE_TERMINAL_STATUSES = frozenset({"verified", "failed", "skipped"})
 
@@ -51,7 +52,7 @@ ARCHIVE_WARNINGS_FILENAME = "archive-warnings.txt"
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def _find_non_terminal_tasks(plan_path: Optional[str]) -> list[tuple[str, str, str]]:
+def _find_non_terminal_tasks(plan_path: Optional[str]) -> Optional[list[tuple[str, str, str]]]:
     """Read the plan YAML and return tasks that have not reached a terminal status.
 
     Returns a list of (task_id, task_name, task_status) tuples for every task
@@ -78,8 +79,8 @@ def _find_non_terminal_tasks(plan_path: Optional[str]) -> list[tuple[str, str, s
                     ))
         return non_terminal
     except (OSError, yaml.YAMLError) as exc:
-        print(f"[archive] Could not read plan YAML for task status check: {exc}")
-        return []
+        logger.warning("[archive] Could not read plan YAML for task status check: %s", exc)
+        return None
 
 
 def _last_verification_outcome(state: PipelineState) -> Optional[str]:
@@ -94,7 +95,11 @@ def _determine_outcome(
     state: PipelineState,
     non_terminal_tasks: Optional[list[tuple[str, str, str]]] = None,
 ) -> str:
-    """Classify the archive outcome as completed, exhausted, or incomplete.
+    """Classify the archive outcome as completed, exhausted, incomplete, or deadlock.
+
+    When executor_deadlock is True, the outcome is ARCHIVE_OUTCOME_DEADLOCK regardless
+    of item type or task state — this is the most specific failure classification and
+    takes priority over all other outcomes.
 
     When non_terminal_tasks is non-empty, the outcome is ARCHIVE_OUTCOME_INCOMPLETE
     regardless of item type or verification history. This acts as a pre-commit gate
@@ -106,7 +111,10 @@ def _determine_outcome(
     determines success. When the last outcome is FAIL (cycles exhausted caused routing
     to archive), the item is marked as exhausted rather than completed.
     """
-    if non_terminal_tasks:
+    if state.get("executor_deadlock"):
+        return ARCHIVE_OUTCOME_DEADLOCK
+
+    if non_terminal_tasks is None or non_terminal_tasks:
         return ARCHIVE_OUTCOME_INCOMPLETE
 
     item_type: str = state.get("item_type", "feature")
@@ -119,8 +127,8 @@ def _determine_outcome(
     if last_outcome == "FAIL":
         return ARCHIVE_OUTCOME_EXHAUSTED
 
-    # No verification history for a defect: treat as success (plan ran without verify).
-    return ARCHIVE_OUTCOME_SUCCESS
+    # No verification history for a defect: unknown state — treat as exhausted.
+    return ARCHIVE_OUTCOME_EXHAUSTED
 
 
 def _move_item_to_completed(item_path: str, item_type: str) -> Optional[str]:
@@ -196,12 +204,33 @@ def _build_slack_message(
     item_type: str,
     outcome: str,
     non_terminal_tasks: Optional[list[tuple[str, str, str]]] = None,
+    deadlock_details: Optional[list[dict]] = None,
 ) -> tuple[str, str]:
     """Build a (message, level) pair for the archive Slack notification.
 
     Returns (message_text, slack_level).
     """
     type_label = item_type.capitalize()
+    if outcome == ARCHIVE_OUTCOME_DEADLOCK:
+        task_lines = "\n".join(
+            "  \u2022 {}: {} (unsatisfied: {})".format(
+                d.get("task_id", "?"),
+                d.get("task_name", ""),
+                ", ".join(d.get("unsatisfied_deps") or []),
+            )
+            for d in (deadlock_details or [])
+        )
+        body = (
+            f"\nBlocked tasks:\n{task_lines}" if task_lines
+            else "\nNo blocked task details available."
+        )
+        msg = (
+            f":rotating_light: *{type_label} deadlock* \u2014 {item_name}\n"
+            f"Executor exited with pending tasks that could not proceed "
+            f"due to unsatisfied dependencies.{body}"
+        )
+        return msg, SLACK_LEVEL_ERROR
+
     if outcome == ARCHIVE_OUTCOME_EXHAUSTED:
         msg = (
             f":no_entry: *{type_label} exhausted* — {item_name}\n"
@@ -323,10 +352,12 @@ def archive(state: PipelineState) -> dict:
 
     # Step 0: Pre-archive validation gate — detect non-terminal tasks.
     non_terminal_tasks = _find_non_terminal_tasks(plan_path)
-    if non_terminal_tasks:
-        print(f"[archive] WARNING: {len(non_terminal_tasks)} non-terminal task(s) found:")
+    if non_terminal_tasks is None:
+        logger.warning("[archive] Could not determine task state for %s — treating as incomplete", item_slug)
+    elif non_terminal_tasks:
+        logger.warning("[archive] %d non-terminal task(s) found for %s:", len(non_terminal_tasks), item_slug)
         for task_id, task_name, task_status in non_terminal_tasks:
-            print(f"  - {task_id}: {task_name!r} (status={task_status})")
+            logger.warning("  - %s: %r (status=%s)", task_id, task_name, task_status)
 
     outcome = _determine_outcome(state, non_terminal_tasks)
 
@@ -354,7 +385,8 @@ def archive(state: PipelineState) -> dict:
         _write_archive_warnings(item_slug, non_terminal_tasks)
 
     # Step 5: Slack notification.
-    message, level = _build_slack_message(item_name, item_type, outcome, non_terminal_tasks)
+    deadlock_details = state.get("executor_deadlock_details") if state.get("executor_deadlock") else None
+    message, level = _build_slack_message(item_name, item_type, outcome, non_terminal_tasks, deadlock_details)
     notifier = SlackNotifier()
     notifier.send_status(message, level=level)
 

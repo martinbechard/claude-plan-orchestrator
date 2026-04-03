@@ -14,6 +14,7 @@ from typing import Literal, Optional
 import yaml
 
 from langgraph_pipeline.shared.claude_cli import call_claude
+from langgraph_pipeline.shared.paths import DEFECT_DIR, FEATURE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,24 @@ LLM_FALLBACK_TIMEOUT_S = 60
 
 # Model used for the LLM fallback when deterministic parsing fails
 LLM_FALLBACK_MODEL = "haiku"
+
+# Backlog filing constants
+TITLE_SLUG_MAX_LEN = 60
+SEQ_FILE_PATTERN = re.compile(r"^(\d+)-")
+
+SEVERITY_TO_PRIORITY: dict[str, str] = {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+}
+
+PROPOSAL_TYPE_TO_DIR: dict[str, str] = {
+    "defect": DEFECT_DIR,
+    "enhancement": FEATURE_DIR,
+}
+
+_TITLE_NON_ALPHANUM = re.compile(r"[^a-z0-9]+")
 
 
 # ─── Data model ───────────────────────────────────────────────────────────────
@@ -206,6 +225,93 @@ def _llm_fallback(text: str, proposal_count: int) -> set[int]:
     except (json.JSONDecodeError, TypeError) as exc:
         logger.warning("LLM fallback JSON parse error: %s", exc)
         return set()
+
+
+def _slugify_title(title: str) -> str:
+    """Convert a title to a filename-safe kebab-case slug."""
+    slug = _TITLE_NON_ALPHANUM.sub("-", title.lower()).strip("-")
+    return slug[:TITLE_SLUG_MAX_LEN]
+
+
+def _next_sequence_number(directory: str) -> int:
+    """Return the next available sequence number for a backlog directory.
+
+    Scans for files matching ##-*.md and returns max_found + 1.
+    Returns 1 if the directory is empty or does not exist.
+    """
+    path = Path(directory)
+    if not path.exists():
+        return 1
+    max_num = 0
+    for f in path.glob("*.md"):
+        match = SEQ_FILE_PATTERN.match(f.name)
+        if match:
+            max_num = max(max_num, int(match.group(1)))
+    return max_num + 1
+
+
+def _write_backlog_item(proposal: Proposal, target_dir: str, investigation_slug: str) -> str:
+    """Write a single proposal as a backlog markdown file.
+
+    Creates the target directory if it does not exist.
+
+    Args:
+        proposal: The proposal to file.
+        target_dir: Target backlog directory path.
+        investigation_slug: Slug of the originating investigation item.
+
+    Returns:
+        Absolute path of the written file.
+    """
+    priority = SEVERITY_TO_PRIORITY.get(proposal.severity, "Medium")
+    seq = _next_sequence_number(target_dir)
+    slug = _slugify_title(proposal.title)
+    filename = f"{seq:02d}-{slug}.md"
+    target_path = Path(target_dir)
+    target_path.mkdir(parents=True, exist_ok=True)
+    filepath = target_path / filename
+
+    content = (
+        f"# {proposal.title}\n\n"
+        f"## Status: Open\n\n"
+        f"## Priority: {priority}\n\n"
+        f"## Summary\n\n"
+        f"{proposal.description}\n\n"
+        f"## Source\n\n"
+        f"Filed from investigation `{investigation_slug}`, proposal #{proposal.number}.\n"
+    )
+    filepath.write_text(content, encoding="utf-8")
+    logger.info(
+        "Filed proposal number=%d type=%s to %s", proposal.number, proposal.proposal_type, filepath
+    )
+    return str(filepath)
+
+
+def file_accepted_proposals(proposal_set: ProposalSet) -> None:
+    """File all accepted proposals in proposal_set as standard backlog items.
+
+    Iterates over proposals with status == 'accepted'. For each:
+    - Routes to DEFECT_DIR (defects) or FEATURE_DIR (enhancements)
+    - Assigns the next available sequence number in that directory
+    - Writes a standard backlog markdown file
+    - Sets proposal.filed_path to the written file path
+
+    Already-filed proposals (filed_path is set) are skipped for idempotency.
+    """
+    for proposal in proposal_set.proposals:
+        if proposal.status != "accepted":
+            continue
+        if proposal.filed_path is not None:
+            continue  # Already filed; skip for idempotency
+        target_dir = PROPOSAL_TYPE_TO_DIR.get(proposal.proposal_type)
+        if target_dir is None:
+            logger.warning(
+                "Unknown proposal_type=%s for proposal number=%d; skipping filing",
+                proposal.proposal_type,
+                proposal.number,
+            )
+            continue
+        proposal.filed_path = _write_backlog_item(proposal, target_dir, proposal_set.slug)
 
 
 def parse_approval_response(text: str, proposal_count: int) -> set[int]:

@@ -15,9 +15,12 @@ State flows between parent pipeline and child subgraph via explicit mapping:
   TaskState.*_tokens       -> PipelineState.session_*_tokens
 """
 
+import logging
 from typing import Optional
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 from langgraph_pipeline.executor.escalation import DEFAULT_STARTING_MODEL
 from langgraph_pipeline.executor.graph import build_executor_graph
@@ -96,8 +99,8 @@ def execute_plan(state: PipelineState) -> dict:
     prior_output_tokens: int = int(state.get("session_output_tokens") or 0)
 
     if not plan_path:
-        print(f"[execute_plan] No plan_path in state for {item_slug!r}; skipping.")
-        return {}
+        logger.error("[execute_plan] No plan_path in state for %s — cannot execute", item_slug)
+        return {"execution_failed": True}
 
     print(f"[execute_plan] Invoking executor subgraph for plan: {plan_path}")
 

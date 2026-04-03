@@ -214,12 +214,26 @@ def _check_stale_pid() -> None:
 
 # ─── Signal handling ──────────────────────────────────────────────────────────
 
+# Module-level state for signal diagnostics. Set by _register_signal_handlers()
+# so the handler closure can include rich context without passing through globals.
+_signal_diag_web_port: int = 7070
+
+
+def set_signal_diag_web_port(port: int) -> None:
+    """Store the web server port so the SIGTERM handler can report port bindings."""
+    global _signal_diag_web_port
+    _signal_diag_web_port = port
+
 
 def _register_signal_handlers(shutdown_event: threading.Event) -> None:
     """Register SIGINT and SIGTERM handlers that set the shutdown event.
 
     The current graph invocation completes before the runner exits; the
     shutdown_event is only checked between iterations.
+
+    For SIGTERM, captures a full forensic diagnostic report (process tree,
+    port bindings, stack traces) to tmp/diagnostics/ so the signal source
+    can be identified post-mortem.
 
     Args:
         shutdown_event: Event set by the handler to request clean shutdown.
@@ -231,6 +245,26 @@ def _register_signal_handlers(shutdown_event: threading.Event) -> None:
             "Received %s — will stop after current graph invocation completes.", sig_name
         )
         shutdown_event.set()
+
+        # For SIGTERM, capture full forensic diagnostics. SIGINT is typically
+        # user-initiated (Ctrl-C) so we skip the heavyweight capture.
+        if signum == signal.SIGTERM:
+            try:
+                from langgraph_pipeline.shared.signal_diagnostics import capture_full_diagnostic
+                report = capture_full_diagnostic(
+                    signal_name=sig_name,
+                    web_port=_signal_diag_web_port,
+                    extra_context={
+                        "shutdown_event_was_set": shutdown_event.is_set(),
+                    },
+                )
+                # Log the full report at WARNING so it shows up in normal output
+                logger.warning(
+                    "SIGTERM DIAGNOSTIC REPORT (also saved to tmp/diagnostics/):\n%s",
+                    report,
+                )
+            except Exception as diag_exc:
+                logger.error("Failed to capture signal diagnostics: %s", diag_exc)
 
     signal.signal(signal.SIGINT, _handler)
     signal.signal(signal.SIGTERM, _handler)
@@ -368,6 +402,7 @@ def _pre_scan(budget_cap_usd: Optional[float]) -> Optional[PipelineState]:
     state["item_type"] = scan_result.get("item_type", "feature")
     state["item_name"] = scan_result.get("item_name", "")
     state["plan_path"] = scan_result.get("plan_path")
+    state["workspace_path"] = scan_result.get("workspace_path")
     return state
 
 
@@ -392,6 +427,8 @@ def _build_initial_state(
         "item_slug": "",
         "item_type": "feature",
         "item_name": "",
+        "workspace_path": None,
+        "requirements_path": None,
         "plan_path": None,
         "design_doc_path": None,
         "verification_cycle": 0,
@@ -695,13 +732,20 @@ def _run_scan_loop(
         EXIT_CODE_ERROR on unhandled exception.
     """
     if max_parallel_items > 1:
-        return run_supervisor_loop(
-            max_workers=max_parallel_items,
-            budget_cap_usd=budget_cap_usd,
-            dry_run=dry_run,
-            shutdown_event=shutdown_event,
-            slack=slack,
-        )
+        code_monitor = CodeChangeMonitor()
+        code_monitor.start()
+        try:
+            result = run_supervisor_loop(
+                max_workers=max_parallel_items,
+                budget_cap_usd=budget_cap_usd,
+                dry_run=dry_run,
+                shutdown_event=shutdown_event,
+                slack=slack,
+                code_monitor=code_monitor,
+            )
+        finally:
+            code_monitor.stop()
+        return result
     if dry_run:
         logger.info("[DRY RUN] Continuous scan loop — no graph invocations will be made.")
         while not shutdown_event.is_set():
@@ -885,6 +929,10 @@ def main() -> int:
 
     _check_stale_pid()
     _write_pid_file()
+
+    # Store web port for signal diagnostics before registering handlers.
+    if web_enabled:
+        set_signal_diag_web_port(web_port)
 
     shutdown_event = threading.Event()
     register_shutdown_event(shutdown_event)

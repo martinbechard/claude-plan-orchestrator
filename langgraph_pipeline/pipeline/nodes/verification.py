@@ -50,11 +50,12 @@ VERIFICATION_PROMPT = (
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
-def _invoke_claude(prompt: str) -> tuple[str, float]:
-    """Invoke the Claude CLI with --print and return (text, total_cost_usd).
+def _invoke_claude(prompt: str) -> tuple[str, float, bool]:
+    """Invoke the Claude CLI with --print and return (text, total_cost_usd, infra_error).
 
     Uses --output-format json so cost data is available in the response.
-    Returns ("", 0.0) on timeout, OS errors, or subprocess failures.
+    Returns ("", 0.0, True) on timeout, OS errors, or subprocess failures
+    so callers can distinguish infrastructure failures from real FAIL verdicts.
     """
     try:
         result = subprocess.run(
@@ -67,10 +68,10 @@ def _invoke_claude(prompt: str) -> tuple[str, float]:
             data = json.loads(result.stdout)
             text = data.get("result", "").strip()
             cost = float(data.get("total_cost_usd", 0.0))
-            return text, cost
-        return result.stdout or "", 0.0
+            return text, cost, False
+        return result.stdout or "", 0.0, False
     except (subprocess.TimeoutExpired, OSError, subprocess.SubprocessError, json.JSONDecodeError):
-        return "", 0.0
+        return "", 0.0, True
 
 
 def _parse_verification_outcome(output: str) -> str:
@@ -124,7 +125,18 @@ def verify_fix(state: PipelineState) -> dict:
     print(f"[verify_fix] Verifying defect symptoms for {item_slug} (cycle {cycle + 1})")
 
     prompt = VERIFICATION_PROMPT.format(item_path=item_path)
-    output, total_cost_usd = _invoke_claude(prompt)
+    output, total_cost_usd, infra_error = _invoke_claude(prompt)
+
+    if infra_error:
+        # Infrastructure failure (timeout, OS error) — do not count as a real FAIL.
+        # Return without incrementing the verification cycle so the item can be
+        # retried without consuming a cycle slot.
+        print(f"[verify_fix] Infrastructure error during verification for {item_slug} — not counting as FAIL")
+        record = _build_verification_record("FAIL", "Infrastructure error: verification could not run.")
+        return {
+            "verification_history": [record],
+            "verification_cycle": cycle,  # do NOT increment
+        }
 
     outcome: str = _parse_verification_outcome(output)
     notes: str = output.strip() if output else "No output from verification."

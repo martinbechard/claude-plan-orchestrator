@@ -103,6 +103,9 @@ def route_after_execution(state: PipelineState) -> str:
     """
     if state.get("quota_exhausted"):
         return END
+    if state.get("execution_failed"):
+        logger.warning("route_after_execution: execution_failed flag set — routing to archive")
+        return NODE_ARCHIVE
     if state.get("executor_deadlock"):
         details = state.get("executor_deadlock_details") or []
         blocked_ids = ", ".join(d.get("task_id", "?") for d in details)
@@ -143,6 +146,7 @@ def verify_result(state: PipelineState) -> str:
     cycles_done_str = f"{cycle_number}/{MAX_VERIFICATION_CYCLES}"
 
     if not history:
+        logger.warning("verify_result: no verification history for defect — archiving as exhausted")
         add_trace_metadata({
             "decision": "archive",
             "reason": "no_verification_history",

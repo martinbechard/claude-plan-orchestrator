@@ -760,7 +760,7 @@ class TestRunIntakeAnalysis:
         slack_msg = success_calls[-1][0][0]
         assert reason in slack_msg
 
-    def test_add_error_called_on_empty_llm_response(self):
+    def test_add_notification_called_on_empty_llm_response(self):
         reason = "Claude process exited with code 2: quota exceeded"
         cb = _make_callbacks(
             call_claude=MagicMock(return_value=ClaudeResult(text="", failure_reason=reason))
@@ -775,8 +775,8 @@ class TestRunIntakeAnalysis:
         ):
             s._run_intake_analysis(intake)
 
-        mock_state.add_error.assert_called_once()
-        error_msg = mock_state.add_error.call_args[0][0]
+        mock_state.add_notification.assert_called_once()
+        error_msg = mock_state.add_notification.call_args[0][0]
         assert reason in error_msg
 
     def test_quota_exhausted_fallback_message_indicates_quota(self):
@@ -799,7 +799,7 @@ class TestRunIntakeAnalysis:
         slack_msg = success_calls[-1][0][0]
         assert "quota" in slack_msg.lower()
 
-    def test_add_error_called_on_quota_exhaustion(self):
+    def test_add_notification_called_on_quota_exhaustion(self):
         cb = _make_callbacks(probe_quota=MagicMock(return_value=False))
         s = _make_suspension(callbacks=cb)
         intake = _make_intake()
@@ -811,8 +811,8 @@ class TestRunIntakeAnalysis:
         ):
             s._run_intake_analysis(intake)
 
-        mock_state.add_error.assert_called_once()
-        error_msg = mock_state.add_error.call_args[0][0]
+        mock_state.add_notification.assert_called_once()
+        error_msg = mock_state.add_notification.call_args[0][0]
         assert "quota" in error_msg.lower()
 
 

@@ -15,16 +15,19 @@ import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from langgraph_pipeline.investigation.proposals import (
     Proposal,
     ProposalSet,
+    file_accepted_proposals,
     load_proposals,
+    parse_approval_response,
     save_proposals,
 )
 from langgraph_pipeline.pipeline.state import PipelineState
 from langgraph_pipeline.shared.paths import workspace_path
+from langgraph_pipeline.slack.notifier import SlackNotifier
 
 logger = logging.getLogger(__name__)
 
@@ -293,13 +296,139 @@ def run_investigation(state: PipelineState) -> dict:
     return {}
 
 
-def process_investigation(state: PipelineState) -> dict:
-    """LangGraph node: process Slack approval and file accepted proposals.
+def _compute_proposal_set_status(
+    accepted_count: int, total_count: int
+) -> Literal["approved", "rejected", "partial"]:
+    """Compute the overall ProposalSet status from accepted/total counts."""
+    if accepted_count == total_count:
+        return "approved"
+    if accepted_count == 0:
+        return "rejected"
+    return "partial"
 
-    Placeholder — returns state unchanged.  Full implementation (polling
-    the Slack thread, parsing the user's response, and filing accepted
-    proposals as backlog items) is delivered in task 3.x.
+
+def process_investigation(state: PipelineState) -> dict:
+    """LangGraph node: three-phase state machine for Slack approval and filing.
+
+    Phase 1 - Post proposals: If proposals.yaml exists but slack_thread_ts is
+    None, post the numbered list to Slack and set should_stop=True.
+
+    Phase 2 - Poll for reply: If slack_thread_ts is set but reply_text is None,
+    check the thread for a human reply. Set should_stop=True if no reply yet.
+    If a reply is found, fall through to Phase 3.
+
+    Phase 3 - Parse and file: Parse the approval response, update proposal
+    statuses, file accepted proposals as backlog items, save final proposals.yaml,
+    and return should_stop=False so routing proceeds to archive.
     """
-    item_slug = state.get("item_slug", "")
-    logger.info("[process_investigation] placeholder — item=%s", item_slug)
-    return {}
+    item_slug: str = state.get("item_slug", "")
+    ws_dir = _workspace_dir(item_slug)
+
+    MAX_INVESTIGATION_RETRIES = 5
+
+    proposal_set = load_proposals(ws_dir)
+    if proposal_set is None:
+        # Track retries via a counter file to avoid infinite suspension loops.
+        retry_file = ws_dir / ".investigation_retries"
+        retries = 0
+        try:
+            retries = int(retry_file.read_text().strip()) if retry_file.exists() else 0
+        except (OSError, ValueError):
+            pass
+        retries += 1
+        try:
+            retry_file.write_text(str(retries))
+        except OSError:
+            pass
+        if retries > MAX_INVESTIGATION_RETRIES:
+            logger.error(
+                "[process_investigation] no proposals.yaml after %d retries — failing item=%s",
+                retries, item_slug,
+            )
+            return {"should_stop": False}  # route to archive
+        logger.warning(
+            "[process_investigation] no proposals.yaml (retry %d/%d) — suspending item=%s",
+            retries, MAX_INVESTIGATION_RETRIES, item_slug,
+        )
+        return {"should_stop": True}
+
+    notifier = SlackNotifier()
+
+    # ── Phase 1: Post proposals to Slack ──────────────────────────────────────
+    if proposal_set.slack_thread_ts is None:
+        result = notifier.post_proposals(item_slug, proposal_set.proposals)
+        if result is None:
+            # Track Slack posting retries via counter file.
+            retry_file = ws_dir / ".slack_post_retries"
+            retries = 0
+            try:
+                retries = int(retry_file.read_text().strip()) if retry_file.exists() else 0
+            except (OSError, ValueError):
+                pass
+            retries += 1
+            try:
+                retry_file.write_text(str(retries))
+            except OSError:
+                pass
+            if retries > MAX_INVESTIGATION_RETRIES:
+                logger.error(
+                    "[process_investigation] Slack posting failed after %d retries — failing item=%s",
+                    retries, item_slug,
+                )
+                return {"should_stop": False}  # route to archive
+            logger.warning(
+                "[process_investigation] failed to post proposals (retry %d/%d) — suspending item=%s",
+                retries, MAX_INVESTIGATION_RETRIES, item_slug,
+            )
+            return {"should_stop": True}
+        thread_ts, channel_id = result
+        proposal_set.slack_thread_ts = thread_ts
+        proposal_set.slack_channel_id = channel_id
+        save_proposals(proposal_set, ws_dir)
+        logger.info(
+            "[process_investigation] proposals posted thread_ts=%s item=%s", thread_ts, item_slug
+        )
+        return {"should_stop": True}
+
+    # ── Phase 2: Poll for Slack reply ─────────────────────────────────────────
+    if proposal_set.reply_text is None:
+        reply = notifier.check_suspension_reply(
+            proposal_set.slack_channel_id or "",
+            proposal_set.slack_thread_ts,
+        )
+        if reply is None:
+            logger.info(
+                "[process_investigation] no reply yet — suspending item=%s", item_slug
+            )
+            return {"should_stop": True}
+        proposal_set.reply_text = reply
+        save_proposals(proposal_set, ws_dir)
+        logger.info(
+            "[process_investigation] reply received item=%s reply=%r", item_slug, reply[:80]
+        )
+        # Fall through to Phase 3
+
+    # ── Phase 3: Parse response, file proposals, record outcomes ─────────────
+    accepted_numbers = parse_approval_response(
+        proposal_set.reply_text,
+        len(proposal_set.proposals),
+    )
+
+    for proposal in proposal_set.proposals:
+        proposal.status = "accepted" if proposal.number in accepted_numbers else "rejected"
+
+    accepted_count = len(accepted_numbers)
+    total_count = len(proposal_set.proposals)
+    proposal_set.status = _compute_proposal_set_status(accepted_count, total_count)
+
+    file_accepted_proposals(proposal_set)
+    save_proposals(proposal_set, ws_dir)
+
+    logger.info(
+        "[process_investigation] completed accepted=%d rejected=%d status=%s item=%s",
+        accepted_count,
+        total_count - accepted_count,
+        proposal_set.status,
+        item_slug,
+    )
+    return {"should_stop": False}

@@ -387,7 +387,7 @@ class TestValidateTask:
         saved = yaml.safe_load(open(plan_path).read())
         assert saved["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_VERIFIED
 
-    def test_returns_warn_when_max_validation_attempts_exceeded(self, tmp_path):
+    def test_returns_validation_exhausted_when_max_validation_attempts_exceeded(self, tmp_path):
         task = _make_task("1.1", validation_attempts=2)
         plan = _make_plan_with_validation(task)
         plan_path = self._make_plan_file(tmp_path, plan)
@@ -395,10 +395,10 @@ class TestValidateTask:
             plan_path=plan_path, plan_data=plan, current_task_id="1.1"
         )
         result = validate_task(state)
-        assert result["last_validation_verdict"] == "WARN"
-        # D3: task advanced to verified on max attempts (treated as WARN)
+        assert result["last_validation_verdict"] == "VALIDATION_EXHAUSTED"
+        # Task marked as validation_exhausted in plan YAML
         saved = yaml.safe_load(open(plan_path).read())
-        assert saved["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_VERIFIED
+        assert saved["sections"][0]["tasks"][0]["status"] == "validation_exhausted"
 
     def test_increments_validation_attempts_counter(self, tmp_path):
         task = _make_task("1.1", validation_attempts=2)
@@ -722,14 +722,14 @@ class TestValidateTaskStatusTransitions:
         result = validate_task(state)
         assert result["plan_data"]["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_VERIFIED
 
-    def test_max_attempts_exceeded_advances_to_verified(self, tmp_path):
-        """When max validation attempts exceeded, task advances to verified."""
+    def test_max_attempts_exceeded_marks_validation_exhausted(self, tmp_path):
+        """When max validation attempts exceeded, task marked as validation_exhausted."""
         task = _make_task("1.1", validation_attempts=2)
         plan = _make_plan_with_validation(task)
         plan_path = self._make_plan_file(tmp_path, plan)
         state = _make_state(plan_path=plan_path, plan_data=plan, current_task_id="1.1")
         result = validate_task(state)
-        assert result["plan_data"]["sections"][0]["tasks"][0]["status"] == _TASK_STATUS_VERIFIED
+        assert result["plan_data"]["sections"][0]["tasks"][0]["status"] == "validation_exhausted"
 
     def test_pass_verdict_advances_to_verified(self, tmp_path):
         """PASS verdict advances task from completed to verified."""

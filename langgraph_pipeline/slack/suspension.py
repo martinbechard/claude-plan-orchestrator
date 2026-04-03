@@ -39,7 +39,7 @@ SLACK_LLM_MODEL = "claude-opus-4-6"
 QA_HISTORY_DEFAULT_MAX_TURNS = 3
 REQUIRED_FIVE_WHYS_COUNT = 5
 INTAKE_CLARITY_THRESHOLD = 3
-INTAKE_ANALYSIS_TIMEOUT_SECONDS = 120  # 2 minutes for intake LLM call
+INTAKE_ANALYSIS_TIMEOUT_SECONDS = None  # no timeout — let Opus finish
 RAG_TOP_K = 5
 RAG_SIMILARITY_THRESHOLD = 0.75
 
@@ -782,7 +782,7 @@ class SlackSuspension:
                 print(f"[INTAKE] Quota unavailable: {failure_reason}")
                 try:
                     from langgraph_pipeline.web.dashboard_state import get_dashboard_state
-                    get_dashboard_state().add_error(
+                    get_dashboard_state().add_notification(
                         f"[INTAKE] call_claude skipped: {failure_reason}"
                     )
                 except Exception:
@@ -826,7 +826,7 @@ class SlackSuspension:
                 print(f"[INTAKE] LLM call failed: {failure_reason}")
                 try:
                     from langgraph_pipeline.web.dashboard_state import get_dashboard_state
-                    get_dashboard_state().add_error(
+                    get_dashboard_state().add_notification(
                         f"[INTAKE] call_claude failed: {failure_reason}"
                     )
                 except Exception:

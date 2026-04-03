@@ -15,6 +15,8 @@ from langgraph_pipeline.shared.git import (
     ORCHESTRATOR_STASH_MESSAGE,
     STASH_EXCLUDE_PLANS_PATHSPEC,
     WORKTREE_BASE_DIR,
+    _GIT_WORKTREE_LOCK,
+    _WORKTREE_CREATE_MAX_ATTEMPTS,
     _WORKTREE_SKIP_PREFIXES,
     _file_exists_in_ref,
     cleanup_worktree,
@@ -223,7 +225,7 @@ class TestGetWorktreePath:
 
 
 class TestCreateWorktree:
-    @patch("langgraph_pipeline.shared.git.cleanup_worktree")
+    @patch("langgraph_pipeline.shared.git._cleanup_worktree_unlocked")
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     @patch("langgraph_pipeline.shared.git.Path.mkdir")
     @patch("langgraph_pipeline.shared.git.Path.exists", return_value=False)
@@ -233,20 +235,39 @@ class TestCreateWorktree:
         assert result is not None
         assert isinstance(result, Path)
 
+    @patch("langgraph_pipeline.shared.git.time.sleep")
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     @patch("langgraph_pipeline.shared.git.Path.mkdir")
     @patch("langgraph_pipeline.shared.git.Path.exists", return_value=False)
-    def test_returns_none_on_subprocess_error(self, mock_exists, mock_mkdir, mock_run):
-        # First two calls succeed (branch -D, prune), add call raises
+    def test_returns_none_after_all_retries_exhausted(self, mock_exists, mock_mkdir, mock_run, mock_sleep):
+        # branch -D and prune succeed, all worktree add attempts fail
+        add_error = subprocess.CalledProcessError(1, "git", stderr="index.lock")
         mock_run.side_effect = [
             MagicMock(returncode=0),  # branch -D
             MagicMock(returncode=0),  # worktree prune
-            subprocess.CalledProcessError(1, "git", stderr="error"),  # worktree add
-        ]
+        ] + [add_error] * _WORKTREE_CREATE_MAX_ATTEMPTS
         result = create_worktree("my-plan", "1.1")
         assert result is None
+        # Retries should sleep between attempts (max_attempts - 1 sleeps)
+        assert mock_sleep.call_count == _WORKTREE_CREATE_MAX_ATTEMPTS - 1
 
-    @patch("langgraph_pipeline.shared.git.cleanup_worktree")
+    @patch("langgraph_pipeline.shared.git.time.sleep")
+    @patch("langgraph_pipeline.shared.git.subprocess.run")
+    @patch("langgraph_pipeline.shared.git.Path.mkdir")
+    @patch("langgraph_pipeline.shared.git.Path.exists", return_value=False)
+    def test_succeeds_on_retry_after_transient_failure(self, mock_exists, mock_mkdir, mock_run, mock_sleep):
+        add_error = subprocess.CalledProcessError(1, "git", stderr="index.lock")
+        mock_run.side_effect = [
+            MagicMock(returncode=0),  # branch -D
+            MagicMock(returncode=0),  # worktree prune
+            add_error,               # first add attempt fails
+            MagicMock(returncode=0, stdout="", stderr=""),  # second add succeeds
+        ]
+        result = create_worktree("my-plan", "1.1")
+        assert result is not None
+        assert mock_sleep.call_count == 1
+
+    @patch("langgraph_pipeline.shared.git._cleanup_worktree_unlocked")
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     @patch("langgraph_pipeline.shared.git.Path.mkdir")
     @patch("langgraph_pipeline.shared.git.Path.exists", return_value=True)
@@ -255,7 +276,7 @@ class TestCreateWorktree:
         create_worktree("my-plan", "1.1")
         mock_cleanup.assert_called_once()
 
-    @patch("langgraph_pipeline.shared.git.cleanup_worktree")
+    @patch("langgraph_pipeline.shared.git._cleanup_worktree_unlocked")
     @patch("langgraph_pipeline.shared.git.subprocess.run")
     @patch("langgraph_pipeline.shared.git.Path.mkdir")
     @patch("langgraph_pipeline.shared.git.Path.exists", return_value=False)
@@ -266,6 +287,11 @@ class TestCreateWorktree:
             c for c in mock_run.call_args_list if "worktree" in c[0][0] and "add" in c[0][0]
         )
         assert "parallel/2-3" in add_call[0][0]
+
+    def test_lock_is_a_threading_lock(self):
+        """Verify the worktree lock exists and is a proper threading.Lock."""
+        import threading
+        assert isinstance(_GIT_WORKTREE_LOCK, type(threading.Lock()))
 
 
 # ─── cleanup_worktree ─────────────────────────────────────────────────────────

@@ -88,6 +88,9 @@ class PipelineState(TypedDict):
     intake_count_defects: int
     intake_count_features: int
 
+    # ── Execution failure signal (set by execute_plan when plan_path is missing) ──
+    execution_failed: bool
+
     # ── Executor deadlock signal (set by execute_plan when executor exits with blocked tasks) ──
     executor_deadlock: bool
     executor_deadlock_details: Optional[list[dict]]  # [{task_id, task_name, unsatisfied_deps}]

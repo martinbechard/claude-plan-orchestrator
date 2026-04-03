@@ -10,14 +10,17 @@ channel discovery/caching, and high-level send methods.
 """
 
 import json
+import logging
 import time
 import urllib.parse
 import urllib.request
-from typing import Optional
+from typing import Optional, Protocol, Sequence
 
 import yaml
 
 from langgraph_pipeline.slack.identity import AgentIdentity, IdentityMixin
+
+logger = logging.getLogger(__name__)
 
 # ── Optional Socket Mode support ────────────────────────────────────────────
 
@@ -42,7 +45,26 @@ SLACK_CHANNEL_ROLE_SUFFIXES: dict[str, str] = {
     "questions": "question",
     "notifications": "control",
     "reports": "analysis",
+    "investigations": "investigation",
 }
+
+PROPOSAL_DESC_TRUNCATE_LEN = 200
+THREAD_REPLIES_POLL_LIMIT = 5
+
+PROPOSAL_BADGE_MAP: dict[str, str] = {
+    "defect": "Defect",
+    "enhancement": "Enhancement",
+}
+
+
+class _ProposalInfo(Protocol):
+    """Minimal interface for proposal data consumed by post_proposals."""
+
+    number: int
+    proposal_type: str
+    title: str
+    description: str
+    severity: str
 
 SLACK_CHANNEL_CACHE_SECONDS = 300
 
@@ -314,6 +336,24 @@ class SlackNotifier(IdentityMixin):
         omitted = len(text) - max_length + 40
         return text[: max_length - 40] + f"\n_...({omitted} chars omitted)_"
 
+    # ── Role-based channel lookup ────────────────────────────────────────────
+
+    def _get_role_channel_id(self, role: str) -> str:
+        """Return the channel ID for a named channel role suffix.
+
+        Looks up <prefix><role> in discovered channels (e.g. 'investigations'
+        resolves to 'orchestrator-investigations').
+
+        Args:
+            role: Channel role suffix (e.g. 'investigations', 'notifications').
+
+        Returns:
+            Channel ID string, or empty string if not found or Slack is disabled.
+        """
+        channel_name = f"{self._channel_prefix}{role}"
+        channels = self._discover_channels()
+        return channels.get(channel_name, "")
+
     # ── Channel discovery ────────────────────────────────────────────────────
 
     def _discover_channels(self) -> dict[str, str]:
@@ -441,6 +481,118 @@ class SlackNotifier(IdentityMixin):
         if description:
             msg += f"\n{description}"
         self._post_message(self._build_status_block(msg, "info"))
+
+    def post_proposals(
+        self,
+        slug: str,
+        proposals: Sequence[_ProposalInfo],
+        channel_role: str = "investigations",
+    ) -> Optional[tuple[str, str]]:
+        """Post a numbered list of investigation proposals to a Slack channel.
+
+        Formats proposals as a Block Kit mrkdwn message and posts to the
+        channel identified by channel_role. The posted message serves as the
+        thread root for human reply correlation.
+
+        Args:
+            slug: Investigation item slug, shown in the message header.
+            proposals: Sequence of proposal objects exposing number, proposal_type,
+                title, description, and severity attributes.
+            channel_role: Channel role suffix to post to (default: 'investigations').
+
+        Returns:
+            (thread_ts, channel_id) tuple if successful, None otherwise.
+        """
+        if not self._enabled:
+            return None
+        channel_id = self._get_role_channel_id(channel_role)
+        if not channel_id:
+            logger.warning(
+                "[post_proposals] no channel found for role=%s slug=%s", channel_role, slug
+            )
+            return None
+        text = self._build_proposals_text(slug, proposals)
+        payload = {
+            "blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": text}}]
+        }
+        ts = self._post_message_get_ts(payload, channel_id=channel_id)
+        if ts is None:
+            return None
+        return ts, channel_id
+
+    def check_suspension_reply(
+        self,
+        channel_id: str,
+        thread_ts: str,
+    ) -> Optional[str]:
+        """Check for a human reply in a Slack thread.
+
+        Uses conversations.replies API to check for replies to a thread-root
+        message. Ignores the original message and bot messages.
+
+        Args:
+            channel_id: Slack channel ID containing the thread.
+            thread_ts: Timestamp of the root message (used as thread identifier).
+
+        Returns:
+            Text of the first human reply if found, None otherwise.
+        """
+        if not self._bot_token or not channel_id or not thread_ts:
+            return None
+        try:
+            params = urllib.parse.urlencode(
+                {"channel": channel_id, "ts": thread_ts, "limit": THREAD_REPLIES_POLL_LIMIT}
+            )
+            req = urllib.request.Request(
+                f"https://slack.com/api/conversations.replies?{params}",
+                headers={"Authorization": f"Bearer {self._bot_token}"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = json.loads(resp.read())
+            if not result.get("ok", False):
+                print(
+                    f"[SLACK] conversations.replies error: {result.get('error', 'unknown')}"
+                )
+                return None
+            for message in result.get("messages", []):
+                if message.get("ts") == thread_ts:
+                    continue  # Skip root message
+                if "bot_id" in message:
+                    continue  # Skip bot messages
+                return message.get("text")
+            return None
+        except Exception as exc:
+            print(f"[SLACK] Failed to check thread replies: {exc}")
+            return None
+
+    def _build_proposals_text(
+        self, slug: str, proposals: Sequence[_ProposalInfo]
+    ) -> str:
+        """Build the mrkdwn text for a proposals message.
+
+        Args:
+            slug: Investigation item slug shown in the header.
+            proposals: Sequence of proposal objects to format.
+
+        Returns:
+            mrkdwn-formatted string truncated to SLACK_BLOCK_TEXT_MAX_LENGTH.
+        """
+        lines = [
+            f":mag: *Investigation proposals for `{slug}`*",
+            "",
+            'Reply with proposal numbers to accept (e.g. "1, 3", "all", "none", "all except 2"):',
+            "",
+        ]
+        for proposal in proposals:
+            badge = PROPOSAL_BADGE_MAP.get(proposal.proposal_type, proposal.proposal_type)
+            severity = proposal.severity.capitalize()
+            desc = self._truncate_for_slack(proposal.description, PROPOSAL_DESC_TRUNCATE_LEN)
+            lines.append(
+                f"*{proposal.number}.* [{badge}] *{proposal.title}* _(Severity: {severity})_"
+            )
+            lines.append(desc)
+            lines.append("")
+        return self._truncate_for_slack("\n".join(lines))
 
     def process_agent_messages(self, status: dict) -> None:
         """Process slack_messages from a task-status.json dict.

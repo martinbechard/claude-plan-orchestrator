@@ -231,6 +231,9 @@ class TestCreatePlan:
         with patch(
             "langgraph_pipeline.pipeline.nodes.plan_creation._run_subprocess",
             return_value=(0, "plan created", ""),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.plan_creation._ensure_acceptance_criteria_in_design",
+            return_value=True,
         ):
             result = create_plan(state)
 
@@ -289,6 +292,9 @@ class TestCreatePlan:
         with patch(
             "langgraph_pipeline.pipeline.nodes.plan_creation._run_subprocess",
             return_value=(0, "done", ""),
+        ), patch(
+            "langgraph_pipeline.pipeline.nodes.plan_creation._ensure_acceptance_criteria_in_design",
+            return_value=True,
         ):
             result = create_plan(state)
 
@@ -447,6 +453,9 @@ class TestFreshnessSkip:
         ), patch(
             PLAN_CREATION_MODULE + "._run_subprocess",
             return_value=(0, "done", ""),
+        ), patch(
+            PLAN_CREATION_MODULE + "._ensure_acceptance_criteria_in_design",
+            return_value=True,
         ), patch(
             PLAN_CREATION_MODULE + ".record_artifact"
         ) as mock_record:

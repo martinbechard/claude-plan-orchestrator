@@ -70,6 +70,9 @@ def _classify_changes(baseline: dict[str, str]) -> tuple[bool, bool]:
     Returns:
         A tuple ``(changed, web_only)`` where *web_only* is ``True`` only when
         every changed file lives under ``langgraph_pipeline/web/``.
+
+    Logs every changed file so post-mortem analysis can trace what triggered
+    a restart or web-reload.
     """
     current = snapshot_source_hashes()
     if current == baseline:
@@ -78,6 +81,14 @@ def _classify_changes(baseline: dict[str, str]) -> tuple[bool, bool]:
     all_paths = set(current) | set(baseline)
     changed_paths = {p for p in all_paths if current.get(p) != baseline.get(p)}
     web_only = all(p.startswith(WEB_CHANGE_FILE_PREFIX) for p in changed_paths)
+
+    classification = "web-only" if web_only else "full-restart"
+    logger.warning(
+        "CodeChangeMonitor: detected %d changed file(s) [%s]: %s",
+        len(changed_paths),
+        classification,
+        ", ".join(sorted(changed_paths)),
+    )
     return True, web_only
 
 
@@ -140,15 +151,48 @@ class CodeChangeMonitor(threading.Thread):
 
 
 def _perform_restart(code_monitor: Optional[CodeChangeMonitor]) -> None:
-    """Stop *code_monitor*, remove the PID file, and restart via os.execv.
+    """Stop *code_monitor*, stop the web server, remove the PID file, and restart via os.execv.
+
+    Stops the web server explicitly before execv so the TCP socket is cleanly
+    released and the new process can bind to the same port. Without this, the
+    old socket lingers in TIME_WAIT and the web server fails to start after restart.
 
     Replaces the current process in-place, preserving the PID so the PID
     file written at startup remains valid after the restart.
+
+    Logs a full diagnostic snapshot before the execv so post-mortem analysis
+    can see the exact state that led to a restart.
     """
     from langgraph_pipeline.shared.paths import LANGGRAPH_PID_FILE_PATH
 
+    # Capture pre-restart diagnostics so we have a record of the state.
+    try:
+        from langgraph_pipeline.shared.signal_diagnostics import capture_full_diagnostic
+        from langgraph_pipeline.web.server import _active_port
+        web_port = _active_port or 7070
+        report = capture_full_diagnostic(
+            signal_name="EXECV_RESTART",
+            web_port=web_port,
+            extra_context={
+                "trigger": "hot-reload code change",
+                "code_monitor_alive": code_monitor.is_alive() if code_monitor else False,
+            },
+        )
+        logger.warning("Pre-restart diagnostic report:\n%s", report)
+    except Exception as exc:
+        logger.warning("Failed to capture pre-restart diagnostics: %s", exc)
+
     if code_monitor is not None:
         code_monitor.stop()
+
+    # Stop the web server cleanly so the port is released before execv.
+    try:
+        from langgraph_pipeline.web.server import stop_web_server, WEB_SERVER_RESTART_DRAIN_SECONDS
+        stop_web_server()
+        # Brief drain to let the socket close before the new process tries to bind.
+        time.sleep(WEB_SERVER_RESTART_DRAIN_SECONDS)
+    except Exception:
+        pass  # Best-effort; proceed with restart even if web stop fails.
 
     try:
         os.remove(LANGGRAPH_PID_FILE_PATH)

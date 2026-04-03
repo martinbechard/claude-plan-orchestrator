@@ -245,16 +245,28 @@ class TestReadStatusFile:
 # ─── Tests: _build_prompt ─────────────────────────────────────────────────────
 
 
+def _create_agent_file(agents_dir, agent_name="coder", body="# Agent Instructions"):
+    """Create a minimal agent definition file in the given directory."""
+    agent_file = agents_dir / f"{agent_name}.md"
+    agent_file.parent.mkdir(parents=True, exist_ok=True)
+    agent_file.write_text(f"---\nname: {agent_name}\n---\n{body}\n")
+    return agent_file
+
+
 class TestBuildPrompt:
     """_build_prompt assembles the Claude CLI prompt string."""
 
     def _run(self, task_attempt=1, validation_findings="", agent="coder", tmp_path=None):
+        import tempfile
+        from pathlib import Path
         plan = _make_plan(_make_task("1.1", agent=agent))
         task = plan["sections"][0]["tasks"][0]
         task["validation_findings"] = validation_findings
         section = plan["sections"][0]
-        agents_dir = str(tmp_path) if tmp_path else "/nonexistent"
-        return _build_prompt(plan, section, task, "plan.yaml", task_attempt, "pnpm build", agents_dir)
+        if tmp_path is None:
+            tmp_path = Path(tempfile.mkdtemp())
+            _create_agent_file(tmp_path, agent)
+        return _build_prompt(plan, section, task, "plan.yaml", task_attempt, "pnpm build", str(tmp_path))
 
     def test_includes_task_id(self):
         prompt = self._run()
@@ -287,10 +299,15 @@ class TestBuildPrompt:
         prompt = self._run(tmp_path=tmp_path)
         assert "Coder Instructions" in prompt
 
-    def test_no_agent_body_when_file_missing(self):
-        prompt = self._run()
-        # Should still produce a valid prompt without agent content
-        assert "Run task" in prompt
+    def test_raises_when_agent_file_missing(self):
+        import tempfile
+        from pathlib import Path
+        plan = _make_plan(_make_task("1.1", agent="nonexistent"))
+        task = plan["sections"][0]["tasks"][0]
+        section = plan["sections"][0]
+        tmp_dir = Path(tempfile.mkdtemp())
+        with pytest.raises(RuntimeError, match="Agent definition not found"):
+            _build_prompt(plan, section, task, "plan.yaml", 1, "pnpm build", str(tmp_dir))
 
 
 # ─── Tests: execute_task node ────────────────────────────────────────────────
@@ -306,8 +323,25 @@ def _make_popen_mock(returncode: int = 0) -> MagicMock:
     return proc
 
 
+def _ensure_agent_files(tmp_path):
+    """Create minimal agent definition files in tmp_path for tests."""
+    from pathlib import Path
+    d = Path(tmp_path)
+    d.mkdir(parents=True, exist_ok=True)
+    for name in ("coder", "frontend-coder", "e2e-test-agent"):
+        agent_file = d / f"{name}.md"
+        if not agent_file.exists():
+            agent_file.write_text(f"---\nname: {name}\n---\n# {name} Instructions\n")
+
+
 class TestExecuteTask:
     """execute_task is the main node for running a task via Claude CLI."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_agent_files(self, tmp_path):
+        """Ensure agent definition files exist for _build_prompt."""
+        _ensure_agent_files(tmp_path)
+        _ensure_agent_files(tmp_path / "agents")
 
     def _patch_all(
         self,
@@ -318,6 +352,9 @@ class TestExecuteTask:
         result_capture: dict | None = None,
     ):
         """Return a set of patches for a typical execute_task test."""
+        # Ensure agent file exists for _build_prompt
+        self._ensure_agent_file(str(tmp_path))
+
         status_path = tmp_path / "task-status.json"
         if status_content is not None:
             status_path.write_text(json.dumps(status_content))
@@ -800,6 +837,11 @@ def test_post_cost_posts_to_orchestrator_web_url(monkeypatch):
 class TestExecuteTaskTraceMetadata:
     """Trace metadata fields: subprocess_exit_code, subprocess_error,
     failure_reason (Gap 1) and claude_invoked, skip_reason (Gap 5)."""
+
+    @pytest.fixture(autouse=True)
+    def _setup_agent_files(self, tmp_path):
+        """Ensure agent definition files exist for _build_prompt."""
+        _ensure_agent_files(tmp_path)
 
     def test_no_task_id_records_claude_not_invoked_with_skip_reason(self, tmp_path):
         """When current_task_id is None, claude_invoked=False and skip_reason is set."""

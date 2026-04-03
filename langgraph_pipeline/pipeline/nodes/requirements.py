@@ -422,9 +422,10 @@ def structure_requirements(state: PipelineState) -> dict:
             logger.warning("Requirements review failed for %s: %s", item_slug, review_failure)
             if detect_quota_exhaustion(review_failure):
                 return {"quota_exhausted": True}
-            # Reviewer failure is non-fatal — accept current output
+            # Transient failure — continue loop to retry on next iteration.
+            # On last iteration, the max-iterations handler below will accept.
             reviewer_notes = f"Reviewer unavailable (iteration {iteration + 1}): {review_failure}"
-            break
+            continue
 
         review_verdict = review_text.strip()
         if review_verdict.upper().startswith("ACCEPT"):
@@ -490,12 +491,12 @@ def structure_requirements(state: PipelineState) -> dict:
         try:
             ws_req = Path(workspace_path) / "requirements.md"
             ws_req.write_text(requirements_doc, encoding="utf-8")
-        except OSError:
-            pass  # Non-fatal
+        except OSError as exc:
+            logger.warning("Failed to copy requirements to workspace for %s: %s", item_slug, exc)
 
     # Step 3b: Skill-based validation of requirements structuring (Step 3).
     if clause_content:
-        _run_skill_validation(
+        req_valid, req_val_cost = _run_skill_validation(
             skill_name="requirements-structuring-validation.md",
             input_artifacts={"Clause Register": clause_content},
             output_artifact=structured_output,
@@ -503,6 +504,9 @@ def structure_requirements(state: PipelineState) -> dict:
             step_number=3,
             step_name="requirements-structuring",
         )
+        total_cost_usd += req_val_cost
+        if not req_valid:
+            logger.warning("Requirements structuring validation FAILED for %s", item_slug)
 
     # Step 4: Generate AC Register from clause register + structured requirements.
     ac_section = ""
@@ -519,7 +523,7 @@ def structure_requirements(state: PipelineState) -> dict:
         total_cost_usd += ac_cost
 
         if ac_failure:
-            logger.warning("AC generation failed for %s: %s", item_slug, ac_failure)
+            logger.error("AC generation failed for %s: %s — requirements will lack AC Register", item_slug, ac_failure)
         else:
             ac_section = ac_text
 
@@ -540,7 +544,7 @@ def structure_requirements(state: PipelineState) -> dict:
                 logger.warning("Failed to append AC Register: %s", exc)
 
             # Skill-based validation of AC generation (Step 4).
-            _run_skill_validation(
+            ac_valid, ac_val_cost = _run_skill_validation(
                 skill_name="ac-generation-validation.md",
                 input_artifacts={
                     "Clause Register": clause_content,
@@ -551,13 +555,16 @@ def structure_requirements(state: PipelineState) -> dict:
                 step_number=4,
                 step_name="ac-generation",
             )
+            total_cost_usd += ac_val_cost
+            if not ac_valid:
+                logger.warning("AC generation validation FAILED for %s", item_slug)
 
     # Record input hashes so future restarts can detect staleness.
     if workspace_path and clause_register_path and five_whys_path:
         try:
             record_artifact(workspace_path, "requirements.md", [clause_register_path, five_whys_path])
-        except Exception:
-            pass  # Non-fatal
+        except OSError as exc:
+            logger.warning("Failed to record artifact hashes for %s: %s", item_slug, exc)
 
     add_trace_metadata({
         "node_name": "structure_requirements",

@@ -38,11 +38,12 @@ LOG_FORMAT = "%(asctime)s [%(levelname)s] [worker-%(process)d] %(message)s"
 LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 # Each worker uses a PID-namespaced SQLite DB to avoid checkpoint file contention
-# when multiple workers run in parallel.
+# when multiple workers run in parallel. On crash recovery, the previous worker's
+# PID is read from the claim sidecar so the new worker can reuse the same DB.
 _WORKER_DB_TEMPLATE = ".claude/pipeline-worker-{pid}.db"
 
-# Each worker uses a PID-namespaced thread ID so it starts a fresh checkpoint
-# history rather than resuming the supervisor's pipeline-main thread.
+# Thread ID is also PID-based. On resume, the previous PID is used so LangGraph
+# finds the existing checkpoint and resumes from the last completed node.
 _WORKER_THREAD_ID_TEMPLATE = "worker-{pid}"
 
 # Message written to the result file when the graph completes without setting an
@@ -94,6 +95,13 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Slug of the backlog item. Forwarded from the supervisor.",
     )
     parser.add_argument(
+        "--resume-pid",
+        default=None,
+        type=int,
+        metavar="PID",
+        help="PID of the crashed worker whose checkpoint DB and thread ID to reuse (crash recovery).",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -112,6 +120,9 @@ def _build_initial_state(item_path: str, item_type: str, item_slug: str) -> Pipe
     reading each worker result. item_type and item_slug are forwarded from the
     supervisor rather than re-derived from the path, because the claimed path
     no longer contains the original backlog directory name.
+
+    On crash recovery, this initial state is ignored -- LangGraph resumes from
+    the checkpoint DB which contains the full state from the crashed worker.
 
     Args:
         item_path: Path to the backlog item being processed (inside .claimed/).
@@ -219,6 +230,31 @@ def _cleanup_worker_db(db_path: str) -> None:
             logger.warning("Could not remove worker checkpoint file %s: %s", path, exc)
 
 
+# ─── Plan helpers ─────────────────────────────────────────────────────────────
+
+
+_TERMINAL_STATUSES = frozenset({"completed", "failed", "skipped"})
+
+
+def _plan_has_pending_tasks(plan_path: Optional[str]) -> bool:
+    """Return True if the plan YAML has tasks not in a terminal status."""
+    if not plan_path:
+        return False
+    try:
+        import yaml
+        with open(plan_path, "r") as f:
+            plan = yaml.safe_load(f)
+        for section in plan.get("sections", []):
+            for task in section.get("tasks", []):
+                if task.get("status", "pending") not in _TERMINAL_STATUSES:
+                    return True
+    except (OSError, yaml.YAMLError) as exc:
+        # On error, assume pending tasks exist — safer to re-invoke than to abandon.
+        logger.warning("Could not parse plan YAML %s: %s — assuming pending tasks", plan_path, exc)
+        return True
+    return False
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 
@@ -240,22 +276,49 @@ def main() -> int:
     item_type: str = args.item_type
     item_slug: str = args.item_slug
     result_file: str = args.result_file
-    db_path: str = _WORKER_DB_TEMPLATE.format(pid=pid)
-    thread_id: str = _WORKER_THREAD_ID_TEMPLATE.format(pid=pid)
+    resume_pid: Optional[int] = args.resume_pid
 
-    logger.info("Worker started: item=%s result=%s db=%s", item_path, result_file, db_path)
+    # When resuming from a crashed worker, reuse its checkpoint DB and thread
+    # ID so LangGraph picks up from the last completed node with full state.
+    checkpoint_pid = resume_pid if resume_pid is not None else pid
+    db_path: str = _WORKER_DB_TEMPLATE.format(pid=checkpoint_pid)
+    thread_id: str = _WORKER_THREAD_ID_TEMPLATE.format(pid=checkpoint_pid)
+
+    if resume_pid is not None:
+        logger.info("Worker started (RESUME from PID %d): item=%s db=%s result=%s", resume_pid, item_path, db_path, result_file)
+    else:
+        logger.info("Worker started: item=%s result=%s db=%s", item_path, result_file, db_path)
 
     start_time = time.monotonic()
     final_state: Optional[PipelineState] = None
 
     try:
-        initial_state = _build_initial_state(item_path, item_type, item_slug)
         thread_config = {"configurable": {"thread_id": thread_id}}
         if item_slug:
             thread_config["run_name"] = item_slug
 
         with pipeline_graph(db_path=db_path) as graph:
-            final_state = graph.invoke(initial_state, config=thread_config)
+            # On resume, pass None so LangGraph picks up from the checkpoint.
+            # Passing initial_state would start a new run from the entry point.
+            if resume_pid is not None:
+                logger.info("Resuming from checkpoint (thread=%s)", thread_id)
+                existing_state = graph.get_state(thread_config)
+                if existing_state and existing_state.next == ():
+                    # Graph reached END, but the plan may still have pending tasks
+                    # (e.g. crash during execute_plan caused early termination).
+                    # Re-run with the checkpoint's state so early nodes short-circuit
+                    # and execute_plan picks up remaining tasks.
+                    if _plan_has_pending_tasks(existing_state.values.get("plan_path")):
+                        logger.info("Graph completed but plan has pending tasks — re-running with checkpoint state.")
+                        final_state = graph.invoke(existing_state.values, config=thread_config)
+                    else:
+                        logger.info("Checkpoint shows graph already completed — nothing to resume.")
+                        final_state = existing_state.values
+                else:
+                    final_state = graph.invoke(None, config=thread_config)
+            else:
+                initial_state = _build_initial_state(item_path, item_type, item_slug)
+                final_state = graph.invoke(initial_state, config=thread_config)
 
         duration_s = time.monotonic() - start_time
         cost_usd = final_state.get("session_cost_usd", 0.0)

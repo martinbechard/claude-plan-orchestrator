@@ -157,8 +157,12 @@ def _build_prompt(
     agent_name = task.get("agent", "coder")
     agent_def = _load_agent_definition(agent_name, agents_dir)
 
+    if agent_def is None:
+        raise RuntimeError(
+            f"Agent definition not found for '{agent_name}' in {agents_dir}"
+        )
     agent_content = ""
-    if agent_def and agent_def["body"]:
+    if agent_def["body"]:
         agent_content = agent_def["body"] + "\n\n---\n\n"
 
     validation_findings = task.get("validation_findings", "")
@@ -289,6 +293,20 @@ def _write_task_log(
             print(f"[execute_task] Worker output: {worker_log_path}")
         except Exception as exc:
             print(f"[execute_task] Failed to write worker output log: {exc}")
+
+    # Also write to per-item workspace if it exists
+    if slug and task_id:
+        try:
+            from langgraph_pipeline.shared.paths import workspace_path as ws_path_fn
+            ws_logs = ws_path_fn(slug) / "logs"
+            if ws_logs.parent.exists():
+                ws_logs.mkdir(parents=True, exist_ok=True)
+                safe_ws_task_id = task_id.replace(".", "-")
+                ws_log = ws_logs / f"task-{safe_ws_task_id}-{timestamp_str}.log"
+                with open(ws_log, "w") as f:
+                    _write_log_content(f)
+        except Exception:
+            pass  # Non-fatal
 
 
 def _run_claude(prompt: str, model_cli_name: str, slug: str = "", task_id: str = "") -> tuple[bool, int, dict, str, str, list[ToolCallRecord]]:
@@ -483,7 +501,11 @@ def _stop_dev_server(port: int) -> None:
 
     Uses lsof to find the PID and sends SIGTERM. Non-fatal if nothing
     is running on the port or if the kill fails.
+
+    Every kill is logged with a full audit trail for signal tracing.
     """
+    from langgraph_pipeline.shared.signal_diagnostics import format_kill_audit
+
     try:
         result = subprocess.run(
             ["lsof", "-ti", f":{port}"],
@@ -492,10 +514,18 @@ def _stop_dev_server(port: int) -> None:
         pids = result.stdout.strip()
         if not pids:
             return
-        for pid in pids.splitlines():
-            pid = pid.strip()
-            if pid:
-                subprocess.run(["kill", pid], capture_output=True, timeout=5)
+        for pid_str in pids.splitlines():
+            pid_str = pid_str.strip()
+            if pid_str:
+                audit = format_kill_audit(
+                    caller="_stop_dev_server",
+                    target_pid=int(pid_str),
+                    signal_name="SIGTERM",
+                    port=port,
+                    reason="stopping dev server before/after task execution",
+                )
+                logger.warning(audit)
+                subprocess.run(["kill", pid_str], capture_output=True, timeout=5)
         logger.info("Stopped dev server on port %d (PIDs: %s)", port, pids.replace("\n", ", "))
     except (subprocess.TimeoutExpired, OSError) as exc:
         logger.debug("Could not stop dev server on port %d: %s", port, exc)

@@ -28,7 +28,7 @@ from typing import Optional
 import yaml
 from langgraph.types import Send
 
-from langgraph_pipeline.executor.circuit_breaker import record_failure, reset_failures
+from langgraph_pipeline.executor.circuit_breaker import reset_failures
 from langgraph_pipeline.executor.state import TaskResult, TaskState, effective_status
 from langgraph_pipeline.shared.langsmith import add_trace_metadata
 from langgraph_pipeline.shared.claude_cli import (
@@ -348,7 +348,7 @@ def _read_worktree_status(worktree_path: Path) -> Optional[dict]:
     try:
         with open(status_path) as f:
             return json.load(f)
-    except Exception:
+    except (OSError, json.JSONDecodeError, ValueError):
         return None
 
 
@@ -411,8 +411,9 @@ def fan_out(state: TaskState) -> list[Send]:
 
     current_task = _find_task_by_id(plan_data, task_id)
     if current_task is None:
-        print(f"[fan_out] Task {task_id!r} not found in plan_data; nothing to dispatch")
-        return []
+        raise RuntimeError(
+            f"[fan_out] Task {task_id!r} not found in plan_data — state corruption"
+        )
 
     parallel_group = current_task.get("parallel_group")
     if not parallel_group:
@@ -473,9 +474,7 @@ def execute_parallel_task(state: TaskState) -> dict:
 
     if task is None or section is None:
         print(f"[execute_parallel_task] Task {task_id!r} not found in plan")
-        failure_count = record_failure(state.get("consecutive_failures") or 0)
         return {
-            "consecutive_failures": failure_count,
             "task_results": [
                 TaskResult(
                     task_id=task_id,
@@ -499,9 +498,7 @@ def execute_parallel_task(state: TaskState) -> dict:
         print(f"[execute_parallel_task] Failed to create worktree for task {task_id!r}")
         with _PLAN_LOCK:
             _update_task_outcome(plan_path, task_id, _OUTCOME_FAILED, "Failed to create git worktree")
-        failure_count = record_failure(state.get("consecutive_failures") or 0)
         return {
-            "consecutive_failures": failure_count,
             "task_results": [
                 TaskResult(
                     task_id=task_id,
@@ -565,10 +562,6 @@ def execute_parallel_task(state: TaskState) -> dict:
     with _PLAN_LOCK:
         _update_task_outcome(plan_path, task_id, outcome, result_message)
 
-    new_failures = reset_failures() if outcome == _OUTCOME_COMPLETED else record_failure(
-        state.get("consecutive_failures") or 0
-    )
-
     add_trace_metadata({
         "node_name": "execute_parallel_task",
         "graph_level": "executor",
@@ -580,6 +573,9 @@ def execute_parallel_task(state: TaskState) -> dict:
         "duration_ms": _duration_ms,
     })
 
+    # Return only task_results (merged via operator.add by LangGraph).
+    # Scalar accumulators (consecutive_failures, cost totals) are computed
+    # in fan_in to avoid INVALID_CONCURRENT_GRAPH_UPDATE on parallel branches.
     return {
         "task_results": [
             TaskResult(
@@ -592,10 +588,6 @@ def execute_parallel_task(state: TaskState) -> dict:
                 message=result_message,
             )
         ],
-        "consecutive_failures": new_failures,
-        "plan_cost_usd": (state.get("plan_cost_usd") or 0.0) + cost_usd,
-        "plan_input_tokens": (state.get("plan_input_tokens") or 0) + input_tokens,
-        "plan_output_tokens": (state.get("plan_output_tokens") or 0) + output_tokens,
     }
 
 
@@ -610,11 +602,16 @@ def fan_in(state: TaskState) -> dict:
     The task_results list is already merged by LangGraph via operator.add before
     this node runs, so state.task_results contains results from all branches.
 
+    Also computes scalar accumulators (consecutive_failures, cost totals) from
+    the merged task_results.  These cannot be returned by individual parallel
+    branches because LangGraph does not allow multiple writers to unannotated
+    scalar keys in the same step.
+
     Args:
         state: Merged TaskState after all parallel branches have completed.
 
     Returns:
-        Partial state dict with refreshed plan_data.
+        Partial state dict with refreshed plan_data and accumulated scalars.
     """
     plan_path: str = state["plan_path"]
     fresh_plan_data = _load_plan_yaml(plan_path)
@@ -623,6 +620,7 @@ def fan_in(state: TaskState) -> dict:
     completed_ids = [
         r["task_id"] for r in task_results if r.get("status") == _OUTCOME_COMPLETED
     ]
+    failed_count = sum(1 for r in task_results if r.get("status") == _OUTCOME_FAILED)
     print(
         f"[fan_in] {len(task_results)} parallel task(s) finished; "
         f"{len(completed_ids)} completed: {completed_ids}"
@@ -632,11 +630,32 @@ def fan_in(state: TaskState) -> dict:
         commit_msg = f"plan: Parallel tasks completed: {', '.join(completed_ids)}"
         git_commit_files([plan_path], commit_msg)
 
+    # Compute scalar accumulators from merged task_results.
+    # consecutive_failures: reset to 0 if any task succeeded, otherwise
+    # increment the pre-branch count by the number of failures in this batch.
+    prev_failures = state.get("consecutive_failures") or 0
+    if completed_ids:
+        new_failures = reset_failures()
+    else:
+        new_failures = prev_failures + failed_count
+
+    # Cost accumulators: sum deltas from all branches.
+    batch_cost = sum(r.get("cost_usd", 0.0) for r in task_results)
+    batch_input = sum(r.get("input_tokens", 0) for r in task_results)
+    batch_output = sum(r.get("output_tokens", 0) for r in task_results)
+
     add_trace_metadata({
         "node_name": "fan_in",
         "graph_level": "executor",
         "completed_task_count": len(completed_ids),
         "total_task_count": len(task_results),
+        "batch_cost_usd": batch_cost,
     })
 
-    return {"plan_data": fresh_plan_data}
+    return {
+        "plan_data": fresh_plan_data,
+        "consecutive_failures": new_failures,
+        "plan_cost_usd": (state.get("plan_cost_usd") or 0.0) + batch_cost,
+        "plan_input_tokens": (state.get("plan_input_tokens") or 0) + batch_input,
+        "plan_output_tokens": (state.get("plan_output_tokens") or 0) + batch_output,
+    }

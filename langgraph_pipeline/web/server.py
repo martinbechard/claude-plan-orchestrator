@@ -440,9 +440,14 @@ def _kill_process_on_port(port: int) -> None:
     Uses lsof to find the PID bound to the port and sends SIGTERM, then
     SIGKILL if it doesn't exit within 2 seconds. This prevents "address
     already in use" errors from stale pipeline processes.
+
+    Every kill is logged with a full audit trail (caller stack, PIDs, reason)
+    so signal delivery can be traced during post-mortem investigations.
     """
     import signal
     import subprocess
+
+    from langgraph_pipeline.shared.signal_diagnostics import format_kill_audit
 
     try:
         result = subprocess.run(
@@ -454,14 +459,26 @@ def _kill_process_on_port(port: int) -> None:
             return
 
         my_pid = os.getpid()
+        logger.warning(
+            "_kill_process_on_port(%d): found PIDs %s on port (my PID=%d)",
+            port, pids, my_pid,
+        )
         for pid_str in pids:
             try:
                 pid = int(pid_str)
             except ValueError:
                 continue
             if pid == my_pid:
+                logger.debug("_kill_process_on_port: skipping own PID %d", my_pid)
                 continue
-            logger.info("Killing stale process %d on port %d", pid, port)
+            audit = format_kill_audit(
+                caller="_kill_process_on_port",
+                target_pid=pid,
+                signal_name="SIGTERM",
+                port=port,
+                reason="stale process on web server port",
+            )
+            logger.warning(audit)
             try:
                 os.kill(pid, signal.SIGTERM)
             except ProcessLookupError:
@@ -481,8 +498,15 @@ def _kill_process_on_port(port: int) -> None:
                 if pid == my_pid:
                     continue
                 os.kill(pid, 0)  # Check if still alive
+                audit = format_kill_audit(
+                    caller="_kill_process_on_port",
+                    target_pid=pid,
+                    signal_name="SIGKILL",
+                    port=port,
+                    reason="process did not exit after SIGTERM",
+                )
+                logger.warning(audit)
                 os.kill(pid, signal.SIGKILL)
-                logger.info("Force-killed stale process %d on port %d", pid, port)
             except (ProcessLookupError, ValueError, PermissionError):
                 pass
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):

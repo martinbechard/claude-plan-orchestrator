@@ -373,11 +373,11 @@ class TestFanOut:
         result = fan_out(state)
         assert result == []
 
-    def test_returns_empty_when_task_not_found(self):
+    def test_raises_when_task_not_found(self):
         plan = _make_plan(_make_task("1.1"))
         state = _make_state(current_task_id="9.9", plan_data=plan)
-        result = fan_out(state)
-        assert result == []
+        with pytest.raises(RuntimeError, match="not found in plan_data"):
+            fan_out(state)
 
     def test_dispatches_single_branch_for_task_without_parallel_group(self):
         task = _make_task("1.1")
@@ -504,7 +504,8 @@ class TestExecuteParallelTask:
         assert task_result["task_id"] == "1.1"
         assert task_result["status"] == "completed"
         assert task_result["cost_usd"] == 0.5
-        assert result["consecutive_failures"] == 0
+        # consecutive_failures is now computed in fan_in, not execute_parallel_task
+        assert "consecutive_failures" not in result
 
     @patch("langgraph_pipeline.executor.nodes.parallel._load_plan_yaml")
     @patch("langgraph_pipeline.executor.nodes.parallel.create_worktree")
@@ -536,7 +537,7 @@ class TestExecuteParallelTask:
 
         assert result["task_results"][0]["status"] == "failed"
         assert result["task_results"][0]["message"] == "No status file written by Claude"
-        assert result["consecutive_failures"] == 1
+        assert "consecutive_failures" not in result
 
     @patch("langgraph_pipeline.executor.nodes.parallel._load_plan_yaml")
     @patch("langgraph_pipeline.executor.nodes.parallel.create_worktree")
@@ -554,7 +555,7 @@ class TestExecuteParallelTask:
 
         assert result["task_results"][0]["status"] == "failed"
         assert result["task_results"][0]["message"] == "Failed to create git worktree"
-        assert result["consecutive_failures"] == 1
+        assert "consecutive_failures" not in result
 
     @patch("langgraph_pipeline.executor.nodes.parallel._load_plan_yaml")
     def test_missing_task_returns_failed_result(self, mock_load_plan):
@@ -570,7 +571,7 @@ class TestExecuteParallelTask:
 
         assert result["task_results"][0]["status"] == "failed"
         assert "not found" in result["task_results"][0]["message"]
-        assert result["consecutive_failures"] == 1
+        assert "consecutive_failures" not in result
 
     @patch("langgraph_pipeline.executor.nodes.parallel._load_plan_yaml")
     @patch("langgraph_pipeline.executor.nodes.parallel.create_worktree")
@@ -611,7 +612,7 @@ class TestExecuteParallelTask:
     @patch("langgraph_pipeline.executor.nodes.parallel.copy_worktree_artifacts")
     @patch("langgraph_pipeline.executor.nodes.parallel.cleanup_worktree")
     @patch("langgraph_pipeline.executor.nodes.parallel._save_plan_yaml")
-    def test_cost_accumulated_in_returned_state(
+    def test_cost_captured_in_task_results(
         self,
         mock_save,
         mock_cleanup,
@@ -621,6 +622,7 @@ class TestExecuteParallelTask:
         mock_create_worktree,
         mock_load_plan,
     ):
+        """Cost data is captured in task_results; accumulation happens in fan_in."""
         task = _make_task("1.1")
         plan = _make_plan(task)
         mock_load_plan.return_value = plan
@@ -647,9 +649,12 @@ class TestExecuteParallelTask:
         with patch("subprocess.run"):
             result = execute_parallel_task(state)
 
-        assert result["plan_cost_usd"] == pytest.approx(0.75 + 1.25)
-        assert result["plan_input_tokens"] == 50 + 200
-        assert result["plan_output_tokens"] == 25 + 100
+        tr = result["task_results"][0]
+        assert tr["cost_usd"] == pytest.approx(1.25)
+        assert tr["input_tokens"] == 200
+        assert tr["output_tokens"] == 100
+        # Scalar accumulators are not returned by parallel branches
+        assert "plan_cost_usd" not in result
 
 
 # ─── Tests: fan_in ────────────────────────────────────────────────────────────
@@ -756,3 +761,100 @@ class TestFanIn:
         result = fan_in(state)
         assert "plan_data" in result
         mock_commit.assert_not_called()
+
+    @patch("langgraph_pipeline.executor.nodes.parallel._load_plan_yaml")
+    @patch("langgraph_pipeline.executor.nodes.parallel.git_commit_files")
+    def test_accumulates_costs_from_task_results(self, mock_commit, mock_load):
+        mock_load.return_value = {}
+        state = _make_state(
+            plan_path="plan.yaml",
+            plan_cost_usd=0.75,
+            plan_input_tokens=50,
+            plan_output_tokens=25,
+            task_results=[
+                {
+                    "task_id": "1.1",
+                    "status": "completed",
+                    "model": "sonnet",
+                    "cost_usd": 1.0,
+                    "input_tokens": 200,
+                    "output_tokens": 100,
+                    "message": "Done",
+                },
+                {
+                    "task_id": "1.2",
+                    "status": "completed",
+                    "model": "sonnet",
+                    "cost_usd": 0.5,
+                    "input_tokens": 150,
+                    "output_tokens": 75,
+                    "message": "Done",
+                },
+            ],
+        )
+        result = fan_in(state)
+        assert result["plan_cost_usd"] == pytest.approx(0.75 + 1.0 + 0.5)
+        assert result["plan_input_tokens"] == 50 + 200 + 150
+        assert result["plan_output_tokens"] == 25 + 100 + 75
+
+    @patch("langgraph_pipeline.executor.nodes.parallel._load_plan_yaml")
+    @patch("langgraph_pipeline.executor.nodes.parallel.git_commit_files")
+    def test_resets_consecutive_failures_on_any_success(self, mock_commit, mock_load):
+        mock_load.return_value = {}
+        state = _make_state(
+            plan_path="plan.yaml",
+            consecutive_failures=3,
+            task_results=[
+                {
+                    "task_id": "1.1",
+                    "status": "completed",
+                    "model": "sonnet",
+                    "cost_usd": 0.0,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "message": "Done",
+                },
+                {
+                    "task_id": "1.2",
+                    "status": "failed",
+                    "model": "sonnet",
+                    "cost_usd": 0.0,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "message": "Error",
+                },
+            ],
+        )
+        result = fan_in(state)
+        assert result["consecutive_failures"] == 0
+
+    @patch("langgraph_pipeline.executor.nodes.parallel._load_plan_yaml")
+    @patch("langgraph_pipeline.executor.nodes.parallel.git_commit_files")
+    def test_increments_consecutive_failures_when_all_fail(self, mock_commit, mock_load):
+        mock_load.return_value = {}
+        state = _make_state(
+            plan_path="plan.yaml",
+            consecutive_failures=2,
+            task_results=[
+                {
+                    "task_id": "1.1",
+                    "status": "failed",
+                    "model": "sonnet",
+                    "cost_usd": 0.0,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "message": "Error",
+                },
+                {
+                    "task_id": "1.2",
+                    "status": "failed",
+                    "model": "sonnet",
+                    "cost_usd": 0.0,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "message": "Error",
+                },
+            ],
+        )
+        result = fan_in(state)
+        assert result["consecutive_failures"] == 4  # 2 prior + 2 failures

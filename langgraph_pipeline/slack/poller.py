@@ -136,6 +136,7 @@ SLACK_CHANNEL_ROLE_SUFFIXES: dict[str, str] = {
     "questions": "question",
     "notifications": "control",
     "reports": "analysis",
+    "investigations": "investigation",
 }
 
 SLACK_CHANNEL_CACHE_SECONDS = 300

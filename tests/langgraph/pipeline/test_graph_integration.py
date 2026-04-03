@@ -111,12 +111,16 @@ class TestFeatureItem:
     """Feature items skip verify_fix and go directly to archive."""
 
     def test_feature_routes_through_archive(self, checkpointer):
-        """A feature item traverses: intake → create_plan → execute → archive."""
+        """A feature item traverses: intake → structure_requirements → create_plan → execute → archive."""
         node_calls: list[str] = []
 
         def mock_intake(state: dict) -> dict:
             node_calls.append("intake_analyze")
             return {}
+
+        def mock_structure_reqs(state: dict) -> dict:
+            node_calls.append("structure_requirements")
+            return {"requirements_path": "docs/plans/2026-03-28-01-test-feature-requirements.md"}
 
         def mock_create_plan(state: dict) -> dict:
             node_calls.append("create_plan")
@@ -132,6 +136,7 @@ class TestFeatureItem:
 
         with (
             patch(f"{GRAPH_MODULE}.intake_analyze", mock_intake),
+            patch(f"{GRAPH_MODULE}.structure_requirements", mock_structure_reqs),
             patch(f"{GRAPH_MODULE}.create_plan", mock_create_plan),
             patch(f"{GRAPH_MODULE}.execute_plan", mock_execute_plan),
             patch(f"{GRAPH_MODULE}.archive", mock_archive),
@@ -141,6 +146,7 @@ class TestFeatureItem:
 
         assert node_calls == [
             "intake_analyze",
+            "structure_requirements",
             "create_plan",
             "execute_plan",
             "archive",
@@ -153,6 +159,9 @@ class TestFeatureItem:
 
         def mock_intake(state: dict) -> dict:
             return {}
+
+        def mock_structure_reqs(state: dict) -> dict:
+            return {"requirements_path": "docs/plans/2026-03-28-01-test-feature-requirements.md"}
 
         def mock_create_plan(state: dict) -> dict:
             return {"plan_path": "tmp/plans/01-test-feature.yaml"}
@@ -170,6 +179,7 @@ class TestFeatureItem:
 
         with (
             patch(f"{GRAPH_MODULE}.intake_analyze", mock_intake),
+            patch(f"{GRAPH_MODULE}.structure_requirements", mock_structure_reqs),
             patch(f"{GRAPH_MODULE}.create_plan", mock_create_plan),
             patch(f"{GRAPH_MODULE}.execute_plan", mock_execute_plan),
             patch(f"{GRAPH_MODULE}.verify_fix", mock_verify),
@@ -185,12 +195,16 @@ class TestDefectItemPassVerification:
     """Defect items that PASS verification route to archive after verify_fix."""
 
     def test_defect_routes_through_verification_to_archive(self, checkpointer):
-        """A defect that PASSes routes: intake → create_plan → execute → verify → archive."""
+        """A defect that PASSes routes: intake → structure_reqs → create_plan → execute → verify → archive."""
         node_calls: list[str] = []
 
         def mock_intake(state: dict) -> dict:
             node_calls.append("intake_analyze")
             return {}
+
+        def mock_structure_reqs(state: dict) -> dict:
+            node_calls.append("structure_requirements")
+            return {"requirements_path": "docs/plans/2026-03-28-01-test-defect-requirements.md"}
 
         def mock_create_plan(state: dict) -> dict:
             node_calls.append("create_plan")
@@ -214,6 +228,7 @@ class TestDefectItemPassVerification:
 
         with (
             patch(f"{GRAPH_MODULE}.intake_analyze", mock_intake),
+            patch(f"{GRAPH_MODULE}.structure_requirements", mock_structure_reqs),
             patch(f"{GRAPH_MODULE}.create_plan", mock_create_plan),
             patch(f"{GRAPH_MODULE}.execute_plan", mock_execute_plan),
             patch(f"{GRAPH_MODULE}.verify_fix", mock_verify),
@@ -224,6 +239,7 @@ class TestDefectItemPassVerification:
 
         assert node_calls == [
             "intake_analyze",
+            "structure_requirements",
             "create_plan",
             "execute_plan",
             "verify_fix",
@@ -243,6 +259,10 @@ class TestDefectItemFailRetry:
         def mock_intake(state: dict) -> dict:
             node_calls.append("intake_analyze")
             return {}
+
+        def mock_structure_reqs(state: dict) -> dict:
+            node_calls.append("structure_requirements")
+            return {"requirements_path": "docs/plans/2026-03-28-01-test-defect-requirements.md"}
 
         def mock_create_plan(state: dict) -> dict:
             node_calls.append("create_plan")
@@ -272,6 +292,7 @@ class TestDefectItemFailRetry:
 
         with (
             patch(f"{GRAPH_MODULE}.intake_analyze", mock_intake),
+            patch(f"{GRAPH_MODULE}.structure_requirements", mock_structure_reqs),
             patch(f"{GRAPH_MODULE}.create_plan", mock_create_plan),
             patch(f"{GRAPH_MODULE}.execute_plan", mock_execute_plan),
             patch(f"{GRAPH_MODULE}.verify_fix", mock_verify),
@@ -280,8 +301,10 @@ class TestDefectItemFailRetry:
             compiled = build_graph().compile(checkpointer=checkpointer)
             result = compiled.invoke(_defect_initial_state(), config=_config("defect-fail-retry"))
 
+        # Note: structure_requirements only runs once on first pass; retry goes directly to create_plan
         assert node_calls == [
             "intake_analyze",
+            "structure_requirements",
             "create_plan",
             "execute_plan",
             "verify_fix",

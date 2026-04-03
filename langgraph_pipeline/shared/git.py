@@ -4,19 +4,33 @@
 
 """Git operation helpers: stash, worktree lifecycle, artifact copy, and commit utilities."""
 
+import logging
 import os
 import shutil
 import subprocess
+import threading
+import time
 from pathlib import Path
 from typing import Optional
 
 from langgraph_pipeline.shared.paths import STATUS_FILE_PATH
+
+logger = logging.getLogger(__name__)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 ORCHESTRATOR_STASH_MESSAGE = "orchestrator-auto-stash"
 STASH_EXCLUDE_PLANS_PATHSPEC = ":(exclude)tmp/plans/"
 WORKTREE_BASE_DIR = ".worktrees"
+
+# Maximum attempts for git worktree add when index.lock contention occurs.
+_WORKTREE_CREATE_MAX_ATTEMPTS = 3
+_WORKTREE_CREATE_RETRY_DELAY_SECONDS = 1.0
+
+# Serializes git worktree create/cleanup operations across parallel branches.
+# Without this lock, concurrent branches running `git worktree add/remove/prune`
+# race on .git/index.lock and fail with "Another git process seems to be running."
+_GIT_WORKTREE_LOCK = threading.Lock()
 
 # Coordination paths never copied from worktrees (owned by orchestrator)
 _WORKTREE_SKIP_PREFIXES = (
@@ -125,59 +139,73 @@ def get_worktree_path(plan_name: str, task_id: str) -> Path:
 def create_worktree(plan_name: str, task_id: str) -> Optional[Path]:
     """Create a git worktree for a task.
 
+    Acquires _GIT_WORKTREE_LOCK to prevent concurrent branches from racing
+    on the git index lock. Retries the ``git worktree add`` command up to
+    _WORKTREE_CREATE_MAX_ATTEMPTS times with a delay between attempts to
+    handle transient index.lock contention from external git processes
+    (e.g., Claude CLI sessions running inside other worktrees).
+
     Returns the worktree path if successful, None if failed.
     """
     worktree_path = get_worktree_path(plan_name, task_id)
     branch_name = f"parallel/{task_id.replace('.', '-')}"
 
-    Path(WORKTREE_BASE_DIR).mkdir(parents=True, exist_ok=True)
+    with _GIT_WORKTREE_LOCK:
+        Path(WORKTREE_BASE_DIR).mkdir(parents=True, exist_ok=True)
 
-    if worktree_path.exists():
-        cleanup_worktree(worktree_path)
+        if worktree_path.exists():
+            _cleanup_worktree_unlocked(worktree_path)
 
-    # Delete stale branch if it exists (from previous failed run)
-    subprocess.run(
-        ["git", "branch", "-D", branch_name],
-        capture_output=True,
-        text=True,
-        check=False
-    )
-
-    # Prune any stale worktree references
-    subprocess.run(
-        ["git", "worktree", "prune"],
-        capture_output=True,
-        text=True,
-        check=False
-    )
-
-    try:
-        # Create worktree with new branch from current HEAD
+        # Delete stale branch if it exists (from previous failed run)
         subprocess.run(
-            ["git", "worktree", "add", "-b", branch_name, str(worktree_path)],
+            ["git", "branch", "-D", branch_name],
             capture_output=True,
             text=True,
-            check=True
+            check=False
         )
 
-        # Clear stale task-status.json inherited from main branch to prevent
-        # the orchestrator from reading results from a previous plan's run
-        stale_status = worktree_path / STATUS_FILE_PATH
-        if stale_status.exists():
-            stale_status.unlink(missing_ok=True)
+        # Prune any stale worktree references
+        subprocess.run(
+            ["git", "worktree", "prune"],
+            capture_output=True,
+            text=True,
+            check=False
+        )
 
-        return worktree_path
+        last_error = ""
+        for attempt in range(1, _WORKTREE_CREATE_MAX_ATTEMPTS + 1):
+            try:
+                subprocess.run(
+                    ["git", "worktree", "add", "-b", branch_name, str(worktree_path)],
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
 
-    except subprocess.CalledProcessError as e:
-        print(f"[ERROR] Failed to create worktree: {e.stderr}")
+                # Clear stale task-status.json inherited from main branch
+                stale_status = worktree_path / STATUS_FILE_PATH
+                if stale_status.exists():
+                    stale_status.unlink(missing_ok=True)
+
+                return worktree_path
+
+            except subprocess.CalledProcessError as e:
+                last_error = e.stderr or str(e)
+                if attempt < _WORKTREE_CREATE_MAX_ATTEMPTS:
+                    logger.warning(
+                        "create_worktree: attempt %d/%d failed for %s (%s), retrying in %.1fs",
+                        attempt, _WORKTREE_CREATE_MAX_ATTEMPTS, task_id, last_error.strip(),
+                        _WORKTREE_CREATE_RETRY_DELAY_SECONDS,
+                    )
+                    time.sleep(_WORKTREE_CREATE_RETRY_DELAY_SECONDS)
+
+        logger.error("create_worktree: all %d attempts failed for %s: %s",
+                      _WORKTREE_CREATE_MAX_ATTEMPTS, task_id, last_error.strip())
         return None
 
 
-def cleanup_worktree(worktree_path: Path) -> bool:
-    """Remove a worktree and its branch.
-
-    Returns True if cleanup was successful.
-    """
+def _cleanup_worktree_unlocked(worktree_path: Path) -> bool:
+    """Remove a worktree and prune references (caller must hold _GIT_WORKTREE_LOCK)."""
     try:
         subprocess.run(
             ["git", "worktree", "remove", str(worktree_path), "--force"],
@@ -196,8 +224,18 @@ def cleanup_worktree(worktree_path: Path) -> bool:
         return True
 
     except Exception as e:
-        print(f"[WARNING] Failed to cleanup worktree {worktree_path}: {e}")
+        logger.warning("Failed to cleanup worktree %s: %s", worktree_path, e)
         return False
+
+
+def cleanup_worktree(worktree_path: Path) -> bool:
+    """Remove a worktree and its branch.
+
+    Acquires _GIT_WORKTREE_LOCK to prevent races with concurrent
+    create_worktree calls. Returns True if cleanup was successful.
+    """
+    with _GIT_WORKTREE_LOCK:
+        return _cleanup_worktree_unlocked(worktree_path)
 
 
 def _file_exists_in_ref(ref: str, file_path: str) -> bool:

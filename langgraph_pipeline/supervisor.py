@@ -174,7 +174,17 @@ def _unclaim_orphaned_items() -> None:
                 worker_pid = meta.get("worker_pid")
                 sidecar_path.unlink()
             except (OSError, json.JSONDecodeError):
-                item_type = "feature"
+                # Sidecar unreadable — fall through to slug-heuristic below
+                sidecar_path = None  # prevent re-read attempts
+                path_str = str(md_file).lower()
+                if "defect" in path_str:
+                    item_type = "defect"
+                elif "investigation" in path_str:
+                    item_type = "investigation"
+                elif "analysis" in path_str:
+                    item_type = "analysis"
+                else:
+                    item_type = "feature"
         else:
             # Fall back to slug-heuristic when no sidecar is present.
             path_str = str(md_file).lower()
@@ -848,6 +858,11 @@ def run_supervisor_loop(
             _reap_finished_workers(
                 active_workers, cumulative_cost_usd, budget_cap_usd, slack
             )
+
+        # If a hot-reload restart was pending, honour it now that workers are drained.
+        if code_monitor is not None and code_monitor.restart_pending.is_set():
+            logger.info("Workers drained — performing deferred hot-reload restart.")
+            _perform_restart(code_monitor)
 
         logger.info(
             "Supervisor exiting. Total cumulative cost: $%.4f USD.",

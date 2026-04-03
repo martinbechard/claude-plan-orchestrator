@@ -57,6 +57,8 @@ def _make_mock_subgraph(
     input_tokens: int = 0,
     output_tokens: int = 0,
     task_results: list | None = None,
+    deadlock_detected: bool = False,
+    deadlock_details: list | None = None,
 ):
     """Return a mock compiled executor subgraph.
 
@@ -69,6 +71,8 @@ def _make_mock_subgraph(
         "task_results": task_results or [],
         "current_task_id": None,
         "consecutive_failures": 0,
+        "deadlock_detected": deadlock_detected,
+        "deadlock_details": deadlock_details,
     }
     compiled = MagicMock()
     compiled.invoke.return_value = final_state
@@ -79,10 +83,10 @@ def _make_mock_subgraph(
 
 
 class TestExecutePlanNoPlanPath:
-    def test_returns_empty_dict_when_plan_path_is_none(self):
+    def test_returns_execution_failed_when_plan_path_is_none(self):
         state = _make_state(plan_path=None)
         result = execute_plan(state)
-        assert result == {}
+        assert result == {"execution_failed": True}
 
     def test_does_not_invoke_subgraph_when_no_plan_path(self):
         state = _make_state(plan_path=None)
@@ -487,3 +491,87 @@ class TestExecutePlanTaskSnapshot:
         ) as mock_trace:
             execute_plan(state)
         mock_trace.assert_not_called()
+
+
+# ─── Tests: deadlock signal propagation ───────────────────────────────────────
+
+
+class TestExecutePlanDeadlockPropagation:
+    """execute_plan propagates deadlock signal from TaskState to PipelineState."""
+
+    def test_executor_deadlock_true_when_deadlock_detected(self):
+        state = _make_state(plan_path="tmp/plans/plan.yaml")
+        mock_compiled = _make_mock_subgraph(deadlock_detected=True)
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
+        ) as mock_build:
+            mock_build.return_value.compile.return_value = mock_compiled
+            result = execute_plan(state)
+
+        assert result["executor_deadlock"] is True
+
+    def test_executor_deadlock_false_when_no_deadlock(self):
+        state = _make_state(plan_path="tmp/plans/plan.yaml")
+        mock_compiled = _make_mock_subgraph(deadlock_detected=False)
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
+        ) as mock_build:
+            mock_build.return_value.compile.return_value = mock_compiled
+            result = execute_plan(state)
+
+        assert result["executor_deadlock"] is False
+
+    def test_executor_deadlock_false_when_field_absent(self):
+        state = _make_state(plan_path="tmp/plans/plan.yaml")
+        mock_compiled = MagicMock()
+        mock_compiled.invoke.return_value = {
+            "plan_cost_usd": 0.0,
+            "plan_input_tokens": 0,
+            "plan_output_tokens": 0,
+            "task_results": [],
+        }
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
+        ) as mock_build:
+            mock_build.return_value.compile.return_value = mock_compiled
+            result = execute_plan(state)
+
+        assert result["executor_deadlock"] is False
+
+    def test_executor_deadlock_details_propagated(self):
+        details = [
+            {"task_id": "0.4", "task_name": "Task Four", "unsatisfied_deps": ["0.3"]},
+            {"task_id": "0.5", "task_name": "Task Five", "unsatisfied_deps": ["0.3", "0.4"]},
+        ]
+        state = _make_state(plan_path="tmp/plans/plan.yaml")
+        mock_compiled = _make_mock_subgraph(deadlock_detected=True, deadlock_details=details)
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
+        ) as mock_build:
+            mock_build.return_value.compile.return_value = mock_compiled
+            result = execute_plan(state)
+
+        assert result["executor_deadlock_details"] == details
+
+    def test_executor_deadlock_details_none_when_no_deadlock(self):
+        state = _make_state(plan_path="tmp/plans/plan.yaml")
+        mock_compiled = _make_mock_subgraph(deadlock_detected=False, deadlock_details=None)
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
+        ) as mock_build:
+            mock_build.return_value.compile.return_value = mock_compiled
+            result = execute_plan(state)
+
+        assert result["executor_deadlock_details"] is None
+
+    def test_executor_deadlock_field_present_in_result(self):
+        state = _make_state(plan_path="tmp/plans/plan.yaml")
+        mock_compiled = _make_mock_subgraph()
+        with patch(
+            "langgraph_pipeline.pipeline.nodes.execute_plan.build_executor_graph"
+        ) as mock_build:
+            mock_build.return_value.compile.return_value = mock_compiled
+            result = execute_plan(state)
+
+        assert "executor_deadlock" in result
+        assert "executor_deadlock_details" in result

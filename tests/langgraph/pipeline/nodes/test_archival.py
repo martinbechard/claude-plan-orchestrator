@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from langgraph_pipeline.pipeline.nodes.archival import (
+    ARCHIVE_OUTCOME_DEADLOCK,
     ARCHIVE_OUTCOME_EXHAUSTED,
     ARCHIVE_OUTCOME_INCOMPLETE,
     ARCHIVE_OUTCOME_SUCCESS,
@@ -167,26 +168,26 @@ class TestDetermineOutcome:
             item_type="feature",
             verification_history=[],
         )
-        assert _determine_outcome(state) == ARCHIVE_OUTCOME_SUCCESS
+        assert _determine_outcome(state, []) == ARCHIVE_OUTCOME_SUCCESS
 
     def test_analysis_is_always_success(self):
         state = _make_state(
             item_type="analysis",
             verification_history=[],
         )
-        assert _determine_outcome(state) == ARCHIVE_OUTCOME_SUCCESS
+        assert _determine_outcome(state, []) == ARCHIVE_OUTCOME_SUCCESS
 
     def test_defect_with_pass_is_success(self):
         state = _make_state(item_type="defect")  # has PASS record
-        assert _determine_outcome(state) == ARCHIVE_OUTCOME_SUCCESS
+        assert _determine_outcome(state, []) == ARCHIVE_OUTCOME_SUCCESS
 
     def test_defect_with_fail_is_exhausted(self):
         state = _make_defect_fail_state()
-        assert _determine_outcome(state) == ARCHIVE_OUTCOME_EXHAUSTED
+        assert _determine_outcome(state, []) == ARCHIVE_OUTCOME_EXHAUSTED
 
-    def test_defect_with_no_history_is_success(self):
+    def test_defect_with_no_history_is_exhausted(self):
         state = _make_state(item_type="defect", verification_history=[])
-        assert _determine_outcome(state) == ARCHIVE_OUTCOME_SUCCESS
+        assert _determine_outcome(state, []) == ARCHIVE_OUTCOME_EXHAUSTED
 
     def test_non_terminal_tasks_override_feature_success(self):
         state = _make_state(item_type="feature", verification_history=[])
@@ -202,9 +203,27 @@ class TestDetermineOutcome:
         state = _make_state(item_type="feature", verification_history=[])
         assert _determine_outcome(state, []) == ARCHIVE_OUTCOME_SUCCESS
 
-    def test_none_non_terminal_does_not_change_outcome(self):
+    def test_none_non_terminal_means_unknown_state_is_incomplete(self):
         state = _make_state(item_type="feature", verification_history=[])
-        assert _determine_outcome(state, None) == ARCHIVE_OUTCOME_SUCCESS
+        assert _determine_outcome(state, None) == ARCHIVE_OUTCOME_INCOMPLETE
+
+    def test_executor_deadlock_returns_deadlock_outcome(self):
+        state = _make_state(executor_deadlock=True)
+        assert _determine_outcome(state) == ARCHIVE_OUTCOME_DEADLOCK
+
+    def test_executor_deadlock_overrides_non_terminal_tasks(self):
+        # Deadlock takes priority — it is the most specific failure classification.
+        state = _make_state(executor_deadlock=True)
+        pending = [("0.4", "Blocked Task", "pending")]
+        assert _determine_outcome(state, pending) == ARCHIVE_OUTCOME_DEADLOCK
+
+    def test_executor_deadlock_overrides_incomplete_for_feature(self):
+        state = _make_state(item_type="feature", executor_deadlock=True, verification_history=[])
+        assert _determine_outcome(state) == ARCHIVE_OUTCOME_DEADLOCK
+
+    def test_no_deadlock_does_not_change_success_outcome(self):
+        state = _make_state(item_type="feature", executor_deadlock=False, verification_history=[])
+        assert _determine_outcome(state, []) == ARCHIVE_OUTCOME_SUCCESS
 
 
 # ─── _move_item_to_completed ──────────────────────────────────────────────────
@@ -301,6 +320,37 @@ class TestBuildSlackMessage:
         assert "1.3" in msg
         assert "pending" in msg
         assert "blocked" in msg
+
+    def test_deadlock_message_has_error_level(self):
+        msg, level = _build_slack_message("My Bug", "defect", ARCHIVE_OUTCOME_DEADLOCK)
+        assert level == "error"
+
+    def test_deadlock_message_contains_deadlock(self):
+        msg, _ = _build_slack_message("My Bug", "defect", ARCHIVE_OUTCOME_DEADLOCK)
+        assert "deadlock" in msg.lower()
+
+    def test_deadlock_message_contains_item_name(self):
+        msg, _ = _build_slack_message("My Feature", "feature", ARCHIVE_OUTCOME_DEADLOCK)
+        assert "My Feature" in msg
+
+    def test_deadlock_message_lists_blocked_task_ids(self):
+        details = [
+            {"task_id": "0.4", "task_name": "Build UI", "unsatisfied_deps": ["0.3"]},
+            {"task_id": "0.5", "task_name": "Run Tests", "unsatisfied_deps": ["0.3", "0.4"]},
+        ]
+        msg, _ = _build_slack_message("Item", "defect", ARCHIVE_OUTCOME_DEADLOCK, deadlock_details=details)
+        assert "0.4" in msg
+        assert "0.5" in msg
+
+    def test_deadlock_message_lists_unsatisfied_deps(self):
+        details = [{"task_id": "0.4", "task_name": "T", "unsatisfied_deps": ["0.3"]}]
+        msg, _ = _build_slack_message("Item", "defect", ARCHIVE_OUTCOME_DEADLOCK, deadlock_details=details)
+        assert "0.3" in msg
+
+    def test_deadlock_message_without_details_is_graceful(self):
+        msg, level = _build_slack_message("Item", "defect", ARCHIVE_OUTCOME_DEADLOCK)
+        assert level == "error"
+        assert "deadlock" in msg.lower()
 
 
 # ─── archive node ─────────────────────────────────────────────────────────────

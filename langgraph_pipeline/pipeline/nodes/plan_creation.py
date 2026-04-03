@@ -233,47 +233,65 @@ def _build_agent_catalog(agents_dir: str) -> str:
 
 
 def _ensure_acceptance_criteria_in_design(
-    item_path: str, design_doc_path: str, item_slug: str
-) -> None:
-    """Copy acceptance criteria from the backlog item into the design doc if missing.
+    item_path: str, design_doc_path: str, requirements_path: str, item_slug: str,
+) -> bool:
+    """Copy acceptance criteria into the design doc if missing.
 
-    Reads the backlog item, extracts the '## Acceptance Criteria' section, and
-    appends it to the design doc if the design doc doesn't already contain one.
+    Checks the backlog item first, then the requirements doc as a fallback
+    (Step 4 generates AC in the requirements doc). Returns True if AC are
+    present in the design doc after this function runs, False if no AC
+    could be found anywhere.
     """
     design_path = Path(design_doc_path)
     if not design_path.exists():
-        return
+        return False
     try:
-        item_text = Path(item_path).read_text(encoding="utf-8")
         design_text = design_path.read_text(encoding="utf-8")
     except OSError:
-        return
+        return False
 
     # Already has criteria
     if "## Acceptance Criteria" in design_text:
-        return
+        return True
 
-    # Extract from backlog item
+    # Try to extract from backlog item, then requirements doc as fallback
     marker = "## Acceptance Criteria"
-    idx = item_text.find(marker)
-    if idx < 0:
-        logger.info("No acceptance criteria in backlog item for %s — skipping", item_slug)
-        return
+    criteria_text = ""
 
-    # Find the end: next ## heading or end of file
-    rest = item_text[idx + len(marker):]
-    next_heading = rest.find("\n## ")
-    if next_heading >= 0:
-        criteria_text = marker + rest[:next_heading].rstrip()
-    else:
-        criteria_text = marker + rest.rstrip()
+    for source_path, source_name in [
+        (item_path, "backlog item"),
+        (requirements_path, "requirements doc"),
+    ]:
+        if not source_path:
+            continue
+        try:
+            source_text = Path(source_path).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        idx = source_text.find(marker)
+        if idx < 0:
+            continue
+        rest = source_text[idx + len(marker):]
+        next_heading = rest.find("\n## ")
+        if next_heading >= 0:
+            criteria_text = marker + rest[:next_heading].rstrip()
+        else:
+            criteria_text = marker + rest.rstrip()
+        logger.info("Found acceptance criteria in %s for %s", source_name, item_slug)
+        break
+
+    if not criteria_text:
+        logger.warning("No acceptance criteria found in any source for %s", item_slug)
+        return False
 
     try:
         with open(design_doc_path, "a", encoding="utf-8") as f:
             f.write(f"\n\n{criteria_text}\n")
         logger.info("Copied acceptance criteria into design doc for %s", item_slug)
+        return True
     except OSError as exc:
         logger.warning("Failed to append criteria to design doc for %s: %s", item_slug, exc)
+        return False
 
 
 DESIGN_VALIDATION_MODEL = "claude-haiku-4-5-20251001"
@@ -417,9 +435,8 @@ def create_plan(state: PipelineState) -> dict:
         planner_in = int(usage.get("input_tokens", 0))
         planner_out = int(usage.get("output_tokens", 0))
         _report_worker_stats(planner_in, planner_out, total_cost_usd)
-    except (json.JSONDecodeError, TypeError):
-        pass
-
+    except (json.JSONDecodeError, TypeError) as exc:
+        logger.warning("Could not parse planner JSON output for %s: %s", item_slug, exc)
 
     # Only check stderr for rate limit / quota signals — stdout contains
     # Claude's response which may include those keywords literally (e.g.
@@ -473,7 +490,14 @@ def create_plan(state: PipelineState) -> dict:
 
     # Ensure acceptance criteria from the backlog item are in the design doc.
     # The planner often omits them, so we copy them directly rather than retrying.
-    _ensure_acceptance_criteria_in_design(item_path, expected_design_doc_path, item_slug)
+    has_ac = _ensure_acceptance_criteria_in_design(
+        item_path, expected_design_doc_path, requirements_path, item_slug,
+    )
+    if not has_ac:
+        logger.error(
+            "No acceptance criteria found for %s — cannot proceed without AC", item_slug
+        )
+        return {}
 
     # Validate design and plan with skill-based cross-reference checks.
     design_doc_content = ""
@@ -502,6 +526,9 @@ def create_plan(state: PipelineState) -> dict:
             step_name="design",
         )
         total_cost_usd += design_cost
+        if not design_valid:
+            logger.error("Design validation FAILED for %s — blocking plan creation", item_slug)
+            return {}
 
         # Step 6: Plan validation.
         if _plan_exists(expected_plan_path):
@@ -523,6 +550,9 @@ def create_plan(state: PipelineState) -> dict:
                     step_name="plan",
                 )
                 total_cost_usd += plan_cost
+                if not plan_valid:
+                    logger.error("Plan validation FAILED for %s — blocking plan creation", item_slug)
+                    return {}
     elif design_doc_content:
         # Fallback: legacy design validation when no requirements available.
         logger.info("Running legacy design validation for %s...", item_slug)
@@ -532,7 +562,8 @@ def create_plan(state: PipelineState) -> dict:
         if valid:
             logger.info("Design validation PASSED for %s", item_slug)
         else:
-            logger.warning("Design validation FAILED for %s: %s", item_slug, reason)
+            logger.error("Design validation FAILED for %s: %s — blocking plan creation", item_slug, reason)
+            return {}
     else:
         logger.warning("No design doc at %s — skipping validation", expected_design_doc_path)
 
@@ -553,15 +584,15 @@ def create_plan(state: PipelineState) -> dict:
                 shutil.copy2(expected_plan_path, ws / "plan.yaml")
             if Path(expected_design_doc_path).exists():
                 shutil.copy2(expected_design_doc_path, ws / "design.md")
-        except OSError:
-            pass  # Non-fatal
+        except OSError as exc:
+            logger.warning("Failed to copy plan/design to workspace for %s: %s", item_slug, exc)
         # Record input hashes so future restarts can detect staleness.
         if requirements_path:
             try:
                 record_artifact(workspace_path, "design.md", [requirements_path])
                 record_artifact(workspace_path, "plan.yaml", [str(ws / "design.md")])
-            except Exception:
-                pass  # Non-fatal
+            except OSError as exc:
+                logger.warning("Failed to record artifact hashes for %s: %s", item_slug, exc)
 
     prior_cost = float(state.get("session_cost_usd") or 0.0)
     return {

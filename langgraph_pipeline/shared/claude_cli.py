@@ -22,7 +22,6 @@ TOOL_CMD_PREVIEW_MAX_CHARS = 80  # Max chars of Bash command shown inline
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 STRIPPED_ENV_VAR = "CLAUDECODE"  # Removed so child Claude can spawn from Claude Code
-DEFAULT_CALL_TIMEOUT_SECONDS = 120
 
 # ─── Running totals for worker stats reporting ────────────────────────────────
 
@@ -160,7 +159,7 @@ def _build_child_env() -> dict:
 def call_claude(
     prompt: str,
     model: str = "sonnet",
-    timeout: Optional[int] = DEFAULT_CALL_TIMEOUT_SECONDS,
+    timeout: Optional[int] = None,
 ) -> ClaudeResult:
     """Call Claude CLI with --print and return a ClaudeResult.
 
@@ -171,7 +170,7 @@ def call_claude(
     Args:
         prompt: The prompt text to send.
         model: Model name (e.g. "sonnet", "haiku", "claude-opus-4-6").
-        timeout: Subprocess timeout in seconds, or None for no timeout.
+        timeout: Subprocess timeout in seconds, or None for no timeout (default).
 
     Returns:
         ClaudeResult with text set on success, or failure_reason set on failure.

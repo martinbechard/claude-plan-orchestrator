@@ -346,7 +346,7 @@ def _verify_defect_symptoms(item_path: str) -> dict[str, str | int | float | boo
             "failed": True,
             "failure_reason": failure_reason,
             "reproducible": "unclear",
-            "clarity": INTAKE_CLARITY_THRESHOLD,
+            "clarity": 0,  # Default to failing, not passing — unknown is not "clear"
             "raw_output": "",
             "total_cost_usd": 0.0,
         }
@@ -639,8 +639,8 @@ def _run_intake_analysis(
         logger.info("Running clause extraction for %s...", item_slug)
         clause_result = _run_clause_extraction(item_path, slug=item_slug)
         if clause_result.get("failed"):
-            logger.warning(
-                "Clause extraction failed for %s: %s",
+            logger.error(
+                "Clause extraction failed for %s: %s — traceability chain broken",
                 item_slug, clause_result.get("failure_reason", ""),
             )
         else:
@@ -663,8 +663,8 @@ def _run_intake_analysis(
             if valid:
                 logger.info("Step 1 (clause extraction) validation PASSED for %s", item_slug)
             else:
-                logger.warning(
-                    "Step 1 (clause extraction) validation issue for %s: %s", item_slug, reason
+                logger.error(
+                    "Step 1 (clause extraction) validation FAILED for %s: %s", item_slug, reason
                 )
 
     # Step 2: 5 Whys — skip if workspace artifact is still fresh.
@@ -688,6 +688,10 @@ def _run_intake_analysis(
         if detect_quota_exhaustion(whys_check):
             return clause_register_path, "", total_cost, True
         if whys_result.get("failed"):
+            logger.error(
+                "5 Whys analysis failed for %s: %s",
+                item_slug, whys_result.get("failure_reason", ""),
+            )
             _report_intake_error(
                 f"[INTAKE] 5 Whys analysis failed for {item_slug}: {whys_result.get('failure_reason', '')}"
             )
@@ -713,8 +717,8 @@ def _run_intake_analysis(
                 if valid:
                     logger.info("Step 2 (5 Whys) validation PASSED for %s", item_slug)
                 else:
-                    logger.warning(
-                        "Step 2 (5 Whys) validation issue for %s: %s", item_slug, reason
+                    logger.error(
+                        "Step 2 (5 Whys) validation FAILED for %s: %s", item_slug, reason
                     )
             else:
                 # Fallback: use legacy validation when no clause register available.
@@ -723,7 +727,7 @@ def _run_intake_analysis(
                 if valid:
                     logger.info("5 Whys validation PASSED for %s (legacy)", item_slug)
                 else:
-                    logger.warning("5 Whys validation FAILED for %s: %s", item_slug, reason)
+                    logger.error("5 Whys validation FAILED for %s: %s", item_slug, reason)
 
     return clause_register_path, five_whys_path, total_cost, quota_exhausted
 

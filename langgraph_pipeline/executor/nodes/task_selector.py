@@ -199,8 +199,8 @@ def _resolve_agent_model(task: dict) -> ModelTier:
             model = match.group(1).lower()
             if model in MODEL_TIER_PROGRESSION:
                 return model  # type: ignore[return-value]
-    except (IOError, OSError):
-        pass
+    except (IOError, OSError) as exc:
+        logger.warning("Could not read agent file %s: %s — defaulting to sonnet", agent_path, exc)
 
     return "sonnet"  # Safe default — never silently use haiku for real work
 
