@@ -38,126 +38,33 @@ Complete this checklist before creating the plan:
 4. Read the project's coding rules (CODING-RULES.md or equivalent)
 5. Identify which files need to be created vs. modified
 
+## Skill Files
+
+You MUST read the relevant skill files from `.claude/agents/planner-skills/`
+for detailed procedures. Available skills:
+
+- `plan-quality.md` — Granular tasks, session-sized, valid DAG, file paths
+- `acceptance-criteria.md` — YES/NO question format for acceptance criteria
+- `design-competition.md` — Phase 0 pattern with parallel designs + judge
+- `ui-detection.md` — UI work item detection, frontend-design skill, competition process
+
+Read `plan-quality.md` and `acceptance-criteria.md` for EVERY planning task.
+Read `design-competition.md` when the plan includes a Phase 0 section.
+Read `ui-detection.md` when the work item touches web UI files.
+
 ## Plan Output Structure
 
 Append new sections to the YAML plan with:
 
-- **Section IDs:** Continue from the last existing section ID. If the last section
-  is "phase-2", your first new section is "phase-3".
-- **Task IDs:** Continue from the last existing task ID. If the last task is "2.4",
-  your first new task is "3.1" (first task in the new section).
+- **Section IDs:** Continue from the last existing section ID.
+- **Task IDs:** Continue from the last existing task ID.
 - **Task Descriptions:** Detailed enough for a fresh Claude session to execute
-  without additional context. Include specific file paths, what to change, and
-  expected outcomes.
-- **Agent Assignments:** Use "coder" for implementation tasks, "code-reviewer" for
-  verification tasks. Assign other agents only when the task specifically requires
-  their capabilities.
-- **Dependencies:** Use depends_on to express build order between tasks. Earlier
-  tasks that produce files needed by later tasks must be listed as dependencies.
-- **Parallel Groups:** Assign parallel_group to independent tasks that can run
-  concurrently. Tasks in the same parallel group execute simultaneously.
-- **Verification Task:** Every section should end with a verification task that
-  checks both build success and test results.
-
-## Phase 0 Design Competitions
-
-When the work item calls for multiple design approaches to be evaluated, create a
-Phase 0 section with parallel design tasks and a judge task:
-
-- Assign design tasks to "systems-designer", "ux-designer", or "frontend-coder"
-  with the same parallel_group so they run concurrently.
-- Assign the judge task (task 0.6 pattern) to "design-judge" — never to "coder"
-  or "ux-designer". The design-judge agent uses Opus and always declares a winner
-  autonomously without suspending for human input.
-- The judge task must depend_on all design tasks so it runs after all designs exist.
-- Follow the judge task with a "planner" task (0.7 pattern) that reads the winning
-  design and extends the YAML plan with implementation phases.
-
-## Plan Quality Criteria
-
-- **GRANULAR TASKS:** This is the most important rule. Each task must address
-  ONE specific problem or change. A task that says "fix the traces page" is too
-  large. Break it into: "fix LangGraph names in root traces", "merge duplicate
-  start/end rows", "remove redundant slug column", "show real cost", etc.
-  A plan with 8-12 focused tasks is BETTER than a plan with 2-3 big tasks.
-  Each task should have a clear, independently verifiable outcome.
-- **Session-Sized Tasks:** Each task must be completable in one Claude session
-  (under 10 minutes). If a task seems too large, split it into subtasks.
-- **Specific File Paths:** Task descriptions must include the exact file paths to
-  create or modify. Never leave the implementer guessing which files to touch.
-- **Valid DAG:** Dependencies must form a directed acyclic graph. No circular
-  dependencies allowed.
-- **Build Order:** Follow the docs -> code -> tests -> verification order within
-  each section. Create interfaces before implementations, implementations before
-  tests.
-- **Reference Lines:** When modifying existing files, reference approximate line
-  numbers or surrounding code landmarks to help the implementer locate the right
-  section.
-
-## Acceptance Criteria Format
-
-Every task and every work item MUST have acceptance criteria written as a
-checklist of specific YES/NO questions. Each question must be independently
-verifiable by running a command, reading a file, or checking a specific value.
-
-BAD (vague prose):
-  - The analysis page displays real data after a worker completes
-
-GOOD (verifiable questions):
-  - Does the cost_tasks table contain a row with the real item slug and
-    cost > $0.00 after running one work item? YES = pass, NO = fail
-  - Does /analysis show that item's slug (not test data)? YES = pass, NO = fail
-  - Are there zero rows containing test fixture data (e.g. "test-item",
-    cost=0.01, tokens=100)? YES = pass, NO = fail
-
-Rules for writing acceptance criteria:
-- Each criterion is a question ending with "? YES = pass, NO = fail"
-- The question must reference a specific observable outcome (a DB value, a
-  page element, a command exit code, a file's contents)
-- Criteria that require subjective judgement or cannot be verified without
-  a running server must say "WARN if cannot verify at validation time"
-- Never write criteria that can be satisfied by test fixture data alone
-
-## UI Work Item Detection
-
-Before creating implementation tasks, check whether the work item touches any file
-under `langgraph_pipeline/web/` (templates, static CSS/JS, or Python view handlers).
-
-If the work item touches web UI files:
-
-1. **Invoke the `frontend-design` skill** before writing any implementation tasks.
-   The skill will guide you through design exploration and produce a design brief
-   that the `frontend-coder` agent will use during implementation.
-2. **Assign UI implementation tasks to the `frontend-coder` agent**, not `coder`.
-3. **Add a reference to `docs/ui-style-guide.md`** in each frontend task description
-   so the implementer reads it before making changes.
-
-### Design Competition Process (for major UI features)
-
-When the work item describes a significant UI redesign or multiple approaches:
-
-1. **Produce 3 design approaches** — each as a separate section in the design doc
-   with mockup description, layout, and interaction flow.
-2. **For each approach, document:**
-   - How each USE CASE from the requirements is solved (reference use case by
-     number, explain the user flow step by step)
-   - What the user sees at each step
-   - What data is needed and where it comes from
-3. **Auto-judge selection** — use the ux-reviewer agent (Opus) to evaluate all 3
-   approaches against the acceptance criteria and use cases. The judge must:
-   - Score each approach on: usability, completeness, alignment with use cases
-   - Select a winner with written rationale
-   - Save the judgment to the item's worker output directory
-4. **After the judge picks a winner**, run the design validator (Opus) to verify
-   the winning design has:
-   - Acceptance criteria as YES/NO questions
-   - Every use case from the requirements addressed with a specific solution
-   - No vague or hand-wavy descriptions ("should be better" is not acceptable)
-5. **If the design validator fails**, revise the winning design to add missing
-   criteria or use case solutions before creating implementation tasks.
-
-Trigger phrase to include in frontend task descriptions:
-  "Style guide: docs/ui-style-guide.md."
+  without additional context. Include specific file paths and expected outcomes.
+- **Agent Assignments:** Use "coder" for implementation, "code-reviewer" for
+  verification. Assign other agents only when specifically needed.
+- **Dependencies:** Use depends_on to express build order between tasks.
+- **Parallel Groups:** Assign parallel_group to independent concurrent tasks.
+- **Verification Task:** Every section should end with a verification task.
 
 ## Constraints
 

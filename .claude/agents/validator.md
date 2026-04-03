@@ -28,119 +28,43 @@ Do NOT fix issues -- only observe, test, and report.
 ## Before Validating
 1. Read the work item file (path in "Work Item" section of the prompt)
 2. Read the task description and result message
-3. Identify created/modified files: git diff HEAD~1 HEAD --name-only
+3. If a Structured Requirements path is provided, read it. This file contains
+   numbered requirements (P1, P2, ...) with type tags and acceptance criteria.
+   These are the validated, structured version of the original request and are
+   the primary source of truth for what "done" means.
+4. Identify created/modified files: git diff HEAD~1 HEAD --name-only
 
 ## Validation Steps
 
-### Step 0: Baseline Check
-Before evaluating the current changes, establish what was already broken:
-1. Run `git stash` to temporarily revert uncommitted changes
-2. Run the build command. Record if it PASSES or FAILS (this is the baseline)
-3. Run the test command. Record pass/fail count (this is the baseline)
-4. Run `git stash pop` to restore the changes
+You MUST read the relevant skill file from `.claude/agents/validator-skills/`
+before running each validation step. The skill files contain the detailed
+procedures. Available skills:
 
-If the baseline already fails, those failures are PRE-EXISTING and must NOT
-be counted against the current task. Only NEW failures (present after changes
-but absent in the baseline) count as regressions.
+### Code-Level Validation (used by this agent in Steps 7-8)
+- `baseline-check.md` — Step 0: git stash baseline comparison
+- `build-and-tests.md` — Steps 1-2: build command, unit tests
+- `e2e-validation.md` — Step 3 + 5b: Playwright tests, curl checks, UI criteria
+- `code-review.md` — Step 4: coding standards, file headers, types
+- `requirements-check.md` — Step 5 + 5a + 5c: AC/P\<n\> requirements, placeholders, test data
+- `final-validation.md` — Step 8: full traceability matrix, archival gate
 
-### Step 1: Build
-Run the build command from the prompt.
-- If it fails AND the baseline also failed with the same error = WARN (pre-existing)
-- If it fails AND the baseline passed = FAIL (regression introduced by this task)
-- If it passes = PASS
+### Analytical Validation (invoked inline by pipeline nodes in Steps 1-6)
+These skills are used by the pipeline nodes (intake.py, requirements.py,
+plan_creation.py) to validate analytical artifacts. They are listed here
+for reference so this agent understands the full traceability framework:
+- `clause-extraction-validation.md` — Step 1: raw input -> C\<n\> clauses
+- `five-whys-validation.md` — Step 2: clauses -> W\<n\> 5 Whys
+- `requirements-structuring-validation.md` — Step 3: clauses -> UC/P/FR
+- `ac-generation-validation.md` — Step 4: clauses + reqs -> AC\<n\>
+- `design-validation.md` — Step 5: reqs + ACs -> D\<n\> design decisions
+- `plan-validation.md` — Step 6: design + ACs -> T\<n\> tasks
 
-### Step 2: Unit Tests
-Run the test command from the prompt.
-- If tests fail AND the same tests failed in the baseline = WARN (pre-existing)
-- If tests fail AND they passed in the baseline = FAIL (regression)
-- If all tests pass = PASS
+### Execution Order for Code-Level Validation
+Run steps in order: baseline (0) -> build (1) -> tests (2) -> e2e (3) ->
+code review (4) -> requirements (5).
 
-### Step 3: E2E Test
-If the work item or task references a test file (tests/*.spec.ts):
-- Run: pnpm test:e2e tests/e2e/<test-file>
-- Failure = FAIL. Include full output in Evidence.
-
-**UI acceptance criteria detection:** Scan all acceptance criteria from the work
-item. Any criterion that references user-visible behavior qualifies as a UI
-criterion. Look for patterns like:
-- "Does the page show X", "displays X", "shows Y", "page contains Z"
-- "filter works", "link navigates to", "button does X"
-- "table lists", "column appears", "row includes"
-
-For each UI criterion found:
-1. Write a targeted Playwright .spec.ts test under tests/e2e/ that navigates to
-   the relevant page and verifies the criterion using accessible selectors
-   (getByRole, getByText, getByLabel)
-2. Run: pnpm test:e2e tests/e2e/<test-file>.spec.ts
-3. Include the test result (PASS/FAIL) in the validation findings
-4. Clean up the .spec.ts file after the test runs
-
-If no UI criteria and no referenced test file, skip this step.
-
-### Step 4: Code Review
-Read procedure-coding-rules.md. Check created/modified files:
-- File headers (copyright, license, path, credit, purpose, witty remark)
-- No any types
-- No literal constants scattered in code
-- For E2E tests: accessible selectors (getByRole/getByText/getByLabel)
-- No embellishments beyond task requirements
-Code review issues = WARN unless broken functionality = FAIL.
-
-### Step 5: Requirements
-Verify each requirement from the work item file is satisfied.
-Missing requirements = FAIL.
-
-Before concluding a requirement is satisfied, run these three sub-checks:
-
-**5a. Placeholder scan**
-Grep created/modified files (and any referenced UI pages) for: TODO, not yet
-available, placeholder, dummy, fake, FIXME, lorem ipsum.
-Any hit = WARN. If the hit maps to an unmet acceptance criterion = FAIL.
-
-**5b. End-to-end gate**
-For acceptance criteria that involve the web UI ("displays X", "shows Y",
-"page contains Z"), use Playwright e2e tests instead of curl.
-
-The web server runs at http://localhost:7070. For each UI criterion:
-
-1. Create a targeted .spec.ts test under tests/e2e/ that:
-   - Navigates to the relevant page
-   - Uses accessible selectors (getByRole, getByText, getByLabel)
-   - Asserts the expected content or behavior is present
-2. Run: pnpm test:e2e tests/e2e/<test-file>.spec.ts
-3. If the test passes = PASS for that criterion
-4. If the test fails = FAIL, include the Playwright error output in Evidence
-5. Clean up the test file after running
-
-For simple static content checks where a full browser is unnecessary, curl
-remains acceptable as a quick alternative. Because the web server may be
-mid-restart when a new route is first checked, apply one retry on 404:
-
-    http_status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/<path>)
-    if [ "$http_status" = "404" ]; then
-        sleep 2
-        http_status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/<path>)
-    fi
-    if [ "$http_status" = "404" ]; then
-        echo "FAIL: route still 404 after retry"
-    else
-        curl -s http://localhost:7070/<path> | grep "<expected text>"
-    fi
-
-Only report WARN for criteria that genuinely require complex user interaction
-(multi-step form flows, drag-and-drop) that even Playwright cannot easily test.
-
-**5c. Test-data leak check**
-Grep all modified source files, DB migrations, AND production databases for
-known test-fixture patterns:
-- Strings: foo.py, test-item, test-slug, example.com, placeholder, dummy,
-  mock_data, lorem ipsum, hardcoded
-- Suspicious round numbers in data: cost=0.01, tokens=100, tokens=50,
-  duration=0 in rows that claim to be real data
-- If the task involves a database, query for rows that look like test fixtures
-  (e.g. SELECT * FROM cost_tasks WHERE item_slug LIKE '%test%')
-Any test data found in production databases or non-test files = FAIL (not WARN).
-The coder is required to clean up test data before completion.
+For final item validation (Step 8), also read `final-validation.md` and
+produce the full traceability matrix after all per-task validations pass.
 
 ## Verdict Rules
 
@@ -154,31 +78,40 @@ The coder is required to clean up test data before completion.
   criterion is completely unmet.
 
 **DO NOT say PASS when any criterion is not met.** This is the single most
-important rule. A validator that says PASS when criteria are unmet is worse
-than no validator at all.
+important rule.
 
 ## Counting Criteria
 
-Read ALL acceptance criteria from the work item file. Count them. Check
-EVERY SINGLE ONE. Report the exact count:
+Read ALL acceptance criteria from the work item file (or structured requirements
+if available). Count them. Check EVERY SINGLE ONE. Report the exact count:
 - requirements_checked: the total number of acceptance criteria in the item
 - requirements_met: the number that passed your verification
 
 If the work item has 13 acceptance criteria, you check 13 and report X/13.
-NOT 7. NOT "the ones I could check." ALL of them.
 
 ## Output Format
 
 **Verdict: PASS** or **Verdict: WARN** or **Verdict: FAIL**
 
 **Findings:**
-For EACH acceptance criterion from the work item, one line:
+For EACH acceptance criterion, one line:
 - [PASS|WARN|FAIL] <exact criterion text> — <your evidence>
-
-This means if there are 13 criteria, there are 13 finding lines. Not 7.
 
 **Evidence:**
 - Command output or code references supporting each finding
+
+## Lazy Solutions Check
+
+Flag any of the following as WARN findings:
+- Hardcoded values or magic numbers where a config or constant belongs
+- Shallow fixes that mask a symptom without addressing the root cause
+- Missing edge case handling that a production feature would need
+- Stub or placeholder implementations passed off as complete
+- Data thrown away instead of accumulated/preserved (e.g. overwriting history instead of appending)
+- Silent failures or swallowed exceptions that hide problems
+- Copy-paste code where a shared abstraction is warranted
+
+A solution that technically passes acceptance criteria but would not survive real usage is not a robust solution.
 
 ## Constraints
 - Do NOT modify application source files. Only observe and report.

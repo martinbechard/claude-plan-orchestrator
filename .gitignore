@@ -22,19 +22,12 @@ venv/
 .env.local
 
 # Auto-generated (user-specific)
-tmp/task-status.json
-tmp/plans/current-plan.yaml
-tmp/plans/.stop
-tmp/plans/.pipeline.pid
-tmp/plans/.lg-pipeline.pid
-tmp/plans/logs/
+tmp/
 .claude/subagent-status/
 .claude/agent-claims.json
 .claude/slack.local.yaml
 .claude/slack-*.json
 .claude/chroma/
-tmp/plans/.intake-history.json
-tmp/plans/.backlog-creation-throttle.json
 
 # Runtime pipeline state and logs
 .claude/pipeline-state.db
@@ -43,6 +36,9 @@ tmp/plans/.backlog-creation-throttle.json
 .claude/pipeline-worker-*.db
 .claude/pipeline-worker-*.db-shm
 .claude/pipeline-worker-*.db-wal
+.claude/orchestrator-traces.db
+.claude/traces.db
+prototype_traces/
 .chroma/
 .langgraph_api/
 logs/
