@@ -113,3 +113,68 @@ Files: langgraph_pipeline/web/templates/item.html
 | AC10 | D4, D2, D1 | Badge reflects correct phase via mapping, auto-updates within poll interval |
 | AC11 | D4, D2, D1 | Badge transitions visibly (e.g., Intake -> Requirements -> Planning) via 10s polling without page refresh |
 | AC12 | D1, D4 | Mapping covers all phases: Intake, Requirements, Planning, Execution, Verification; JS renders whichever label backend returns |
+
+
+## Acceptance Criteria
+
+AC1: Does the work item page display a phase status badge (not plan item content) during work item processing? YES = pass, NO = fail
+  Origin: Derived from C1 [PROB] (inverse: "status of the phase is not displayed properly" → is it displayed properly?)
+  Belongs to: P1
+  Source clauses: [C1, C7]
+
+AC2: Is the phase status badge visually distinct from plan item content on the work item page? YES = pass, NO = fail
+  Origin: Derived from C7 [FACT] (inverse: "renders plan items as the primary status indicator rather than phase state" → is phase state visually separated from plan items?)
+  Belongs to: P1
+  Source clauses: [C7]
+
+AC3: Does the phase badge show a label matching the current pipeline phase (e.g., Intake, Requirements, Planning, Execution, Verification)? YES = pass, NO = fail
+  Origin: Derived from C2 [GOAL] (operationalized: "a badge that says Intake, Requirements, Planning, Execution, Verification etc." → does the badge show these labels?)
+  Belongs to: FR1
+  Source clauses: [C2, C11]
+
+AC4: Is the phase badge displayed as the primary status indicator, replacing or clearly augmenting the plan item output? YES = pass, NO = fail
+  Origin: Derived from C11 [GOAL] (operationalized: "replacing or clearly augmenting the static plan item output")
+  Belongs to: FR1
+  Source clauses: [C11, C12]
+
+AC5: Does the display update beyond its initial rendering as work item processing progresses through phases? YES = pass, NO = fail
+  Origin: Derived from C3 [PROB] (inverse: "we get the first plan item and no further updates" → does the display update?)
+  Belongs to: P2
+  Source clauses: [C3, C6]
+
+AC6: Is the phase badge shown instead of (or clearly distinct from) the static first plan item that was previously displayed? YES = pass, NO = fail
+  Origin: Derived from C6 [FACT] (inverse: "shows the first plan item with no further updates, instead of a phase badge" → is the badge shown instead?)
+  Belongs to: P2
+  Source clauses: [C6, C3]
+
+AC7: Does the backend emit phase transition events that the frontend can consume? YES = pass, NO = fail
+  Origin: Derived from C8 [PROB] (inverse: "lacks instrumentation to translate internal phase transitions into UI-level state updates" → does instrumentation exist?)
+  Belongs to: P3
+  Source clauses: [C8]
+
+AC8: Does the work item page receive phase state changes without requiring a manual page refresh? YES = pass, NO = fail
+  Origin: Derived from C9 [PROB] (inverse: "no real-time binding or event stream feeding phase state transitions" → does a real-time binding exist?)
+  Belongs to: P3
+  Source clauses: [C9]
+
+AC9: Is the phase badge displayed during active work item processing (not only before or after)? YES = pass, NO = fail
+  Origin: Derived from C11 [GOAL] (operationalized: "during the processing of the work item" → is it visible during processing?)
+  Belongs to: FR1
+  Source clauses: [C11]
+
+AC10: Does the phase badge update automatically when the backend transitions to a new phase, without user interaction? YES = pass, NO = fail
+  Origin: Derived from C12 [GOAL] (operationalized: "real-time phase status badge that... updates throughout processing")
+  Belongs to: FR2
+  Source clauses: [C11, C12]
+
+AC11: Can a user observe the badge changing from one phase to the next (e.g., Intake → Requirements → Planning) without refreshing the page? YES = pass, NO = fail
+  Origin: Derived from C11 [GOAL] (operationalized: "updates as phases transition")
+  Belongs to: FR2
+  Source clauses: [C11, C12]
+
+AC12: Does the badge correctly reflect at least the phases: Intake, Requirements, Planning, Execution, Verification? YES = pass, NO = fail
+  Origin: Derived from C2 [GOAL] (operationalized: "Intake, Requirements, Planning, Execution, Verification etc.")
+  Belongs to: FR2
+  Source clauses: [C2, C11]
+
+---

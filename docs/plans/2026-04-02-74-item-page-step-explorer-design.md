@@ -476,3 +476,25 @@ bandwidth for collapsed stages the user never expands.
 | AC25 | D5 | Expanding a stage loads artifacts without a full page refresh |
 | AC26 | D7 | Label "Raw Input" replaced with "User Request" in Intake stage |
 | AC27 | D7 | Underlying data still references same artifact content after rename |
+
+---
+
+## Design Competition Judgment
+
+### Scoring Matrix
+
+| Design | Alignment | Completeness | Feasibility | Integration | Clarity | Total |
+|--------|-----------|--------------|-------------|-------------|---------|-------|
+| Design 1 - Systems Architecture (0.1) | 10 | 9 | 10 | 10 | 9 | 48 |
+| Design 2 - UX Design (0.2) | 8 | 8 | 9 | 9 | 10 | 44 |
+| Design 3 - Frontend Implementation (0.3) | 6 | 4 | 7 | 7 | 5 | 29 |
+
+### Winner: Design 1 - Systems Architecture (48/50)
+
+Design 1 provides the most comprehensive and implementation-ready specification covering
+all 27 acceptance criteria. Its data models (StageInfo/ArtifactInfo), build_stages()
+three-pass algorithm, status computation matrix, /dynamic API extension, and artifact-to-stage
+mapping table give implementers a complete blueprint. UX visual hierarchy, loading spinner
+CSS, and responsive breakpoints from Design 2 should be incorporated into the implementation.
+
+Full judgment: tmp/worker-output/74-item-page-step-explorer-judgment.md

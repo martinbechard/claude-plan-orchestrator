@@ -117,3 +117,88 @@ The rename is atomic within a single DDL statement.
 | AC14 | D4 | Variable/function names using "completion(s)" renamed to "work_item(s)" |
 | AC15 | D4 | Code comments referencing "completions" updated to "work item(s)" |
 | AC16 | D5 | Documentation updated to use "work item" terminology consistently |
+
+
+## Acceptance Criteria
+
+**AC1**: Does the term "Completions" appear anywhere in user-facing UI labels (nav menu, page headings, browser tab titles) after the rename is complete? YES = fail, NO = pass
+  Origin: Derived from C2 [PROB] (inverse — "name is misleading" → "misleading name no longer present")
+  Belongs to: P1
+  Source clauses: [C2, C3]
+
+**AC2**: Does the replacement term "Work Items" / "Work Item" accurately describe entities across all lifecycle states (queued, in-progress, failed, completed)? YES = pass, NO = fail
+  Origin: Derived from C2 [PROB] (inverse — "only describes finished runs" → "describes all states")
+  Belongs to: P1
+  Source clauses: [C2]
+
+**AC3**: Does the nav menu label match the terminology used on detail pages (both using "Work Item(s)")? YES = pass, NO = fail
+  Origin: Derived from C4 [PROB] (inverse — "users see Completions but detail says Work Item" → "terminology is consistent")
+  Belongs to: P2
+  Source clauses: [C4, C5]
+
+**AC4**: Can a user navigate from the list page to a detail page without encountering a terminology change for this entity? YES = pass, NO = fail
+  Origin: Derived from C4 [PROB] (inverse — "confusion from inconsistent terms" → "no terminology change in journey")
+  Belongs to: P2
+  Source clauses: [C4, C5]
+
+**AC5**: Does the nav menu in base.html display "Work Items" instead of "Completions"? YES = pass, NO = fail
+  Origin: Derived from C9 [GOAL] (operationalized — "rename the nav menu link" → verifiable check)
+  Belongs to: FR1
+  Source clauses: [C1, C8, C9]
+
+**AC6**: Does the page heading on the list page display "Work Items" instead of "Completions"? YES = pass, NO = fail
+  Origin: Derived from C9 [GOAL] (operationalized — "rename page title/heading in completions.html")
+  Belongs to: FR2
+  Source clauses: [C1, C8, C9]
+
+**AC7**: Does the browser tab title on the list page use "Work Items" instead of "Completions"? YES = pass, NO = fail
+  Origin: Derived from C9 [GOAL] (operationalized — "rename page title" includes the document title element)
+  Belongs to: FR2
+  Source clauses: [C1, C9]
+
+**AC8**: Does the application serve the work items list page at a route using "work-items" (or equivalent work-item terminology) instead of "/completions"? YES = pass, NO = fail
+  Origin: Derived from C9 [GOAL] (operationalized — "rename the /completions route path")
+  Belongs to: FR3
+  Source clauses: [C1, C9, C10]
+
+**AC9**: Do all internal links and navigation elements point to the new work-items route path instead of /completions? YES = pass, NO = fail
+  Origin: Derived from C8 [GOAL] (operationalized — "single ubiquitous domain term" requires all references updated)
+  Belongs to: FR3
+  Source clauses: [C8, C9]
+
+**AC10**: Does the old /completions path either redirect to the new path or return a 404 (i.e., it no longer serves the page at the old URL without indication of the change)? YES = pass, NO = fail
+  Origin: Derived from C8 [GOAL] (operationalized — eliminating legacy path ensures no stale bookmarks silently work under the old name)
+  Belongs to: FR3
+  Source clauses: [C8, C9]
+
+**AC11**: Is the database table named "work_items" (or equivalent work-item terminology) instead of "completions"? YES = pass, NO = fail
+  Origin: Derived from C9 [GOAL] (operationalized — "rename the completions database table")
+  Belongs to: FR4
+  Source clauses: [C1, C9, C10]
+
+**AC12**: Do all queries, ORM models, and data access code reference the new table name instead of "completions"? YES = pass, NO = fail
+  Origin: Derived from C8 [GOAL] (operationalized — "single ubiquitous domain term across UI, database, and code")
+  Belongs to: FR4
+  Source clauses: [C8, C10]
+
+**AC13**: Does the application start and function correctly (pages load, data persists, queries execute) after the table rename? YES = pass, NO = fail
+  Origin: Derived from C9 [GOAL] (operationalized — rename must not break functionality)
+  Belongs to: FR4
+  Source clauses: [C9]
+
+**AC14**: Are variable names and function names that used "completion(s)" (in the context of this entity) renamed to use "work_item(s)"? YES = pass, NO = fail
+  Origin: Derived from C8 [GOAL] (operationalized — "single ubiquitous domain term across code")
+  Belongs to: FR5
+  Source clauses: [C6, C8, C10]
+
+**AC15**: Are code comments that previously referenced "completions" (in the context of this entity) updated to say "work item(s)"? YES = pass, NO = fail
+  Origin: Derived from C10 [GOAL] (operationalized — "aligns with work item terminology already used in comments")
+  Belongs to: FR5
+  Source clauses: [C6, C7, C10]
+
+**AC16**: Is documentation updated to use "work item" terminology consistently, with no remaining references to "completions" for this entity? YES = pass, NO = fail
+  Origin: Derived from C10 [GOAL] (operationalized — "terminology already used in documentation" must be made universal)
+  Belongs to: FR5
+  Source clauses: [C6, C8, C10]
+
+---

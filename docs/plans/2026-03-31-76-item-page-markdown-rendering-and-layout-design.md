@@ -61,7 +61,7 @@ No backend changes required.
 ### D1: Client-side markdown rendering with marked.js
 
 - Addresses: P1, FR1
-- Satisfies: AC1, AC2, AC3, AC4, AC5
+- Satisfies: AC1, AC2, AC5, AC6
 - Approach: Add the marked.js library (via CDN with SRI hash) to item.html. In
   both loadStageArtifacts() and the artifact-path-link click handler, after
   fetching artifact text, check the file path for .md extension. For markdown
@@ -73,18 +73,19 @@ No backend changes required.
 
   A shared helper function renderArtifactContent(pre, mdDiv, text, path) ensures
   both code paths use identical .md detection and rendering logic, satisfying
-  AC3 (every artifact section applies markdown-to-HTML) and AC4 (all standard
+  AC5 (every artifact section applies markdown-to-HTML) and AC6 (all standard
   markdown elements rendered).
 
   AC1 is satisfied because markdown files are converted to HTML before display.
   AC2 is satisfied because marked.js handles headings, lists, and code blocks.
-  AC5 is satisfied because raw syntax is replaced by rendered output.
+  AC5 is satisfied because the shared helper is called from both code paths.
+  AC6 is satisfied because marked.js supports all standard GFM elements.
 - Files: langgraph_pipeline/web/templates/item.html
 
 ### D2: CSS layout constraints for two-column stability
 
 - Addresses: P2, FR2
-- Satisfies: AC5, AC6, AC7, AC8, AC9, AC10
+- Satisfies: AC3, AC4, AC7, AC8, AC9
 - Approach: Apply three CSS fixes:
   (a) Add min-width: 0 to .item-layout > * (grid children). This is the standard
       fix for CSS Grid blowout -- without it, grid items default to min-width:
@@ -95,22 +96,21 @@ No backend changes required.
   (c) Add overflow: hidden to the step-explorer container to prevent any child
       overflow from escaping the left column.
 
-  AC5 is satisfied because the right column stays visible and positioned when
-  artifacts expand -- min-width: 0 constrains the grid track.
-  AC6 is satisfied because expanded content cannot take full page width.
-  AC7 is satisfied because no overlap occurs between content and sidebar.
-  AC8 is satisfied because content stays within column bounds via min-width: 0
-  + max-width: 100%.
-  AC9 is satisfied because CSS constraints are static rules -- stable regardless
-  of expand/collapse state.
-  AC10 is satisfied because wide content (e.g. code blocks, tables) gets
+  AC3 is satisfied because expanding an artifact section can no longer push or
+  overlap the right column -- min-width: 0 constrains the grid track.
+  AC4 is satisfied because the right column stays fully visible and positioned.
+  AC7 is satisfied because content containers are constrained to column width
+  via min-width: 0 + max-width: 100%.
+  AC8 is satisfied because CSS constraints are static rules, independent of
+  expand/collapse toggle state.
+  AC9 is satisfied because wide content (e.g. code blocks, tables) gets
   overflow-x: auto for horizontal scrolling instead of breaking layout.
 - Files: langgraph_pipeline/web/templates/item.html (inline styles section)
 
 ### D3: Dark-theme markdown content styling
 
 - Addresses: P1, FR1
-- Satisfies: AC1, AC2, AC3, AC4
+- Satisfies: AC1, AC2, AC5, AC6
 - Approach: Add CSS rules for .md-rendered that style rendered markdown elements
   within the dark-themed artifact viewer: headings with scaled sizes (h1 at
   1.3em down to h6 at 0.85em), lists with indentation and proper bullet/number
@@ -124,8 +124,8 @@ No backend changes required.
 
   AC1 is reinforced because rendered HTML is visually styled (not just
   structurally correct). AC2 is reinforced because headings, lists, and code
-  blocks have distinct visual treatment. AC3 is reinforced because all artifact
-  sections share the same styled output. AC4 is reinforced because all common
+  blocks have distinct visual treatment. AC5 is reinforced because all artifact
+  sections share the same styled output. AC6 is reinforced because all common
   elements (bold, italic, links, tables, blockquotes) have styled CSS rules.
 - Files: langgraph_pipeline/web/templates/item.html (inline styles)
 
@@ -133,13 +133,12 @@ No backend changes required.
 
 | AC | Design Decision(s) | Approach |
 |---|---|---|
-| AC1: Markdown rendered as HTML | D1, D3 | marked.js parses markdown to HTML; D3 styles rendered output in dark theme |
-| AC2: Headings, lists, code blocks correct | D1, D3 | marked.js converts markdown constructs to HTML elements; D3 styles them with scaled sizes, indentation, monospace |
-| AC3: Every artifact section applies rendering | D1, D3 | Shared renderArtifactContent() helper called from both loadStageArtifacts() and artifact-link handler; D3 styles all sections identically |
-| AC4: All standard markdown elements rendered | D1, D3 | marked.js supports full GFM (headings, lists, code, bold, italic, links, tables, blockquotes); D3 CSS for each element type |
-| AC5: Raw syntax hidden, right column visible | D1, D2 | D1 replaces raw syntax with rendered output; D2 grid constraints keep right column positioned |
-| AC6: Expanded content avoids full page width | D2 | min-width: 0 on grid children prevents left column from exceeding its track |
-| AC7: No overlap between content and sidebar | D2 | min-width: 0 + max-width: 100% + overflow: hidden on step-explorer constrain content |
-| AC8: Content within column boundary | D2 | Content containers constrained to column width via CSS |
-| AC9: Sidebar stable on expand/collapse | D2 | CSS grid constraints are static rules, independent of toggle state |
-| AC10: Overflow handled gracefully | D2 | overflow-x: auto provides horizontal scrolling for wide content |
+| AC1: Markdown rendered as formatted HTML | D1, D3 | marked.js parses markdown to HTML; D3 styles rendered output in dark theme |
+| AC2: Headings, lists, code blocks correct | D1, D3 | marked.js converts markdown constructs to HTML elements; D3 styles with scaled sizes, indentation, monospace |
+| AC3: Expanding avoids pushing/overlapping right column | D2 | min-width: 0 on grid children prevents left column from exceeding its track |
+| AC4: Right column visible and positioned when expanded | D2 | CSS grid constraints keep right column at fixed 360px regardless of left content |
+| AC5: Markdown-to-HTML in every artifact section | D1, D3 | Shared renderArtifactContent() helper called from both loadStageArtifacts() and artifact-link handler |
+| AC6: All standard markdown elements rendered | D1, D3 | marked.js supports full GFM; D3 CSS rules for each element type |
+| AC7: Expanded content within column width | D2 | Content containers constrained to column width via min-width: 0 + max-width: 100% |
+| AC8: Sidebar unaffected by expand/collapse | D2 | CSS grid constraints are static rules, independent of toggle state |
+| AC9: Overflow handled gracefully | D2 | overflow-x: auto provides horizontal scrolling for wide content |

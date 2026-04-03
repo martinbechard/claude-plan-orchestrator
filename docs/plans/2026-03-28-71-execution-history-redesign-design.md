@@ -229,3 +229,32 @@ Files:
 | AC47 | D5 | Duration from earliest descendant start to latest end |
 | AC48 | D5 | Own near-zero timestamps not used for phase duration |
 | AC49 | D5 | Multi-minute phases show correct wall-clock duration |
+
+---
+
+## Phase 0 Design Competition Results
+
+### Scoring Matrix
+
+| Design | Alignment | Completeness | Feasibility | Integration | Clarity | Total |
+|--------|-----------|--------------|-------------|-------------|---------|-------|
+| Design 1 - Systems Architecture (0.1) | 7 | 7 | 9 | 6 | 8 | 37 |
+| Design 2 - UX Design (0.2) | 9 | 9 | 8 | 8 | 9 | 43 |
+| Design 3 - Frontend Implementation (0.3) | 9 | 8 | 9 | 9 | 9 | 44 |
+
+### Winner: Design 3 - Frontend Implementation (44/50)
+
+Design 3 wins on the strength of its implementation-readiness and codebase integration.
+It provides concrete Jinja2 recursive macros, CSS Grid layouts, and vanilla JS with
+named functions following existing patterns (dashboard.js, analysis.js). The server-rendered
+tree approach enables progressive enhancement, and the /execution/ URL namespace cleanly
+replaces the old /proxy/ routes.
+
+### Improvements Incorporated from Runner-ups
+
+1. **Responsive breakpoints** from Design 2: three-tier layout (1024px+, 768-1023px, <768px)
+2. **WCAG 2.1 AA accessibility** from Design 2: WAI-ARIA TreeView roles, focus trapping,
+   aria-live regions, prefers-reduced-motion
+3. **Loading/empty states** from Design 2: skeleton shimmer, "no spans" message, node count badge
+
+Full judgment: tmp/worker-output/71-execution-history-redesign-judgment.md

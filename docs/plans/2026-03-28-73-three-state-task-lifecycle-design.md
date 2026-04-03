@@ -211,3 +211,29 @@ Files: langgraph_pipeline/web/static/dashboard.js,
 | AC18 | D2 | effective_status returns "verified" for legacy completed tasks when validation not configured |
 | AC19 | D2 | Legacy plans work via effective_status read-time transformation; no YAML mutation needed |
 | AC20 | D2 | effective_status only applies backward-compat for completed tasks; new tasks go through full lifecycle |
+
+---
+
+## D6 Design Competition Results
+
+Three designs competed for the dashboard visual differentiation approach (D6):
+
+| Design | Alignment | Completeness | Feasibility | Integration | Clarity | Total |
+|--------|-----------|--------------|-------------|-------------|---------|-------|
+| Design 1 - Systems Architecture | 4 | 5 | 9 | 9 | 6 | 33 |
+| Design 2 - UX Design | 9 | 8 | 7 | 8 | 8 | 40 |
+| Design 3 - Frontend Implementation | 9 | 9 | 10 | 9 | 9 | 46 |
+
+**Winner: Design 3 - Frontend Implementation** (46/50)
+
+Design 3 provides production-ready code for all six-state visual differentiation:
+amber timer icon for completed, green checkmark for verified, stacked progress bar
+with legend, and progress counter counting only verified as done. All changes are
+scoped to item.html.
+
+Improvements incorporated from runner-ups:
+1. Descriptive aria-labels from UX Design ("Completed, awaiting validation")
+2. In-progress spinner animation from UX Design (with reduced-motion support)
+3. Dual-path divergence testing strategy from Systems Design
+
+Full judgment: tmp/worker-output/73-three-state-task-lifecycle-judgment.md

@@ -131,3 +131,36 @@ when no real trace tree can be found.
 | AC4 | D1, D2 | find_real_trace_for_completion() resolves the correct identifier; migration (D2) fixes at startup |
 | AC5 | D1, D2, D4 | Trace identifier resolved via slug match; migration re-links permanently; API endpoint resolves on fetch |
 | AC6 | D1, D3 | Slug-based resolution (D1) ensures displayed trace matches clicked item; fallback (D3) shows correct completion metadata |
+
+
+## Acceptance Criteria
+
+AC1: Does clicking a Trace link in the Completions page navigate the user to the Execution History page? YES = pass, NO = fail
+  Origin: Derived from C1 [FACT] (made verifiable)
+  Belongs to: P1
+  Source clauses: [C1]
+
+AC2: Is the Execution History page non-empty (i.e., trace data is visibly rendered) after navigating via a Trace link? YES = pass, NO = fail
+  Origin: Derived from C2 [PROB] (inverse — "page is empty" → "page is non-empty")
+  Belongs to: P1
+  Source clauses: [C2]
+
+AC3: Does the non-empty behavior hold for multiple different items, not just a single trace? YES = pass, NO = fail
+  Origin: Derived from C2 [PROB] (inverse — "no matter what item" is empty → every item shows data)
+  Belongs to: P1
+  Source clauses: [C2]
+
+AC4: Does the Trace link in the Completions page correctly encode and transmit the trace identifier in the URL or navigation parameters to the Execution History page? YES = pass, NO = fail
+  Origin: Derived from C3 [GOAL] (operationalized — "correctly transmit the trace identifier" → verifiable encoding check)
+  Belongs to: UC1
+  Source clauses: [C3]
+
+AC5: Does the Execution History page receive the trace identifier and use it to fetch and load the corresponding trace data? YES = pass, NO = fail
+  Origin: Derived from C3 [GOAL] (operationalized — "trace data is loaded" → verifiable data-fetch check)
+  Belongs to: UC1
+  Source clauses: [C3]
+
+AC6: Does the displayed trace data on the Execution History page correspond to the specific item whose Trace link was clicked? YES = pass, NO = fail
+  Origin: Derived from C3 [GOAL] (operationalized — "displayed instead of showing empty content" → correct-content verification)
+  Belongs to: UC1
+  Source clauses: [C1, C3]

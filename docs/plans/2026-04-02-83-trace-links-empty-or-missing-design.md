@@ -114,3 +114,27 @@ completions. The template shows a dash instead of a link.
 | AC4 | D4 | JS renders nested collapsible tree showing parent/child hierarchy |
 | AC5 | D1, D2, D4 | UUID always generated (valid LangSmith format); synthetic trace row ensures lookup works; JS renders trace data |
 | AC6 | D1, D2 | UUID is valid LangSmith format (D1); synthetic trace row ensures the ID resolves to data (D2) |
+
+## Phase 0 Design Competition: Execution History Tree Rendering (D4)
+
+### Scoring Matrix
+
+| Design | Alignment | Completeness | Feasibility | Integration | Clarity | Total |
+|--------|-----------|--------------|-------------|-------------|---------|-------|
+| Design 1 - Systems Architecture | 8 | 7 | 9 | 8 | 8 | 40 |
+| Design 2 - UX Design | 8 | 9 | 7 | 8 | 9 | 41 |
+| Design 3 - Frontend Implementation | 9 | 8 | 10 | 9 | 9 | 45 |
+
+### Winner: Design 3 - Frontend Implementation (45/50)
+
+Design 3 (tmp/worker-output/0.3-frontend-design.md) provides implementation-ready
+JavaScript, CSS, and template changes that follow existing codebase patterns
+(IIFE, defer loading, exec- CSS prefix, ARIA tree pattern). It requires no
+Python route changes and maps every AC to a specific function in the code.
+
+Improvements to incorporate from runner-up designs:
+1. Skeleton loading animation from Design 2 (replaces simple spinner)
+2. Expand All / Collapse All toolbar from Design 2
+3. Depth-based default collapse (depth >= 2 collapsed) from Design 1
+
+Full judgment: tmp/worker-output/83-trace-links-empty-or-missing-judgment.md

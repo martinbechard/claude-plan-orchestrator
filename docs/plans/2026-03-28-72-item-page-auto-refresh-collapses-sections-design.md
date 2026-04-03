@@ -149,3 +149,27 @@ Static elements (never touched by refresh):
 | AC13 | D3 | Static sections identified by absence of data-dynamic attribute; excluded from updates |
 | AC14 | D3 | Dynamic elements explicitly enumerated via data-dynamic="cost", "tokens", etc. |
 | AC15 | D3 | New dynamic elements added by data-dynamic attribute + JS handler; no static changes |
+
+## Design Competition Results
+
+Three competing designs were evaluated for the selective refresh mechanism:
+
+| Design | Alignment | Completeness | Feasibility | Integration | Clarity | Total |
+|--------|-----------|--------------|-------------|-------------|---------|-------|
+| Design 1 - Systems Architecture (systems-designer) | 7 | 7 | 9 | 9 | 8 | 40 |
+| Design 2 - UX Design (ux-designer) | 9 | 8 | 9 | 7 | 9 | 42 |
+| Design 3 - Frontend Implementation (frontend-coder) | 9 | 9 | 8 | 8 | 9 | 43 |
+
+**Winner: Design 3 - Frontend Implementation** (43/50)
+
+Design 3 provides the most implementation-ready specification with working JavaScript
+code, setTimeout chaining (superior to setInterval for preventing request pileup),
+server-rendered HTML fragments (avoiding Jinja2 logic duplication), and a two-attribute
+system (data-dynamic / data-dynamic-html) that provides explicit XSS defense.
+
+Improvements incorporated from runner-up designs:
+1. Accessibility strategy from Design 2 (aria-live regions, sr-status announcements, focus management)
+2. _compute_dynamic_fields shared helper from Design 1 (DRY for HTML render + JSON endpoint)
+3. Graceful degradation tiers from Design 2 (user feedback after extended fetch failures)
+
+Full judgment: tmp/worker-output/72-item-page-auto-refresh-collapses-sections-judgment.md
